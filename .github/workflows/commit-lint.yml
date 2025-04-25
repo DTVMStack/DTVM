@@ -1,0 +1,80 @@
+name: Commit Lint
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches:
+      - '**'
+
+jobs:
+  commitlint:
+    name: Lint Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install dependencies
+        run: |
+          npm install --save-dev @commitlint/cli @commitlint/config-conventional
+
+      - name: Create commitlint config
+        run: |
+          cat > commitlint.config.js << 'EOL'
+          module.exports = {
+            extends: ['@commitlint/config-conventional'],
+            rules: {
+              'type-enum': [2, 'always', [
+                'feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore'
+              ]],
+              'scope-enum': [2, 'always', [
+                'core', 'runtime', 'compiler', 'examples', 'docs', 'tools', 'deps', 'ci', 'test', 'other', ''
+              ]],
+              'body-max-line-length': [1, 'always', 100],
+              'subject-case': [0, 'never'],
+            },
+            helpUrl: 'https://github.com/DTVMStack/DTVM/blob/main/docs/COMMIT_CONVENTION.md',
+          };
+          EOL
+
+      - name: Lint commit messages
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PR events, check all commits in the PR
+            if [ -n "${{ github.event.pull_request.base.sha }}" ] && [ -n "${{ github.event.pull_request.head.sha }}" ]; then
+              echo "Linting PR commits from ${{ github.event.pull_request.base.sha }} to ${{ github.event.pull_request.head.sha }}"
+              npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+            else
+              echo "PR SHA values missing, checking last commit only"
+              npx commitlint --from HEAD~1 --to HEAD --verbose || echo "No previous commit to check"
+            fi
+          else
+            # For push events, check only the new commits with better error handling
+            if [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && [ -n "${{ github.event.after }}" ]; then
+              # Verify the before commit exists in the repo
+              if git cat-file -e ${{ github.event.before }}; then
+                echo "Linting push commits from ${{ github.event.before }} to ${{ github.event.after }}"
+                npx commitlint --from ${{ github.event.before }} --to ${{ github.event.after }} --verbose
+              else
+                echo "Before commit ${{ github.event.before }} not found, checking last commit only"
+                npx commitlint --from HEAD~1 --to HEAD --verbose || echo "First commit, nothing to check"
+              fi
+            else
+              echo "Initial push or empty before SHA, checking last commit only"
+              # Check if we have at least one commit
+              if git rev-parse HEAD~1 > /dev/null 2>&1; then
+                npx commitlint --from HEAD~1 --to HEAD --verbose
+              else
+                echo "First commit in the repository, nothing to check"
+                exit 0
+              fi
+            fi
+          fi 
