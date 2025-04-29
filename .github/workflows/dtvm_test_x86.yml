@@ -2,23 +2,17 @@ name: DTVM development test CI in x86-64
 
 on:
   push:
-    paths:
-      - '.ci/**'
-      - '.github/workflow/dtvm_test_x86.yml'
-      - 'src/**'
-      - 'tools/**'
-      - 'tests/**'
-      - 'CMakeLists.txt'
-      - 'example/**'
-      - 'rust_crate/**'
-      - 'third_party/**'
-      - 'tools/**'
-      - '.bazelrc'
-      - '.gitattributes'
-      - '.gitmodules'
-      - 'BUILD*'
-      - 'WORKSPACE'
-      - 'WORKSPACE*'
+    paths-ignore:
+      - 'docs/**'
+      - 'resources/**'
+      - '*.md'
+      - '.gitignore'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'resources/**'
+      - '*.md'
+      - '.gitignore'
 permissions:
     contents: read
 
