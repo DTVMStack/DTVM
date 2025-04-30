@@ -1,5 +1,6 @@
 {
     // ...
-    "build": { "dockerfile": "Dockerfile" },
+    // "build": { "dockerfile": "Dockerfile" },
+    "image": "dtvmdev1/dtvm-dev-x64:main"
     // ...
 }
