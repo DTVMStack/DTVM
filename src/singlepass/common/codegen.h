@@ -370,7 +370,8 @@ public:
       mov<F64, TempRegIndex>(LHS, RHS);
       break;
     default:
-      ZEN_ASSERT_TODO();
+      // ZEN_ASSERT_TODO();
+      throw getError(ErrorCode::TypeMismatch);
     }
   }
 
@@ -1020,7 +1021,8 @@ private:
           self().template storeRegToMem<V128>(Info.getReg(), Addr);
           break;
         default:
-          ZEN_ASSERT_TODO();
+          // ZEN_ASSERT_TODO();
+          throw getError(ErrorCode::TypeMismatch);
         }
         // set local not in register
         Layout.clearLocalInRegister(I);

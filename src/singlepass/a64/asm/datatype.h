@@ -11,6 +11,7 @@
 //
 // ============================================================================
 
+#include "common/errors.h"
 #include "singlepass/common/definitions.h"
 
 namespace zen::singlepass {
@@ -68,12 +69,13 @@ constexpr A64::Type getA64TypeFromWASMType(WASMType Type) {
     return A64::F32;
   case WASMType::F64:
     return A64::F64;
-  case WASMType::V128:
-    return A64::V128;
+    // case WASMType::V128:
+    //   return A64::V128;
     //    case WASMType::REF:
     //        return A64::I64; // 64-bit reference
   default:
-    ZEN_ASSERT_TODO();
+    // ZEN_ASSERT_TODO();
+    throw getError(ErrorCode::InvalidType);
   };
 }
 

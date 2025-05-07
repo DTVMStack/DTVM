@@ -11,6 +11,7 @@
 //
 // ============================================================================
 
+#include "common/errors.h"
 #include "singlepass/common/definitions.h"
 
 namespace zen::singlepass {
@@ -92,10 +93,11 @@ template <X64::Type Ty> constexpr WASMType getWASMTypeFromX64Type() {
     return WASMType::F32;
   case X64::F64:
     return WASMType::F64;
-  case X64::V128:
-    return WASMType::V128;
+  // case X64::V128:
+  //   return WASMType::V128;
   default:
-    ZEN_ASSERT_TODO();
+    throw getError(ErrorCode::InvalidType);
+    // ZEN_ASSERT_TODO();
   }
 }
 

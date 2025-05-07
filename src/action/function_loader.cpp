@@ -106,7 +106,10 @@ WASMType FunctionLoader::popValueType(WASMType Type) {
   }
 
   if (ValueTypes.back() == WASMType::ANY) {
-    ZEN_ASSERT(Type != WASMType::ANY);
+    // ZEN_ASSERT(Type != WASMType::ANY);
+    if (Type == WASMType::ANY) {
+      throw getError(ErrorCode::TypeMismatch);
+    }
   } else if (Type == WASMType::ANY) {
     Type = ValueTypes.back();
   } else if (ValueTypes.back() != Type) {
