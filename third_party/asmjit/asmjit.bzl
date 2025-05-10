@@ -13,5 +13,6 @@ def load_asmjit_deps():
         urls = [
             "https://codeload.github.com/asmjit/asmjit/zip/3577608cab0bc509f856ebf6e41b2f9d9f71acc4",
         ],
+        type = "zip",
     )
 

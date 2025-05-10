@@ -186,6 +186,7 @@ cc_library(
     ],
     copts = PROJECT_COPTS,
     defines = PROJECT_DEFINES,
+    includes = ["src"],  # Add this to specify include directory
     include_prefix = "zetaengine",
     linkopts = PROJECT_LINKOPTS + ["-lpthread"],
     linkstatic = True,
