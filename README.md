@@ -157,6 +157,26 @@ dtvm --mode multipass i32.wasm
 ```
 Refer to [docs/user-guide.md](docs/user-guide.md) for command-line arguments.
 
+## Roadmap
+
+DTVM is continuously evolving to support more instruction sets and provide enhanced functionality. Our upcoming development plans include:
+
+1. **EVM Bytecode Support**
+   * Implementation of EVM bytecode as an input program format
+   * Development of EVM->dMIR translation layer
+   * EVMRuntime for executing EVM bytecode directly
+   * With this addition, DTVM will function as a complete EVM JIT virtual machine
+
+2. **RISC-V Instruction Set Support**
+   * Addition of RISC-V instruction set as an input program format
+   * Development of RISC-V->dMIR translation layer
+   * RISCVRuntime for executing RISC-V instructions
+   * This will enable DTVM to serve as a RISC-V JIT virtual machine
+
+These enhancements will significantly expand DTVM's versatility, allowing it to function not only as a WebAssembly VM but also as a full-featured EVM JIT and RISC-V JIT virtual machine with the same deterministic guarantees and performance optimizations.
+
+We welcome interested developers to join us in implementing these features and expanding DTVM's capabilities. If you're interested in contributing to any of these roadmap items, please reach out to the maintainers or check the issues labeled with "roadmap" in our repository.
+
 ## Contributing
 
 We welcome contributions to DTVM! Before contributing, please read our [Contributing Guidelines](CONTRIBUTING.md). 
