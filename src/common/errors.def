@@ -21,7 +21,7 @@ DEFINE_ERROR(Load,  None,   DuplicateHostFunction,      "duplicate host function
 DEFINE_ERROR(Load,  None,   MagicNotDetected,       "magic header not detected")
 DEFINE_ERROR(Load,  None,   UnknownBinaryVersion,   "unknown binary version")
 DEFINE_ERROR(Load,  None,   UnexpectedEnd,          "unexpected end")
-DEFINE_ERROR(Load,  None,   LEBIntTooLoog,          "integer representation too long")
+DEFINE_ERROR(Load,  None,   LEBIntTooLong,          "integer representation too long")
 DEFINE_ERROR(Load,  None,   LEBIntTooLarge,         "integer too large")
 DEFINE_ERROR(Load,  None,   ConstExprRequired,      "constant expression required")
 DEFINE_ERROR(Load,  None,   TypeMismatchOrConstExprRequired,  "type mismatch or constant expression required")
@@ -32,7 +32,7 @@ DEFINE_ERROR(Load,  None,   JunkAfterLastSection,   "junk after last section")
 // Malformed Error: UTF8 Encoding
 DEFINE_ERROR(Load,  None,   TooLongName,            "too long name string")
 DEFINE_ERROR(Load,  None,   InvalidUTF8Encoding,    "invalid UTF-8 encoding")
-DEFINE_ERROR(Load,  None,   SymbolAllocFaild,       "symbol allocation failed")
+DEFINE_ERROR(Load,  None,   SymbolAllocFailed,      "symbol allocation failed")
 
 // Malformed Error: About Unknown(Except Import) ...
 DEFINE_ERROR(Load,  None,   UnknownTypeIdx,         "unknown type")

@@ -41,7 +41,7 @@ const uint8_t *readLEBNumber(const uint8_t *Ip, const uint8_t *End, T &Value) {
   }
 
   if (Count >= MaxBytes || Byte & 0x80) {
-    throw getError(ErrorCode::LEBIntTooLoog);
+    throw getError(ErrorCode::LEBIntTooLong);
   }
 
   if (!Signed && sizeof(T) == 4 && Shift >= sizeof(T) * 8) {

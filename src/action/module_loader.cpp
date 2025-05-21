@@ -71,7 +71,7 @@ WASMSymbol ModuleLoader::readName() {
   const char *Name = reinterpret_cast<const char *>(NameBytes.data());
   WASMSymbol NameSymbol = Mod.newSymbol(Name, NameLen);
   if (NameSymbol == WASM_SYMBOL_NULL) {
-    throw getError(ErrorCode::SymbolAllocFaild);
+    throw getError(ErrorCode::SymbolAllocFailed);
   }
   return NameSymbol;
 }
