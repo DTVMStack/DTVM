@@ -16,6 +16,11 @@ if(ZEN_ENABLE_SPEC_TEST)
   list(APPEND HOST_OBJECTS $<TARGET_OBJECTS:host_spectest>)
 endif()
 
+if(ZEN_ENABLE_EVMABI_TEST)
+  add_subdirectory(evmabimock)
+  list(APPEND HOST_OBJECTS $<TARGET_OBJECTS:host_evmabimock>)
+endif()
+
 if(HOST_OBJECTS)
   add_library(host STATIC ${HOST_OBJECTS})
 endif()

@@ -17,6 +17,10 @@
 #include "host/env/env.h"
 #endif
 
+#ifdef ZEN_ENABLE_EVMABI_TEST
+#include "host/evmabimock/evmabimock.h"
+#endif
+
 #ifdef ZEN_ENABLE_PROFILER
 #include <gperftools/profiler.h>
 #endif
@@ -36,6 +40,16 @@ int exitMain(int ExitCode, Runtime *RT = nullptr) {
 
   return ExitCode;
 }
+
+// when evmabi test enabled, we need fuzz test by cli, so we need all output
+// fixed
+#ifdef ZEN_ENABLE_EVMABI_TEST
+#define SIMPLE_LOG_ERROR(...)                                                  \
+  printf(__VA_ARGS__);                                                         \
+  printf("\n");
+#else
+#define SIMPLE_LOG_ERROR(...) ZEN_LOG_ERROR(__VA_ARGS__)
+#endif // ZEN_ENABLE_EVMABI_TEST
 
 int main(int argc, char *argv[]) {
 #ifdef ZEN_ENABLE_PROFILER
@@ -166,6 +180,16 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
+  /// =============== Load evmabi mock module ================
+
+#ifdef ZEN_ENABLE_EVMABI_TEST
+  HostModule *EvmAbiMockMod = LOAD_HOST_MODULE(RT, zen::host, env);
+  if (!EvmAbiMockMod) {
+    ZEN_LOG_ERROR("failed to load evmabi mock module");
+    return exitMain(EXIT_FAILURE, RT.get());
+  }
+#endif
+
   /// ================ Load user's module ================
 
   const auto &ActualEntryHint = !EntryHint.empty() ? EntryHint : FuncName;
@@ -174,7 +198,7 @@ int main(int argc, char *argv[]) {
     const Error &Err = ModRet.getError();
     ZEN_ASSERT(!Err.isEmpty());
     const auto &ErrMsg = Err.getFormattedMessage(false);
-    ZEN_LOG_ERROR("failed to load module: %s", ErrMsg.c_str());
+    SIMPLE_LOG_ERROR("failed to load module: %s", ErrMsg.c_str());
     return exitMain(EXIT_FAILURE, RT.get());
   }
   Module *Mod = *ModRet;
@@ -194,10 +218,20 @@ int main(int argc, char *argv[]) {
     const Error &Err = InstRet.getError();
     ZEN_ASSERT(!Err.isEmpty());
     const auto &ErrMsg = Err.getFormattedMessage(false);
-    ZEN_LOG_ERROR("failed to create instance: %s", ErrMsg.c_str());
+    SIMPLE_LOG_ERROR("failed to create instance: %s", ErrMsg.c_str());
     return exitMain(EXIT_FAILURE, RT.get());
   }
   Instance *Inst = *InstRet;
+
+#ifdef ZEN_ENABLE_EVMABI_TEST
+  std::vector<uint8_t> WasmFileBytecode;
+  if (!zen::utils::readBinaryFile(WasmFilename, WasmFileBytecode)) {
+    SIMPLE_LOG_ERROR("failed to read wasm file %s", WasmFilename.c_str());
+    return exitMain(EXIT_FAILURE, RT.get());
+  }
+  auto EVMAbiMockCtx = zen::host::EVMAbiMockContext::create(WasmFileBytecode);
+  Inst->setCustomData((void *)EVMAbiMockCtx.get());
+#endif // ZEN_ENABLE_EVMABI_TEST
 
   /// ================ Call function ================
 
@@ -209,8 +243,8 @@ int main(int argc, char *argv[]) {
       const Error &Err = Inst->getError();
       ZEN_ASSERT(!Err.isEmpty());
       const auto &ErrMsg = Err.getFormattedMessage(false);
-      ZEN_LOG_ERROR("failed to call function '%s': %s", FuncName.c_str(),
-                    ErrMsg.c_str());
+      SIMPLE_LOG_ERROR("failed to call function '%s': %s", FuncName.c_str(),
+                       ErrMsg.c_str());
       return exitMain(EXIT_FAILURE, RT.get());
     }
     printTypedValueArray(Results);
@@ -221,7 +255,7 @@ int main(int argc, char *argv[]) {
       const Error &Err = Inst->getError();
       ZEN_ASSERT(!Err.isEmpty());
       const auto &ErrMsg = Err.getFormattedMessage(false);
-      ZEN_LOG_ERROR("failed to call main function: %s", ErrMsg.c_str());
+      SIMPLE_LOG_ERROR("failed to call main function: %s", ErrMsg.c_str());
       return exitMain(EXIT_FAILURE, RT.get());
     }
   }
@@ -233,7 +267,7 @@ int main(int argc, char *argv[]) {
     try {
       Code = CodeHolder::newFileCodeHolder(*RT, WasmFilename);
     } catch (const std::exception &e) {
-      ZEN_LOG_ERROR("failed to load module: %s", e.what());
+      SIMPLE_LOG_ERROR("failed to load module: %s", e.what());
       return exitMain(EXIT_FAILURE, RT.get());
     }
     for (uint32_t I = 0; I < NumExtraCompilations; ++I) {

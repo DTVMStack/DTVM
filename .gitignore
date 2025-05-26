@@ -38,3 +38,6 @@ bazel-testlogs
 /*.writen.cpp
 /testsuites
 /venv
+
+# fuzzer
+/wtf

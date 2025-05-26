@@ -74,4 +74,34 @@ bool checkSupportRamDisk() {
 #endif
 }
 
+#ifndef ZEN_ENABLE_SGX
+bool readBinaryFile(const std::string &Path, std::vector<uint8_t> &Data) {
+  FILE *File = ::fopen(Path.c_str(), "rb");
+  if (!File) {
+    return false;
+  }
+  ::fseek(File, 0, SEEK_END);
+  size_t Size = ::ftell(File);
+  ::rewind(File);
+  Data.resize(Size);
+  ::fread(Data.data(), 1, Size, File);
+  ::fclose(File);
+  return true;
+}
+#endif // ZEN_ENABLE_SGX
+
+const char HEX_CHARS[] = "0123456789ABCDEF";
+
+std::string toHex(const uint8_t *Bytes, size_t BytesCount) {
+  std::string HexStr;
+  HexStr.reserve(BytesCount * 2);
+
+  for (size_t I = 0; I < BytesCount; I++) {
+    unsigned char B = (unsigned char)Bytes[I];
+    HexStr += HEX_CHARS[(B >> 4) & 0x0F]; // high 4 bits
+    HexStr += HEX_CHARS[B & 0x0F];        // low 4 bits
+  }
+  return HexStr;
+}
+
 } // namespace zen::utils

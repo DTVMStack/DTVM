@@ -47,6 +47,7 @@ option(ZEN_ENABLE_LINUX_PERF "Enable linux perf" OFF)
 option(ZEN_ENABLE_SPEC_TEST "Enable spec test" OFF)
 option(ZEN_ENABLE_ASSEMBLYSCRIPT_TEST "Enable AssemblyScript test" OFF)
 option(ZEN_ENABLE_MOCK_CHAIN_TEST "Enable mock chain hostapis for test" OFF)
+option(ZEN_ENABLE_EVMABI_TEST "Enable evmabi test" OFF)
 option(ZEN_ENABLE_COVERAGE "Enable coverage test" OFF)
 
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
@@ -105,6 +106,10 @@ if(ZEN_ENABLE_BUILTIN_LIBC
    OR ZEN_ENABLE_ASSEMBLYSCRIPT_TEST
 )
   set(ZEN_ENABLE_BUILTIN_ENV ON)
+endif()
+
+if(ZEN_ENABLE_EVMABI_TEST)
+  set(ZEN_ENABLE_EVMABI_TEST ON)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/third_party")

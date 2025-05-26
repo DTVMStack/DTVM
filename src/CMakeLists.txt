@@ -21,6 +21,10 @@ if(ZEN_ENABLE_BUILTIN_ENV)
   add_definitions(-DZEN_ENABLE_BUILTIN_ENV)
 endif()
 
+if(ZEN_ENABLE_EVMABI_TEST)
+  add_definitions(-DZEN_ENABLE_EVMABI_TEST)
+endif()
+
 if(ZEN_ENABLE_CHECKED_ARITHMETIC)
   add_definitions(-DZEN_ENABLE_CHECKED_ARITHMETIC)
 endif()

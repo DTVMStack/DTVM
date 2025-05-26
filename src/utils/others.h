@@ -36,6 +36,12 @@ void printTypedValueArray(const std::vector<common::TypedValue> &Results);
 
 bool checkSupportRamDisk();
 
+#ifndef ZEN_ENABLE_SGX
+bool readBinaryFile(const std::string &Path, std::vector<uint8_t> &Data);
+#endif // ZEN_ENABLE_SGX
+
+std::string toHex(const uint8_t *Bytes, size_t BytesCount);
+
 } // namespace zen::utils
 
 #endif // ZEN_UTILS_OTHERS_H

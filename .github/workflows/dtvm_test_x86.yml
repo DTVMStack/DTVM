@@ -137,3 +137,38 @@ jobs:
 
           bash .ci/run_test_suite.sh
 
+  build_test_evmabi_mock_cli_on_x86:
+    name: Build and test DTVM cli with evm abi hostapis on x86-64
+    runs-on: ubuntu-latest
+    container:
+      image: dtvmdev1/dtvm-dev-x64:main
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: Code Format Check
+        run: |
+          ./tools/format.sh check
+      - name: Test Git clone
+        run: |
+          git clone https://github.com/asmjit/asmjit.git
+      - name: Install llvm
+        run: |
+          echo "current home is $HOME"
+          export CUR_PROJECT=$(pwd)
+          cd /opt
+          # ./install_llvm15.sh
+          # ./install_rust.sh
+          cd $CUR_PROJECT
+          export LLVM_SYS_150_PREFIX=/opt/llvm15
+          export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
+          export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
+          cd tests/wast/spec
+          git apply ../spec.patch
+          cd $CUR_PROJECT
+
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DZEN_ENABLE_DWASM=ON -DZEN_ENABLE_SINGLEPASS_JIT=ON -DZEN_ENABLE_MULTIPASS_JIT=ON -DZEN_ENABLE_CHECKED_ARITHMETIC=ON  -DZEN_ENABLE_CPU_EXCEPTION=OFF -DZEN_ENABLE_EVMABI_TEST=ON -DZEN_ENABLE_BUILTIN_LIBC=OFF -DZEN_ENABLE_BUILTIN_ENV=OFF
+          cmake --build build -j7
+          # use dtvm to test evm abi wasm files
+          # ./build/dtvm -m 2 -f call counter.wasm
