@@ -63,16 +63,45 @@ if(ZEN_ENABLE_SPEC_TEST)
   if(ZEN_BUILD_PLATFORM_LINUX)
     target_link_libraries(specUnitTests PRIVATE stdc++fs)
   endif()
-  target_link_libraries(
-    mempoolTests
-    PRIVATE dtvmcore gtest_main
-    PUBLIC ${GTEST_BOTH_LIBRARIES}
-  )
-  target_link_libraries(
-    cAPITests
-    PRIVATE dtvmcore gtest_main
-    PUBLIC ${GTEST_BOTH_LIBRARIES}
-  )
+
+  if(ZEN_ENABLE_ASAN)
+    target_compile_options(mempoolTests PRIVATE -fsanitize=address)
+    target_compile_options(cAPITests PRIVATE -fsanitize=address)
+    if(ZEN_BUILD_PLATFORM_DARWIN)
+      target_link_libraries(
+        mempoolTests
+        PRIVATE dtvmcore gtest_main -fsanitize=address
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+      target_link_libraries(
+        cAPITests
+        PRIVATE dtvmcore gtest_main -fsanitize=address
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+    else()
+      target_link_libraries(
+        mempoolTests
+        PRIVATE dtvmcore gtest_main -fsanitize=address -static-libasan
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+      target_link_libraries(
+        cAPITests
+        PRIVATE dtvmcore gtest_main -fsanitize=address -static-libasan
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+    endif()
+  else()
+    target_link_libraries(
+      mempoolTests
+      PRIVATE dtvmcore gtest_main
+      PUBLIC ${GTEST_BOTH_LIBRARIES}
+    )
+    target_link_libraries(
+      cAPITests
+      PRIVATE dtvmcore gtest_main
+      PUBLIC ${GTEST_BOTH_LIBRARIES}
+    )
+  endif()
 
   add_dependencies(specUnitTests spec_jsons)
 
