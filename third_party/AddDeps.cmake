@@ -75,9 +75,11 @@ if(ZEN_ENABLE_SPEC_TEST)
 
   FetchContent_Declare(
     rapidjson
-    GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
-    GIT_COMMIT 06d58b9e848c650114556a23294d0b6440078c61
-    GIT_SHALLOW TRUE
+    URL https://github.com/Tencent/rapidjson/archive/06d58b9e848c650114556a23294d0b6440078c61.zip
+    URL_HASH
+      SHA256=05562af69b62d0a203ae1ecd914bf8e501cde630078bf82384485e9b85e7bf55
+    # GIT_REPOSITORY https://github.com/Tencent/rapidjson.git GIT_COMMIT
+    # 06d58b9e848c650114556a23294d0b6440078c61 GIT_SHALLOW TRUE
   )
   set(RAPIDJSON_BUILD_DOC OFF)
   set(RAPIDJSON_BUILD_EXAMPLES OFF)

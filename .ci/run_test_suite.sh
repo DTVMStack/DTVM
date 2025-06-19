@@ -70,6 +70,7 @@ if [[ $RUN_MODE == "interpreter" ]]; then
 fi
 
 export PATH=$PATH:$PWD/build
+CMAKE_OPTIONS_ORIGIN="$CMAKE_OPTIONS"
 
 for STACK_TYPE in ${STACK_TYPES[@]}; do
     rm -rf build
