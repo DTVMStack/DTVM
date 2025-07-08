@@ -79,7 +79,7 @@ constexpr A64::Type getA64TypeFromWASMType(WASMType Type) {
   };
 }
 
-template <A64::Type type> constexpr WASMType getWASMTypeFromA64Type() {
+template <A64::Type type> const WASMType getWASMTypeFromA64Type() {
   ZEN_STATIC_ASSERT(type >= A64::I8 && type <= A64::V128);
   switch (type) {
   case A64::I8:
@@ -97,7 +97,7 @@ template <A64::Type type> constexpr WASMType getWASMTypeFromA64Type() {
   case A64::V128:
     return WASMType::V128;
   default:
-    ZEN_ASSERT_TODO();
+    throw getError(ErrorCode::InvalidType);
   }
 }
 

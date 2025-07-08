@@ -78,7 +78,7 @@ constexpr X64::Type getX64TypeFromWASMType(WASMType Type) {
   };
 }
 
-template <X64::Type Ty> constexpr WASMType getWASMTypeFromX64Type() {
+template <X64::Type Ty> const WASMType getWASMTypeFromX64Type() {
   ZEN_STATIC_ASSERT(Ty >= X64::I8 && Ty <= X64::V128);
   switch (Ty) {
   case X64::I8:
