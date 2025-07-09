@@ -1,0 +1,9 @@
+// 10 % 3 = 1 (signed modulo)
+PUSH1 0x03
+PUSH1 0x0A
+SMOD
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN
