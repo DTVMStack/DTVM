@@ -12,9 +12,9 @@ public:
     if (Data.empty()) {
       throw common::getError(common::ErrorCode::InvalidRawData);
     }
-    Mod.code = Mod.initCode(Data.size());
-    std::memcpy(Mod.code, Data.data(), Data.size());
-    Mod.code_size = Data.size();
+    Mod.Code = Mod.initCode(Data.size());
+    std::memcpy(Mod.Code, Data.data(), Data.size());
+    Mod.CodeSize = Data.size();
   }
 
 private:

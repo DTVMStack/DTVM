@@ -15,7 +15,7 @@
 namespace zen::runtime {
 
 EVMModule::EVMModule(Runtime *RT)
-    : BaseModule(RT, ModuleType::EVM), code(nullptr), code_size(0) {
+    : BaseModule(RT, ModuleType::EVM), Code(nullptr), CodeSize(0) {
   // do nothing
 }
 
@@ -25,8 +25,8 @@ EVMModule::~EVMModule() {
     Name = common::WASM_SYMBOL_NULL;
   }
 
-  if (code) {
-    deallocate(code);
+  if (Code) {
+    deallocate(Code);
   }
 }
 
@@ -38,8 +38,8 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
   auto *RawMod = new (ObjBuf) EVMModule(&RT);
   EVMModuleUniquePtr Mod(RawMod);
 
-  const uint8_t *data = static_cast<const uint8_t *>(CodeHolder->getData());
-  std::vector<uint8_t> CodeVector(data, data + CodeHolder->getSize());
+  const uint8_t *Data = static_cast<const uint8_t *>(CodeHolder->getData());
+  std::vector<uint8_t> CodeVector(Data, Data + CodeHolder->getSize());
   action::EVMModuleLoader Loader(*Mod, CodeVector);
 
   auto &Stats = RT.getStatistics();

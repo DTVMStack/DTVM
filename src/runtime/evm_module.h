@@ -14,8 +14,8 @@ public:
 
   virtual ~EVMModule();
 
-  uint8_t *code;
-  size_t code_size;
+  uint8_t *Code;
+  size_t CodeSize;
 
 private:
   EVMModule(Runtime *RT);
@@ -23,7 +23,7 @@ private:
   EVMModule &operator=(const EVMModule &Other) = delete;
   CodeHolderUniquePtr CodeHolder;
 
-  uint8_t *initCode(size_t size) { return (uint8_t *)allocateZeros(size); }
+  uint8_t *initCode(size_t Size) { return (uint8_t *)allocateZeros(Size); }
 };
 
 } // namespace runtime
