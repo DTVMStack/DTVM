@@ -19,10 +19,14 @@
 #include "runtime/module.h"
 #include "runtime/symbol_wrapper.h"
 #include "utils/logging.h"
+#include "utils/others.h"
 #include "utils/statistics.h"
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
 #include "utils/virtual_stack.h"
 #endif
+#include <evmc/hex.hpp>
+#include <fstream>
+#include <string_view>
 #include <unistd.h>
 
 namespace zen::runtime {
@@ -225,12 +229,36 @@ Runtime::loadEVMModule(const std::string &Filename) noexcept {
   }
 
   try {
-    auto Code = CodeHolder::newFileCodeHolder(*this, Filename);
+    // Read hex content from file
+    std::ifstream File(Filename);
+    if (!File.is_open()) {
+      return getError(ErrorCode::FileAccessFailed);
+    }
+
+    std::string HexContent((std::istreambuf_iterator<char>(File)),
+                           std::istreambuf_iterator<char>());
+    File.close();
+    // trim HexContent
+    utils::trimString(HexContent);
+
+    // Decode hex string to bytes
+    auto DecodedBytes = utils::fromHex(std::string_view(HexContent));
+    if (!DecodedBytes.has_value()) {
+      return getError(ErrorCode::InvalidRawData);
+    }
+
+    // Create CodeHolder with decoded bytes
+    auto Code = CodeHolder::newRawDataCodeHolder(*this, DecodedBytes->data(),
+                                                 DecodedBytes->size());
     return loadEVMModule(Name, std::move(Code));
   } catch (const Error &Err) {
     Stats.clearAllTimers();
     freeSymbol(Name);
     return Err;
+  } catch (const std::exception &StdErr) {
+    Stats.clearAllTimers();
+    freeSymbol(Name);
+    return getError(ErrorCode::FileAccessFailed);
   }
 }
 

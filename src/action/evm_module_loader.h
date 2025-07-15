@@ -4,20 +4,22 @@ namespace zen::action {
 
 class EVMModuleLoader final {
 public:
-  using Byte = std::optional<evmc::bytes>;
-
-  explicit EVMModuleLoader(runtime::EVMModule &mod, const char *data)
-      : Mod(mod), Data(evmc::from_spaced_hex(std::string(data))) {}
+  explicit EVMModuleLoader(runtime::EVMModule &mod,
+                           const std::vector<uint8_t> &data)
+      : Mod(mod), Data(data) {}
 
   void load() {
-    Mod.code = Mod.initCode(Data->size());
-    std::memcpy(Mod.code, Data->data(), Data->size());
-    Mod.code_size = Data->size();
+    if (Data.empty()) {
+      throw common::getError(common::ErrorCode::InvalidRawData);
+    }
+    Mod.code = Mod.initCode(Data.size());
+    std::memcpy(Mod.code, Data.data(), Data.size());
+    Mod.code_size = Data.size();
   }
 
 private:
   runtime::EVMModule &Mod;
-  const Byte Data;
+  const std::vector<uint8_t> Data;
 };
 
 } // namespace zen::action
