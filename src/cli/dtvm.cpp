@@ -68,7 +68,6 @@ int main(int argc, char *argv[]) {
   }
 
   std::string Filename;
-  InputFormat format;
   std::string FuncName;
   std::string EntryHint;
   std::vector<std::string> Args;
@@ -79,6 +78,7 @@ int main(int argc, char *argv[]) {
   uint32_t NumExtraCompilations = 0;
   uint32_t NumExtraExecutions = 0;
   RuntimeConfig Config;
+  InputFormat Format;
   bool EnableBenchmark = false;
 
   const std::unordered_map<std::string, InputFormat> FormatMap = {
@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
 
   try {
     CLIParser->add_option("INPUT_FILE", Filename, "input filename")->required();
-    CLIParser->add_option("--format", format, "Input format")
+    CLIParser->add_option("--format", Format, "Input format")
         ->transform(CLI::CheckedTransformer(FormatMap, CLI::ignore_case));
     CLIParser->add_option("-m,--mode", Config.Mode, "Running mode")
         ->transform(CLI::CheckedTransformer(ModeMap, CLI::ignore_case));
@@ -159,7 +159,7 @@ int main(int argc, char *argv[]) {
 
   /// ================ Basic evm interpreter ================
 
-  if (format == InputFormat::EVM) {
+  if (Format == InputFormat::EVM) {
 
     std::unique_ptr<Runtime> RT = Runtime::newRuntime(Config);
     if (!RT) {
@@ -178,7 +178,7 @@ int main(int argc, char *argv[]) {
     EVMModule *Mod = *ModRet;
 
     if (!RT->unloadEVMModule(Mod)) {
-      ZEN_LOG_ERROR("failed to unload module");
+      ZEN_LOG_ERROR("failed to unload EVM module");
       return exitMain(EXIT_FAILURE, RT.get());
     }
 

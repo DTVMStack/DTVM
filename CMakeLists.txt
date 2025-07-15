@@ -9,9 +9,10 @@ include(FetchContent)
 FetchContent_Declare(
   intx
   GIT_REPOSITORY https://github.com/chfast/intx.git
-  GIT_TAG v0.13.0
+  GIT_TAG v0.9.3
 )
 FetchContent_MakeAvailable(intx)
+include_directories(${intx_SOURCE_DIR}/include)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
