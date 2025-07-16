@@ -79,9 +79,6 @@ public:
       case WASMType::F64:
         layoutArgument<WASMType::F64>(FpNum, StkSize);
         break;
-      case WASMType::V128:
-        layoutArgument<WASMType::V128>(FpNum, StkSize);
-        break;
       default:
         ZEN_ABORT();
       }
@@ -819,8 +816,7 @@ protected:
     RegNum Reg;
     if (Type == WASMType::I32 || Type == WASMType::I64) {
       Reg = ABI.template getRetRegNum<I64>();
-    } else if (Type == WASMType::F32 || Type == WASMType::F64 ||
-               Type == WASMType::V128) {
+    } else if (Type == WASMType::F32 || Type == WASMType::F64) {
       Reg = ABI.template getRetRegNum<F64>();
     } else {
       ZEN_ABORT();
@@ -1015,10 +1011,6 @@ private:
         case WASMType::F64:
           FpAvailMask |= (1 << Info.getReg());
           self().template storeRegToMem<F64>(Info.getReg(), Addr);
-          break;
-        case WASMType::V128:
-          FpAvailMask |= (1 << Info.getReg());
-          self().template storeRegToMem<V128>(Info.getReg(), Addr);
           break;
         default:
           // ZEN_ASSERT_TODO();

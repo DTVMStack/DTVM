@@ -213,10 +213,6 @@ private:
       case WASMType::F64:
         mov<X64::F64>(ABI.getRetRegNum<X64::F64>(), Op);
         break;
-      case WASMType::V128:
-        ZEN_ASSERT(false);
-        // mov<X64::V128>(ABI.getFloatRet(), opnd);
-        break;
       default:
         ZEN_ASSERT(false);
       }
@@ -1371,8 +1367,6 @@ public:
       return selectWithIf<WASMType::F32>(Cond, LHS, RHS);
     case WASMType::F64:
       return selectWithIf<WASMType::F64>(Cond, LHS, RHS);
-    case WASMType::V128:
-      return selectWithIf<WASMType::V128>(Cond, LHS, RHS);
     default:
       ZEN_ABORT();
     }

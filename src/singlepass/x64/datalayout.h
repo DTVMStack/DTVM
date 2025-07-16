@@ -106,9 +106,6 @@ public:
       case WASMType::F64:
         layoutParam<WASMType::F64>(FpParamCnt, StackTop, UpStackOffset);
         break;
-      case WASMType::V128:
-        layoutParam<WASMType::V128>(FpParamCnt, StackTop, UpStackOffset);
-        break;
       default:
         ZEN_ABORT();
       }
@@ -128,9 +125,6 @@ public:
         break;
       case WASMType::F64:
         layoutLocal<WASMType::F64>(StackTop);
-        break;
-      case WASMType::V128:
-        layoutLocal<WASMType::V128>(StackTop);
         break;
       default:
         ZEN_ABORT();

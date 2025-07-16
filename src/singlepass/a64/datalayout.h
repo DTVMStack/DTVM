@@ -106,9 +106,6 @@ public:
       case WASMType::F64:
         layoutParam<WASMType::F64>(FpParamCnt, StackTop, UpStackOffset);
         break;
-      case WASMType::V128:
-        layoutParam<WASMType::V128>(FpParamCnt, StackTop, UpStackOffset);
-        break;
       default:
         ZEN_ABORT();
       }
@@ -128,9 +125,6 @@ public:
         break;
       case WASMType::F64:
         layoutLocal<WASMType::F64>(StackTop);
-        break;
-      case WASMType::V128:
-        layoutLocal<WASMType::V128>(StackTop);
         break;
       default:
         ZEN_ABORT();
@@ -254,7 +248,6 @@ public:
         break;
       case WASMType::F32:
       case WASMType::F64:
-      case WASMType::V128:
         ZEN_ASSERT(A64OnePassABI::isTempReg<A64::F32>(Reg));
         VmState.markAvailReg<A64::F32>((A64::FP)Reg);
         break;

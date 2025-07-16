@@ -25,7 +25,6 @@ enum class WASMType : uint8_t {
   I64,
   F32,
   F64,
-  V128,
   FUNCREF,
   ANY,
   ERROR_TYPE
@@ -83,13 +82,6 @@ template <> struct WASMTypeAttr<WASMType::F64> {
   static constexpr WASMTypeKind Kind = WASMTypeKind::FLOAT;
   static constexpr uint32_t Size = 8;
   static constexpr uint32_t NumCells = 2;
-};
-
-template <> struct WASMTypeAttr<WASMType::V128> {
-  typedef double Type;
-  static constexpr WASMTypeKind Kind = WASMTypeKind::VECTOR;
-  static constexpr uint32_t Size = 16;
-  static constexpr uint32_t NumCells = 4;
 };
 
 // ============================================================================
@@ -195,8 +187,6 @@ static inline WASMTypeKind getWASMTypeKind(WASMType Type) {
   case WASMType::F32:
   case WASMType::F64:
     return WASMTypeKind::FLOAT;
-  case WASMType::V128:
-    return WASMTypeKind::VECTOR;
   default:
     ZEN_ABORT();
   }
@@ -218,8 +208,6 @@ static inline uint32_t getWASMTypeSize(WASMType Type) {
   case WASMType::I64:
   case WASMType::F64:
     return 8;
-  case WASMType::V128:
-    return 16;
   case WASMType::ANY:
     return 4;
   default:
@@ -243,8 +231,6 @@ static inline uint32_t getWASMTypeCellNum(WASMType Type) {
   case WASMType::I64:
   case WASMType::F64:
     return 2;
-  case WASMType::V128:
-    return 4;
   default:
     ZEN_ABORT();
   }
@@ -275,8 +261,6 @@ getWASMTypeKindAndSize(WASMType Type) {
     return {WASMTypeKind::FLOAT, 4};
   case WASMType::F64:
     return {WASMTypeKind::FLOAT, 8};
-  case WASMType::V128:
-    return {WASMTypeKind::VECTOR, 16};
   default:
     ZEN_ABORT();
   }

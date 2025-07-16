@@ -33,6 +33,7 @@ enum Type {
 } // namespace X64
 
 template <WASMType Type> constexpr X64::Type getX64TypeFromWASMType() {
+  ZEN_STATIC_ASSERT(WASMType::I8 <= Type && Type <= WASMType::F64);
   switch (Type) {
   case WASMType::I8:
     return X64::I8;
@@ -44,14 +45,8 @@ template <WASMType Type> constexpr X64::Type getX64TypeFromWASMType() {
     return X64::I64;
   case WASMType::F32:
     return X64::F32;
-  case WASMType::F64:
+  default: // WASMType::F64
     return X64::F64;
-  case WASMType::V128:
-    return X64::V128;
-    //        case WASMType::REF:
-    //            return X64::I64; // 64-bit reference
-  default:
-    ZEN_ASSERT_TODO();
   };
 }
 
@@ -69,17 +64,13 @@ constexpr X64::Type getX64TypeFromWASMType(WASMType Type) {
     return X64::F32;
   case WASMType::F64:
     return X64::F64;
-  case WASMType::V128:
-    return X64::V128;
-    //        case WASMType::REF:
-    //            return X64::I64; // 64-bit reference
   default:
     ZEN_ASSERT_TODO();
   };
 }
 
-template <X64::Type Ty> const WASMType getWASMTypeFromX64Type() {
-  ZEN_STATIC_ASSERT(Ty >= X64::I8 && Ty <= X64::V128);
+template <X64::Type Ty> constexpr WASMType getWASMTypeFromX64Type() {
+  ZEN_STATIC_ASSERT(X64::I8 <= Ty && Ty <= X64::F64);
   switch (Ty) {
   case X64::I8:
     return WASMType::I8;
@@ -91,13 +82,8 @@ template <X64::Type Ty> const WASMType getWASMTypeFromX64Type() {
     return WASMType::I64;
   case X64::F32:
     return WASMType::F32;
-  case X64::F64:
+  default: // X64::F64
     return WASMType::F64;
-  // case X64::V128:
-  //   return WASMType::V128;
-  default:
-    throw getError(ErrorCode::InvalidType);
-    // ZEN_ASSERT_TODO();
   }
 }
 

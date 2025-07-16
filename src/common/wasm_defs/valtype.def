@@ -14,7 +14,6 @@ DEFINE_VALUE_TYPE(I32,      0x7f,   "i32")
 DEFINE_VALUE_TYPE(I64,      0x7e,   "i64")
 DEFINE_VALUE_TYPE(F32,      0x7d,   "f32")
 DEFINE_VALUE_TYPE(F64,      0x7c,   "f64")
-DEFINE_VALUE_TYPE(V128,     0x7b,   "v128")
 #endif
 
 
