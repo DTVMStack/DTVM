@@ -62,8 +62,8 @@ int main(int argc, char *argv[]) {
   try {
     CLIParser = std::make_unique<CLI::App>(
         "ZetaEngine Command Line Interface\n", "dtvm");
-  } catch (const std::exception &e) {
-    printf("failed to create CLI parser: %s\n", e.what());
+  } catch (const std::exception &E) {
+    printf("failed to create CLI parser: %s\n", E.what());
     return exitMain(EXIT_FAILURE);
   }
 
@@ -145,15 +145,15 @@ int main(int argc, char *argv[]) {
 #endif // ZEN_ENABLE_MULTIPASS_JIT
 
     CLI11_PARSE(*CLIParser, argc, argv);
-  } catch (const std::exception &e) {
-    printf("failed to parse command line arguments: %s\n", e.what());
+  } catch (const std::exception &E) {
+    printf("failed to parse command line arguments: %s\n", E.what());
     return exitMain(EXIT_FAILURE);
   }
 
   try {
     zen::setGlobalLogger(createConsoleLogger("dtvm_cli_logger", LogLevel));
-  } catch (const std::exception &e) {
-    ZEN_LOG_ERROR("failed to create logger: %s", e.what());
+  } catch (const std::exception &E) {
+    ZEN_LOG_ERROR("failed to create logger: %s", E.what());
     return exitMain(EXIT_FAILURE);
   }
 
@@ -302,8 +302,8 @@ int main(int argc, char *argv[]) {
     CodeHolderUniquePtr Code;
     try {
       Code = CodeHolder::newFileCodeHolder(*RT, Filename);
-    } catch (const std::exception &e) {
-      SIMPLE_LOG_ERROR("failed to load module: %s", e.what());
+    } catch (const std::exception &E) {
+      SIMPLE_LOG_ERROR("failed to load module: %s", E.what());
       return exitMain(EXIT_FAILURE, RT.get());
     }
     for (uint32_t I = 0; I < NumExtraCompilations; ++I) {

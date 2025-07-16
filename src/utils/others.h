@@ -9,6 +9,7 @@
 #include "utils/logging.h"
 
 #include <chrono>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -41,6 +42,10 @@ bool readBinaryFile(const std::string &Path, std::vector<uint8_t> &Data);
 #endif // ZEN_ENABLE_SGX
 
 std::string toHex(const uint8_t *Bytes, size_t BytesCount);
+
+std::optional<std::vector<uint8_t>> fromHex(std::string_view HexStr);
+
+void trimString(std::string &Str);
 
 } // namespace zen::utils
 

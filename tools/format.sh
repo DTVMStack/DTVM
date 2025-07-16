@@ -9,6 +9,12 @@ if ! command -v clang-format &>/dev/null; then
   exit 1
 fi
 
+# Check if clang-tidy is installed
+if ! command -v clang-tidy &>/dev/null; then
+  echo "Error: clang-tidy command not found, please install it and try again." >&2
+  exit 1
+fi
+
 # Check if cmake-format is installed
 if ! command -v cmake-format &>/dev/null; then
   echo "Error: cmake-format command not found, please install it and try again." >&2
@@ -22,6 +28,13 @@ if [ "$1" == "check" ]; then
   find third_party -type f -name "*.cmake" | xargs cmake-format --check
   # Check the format of all C/C++ files
   find src -path "src/compiler/llvm-prebuild" -prune -type f -or -name "*.h" -or -name "*.c" -or -name "*.cpp" | xargs clang-format --dry-run -style=file -Werror
+elif [ "$1" == "tidy-check" ]; then
+  # Check variable naming conventions with clang-tidy
+  if [ -d "build" ]; then
+    find src -path "src/compiler/llvm-prebuild" -prune -type f -or -name "*.h" -or -name "*.c" -or -name "*.cpp" | head -5 | xargs clang-tidy -p build --quiet --checks='readability-identifier-naming'
+  else
+    echo "Warning: build directory not found, skipping clang-tidy checks"
+  fi
 elif [ "$1" == "format" ]; then
   # Format all CMake files
   cmake-format -i CMakeLists.txt
