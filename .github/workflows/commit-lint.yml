@@ -36,7 +36,7 @@ jobs:
                 'feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore'
               ]],
               'scope-enum': [2, 'always', [
-                'core', 'runtime', 'compiler', 'examples', 'docs', 'tools', 'deps', 'ci', 'test', 'other', ''
+                'core', 'runtime', 'compiler', 'examples', 'docs', 'tools', 'deps', 'ci', 'test', 'evm', 'other', ''
               ]],
               'body-max-line-length': [1, 'always', 100],
               'subject-case': [0, 'never'],

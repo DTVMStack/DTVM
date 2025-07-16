@@ -40,6 +40,7 @@ The scope should specify the area of the change, for example:
 - **deps**: Dependency related
 - **ci**: CI related
 - **test**: Test related
+- **evm**: EVM related
 - **other**: Other
 
 ### Description
