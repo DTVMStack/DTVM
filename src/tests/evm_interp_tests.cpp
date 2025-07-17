@@ -54,20 +54,14 @@ void appendResult(const std::string &SampleName, const std::string &HexRet) {
 }
 
 std::string readAnswerFile(const std::string &FilePath) {
-  std::string::size_type SepPos = FilePath.find_last_of("/\\");
-  std::string DirPath = (SepPos == std::string::npos)
-                            ? std::string()
-                            : FilePath.substr(0, SepPos + 1);
+  std::filesystem::path InputFilePath(FilePath);
 
-  std::string FileName =
-      (SepPos == std::string::npos) ? FilePath : FilePath.substr(SepPos + 1);
+  // Use filesystem API instead of manual path parsing
+  std::filesystem::path AnswerPath =
+      InputFilePath.parent_path() /
+      (InputFilePath.stem().stem().string() + ".answer");
 
-  std::string::size_type DotPos = FileName.find('.');
-  std::string BaseName =
-      (DotPos == std::string::npos) ? FileName : FileName.substr(0, DotPos);
-
-  std::string AnswerPath = DirPath + BaseName + ".answer";
-
+  // Read file content
   std::ifstream Fin(AnswerPath);
   if (!Fin) {
     return "";
@@ -90,15 +84,9 @@ TEST_P(EVMSampleTest, ExecuteSample) {
 
   std::string Hex;
   Fin >> Hex;
-  ASSERT_FALSE(Hex.empty()) << "Test file is empty: " << FilePath;
-  ASSERT_EQ(Hex.size() % 2, 0u) << "Bytecode length is not even: " << FilePath;
-
-  std::vector<uint8_t> BytecodeBuf;
-  for (size_t I = 0; I < Hex.size(); I += 2) {
-    uint8_t ByteVal =
-        static_cast<uint8_t>(std::stoul(Hex.substr(I, 2), nullptr, 16));
-    BytecodeBuf.push_back(ByteVal);
-  }
+  zen::utils::trimString(Hex);
+  auto BytecodeBuf = zen::utils::fromHex(Hex);
+  ASSERT_TRUE(BytecodeBuf) << "Failed to convert hex to bytecode";
 
   RuntimeConfig Config;
   Config.Mode = common::RunMode::InterpMode;
@@ -130,7 +118,7 @@ TEST_P(EVMSampleTest, ExecuteSample) {
         << "Test: " << std::filesystem::path(FilePath).filename().string()
         << "\nExpected: " << ExpectedAnswer << "\nActual:   " << HexRet;
   } else {
-    std::cout << "No answer file found for: " << FilePath << std::endl;
+    ASSERT_TRUE(false) << "No answer file found for: " << FilePath;
   }
 
   EXPECT_EQ(Ctx.getCurFrame(), nullptr)
