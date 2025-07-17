@@ -101,9 +101,6 @@ TEST_P(EVMSampleTest, ExecuteSample) {
 
   InterpreterExecContext Ctx(Mod);
 
-  EVMFrame *Frame = Ctx.allocFrame();
-  ASSERT_NE(Frame, nullptr) << "Failed to allocate EVM frame";
-
   BaseInterpreter Interpreter(Ctx);
   EXPECT_NO_THROW({ Interpreter.interpret(); });
 
