@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
   uint32_t NumExtraCompilations = 0;
   uint32_t NumExtraExecutions = 0;
   RuntimeConfig Config;
-  InputFormat Format;
+  InputFormat Format = InputFormat::WASM;
   bool EnableBenchmark = false;
 
   const std::unordered_map<std::string, InputFormat> FormatMap = {
