@@ -38,135 +38,136 @@ void InterpreterExecContext::freeBackFrame() {
   FrameStack.pop_back();
 }
 
-//Opcode preocessing function
-void handleOP_ADD(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 C = A + B;
-    Frame->push(C);
+namespace {
+// Opcode processing function
+void handleOpADD(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 C = A + B;
+  Frame->push(C);
 }
-void handleOP_SUB(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = A - B;
-    Frame->push(Res);
+void handleOpSUB(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = A - B;
+  Frame->push(Res);
 }
-void handleOP_MUL(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = A * B;
-    Frame->push(Res);
+void handleOpMUL(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = A * B;
+  Frame->push(Res);
 }
 
-void handleOP_DIV(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-      intx::uint256 A = Frame->pop();
-      intx::uint256 B = Frame->pop();
-      intx::uint256 Q = (B == 0) ? intx::uint256(0) : A / B;
-      Frame->push(Q);
+void handleOpDIV(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Q = (B == 0) ? intx::uint256(0) : A / B;
+  Frame->push(Q);
 }
-void handleOP_MOD(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 R = (B == 0) ? intx::uint256(0) : A % B;
-    Frame->push(R);
+void handleOpMOD(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 R = (B == 0) ? intx::uint256(0) : A % B;
+  Frame->push(R);
 }
-void handleOP_AND(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = A & B;
-    Frame->push(Res);
+void handleOpAND(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = A & B;
+  Frame->push(Res);
 }
-void handleOP_EQ(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = (A == B) ? intx::uint256(1) : intx::uint256(0);
-    Frame->push(Res);
-}   
-void handleOP_ISZERO(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 1);
-    intx::uint256 V = Frame->pop();
-    intx::uint256 Res = (V == 0) ? intx::uint256(1) : intx::uint256(0);
-    Frame->push(Res);
+void handleOpEQ(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = (A == B) ? intx::uint256(1) : intx::uint256(0);
+  Frame->push(Res);
 }
-void handleOP_LT(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = (A < B) ? intx::uint256(1) : intx::uint256(0);
-    Frame->push(Res);
+void handleOpISZERO(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 1);
+  intx::uint256 V = Frame->pop();
+  intx::uint256 Res = (V == 0) ? intx::uint256(1) : intx::uint256(0);
+  Frame->push(Res);
 }
-void handleOP_GT(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = (A > B) ? intx::uint256(1) : intx::uint256(0);
-    Frame->push(Res);
+void handleOpLT(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = (A < B) ? intx::uint256(1) : intx::uint256(0);
+  Frame->push(Res);
 }
-void handleOP_SLT(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = intx::slt(A, B);
-    Frame->push(Res);
+void handleOpGT(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = (A > B) ? intx::uint256(1) : intx::uint256(0);
+  Frame->push(Res);
 }
-void handleOP_SGT(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = intx::slt(B, A);
-    Frame->push(Res);
+void handleOpSLT(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = intx::slt(A, B);
+  Frame->push(Res);
 }
-void handleOP_ADDMOD(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 3);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 C = Frame->pop();
-    intx::uint256 Res = (C == 0) ? intx::uint256(0) : intx::addmod(A, B, C);
-    Frame->push(Res);
+void handleOpSGT(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = intx::slt(B, A);
+  Frame->push(Res);
 }
-void handleOP_MULMOD(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 3);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 C = Frame->pop();
-    intx::uint256 Res = (C == 0) ? intx::uint256(0) : intx::mulmod(A, B, C);
-    Frame->push(Res);
+void handleOpADDMOD(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 3);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 C = Frame->pop();
+  intx::uint256 Res = (C == 0) ? intx::uint256(0) : intx::addmod(A, B, C);
+  Frame->push(Res);
 }
-void handleOP_EXP(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 Base = Frame->pop();
-    intx::uint256 Exp = Frame->pop();
-    intx::uint256 Res = intx::exp(Base, Exp);
-    Frame->push(Res);
+void handleOpMULMOD(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 3);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 C = Frame->pop();
+  intx::uint256 Res = (C == 0) ? intx::uint256(0) : intx::mulmod(A, B, C);
+  Frame->push(Res);
 }
-void handleOP_SDIV(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).quot;
-    Frame->push(Res);
+void handleOpEXP(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 Base = Frame->pop();
+  intx::uint256 Exp = Frame->pop();
+  intx::uint256 Res = intx::exp(Base, Exp);
+  Frame->push(Res);
 }
-void handleOP_SMOD(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).rem;
-    Frame->push(Res);
+void handleOpSDIV(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).quot;
+  Frame->push(Res);
 }
-void handleOP_SIGNEXTEND(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 I = Frame->pop();
-    intx::uint256 V = Frame->pop();
+void handleOpSMOD(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).rem;
+  Frame->push(Res);
+}
+void handleOpSIGNEXTEND(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 I = Frame->pop();
+  intx::uint256 V = Frame->pop();
 
-    intx::uint256 Res = V;
-    if (I < 31) {
+  intx::uint256 Res = V;
+  if (I < 31) {
     // Calculate the sign bit position (the highest bit of the Ith byte,
     // i.e., bit 8*I+7)
     intx::uint256 SignBitPosition = 8 * I + 7;
@@ -175,193 +176,191 @@ void handleOP_SIGNEXTEND(EVMFrame* Frame) {
     bool SignBit = (V & (intx::uint256(1) << SignBitPosition)) != 0;
 
     if (SignBit) {
-        // Generate mask: lower I*8 bits are 0, the rest are 1
-        intx::uint256 Mask = (intx::uint256(1) << SignBitPosition) - 1;
-        // Apply mask: extend the sign bit to higher bits
-        Res |= ~Mask;
+      // Generate mask: lower I*8 bits are 0, the rest are 1
+      intx::uint256 Mask = (intx::uint256(1) << SignBitPosition) - 1;
+      // Apply mask: extend the sign bit to higher bits
+      Res |= ~Mask;
     }
     // If the sign bit is 0, no processing is needed, keep the original
     // value unchanged
-    }
-    Frame->push(Res);
+  }
+  Frame->push(Res);
 }
-void handleOP_OR(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = A | B;
-    Frame->push(Res);
+void handleOpOR(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = A | B;
+  Frame->push(Res);
 }
-void handleOP_XOR(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 Res = A ^ B;
-    Frame->push(Res);  
-}        
-void handleOP_NOT(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 1);
-    intx::uint256 V = Frame->pop();
-    intx::uint256 Res = ~V;
-    Frame->push(Res);
+void handleOpXOR(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 A = Frame->pop();
+  intx::uint256 B = Frame->pop();
+  intx::uint256 Res = A ^ B;
+  Frame->push(Res);
 }
-void handleOP_BYTE(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 I = Frame->pop();
-    intx::uint256 Val = Frame->pop();
+void handleOpNOT(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 1);
+  intx::uint256 V = Frame->pop();
+  intx::uint256 Res = ~V;
+  Frame->push(Res);
+}
+void handleOpBYTE(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 I = Frame->pop();
+  intx::uint256 Val = Frame->pop();
 
-    intx::uint256 Res = 0;
-    if (I < 32) {
+  intx::uint256 Res = 0;
+  if (I < 32) {
     uint8_t ByteVal = static_cast<uint8_t>((Val >> (8 * (31 - I))) & 0xFF);
     Res = intx::uint256(ByteVal);
-    }
-    Frame->push(Res);
+  }
+  Frame->push(Res);
 }
-void handleOP_SHL(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 Shift = Frame->pop();
-    intx::uint256 Value = Frame->pop();
+void handleOpSHL(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 Shift = Frame->pop();
+  intx::uint256 Value = Frame->pop();
 
-    intx::uint256 Res = 0;
-    if (Shift < 256) {
+  intx::uint256 Res = 0;
+  if (Shift < 256) {
     Res = Value << Shift;
-    }
-    Frame->push(Res);
+  }
+  Frame->push(Res);
 }
-void handleOP_SHR(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 Shift = Frame->pop();
-    intx::uint256 Value = Frame->pop();
+void handleOpSHR(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 Shift = Frame->pop();
+  intx::uint256 Value = Frame->pop();
 
-    intx::uint256 Res = 0;
-    if (Shift < 256) {
+  intx::uint256 Res = 0;
+  if (Shift < 256) {
     Res = Value >> Shift;
-    }
-    Frame->push(Res);
+  }
+  Frame->push(Res);
 }
-void handleOP_SAR(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 Shift = Frame->pop();
-    intx::uint256 Value = Frame->pop();
+void handleOpSAR(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 Shift = Frame->pop();
+  intx::uint256 Value = Frame->pop();
 
-    intx::uint256 Res = 0;
-    if (Shift < 256) {
+  intx::uint256 Res = 0;
+  if (Shift < 256) {
     intx::uint256 IsNegative = (Value >> 255) & 1;
     Res = Value >> Shift;
 
     if (IsNegative && Shift > 0) {
-        intx::uint256 Mask = (intx::uint256(1) << (256 - Shift)) - 1;
-        Mask = ~Mask;
-        Res |= Mask;
+      intx::uint256 Mask = (intx::uint256(1) << (256 - Shift)) - 1;
+      Mask = ~Mask;
+      Res |= Mask;
     }
-    } else {
+  } else {
     intx::uint256 IsNegative = (Value >> 255) & 1;
     Res = IsNegative ? intx::uint256(-1) : intx::uint256(0);
-    }
-    Frame->push(Res);
+  }
+  Frame->push(Res);
 }
-void handleOP_MSTORE(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 OffsetVal = Frame->pop();
-    intx::uint256 Value = Frame->pop();
+void handleOpMSTORE(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 OffsetVal = Frame->pop();
+  intx::uint256 Value = Frame->pop();
 
-    uint64_t Offset = uint256ToUint64(OffsetVal);
-    if (Offset > UINT32_MAX) {
+  uint64_t Offset = uint256ToUint64(OffsetVal);
+  if (Offset > UINT32_MAX) {
     throw common::getError(common::ErrorCode::IntegerOverflow);
-    }
+  }
 
-    uint64_t ReqSize = Offset + 32;
-    // TODO: use EVMMemory class in the future
-    if (ReqSize > Frame->Memory.size()) {
+  uint64_t ReqSize = Offset + 32;
+  // TODO: use EVMMemory class in the future
+  if (ReqSize > Frame->Memory.size()) {
     Frame->Memory.resize(ReqSize, 0);
-    }
+  }
 
-    uint8_t ValueBytes[32];
-    intx::be::store(ValueBytes, Value);
-    // TODO: use EVMMemory class in the future
-    std::memcpy(Frame->Memory.data() + Offset, ValueBytes, 32);
+  uint8_t ValueBytes[32];
+  intx::be::store(ValueBytes, Value);
+  // TODO: use EVMMemory class in the future
+  std::memcpy(Frame->Memory.data() + Offset, ValueBytes, 32);
 }
-void handleOP_MLOAD(EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 1);
-    intx::uint256 OffsetVal = Frame->pop();
-    uint64_t Offset = uint256ToUint64(OffsetVal);
+void handleOpMLOAD(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 1);
+  intx::uint256 OffsetVal = Frame->pop();
+  uint64_t Offset = uint256ToUint64(OffsetVal);
 
-    if (Offset > UINT32_MAX) {
+  if (Offset > UINT32_MAX) {
     throw common::getError(common::ErrorCode::IntegerOverflow);
-    }
+  }
 
-    uint64_t ReqSize = Offset + 32;
-    // TODO: use EVMMemory class in the future
-    if (ReqSize > Frame->Memory.size()) {
+  uint64_t ReqSize = Offset + 32;
+  // TODO: use EVMMemory class in the future
+  if (ReqSize > Frame->Memory.size()) {
     Frame->Memory.resize(ReqSize, 0);
-    }
+  }
 
-    uint8_t ValueBytes[32];
-    // TODO: use EVMMemory class in the future
-    std::memcpy(ValueBytes, Frame->Memory.data() + Offset, 32);
+  uint8_t ValueBytes[32];
+  // TODO: use EVMMemory class in the future
+  std::memcpy(ValueBytes, Frame->Memory.data() + Offset, 32);
 
-    intx::uint256 Value = intx::be::load<intx::uint256>(ValueBytes);
-    Frame->push(Value);
+  intx::uint256 Value = intx::be::load<intx::uint256>(ValueBytes);
+  Frame->push(Value);
 }
-void handleOP_RETURN(InterpreterExecContext& Context, EVMFrame* Frame) {
-    EVM_STACK_CHECK(Frame, 2);
-    intx::uint256 OffsetVal = Frame->pop();
-    intx::uint256 SizeVal = Frame->pop();
-    uint64_t Offset = uint256ToUint64(OffsetVal);
-    uint64_t Size = uint256ToUint64(SizeVal);
+void handleOpRETURN(InterpreterExecContext &Context, EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 OffsetVal = Frame->pop();
+  intx::uint256 SizeVal = Frame->pop();
+  uint64_t Offset = uint256ToUint64(OffsetVal);
+  uint64_t Size = uint256ToUint64(SizeVal);
 
-    if (Offset > UINT32_MAX || Size > UINT32_MAX) {
+  if (Offset > UINT32_MAX || Size > UINT32_MAX) {
     throw common::getError(common::ErrorCode::IntegerOverflow);
-    }
+  }
 
-    uint64_t ReqSize = Offset + Size;
-    // TODO: use EVMMemory class in the future
-    if (ReqSize > Frame->Memory.size()) {
+  uint64_t ReqSize = Offset + Size;
+  // TODO: use EVMMemory class in the future
+  if (ReqSize > Frame->Memory.size()) {
     Frame->Memory.resize(ReqSize, 0);
-    }
-    // TODO: use EVMMemory class in the future
-    std::vector<uint8_t> ReturnData(Frame->Memory.begin() + Offset,
-                                    Frame->Memory.begin() + Offset + Size);
-    Context.setReturnData(std::move(ReturnData));
+  }
+  // TODO: use EVMMemory class in the future
+  std::vector<uint8_t> ReturnData(Frame->Memory.begin() + Offset,
+                                  Frame->Memory.begin() + Offset + Size);
+  Context.setReturnData(std::move(ReturnData));
 
-    Context.freeBackFrame();
+  Context.freeBackFrame();
 }
-void handleOP_PUSH(EVMFrame* Frame, uint8_t OpcodeByte, const uint8_t* Code, size_t CodeSize) {
-    // PUSH1 ~ PUSH32
-    uint32_t NumBytes = OpcodeByte - 0x60 + 1;
-    if (Frame->Pc + NumBytes >= CodeSize) {
-        throw common::getError(common::ErrorCode::UnexpectedEnd);
-    }
-    uint8_t ValueBytes[32];
-    memset(ValueBytes, 0, sizeof(ValueBytes));
-    std::memcpy(ValueBytes + (32 - NumBytes), Code + Frame->Pc + 1,
-                NumBytes);
-    intx::uint256 Val = intx::be::load<intx::uint256>(ValueBytes);
-    Frame->push(Val);
-    Frame->Pc += NumBytes;
+void handleOpPUSH(EVMFrame *Frame, uint8_t OpcodeByte, const uint8_t *Code,
+                  size_t CodeSize) {
+  // PUSH1 ~ PUSH32
+  uint32_t NumBytes = OpcodeByte - 0x60 + 1;
+  if (Frame->Pc + NumBytes >= CodeSize) {
+    throw common::getError(common::ErrorCode::UnexpectedEnd);
+  }
+  uint8_t ValueBytes[32];
+  memset(ValueBytes, 0, sizeof(ValueBytes));
+  std::memcpy(ValueBytes + (32 - NumBytes), Code + Frame->Pc + 1, NumBytes);
+  intx::uint256 Val = intx::be::load<intx::uint256>(ValueBytes);
+  Frame->push(Val);
+  Frame->Pc += NumBytes;
 }
-void handleOP_DUP(uint8_t OpcodeByte, EVMFrame* Frame) {
-    // DUP1 ~ DUP16
-    uint32_t N = OpcodeByte - 0x80 + 1;
-    if (Frame->stackHeight() < N) {
-        throw common::getError(common::ErrorCode::UnexpectedNumArgs);
-    }
-    intx::uint256 V = Frame->peek(N - 1);
-    Frame->push(V);
+void handleOpDUP(uint8_t OpcodeByte, EVMFrame *Frame) {
+  // DUP1 ~ DUP16
+  uint32_t N = OpcodeByte - 0x80 + 1;
+  if (Frame->stackHeight() < N) {
+    throw common::getError(common::ErrorCode::UnexpectedNumArgs);
+  }
+  intx::uint256 V = Frame->peek(N - 1);
+  Frame->push(V);
 }
-void handleOP_SWAP(uint8_t OpcodeByte, EVMFrame* Frame) {
-    // SWAP1 ~ SWAP16
-    uint32_t N = OpcodeByte - 0x90 + 1;
-    if (Frame->stackHeight() < N + 1) {
-        throw common::getError(common::ErrorCode::UnexpectedNumArgs);
-    }
-    intx::uint256 &Top = Frame->peek(0);
-    intx::uint256 &Nth = Frame->peek(N);
-    std::swap(Top, Nth);
+void handleOpSWAP(uint8_t OpcodeByte, EVMFrame *Frame) {
+  // SWAP1 ~ SWAP16
+  uint32_t N = OpcodeByte - 0x90 + 1;
+  if (Frame->stackHeight() < N + 1) {
+    throw common::getError(common::ErrorCode::UnexpectedNumArgs);
+  }
+  intx::uint256 &Top = Frame->peek(0);
+  intx::uint256 &Nth = Frame->peek(N);
+  std::swap(Top, Nth);
 }
-
-
-
+} // namespace
 
 void BaseInterpreter::interpret() {
   Context.allocFrame();
@@ -386,141 +385,141 @@ void BaseInterpreter::interpret() {
       continue;
 
     case evmc_opcode::OP_ADD: {
-      handleOP_ADD(Frame);
+      handleOpADD(Frame);
       break;
     }
 
     case evmc_opcode::OP_SUB: {
-      handleOP_SUB(Frame);
+      handleOpSUB(Frame);
       break;
     }
 
     case evmc_opcode::OP_MUL: {
-      handleOP_MUL(Frame);
+      handleOpMUL(Frame);
       break;
     }
 
     case evmc_opcode::OP_DIV: {
-      handleOP_DIV(Frame);
+      handleOpDIV(Frame);
       break;
     }
 
     case evmc_opcode::OP_MOD: {
-      handleOP_MOD(Frame);
+      handleOpMOD(Frame);
       break;
     }
 
     case evmc_opcode::OP_AND: {
-      handleOP_AND(Frame);
+      handleOpAND(Frame);
       break;
     }
 
     case evmc_opcode::OP_EQ: {
-      handleOP_EQ(Frame);
+      handleOpEQ(Frame);
       break;
     }
 
     case evmc_opcode::OP_ISZERO: {
-      handleOP_ISZERO(Frame);
+      handleOpISZERO(Frame);
       break;
     }
 
     case evmc_opcode::OP_LT: {
-      handleOP_LT(Frame);
+      handleOpLT(Frame);
       break;
     }
 
     case evmc_opcode::OP_GT: {
-      handleOP_GT(Frame);
+      handleOpGT(Frame);
       break;
     }
 
     case evmc_opcode::OP_SLT: {
-      handleOP_SLT(Frame);
+      handleOpSLT(Frame);
       break;
     }
 
     case evmc_opcode::OP_SGT: {
-      handleOP_SGT(Frame);
+      handleOpSGT(Frame);
       break;
     }
 
     case evmc_opcode::OP_ADDMOD: {
-      handleOP_ADDMOD(Frame);
+      handleOpADDMOD(Frame);
       break;
     }
 
     case evmc_opcode::OP_MULMOD: {
-      handleOP_MULMOD(Frame);
+      handleOpMULMOD(Frame);
       break;
     }
 
     case evmc_opcode::OP_EXP: {
-      handleOP_EXP(Frame);
+      handleOpEXP(Frame);
       break;
     }
 
     case evmc_opcode::OP_SDIV: {
-      handleOP_SDIV(Frame);
+      handleOpSDIV(Frame);
       break;
     }
 
     case evmc_opcode::OP_SMOD: {
-      handleOP_SMOD(Frame);
+      handleOpSMOD(Frame);
       break;
     }
     case evmc_opcode::OP_SIGNEXTEND: {
-      handleOP_SIGNEXTEND(Frame);
+      handleOpSIGNEXTEND(Frame);
       break;
     }
 
     case evmc_opcode::OP_OR: {
-      handleOP_OR(Frame);
+      handleOpOR(Frame);
       break;
     }
 
     case evmc_opcode::OP_XOR: {
-      handleOP_XOR(Frame);
+      handleOpXOR(Frame);
       break;
     }
 
     case evmc_opcode::OP_NOT: {
-      handleOP_NOT(Frame);
+      handleOpNOT(Frame);
       break;
     }
 
     case evmc_opcode::OP_BYTE: {
-      handleOP_BYTE(Frame);
+      handleOpBYTE(Frame);
       break;
     }
 
     case evmc_opcode::OP_SHL: {
-      handleOP_SHL(Frame);
+      handleOpSHL(Frame);
       break;
     }
 
     case evmc_opcode::OP_SHR: {
-      handleOP_SHR(Frame);
+      handleOpSHR(Frame);
       break;
     }
 
     case evmc_opcode::OP_SAR: {
-      handleOP_SAR(Frame);
+      handleOpSAR(Frame);
       break;
     }
 
     case evmc_opcode::OP_MSTORE: {
-      handleOP_MSTORE(Frame);
+      handleOpMSTORE(Frame);
       break;
     }
 
     case evmc_opcode::OP_MLOAD: {
-      handleOP_MLOAD(Frame);
+      handleOpMLOAD(Frame);
       break;
     }
 
     case evmc_opcode::OP_RETURN: {
-      handleOP_RETURN(Context, Frame);
+      handleOpRETURN(Context, Frame);
       Frame = Context.getCurFrame();
       if (!Frame) {
         return;
@@ -537,15 +536,15 @@ void BaseInterpreter::interpret() {
     default:
       if (OpcodeByte >= 0x60 && OpcodeByte <= 0x7F) {
         // PUSH1 ~ PUSH32
-       handleOP_PUSH(Frame, OpcodeByte, Code, CodeSize);
+        handleOpPUSH(Frame, OpcodeByte, Code, CodeSize);
         break;
       } else if (OpcodeByte >= 0x80 && OpcodeByte <= 0x8F) {
         // DUP1 ~ DUP16
-        handleOP_DUP(OpcodeByte, Frame);
+        handleOpDUP(OpcodeByte, Frame);
         break;
       } else if (OpcodeByte >= 0x90 && OpcodeByte <= 0x9F) {
         // SWAP1 ~ SWAP16
-        handleOP_SWAP(OpcodeByte, Frame);
+        handleOpSWAP(OpcodeByte, Frame);
         break;
       } else {
         throw common::getError(common::ErrorCode::UnsupportedOpcode);
