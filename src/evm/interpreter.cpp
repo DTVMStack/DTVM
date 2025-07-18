@@ -330,7 +330,8 @@ void handleOpRETURN(InterpreterExecContext &Context, EVMFrame *Frame) {
 void handleOpPUSH(EVMFrame *Frame, uint8_t OpcodeByte, const uint8_t *Code,
                   size_t CodeSize) {
   // PUSH1 ~ PUSH32
-  uint32_t NumBytes = OpcodeByte - 0x60 + 1;
+  uint32_t NumBytes =
+      OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
   if (Frame->Pc + NumBytes >= CodeSize) {
     throw common::getError(common::ErrorCode::UnexpectedEnd);
   }
@@ -343,7 +344,7 @@ void handleOpPUSH(EVMFrame *Frame, uint8_t OpcodeByte, const uint8_t *Code,
 }
 void handleOpDUP(uint8_t OpcodeByte, EVMFrame *Frame) {
   // DUP1 ~ DUP16
-  uint32_t N = OpcodeByte - 0x80 + 1;
+  uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_DUP1) + 1;
   if (Frame->stackHeight() < N) {
     throw common::getError(common::ErrorCode::UnexpectedNumArgs);
   }
@@ -352,7 +353,7 @@ void handleOpDUP(uint8_t OpcodeByte, EVMFrame *Frame) {
 }
 void handleOpSWAP(uint8_t OpcodeByte, EVMFrame *Frame) {
   // SWAP1 ~ SWAP16
-  uint32_t N = OpcodeByte - 0x90 + 1;
+  uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_SWAP1) + 1;
   if (Frame->stackHeight() < N + 1) {
     throw common::getError(common::ErrorCode::UnexpectedNumArgs);
   }
@@ -534,15 +535,18 @@ void BaseInterpreter::interpret() {
     }
 
     default:
-      if (OpcodeByte >= 0x60 && OpcodeByte <= 0x7F) {
+      if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_PUSH1) &&
+          OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_PUSH32)) {
         // PUSH1 ~ PUSH32
         handleOpPUSH(Frame, OpcodeByte, Code, CodeSize);
         break;
-      } else if (OpcodeByte >= 0x80 && OpcodeByte <= 0x8F) {
+      } else if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_DUP1) &&
+                 OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_DUP16)) {
         // DUP1 ~ DUP16
         handleOpDUP(OpcodeByte, Frame);
         break;
-      } else if (OpcodeByte >= 0x90 && OpcodeByte <= 0x9F) {
+      } else if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_SWAP1) &&
+                 OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_SWAP16)) {
         // SWAP1 ~ SWAP16
         handleOpSWAP(OpcodeByte, Frame);
         break;
