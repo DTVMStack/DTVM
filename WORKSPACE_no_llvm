@@ -3,7 +3,7 @@ workspace(name = "zetaengine")
 load("//third_party/asmjit:asmjit.bzl", "load_asmjit_deps")
 load("//third_party/CLI11:CLI11.bzl", "load_CLI11_deps")
 load("//third_party/spdlog:spdlog.bzl", "load_spdlog_deps")
-load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+load("//third_party/intx:intx.bzl", "load_intx_deps")
 
 load_asmjit_deps()
 
@@ -11,8 +11,4 @@ load_CLI11_deps()
 
 load_spdlog_deps()
 
-git_repository(
-    name = "intx",
-    remote = "https://github.com/chfast/intx.git",
-    tag = "v0.9.3",
-)
+load_intx_deps()

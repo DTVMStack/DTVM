@@ -45,6 +45,17 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
+cc_library(
+    name = "evmc",
+    hdrs = glob([
+        "evmc/include/evmc/*.h",
+        "evmc/include/evmc/*.hpp",
+    ]),
+    includes = ["evmc/include"],
+    strip_include_prefix = "evmc/include",
+    visibility = ["//visibility:public"],
+)
+
 # ======================== [End] Project Config ========================
 
 # ======================== [Begin] Compilation and Link Options ========================
@@ -195,6 +206,7 @@ cc_library(
     deps = [
         ":utils_lib",
         ":zetaengine_headers",
+        ":evmc",
         "@zen_deps_asmjit//:asmjit",
         "@zen_deps_spdlog//:spdlog",
         "@intx//:intx",

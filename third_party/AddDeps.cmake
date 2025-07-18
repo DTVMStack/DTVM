@@ -62,6 +62,15 @@ set(CLI11_INSTALL OFF)
 set(CLI11_BUILD_TESTS OFF)
 FetchContent_MakeAvailable(CLI11)
 
+FetchContent_Declare(
+  intx
+  GIT_REPOSITORY https://github.com/chfast/intx.git
+  GIT_TAG v0.9.3
+  GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(intx)
+include_directories(${intx_SOURCE_DIR}/include)
+
 if(ZEN_ENABLE_SPEC_TEST)
   FetchContent_Declare(
     googletest
