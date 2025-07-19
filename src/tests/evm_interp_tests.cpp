@@ -79,6 +79,11 @@ class EVMSampleTest : public ::testing::TestWithParam<std::string> {};
 TEST_P(EVMSampleTest, ExecuteSample) {
   const std::string &FilePath = GetParam();
 
+  // if there is no evm files, we should skip the test
+  if (FilePath == "") {
+    GTEST_SKIP() << "No EVM hex files found, skipping test";
+  }
+
   std::ifstream Fin(FilePath);
   ASSERT_TRUE(Fin.is_open()) << "Failed to open test file: " << FilePath;
 
@@ -122,5 +127,11 @@ TEST_P(EVMSampleTest, ExecuteSample) {
       << "Frame should be deallocated after execution";
 }
 
+// if there is no evm files, we should skip the test
+// TODO: check if there is a better way to do this,
+// maybe we should convert easm to hex first
+auto EvmFiles = getAllEvmBytecodeFiles();
 INSTANTIATE_TEST_SUITE_P(EVMSamples, EVMSampleTest,
-                         ::testing::ValuesIn(getAllEvmBytecodeFiles()));
+                         ::testing::ValuesIn(EvmFiles.empty()
+                                                 ? std::vector<std::string>{""}
+                                                 : EvmFiles));
