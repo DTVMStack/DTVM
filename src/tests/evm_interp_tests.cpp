@@ -46,13 +46,6 @@ std::vector<std::string> getAllEvmBytecodeFiles() {
   return Files;
 }
 
-void appendResult(const std::string &SampleName, const std::string &HexRet) {
-  static std::mutex Mtx;
-  std::lock_guard<std::mutex> Guard(Mtx);
-  std::ofstream Fout("evm_results.txt", std::ios::app);
-  Fout << SampleName << ": " << HexRet << '\n';
-}
-
 std::string readAnswerFile(const std::string &FilePath) {
   std::filesystem::path InputFilePath(FilePath);
 
@@ -111,7 +104,6 @@ TEST_P(EVMSampleTest, ExecuteSample) {
 
   const auto &Ret = Ctx.getReturnData();
   std::string HexRet = zen::utils::toHex(Ret.data(), Ret.size());
-  appendResult(std::filesystem::path(FilePath).filename().string(), HexRet);
 
   // Read expected answer
   std::string ExpectedAnswer = readAnswerFile(FilePath);
