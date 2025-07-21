@@ -21,11 +21,12 @@ using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
 
-EVMFrame *InterpreterExecContext::allocFrame() {
+EVMFrame *InterpreterExecContext::allocFrame(uint64_t GasLimit) {
   FrameStack.emplace_back();
 
   EVMFrame &Frame = FrameStack.back();
-  Frame.GasLeft = 0;
+  Frame.GasLimit = GasLimit;
+  Frame.GasLeft = GasLimit;
 
   return &Frame;
 }
@@ -40,6 +41,44 @@ void InterpreterExecContext::freeBackFrame() {
 }
 
 namespace {
+
+int64_t
+getGasCost(enum evmc_opcode Code,
+           enum evmc_revision Revision = EVMC_SHANGHAI) { // EVMC_SHANGHAI = 11
+  // Get the instruction index table for the specified EVM version
+  const struct evmc_instruction_metrics *MetricsTable =
+      evmc_get_instruction_metrics_table(Revision);
+
+  if (MetricsTable == nullptr) {
+    throw common::getError(common::ErrorCode::EVMMetricsTableMissing);
+  }
+  int16_t GasCost = MetricsTable[Code].gas_cost;
+  return GasCost;
+}
+
+// Calculate memory expansion gas cost
+uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize) {
+  if (NewSize <= CurrentSize) {
+    return 0; // No expansion needed
+  }
+
+  // EVM memory expansion cost formula:
+  // cost = (new_words^2 / 512) + (3 * new_words) - (current_words^2 / 512) - (3
+  // * current_words) where words = (size + 31) / 32 (round up to nearest word)
+
+  uint64_t CurrentWords = (CurrentSize + 31) / 32;
+  uint64_t NewWords = (NewSize + 31) / 32;
+
+  auto MemoryCost = [](uint64_t Words) -> uint64_t {
+    __int128 W = Words;
+    return static_cast<uint64_t>(W * W / 512 + 3 * W);
+  };
+
+  uint64_t CurrentCost = MemoryCost(CurrentWords);
+  uint64_t NewCost = MemoryCost(NewWords);
+
+  return NewCost - CurrentCost;
+}
 // Opcode processing function
 void handleOpADD(EVMFrame *Frame) {
   EVM_STACK_CHECK(Frame, 2);
@@ -273,8 +312,18 @@ void handleOpMSTORE(EVMFrame *Frame) {
   }
 
   uint64_t ReqSize = Offset + 32;
+  uint64_t CurrentSize = Frame->Memory.size();
+
+  // Calculate and charge memory expansion gas
+  uint64_t MemoryExpansionCost =
+      calculateMemoryExpansionCost(CurrentSize, ReqSize);
+  if (Frame->GasLeft < MemoryExpansionCost) {
+    throw common::getError(common::ErrorCode::EVMOutOfGas);
+  }
+  Frame->GasLeft -= MemoryExpansionCost;
+
   // TODO: use EVMMemory class in the future
-  if (ReqSize > Frame->Memory.size()) {
+  if (ReqSize > CurrentSize) {
     Frame->Memory.resize(ReqSize, 0);
   }
 
@@ -283,6 +332,35 @@ void handleOpMSTORE(EVMFrame *Frame) {
   // TODO: use EVMMemory class in the future
   std::memcpy(Frame->Memory.data() + Offset, ValueBytes, 32);
 }
+void handleOpMSTORE8(EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 OffsetVal = Frame->pop();
+  intx::uint256 Value = Frame->pop();
+
+  uint64_t Offset = uint256ToUint64(OffsetVal);
+  if (Offset > UINT32_MAX) {
+    throw common::getError(common::ErrorCode::IntegerOverflow);
+  }
+
+  uint64_t ReqSize = Offset + 1;
+  uint64_t CurrentSize = Frame->Memory.size();
+
+  // Calculate and charge memory expansion gas
+  uint64_t MemoryExpansionCost =
+      calculateMemoryExpansionCost(CurrentSize, ReqSize);
+  if (Frame->GasLeft < MemoryExpansionCost) {
+    throw common::getError(common::ErrorCode::EVMOutOfGas);
+  }
+  Frame->GasLeft -= MemoryExpansionCost;
+
+  // TODO: use EVMMemory class in the future
+  if (ReqSize > CurrentSize) {
+    Frame->Memory.resize(ReqSize, 0);
+  }
+  uint8_t ByteValue = static_cast<uint8_t>(Value & intx::uint256{0xFF});
+  Frame->Memory[Offset] = ByteValue;
+}
+
 void handleOpMLOAD(EVMFrame *Frame) {
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 OffsetVal = Frame->pop();
@@ -293,8 +371,18 @@ void handleOpMLOAD(EVMFrame *Frame) {
   }
 
   uint64_t ReqSize = Offset + 32;
+  uint64_t CurrentSize = Frame->Memory.size();
+
+  // Calculate and charge memory expansion gas
+  uint64_t MemoryExpansionCost =
+      calculateMemoryExpansionCost(CurrentSize, ReqSize);
+  if (Frame->GasLeft < MemoryExpansionCost) {
+    throw common::getError(common::ErrorCode::EVMOutOfGas);
+  }
+  Frame->GasLeft -= MemoryExpansionCost;
+
   // TODO: use EVMMemory class in the future
-  if (ReqSize > Frame->Memory.size()) {
+  if (ReqSize > CurrentSize) {
     Frame->Memory.resize(ReqSize, 0);
   }
 
@@ -304,6 +392,54 @@ void handleOpMLOAD(EVMFrame *Frame) {
 
   intx::uint256 Value = intx::be::load<intx::uint256>(ValueBytes);
   Frame->push(Value);
+}
+bool handleOpJUMP(EVMFrame *Frame, const uint8_t *Code, const size_t CodeSize) {
+  EVM_STACK_CHECK(Frame, 1);
+  // We can assume that valid destination can't greater than uint64_t
+  uint64_t Dest = uint256ToUint64(Frame->pop());
+
+  if (Dest >= CodeSize) {
+    throw common::getError(common::ErrorCode::EVMJumpDestOutOfRange);
+  }
+  if (static_cast<evmc_opcode>(Code[Dest]) != evmc_opcode::OP_JUMPDEST) {
+    throw common::getError(common::ErrorCode::EVMInvalidJumpDest);
+  }
+
+  Frame->Pc = Dest;
+  return true;
+}
+bool handleOpJUMPI(EVMFrame *Frame, const uint8_t *Code,
+                   const size_t CodeSize) {
+  EVM_STACK_CHECK(Frame, 2);
+  // We can assume that valid destination can't greater than uint64_t
+  uint64_t Dest = uint256ToUint64(Frame->pop());
+  intx::uint256 Cond = Frame->pop();
+
+  if (!Cond) {
+    return false;
+  }
+  if (Dest >= CodeSize) {
+    throw common::getError(common::ErrorCode::EVMJumpDestOutOfRange);
+  }
+  if (static_cast<evmc_opcode>(Code[Dest]) != evmc_opcode::OP_JUMPDEST) {
+    throw common::getError(common::ErrorCode::EVMInvalidJumpDest);
+  }
+
+  Frame->Pc = Dest;
+  return true;
+}
+void handleOpPC(EVMFrame *Frame) { Frame->push(intx::uint256(Frame->Pc)); }
+void handleOpMSize(EVMFrame *Frame) {
+  // Return the current memory size in bytes
+  intx::uint256 MemSize = Frame->Memory.size();
+  Frame->push(MemSize);
+}
+void handleOpGAS(EVMFrame *Frame) {
+  Frame->push(intx::uint256(Frame->GasLeft - getGasCost(evmc_opcode::OP_GAS)));
+}
+
+void handleOpGASLIMIT(EVMFrame *Frame) {
+  Frame->push(intx::uint256(Frame->GasLimit));
 }
 void handleOpRETURN(InterpreterExecContext &Context, EVMFrame *Frame) {
   EVM_STACK_CHECK(Frame, 2);
@@ -326,7 +462,42 @@ void handleOpRETURN(InterpreterExecContext &Context, EVMFrame *Frame) {
                                   Frame->Memory.begin() + Offset + Size);
   Context.setReturnData(std::move(ReturnData));
 
+  Context.setStatus(EVMC_SUCCESS);
+  // Return remaining gas to parent frame before freeing current frame
+  uint64_t RemainingGas = Frame->GasLeft;
   Context.freeBackFrame();
+  if (Context.getCurFrame() != nullptr) {
+    Context.getCurFrame()->GasLeft += RemainingGas;
+  }
+}
+// TODO: implement host storage revert in the future
+void handleOpREVERT(InterpreterExecContext &Context, EVMFrame *Frame) {
+  EVM_STACK_CHECK(Frame, 2);
+  intx::uint256 OffsetVal = Frame->pop();
+  intx::uint256 SizeVal = Frame->pop();
+  uint64_t Offset = uint256ToUint64(OffsetVal);
+  uint64_t Size = uint256ToUint64(SizeVal);
+
+  if (Offset > UINT32_MAX || Size > UINT32_MAX) {
+    throw common::getError(common::ErrorCode::IntegerOverflow);
+  }
+
+  uint64_t ReqSize = Offset + Size;
+  // TODO: use EVMMemory class in the future
+  if (ReqSize > Frame->Memory.size()) {
+    Frame->Memory.resize(ReqSize, 0);
+  }
+  std::vector<uint8_t> RevertData(Frame->Memory.begin() + Offset,
+                                  Frame->Memory.begin() + Offset + Size);
+
+  Context.setStatus(EVMC_REVERT);
+  Context.setReturnData(std::move(RevertData));
+  // Return remaining gas to parent frame before freeing current frame
+  uint64_t RemainingGas = Frame->GasLeft;
+  Context.freeBackFrame();
+  if (Context.getCurFrame() != nullptr) {
+    Context.getCurFrame()->GasLeft += RemainingGas;
+  }
 }
 void handleOpPUSH(EVMFrame *Frame, uint8_t OpcodeByte, const uint8_t *Code,
                   size_t CodeSize) {
@@ -365,7 +536,7 @@ void handleOpSWAP(uint8_t OpcodeByte, EVMFrame *Frame) {
 } // namespace
 
 void BaseInterpreter::interpret() {
-  Context.allocFrame();
+  Context.allocFrame(Context.getInstance()->getGas());
   EVMFrame *Frame = Context.getCurFrame();
 
   const EVMModule *Mod = Context.getInstance()->getModule();
@@ -376,6 +547,14 @@ void BaseInterpreter::interpret() {
   while (Frame->Pc < CodeSize) {
     uint8_t OpcodeByte = Code[Frame->Pc];
     evmc_opcode Op = static_cast<evmc_opcode>(OpcodeByte);
+    bool IsJumpSuccess = false;
+
+    // Check and deduct gas before executing operation
+    uint64_t GasCost = getGasCost(Op);
+    if (Frame->GasLeft < GasCost) {
+      throw common::getError(common::ErrorCode::EVMOutOfGas);
+    }
+    Frame->GasLeft -= GasCost;
 
     switch (Op) {
     case evmc_opcode::OP_STOP:
@@ -515,8 +694,44 @@ void BaseInterpreter::interpret() {
       break;
     }
 
+    case evmc_opcode::OP_MSTORE8: {
+      handleOpMSTORE8(Frame);
+      break;
+    }
     case evmc_opcode::OP_MLOAD: {
       handleOpMLOAD(Frame);
+      break;
+    }
+
+    case evmc_opcode::OP_JUMP: {
+      IsJumpSuccess = handleOpJUMP(Frame, Mod->Code, Mod->CodeSize);
+      break;
+    }
+
+    case evmc_opcode::OP_JUMPI: {
+      IsJumpSuccess = handleOpJUMPI(Frame, Mod->Code, Mod->CodeSize);
+      break;
+    }
+
+    case evmc_opcode::OP_PC: {
+      handleOpPC(Frame);
+      break;
+    }
+    case evmc_opcode::OP_MSIZE: {
+      handleOpMSize(Frame);
+      break;
+    }
+
+    case evmc_opcode::OP_JUMPDEST: {
+      break;
+    }
+
+    case evmc_opcode::OP_GAS: {
+      handleOpGAS(Frame);
+      break;
+    }
+    case evmc_opcode::OP_GASLIMIT: {
+      handleOpGASLIMIT(Frame);
       break;
     }
 
@@ -529,10 +744,23 @@ void BaseInterpreter::interpret() {
       break;
     }
 
+    case evmc_opcode::OP_REVERT: {
+      handleOpREVERT(Context, Frame);
+      Frame = Context.getCurFrame();
+      if (!Frame) {
+        return;
+      }
+      break;
+    }
+
     case evmc_opcode::OP_POP: {
       EVM_STACK_CHECK(Frame, 1);
       Frame->pop();
       break;
+    }
+
+    case evmc_opcode::OP_INVALID: {
+      throw common::getError(common::ErrorCode::EVMInvalidInstruction);
     }
 
     default:
@@ -554,6 +782,10 @@ void BaseInterpreter::interpret() {
       } else {
         throw common::getError(common::ErrorCode::UnsupportedOpcode);
       }
+    }
+
+    if (IsJumpSuccess) {
+      continue;
     }
 
     Frame->Pc++;

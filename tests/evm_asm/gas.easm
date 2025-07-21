@@ -1,0 +1,11 @@
+// it is a spcial status that gasleft = gaslimit
+GAS
+PUSH1 0x00 
+GASLIMIT 
+SUB
+SUB 
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

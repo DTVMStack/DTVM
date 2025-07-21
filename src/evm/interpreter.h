@@ -4,7 +4,7 @@
 #ifndef ZEN_EVM_INTERPRETER_H
 #define ZEN_EVM_INTERPRETER_H
 
-#include "common/defines.h"
+#include "evmc/evmc.h"
 #include "intx/intx.hpp"
 #include "runtime/destroyer.h"
 #include "runtime/object.h"
@@ -35,6 +35,7 @@ struct EVMFrame {
 
   size_t Sp = 0;
   uint64_t GasLeft = 0;
+  uint64_t GasLimit = 0;
   uint64_t Pc = 0;
   intx::uint256 Value = 0;
 
@@ -66,11 +67,13 @@ class InterpreterExecContext {
 private:
   runtime::EVMInstance *Inst;
   std::vector<EVMFrame> FrameStack;
+  evmc_status_code Status = EVMC_SUCCESS;
+  std::vector<uint8_t> ReturnData;
 
 public:
   InterpreterExecContext(runtime::EVMInstance *Inst) : Inst(Inst) {}
 
-  EVMFrame *allocFrame();
+  EVMFrame *allocFrame(uint64_t GasLimit = 0);
   void freeBackFrame();
 
   EVMFrame *getCurFrame() {
@@ -82,10 +85,9 @@ public:
 
   runtime::EVMInstance *getInstance() { return Inst; }
 
-private:
-  std::vector<uint8_t> ReturnData;
+  evmc_status_code getStatus() const { return Status; }
+  void setStatus(evmc_status_code Status) { this->Status = Status; }
 
-public:
   const std::vector<uint8_t> &getReturnData() const { return ReturnData; }
   void setReturnData(std::vector<uint8_t> Data) {
     ReturnData = std::move(Data);

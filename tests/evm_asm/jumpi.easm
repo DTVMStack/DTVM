@@ -1,0 +1,18 @@
+// First example does not jump, second example does
+PUSH1 0x00  
+PUSH1 0x0a 
+JUMPI   
+PUSH1 0x01  
+PUSH1 0x10 
+JUMPI    
+JUMPDEST 
+PUSH1 0x00 
+PUSH1 0x00
+MSTORE
+JUMPDEST 
+PUSH1 0x01
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

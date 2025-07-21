@@ -99,7 +99,8 @@ TEST_P(EVMSampleTest, ExecuteSample) {
   Isolation *Iso = RT->createManagedIsolation();
   ASSERT_TRUE(Iso) << "Failed to create Isolation: " << FilePath;
 
-  uint64_t GasLimit = 0UL;
+  uint64_t GasLimit = 1000000UL; // enough gas for most of the tests
+
   auto InstRet = Iso->createEVMInstance(*Mod, GasLimit);
   ASSERT_TRUE(Iso) << "Failed to create Instance: " << FilePath;
   EVMInstance *Inst = *InstRet;

@@ -1,0 +1,9 @@
+//return 2 pc(0)+2=2
+PC
+PUSH1 0x02
+ADD
+PC
+MSTORE
+PUSH1 0x20
+PUSH1 0x04
+RETURN
