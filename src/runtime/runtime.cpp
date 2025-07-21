@@ -651,12 +651,12 @@ void Runtime::callWasmFunctionInInterpMode(Instance &Inst, uint32_t FuncIdx,
   }
 }
 
-void Runtime::callEVMBlockInInterpMode(EVMInstance &Inst, std::string &result) {
+void Runtime::callEVMBlockInInterpMode(EVMInstance &Inst,
+                                       std::vector<uint8_t> &result) {
   evm::InterpreterExecContext Ctx(&Inst);
   evm::BaseInterpreter Interpreter(Ctx);
   Interpreter.interpret();
-  const auto &Ret = Ctx.getReturnData();
-  result = zen::utils::toHex(Ret.data(), Ret.size());
+  result = Ctx.getReturnData();
 }
 
 #ifdef ZEN_ENABLE_JIT
