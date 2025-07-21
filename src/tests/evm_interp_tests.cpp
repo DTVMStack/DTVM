@@ -95,7 +95,14 @@ TEST_P(EVMSampleTest, ExecuteSample) {
 
   EVMModule *Mod = *ModRet;
 
-  InterpreterExecContext Ctx(Mod);
+  Isolation *Iso = RT->createManagedIsolation();
+  ASSERT_TRUE(Iso) << "Failed to create Isolation: " << FilePath;
+
+  MayBe<EVMInstance *> InstRet = Iso->createEVMInstance(*Mod, GasLimit);
+  ASSERT_TRUE(Iso) << "Failed to create Instance: " << FilePath;
+  EVMInstance *Inst = *InstRet;
+
+  InterpreterExecContext Ctx(Inst);
 
   BaseInterpreter Interpreter(Ctx);
   EXPECT_NO_THROW({ Interpreter.interpret(); });
