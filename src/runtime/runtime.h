@@ -301,8 +301,7 @@ public:
       Instance &Inst, uint32_t FuncIdx, const std::vector<TypedValue> &Args,
       std::vector<common::TypedValue> &Results) noexcept;
 
-  void callEVMBlockInInterpMode(EVMInstance &Inst,
-                                std::vector<uint8_t> &result);
+  void callEVMInInterpMode(EVMInstance &Inst, std::vector<uint8_t> &Result);
 
   /* **************** [End] Runtime Tool Methods  **************** */
 private:

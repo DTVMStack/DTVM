@@ -651,12 +651,12 @@ void Runtime::callWasmFunctionInInterpMode(Instance &Inst, uint32_t FuncIdx,
   }
 }
 
-void Runtime::callEVMBlockInInterpMode(EVMInstance &Inst,
-                                       std::vector<uint8_t> &result) {
+void Runtime::callEVMInInterpMode(EVMInstance &Inst,
+                                  std::vector<uint8_t> &Result) {
   evm::InterpreterExecContext Ctx(&Inst);
   evm::BaseInterpreter Interpreter(Ctx);
   Interpreter.interpret();
-  result = Ctx.getReturnData();
+  Result = Ctx.getReturnData();
 }
 
 #ifdef ZEN_ENABLE_JIT
