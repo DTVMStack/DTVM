@@ -4,6 +4,7 @@
 #include "runtime/destroyer.h"
 
 #include "action/interpreter.h"
+#include "evm/interpreter.h"
 #include "runtime/codeholder.h"
 #include "runtime/evm_instance.h"
 #include "runtime/instance.h"

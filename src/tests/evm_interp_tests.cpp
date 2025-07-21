@@ -9,8 +9,9 @@
 #include <gtest/gtest.h>
 
 #include "evm/interpreter.h"
-#include "runtime/runtime.h"
 #include "utils/others.h"
+#include "zetaengine-c.h"
+#include "zetaengine.h"
 
 using namespace zen;
 using namespace zen::evm;
@@ -99,7 +100,7 @@ TEST_P(EVMSampleTest, ExecuteSample) {
   ASSERT_TRUE(Iso) << "Failed to create Isolation: " << FilePath;
 
   uint64_t GasLimit = 0UL;
-  EVMInstance *InstRet = Iso->createEVMInstance(*Mod, GasLimit);
+  auto InstRet = Iso->createEVMInstance(*Mod, GasLimit);
   ASSERT_TRUE(Iso) << "Failed to create Instance: " << FilePath;
   EVMInstance *Inst = *InstRet;
 
