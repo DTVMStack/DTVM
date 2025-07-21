@@ -12,8 +12,9 @@
 #include "action/interpreter.h"
 #include "common/type.h"
 #include "entrypoint/entrypoint.h"
+#include "evm/interpreter.h"
 #include "runtime/codeholder.h"
-#include "runtime/evm_module.h"
+#include "runtime/evm_instance.h"
 #include "runtime/instance.h"
 #include "runtime/isolation.h"
 #include "runtime/module.h"
@@ -648,6 +649,14 @@ void Runtime::callWasmFunctionInInterpMode(Instance &Inst, uint32_t FuncIdx,
       ZEN_ASSERT_TODO();
     }
   }
+}
+
+void Runtime::callEVMBlockInInterpMode(EVMInstance &Inst, std::string &result) {
+  evm::InterpreterExecContext Ctx(&Inst);
+  evm::BaseInterpreter Interpreter(Ctx);
+  Interpreter.interpret();
+  const auto &Ret = Ctx.getReturnData();
+  result = zen::utils::toHex(Ret.data(), Ret.size());
 }
 
 #ifdef ZEN_ENABLE_JIT

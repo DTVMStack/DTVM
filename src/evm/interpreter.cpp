@@ -3,6 +3,7 @@
 
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
+#include "runtime/evm_instance.h"
 
 #define EVM_STACK_CHECK(FramePtr, N)                                           \
   if ((FramePtr)->stackHeight() < (N)) {                                       \
@@ -367,7 +368,7 @@ void BaseInterpreter::interpret() {
   Context.allocFrame();
   EVMFrame *Frame = Context.getCurFrame();
 
-  const EVMModule *Mod = Context.getModule();
+  const EVMModule *Mod = Context.getInstance()->getModule();
 
   size_t CodeSize = Mod->CodeSize;
   uint8_t *Code = Mod->Code;

@@ -6,7 +6,8 @@
 
 #include "common/defines.h"
 #include "intx/intx.hpp"
-#include "runtime/evm_module.h"
+#include "runtime/destroyer.h"
+#include "runtime/object.h"
 #include "utils/logging.h"
 
 #include <array>
@@ -15,6 +16,11 @@
 #include <vector>
 
 namespace zen {
+
+namespace runtime {
+class EVMInstance;
+class Runtime;
+} // namespace runtime
 
 namespace evm {
 
@@ -58,11 +64,11 @@ struct EVMFrame {
 
 class InterpreterExecContext {
 private:
-  runtime::EVMModule *Mod;
+  runtime::EVMInstance *Inst;
   std::vector<EVMFrame> FrameStack;
 
 public:
-  InterpreterExecContext(runtime::EVMModule *Mod) : Mod(Mod) {}
+  InterpreterExecContext(runtime::EVMInstance *Inst) : Inst(Inst) {}
 
   EVMFrame *allocFrame();
   void freeBackFrame();
@@ -74,7 +80,7 @@ public:
     return &FrameStack.back();
   }
 
-  runtime::EVMModule *getModule() { return Mod; }
+  runtime::EVMInstance *getInstance() { return Inst; }
 
 private:
   std::vector<uint8_t> ReturnData;

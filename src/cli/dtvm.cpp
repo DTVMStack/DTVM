@@ -193,6 +193,12 @@ int main(int argc, char *argv[]) {
     }
     EVMInstance *Inst = *InstRet;
 
+    std::string result;
+    RT->callEVMBlockInInterpMode(*Inst, result);
+    if (!result.empty()) {
+      std::cout << "out: " << result << std::endl;
+    }
+
     if (!RT->unloadEVMModule(Mod)) {
       ZEN_LOG_ERROR("failed to unload EVM module");
       return exitMain(EXIT_FAILURE, RT.get());
