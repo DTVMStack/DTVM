@@ -134,12 +134,14 @@ add_subdirectory(action)
 add_subdirectory(entrypoint)
 add_subdirectory(runtime)
 add_subdirectory(utils)
+add_subdirectory(evm)
 
 add_library(
   dtvmcore STATIC
   $<TARGET_OBJECTS:action>
   $<TARGET_OBJECTS:common>
   $<TARGET_OBJECTS:entrypoint>
+  $<TARGET_OBJECTS:evm>
   $<TARGET_OBJECTS:platform>
   $<TARGET_OBJECTS:runtime>
   $<TARGET_OBJECTS:utils>

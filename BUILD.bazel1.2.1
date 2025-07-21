@@ -160,6 +160,7 @@ cc_library(
     strip_include_prefix = "src",
     visibility = ["//visibility:public"],
     deps = [
+        ":evmc",
         ":zetaengine_headers",
         "@zen_deps_spdlog//:spdlog",
     ],
@@ -206,7 +207,6 @@ cc_library(
     deps = [
         ":utils_lib",
         ":zetaengine_headers",
-        ":evmc",
         "@zen_deps_asmjit//:asmjit",
         "@zen_deps_spdlog//:spdlog",
         "@intx//:intx",

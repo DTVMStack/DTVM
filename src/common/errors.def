@@ -162,6 +162,11 @@ DEFINE_ERROR(Execution,     None,   CustomHostError,            "")
 DEFINE_ERROR(Unspecified,   None,   UnexpectedType,             "unexpected type")
 DEFINE_ERROR(Unspecified,   None,   MmapFailed,                 "failed to mmap(allocate execution memory)")
 
+// EVM Error: About EVMFrame stack handling
+DEFINE_ERROR(Execution,     None,   EVMDataStackOverflow,         "EVM data stack overflow")
+DEFINE_ERROR(Execution,     None,   EVMDataStackUnderflow,        "EVM data stack underflow")
+DEFINE_ERROR(Execution,     None,   EVMDataStackPeekOutRange,     "peek out of range")
+
 #endif
 
 #ifdef DEFINE_DWASM_ERROR

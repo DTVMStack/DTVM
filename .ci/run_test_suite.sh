@@ -78,6 +78,8 @@ fi
 export PATH=$PATH:$PWD/build
 CMAKE_OPTIONS_ORIGIN="$CMAKE_OPTIONS"
 
+./tools/easm2bytecode.sh ./tests/evm_asm ./tests/evm_asm
+
 for STACK_TYPE in ${STACK_TYPES[@]}; do
     rm -rf build
     cmake -S . -B build $CMAKE_OPTIONS_ORIGIN $STACK_TYPE
@@ -115,7 +117,6 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             cd ..
             ;;
         "evmrealsuite")
-            ./tools/easm2bytecode.sh ./tests/evm_asm ./tests/evm_asm
             ./build/dtvm --format evm -m interpreter tests/evm_asm/add.evm.hex
             ;;
     esac

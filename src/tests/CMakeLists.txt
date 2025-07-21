@@ -54,6 +54,7 @@ if(ZEN_ENABLE_SPEC_TEST)
   add_executable(specUnitTests spec_unit_tests.cpp spectest.cpp test_utils.cpp)
   add_executable(mempoolTests mempool_tests.cpp)
   add_executable(cAPITests c_api_tests.cpp)
+  add_executable(evmInterpTests evm_interp_tests.cpp)
 
   target_link_libraries(
     specUnitTests
@@ -67,6 +68,7 @@ if(ZEN_ENABLE_SPEC_TEST)
   if(ZEN_ENABLE_ASAN)
     target_compile_options(mempoolTests PRIVATE -fsanitize=address)
     target_compile_options(cAPITests PRIVATE -fsanitize=address)
+    target_compile_options(evmInterpTests PRIVATE -fsanitize=address)
     if(ZEN_BUILD_PLATFORM_DARWIN)
       target_link_libraries(
         mempoolTests
@@ -78,6 +80,11 @@ if(ZEN_ENABLE_SPEC_TEST)
         PRIVATE dtvmcore gtest_main -fsanitize=address
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
+      target_link_libraries(
+        evmInterpTests
+        PRIVATE dtvmcore gtest_main -fsanitize=address
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
     else()
       target_link_libraries(
         mempoolTests
@@ -86,6 +93,11 @@ if(ZEN_ENABLE_SPEC_TEST)
       )
       target_link_libraries(
         cAPITests
+        PRIVATE dtvmcore gtest_main -fsanitize=address -static-libasan
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+      target_link_libraries(
+        evmInterpTests
         PRIVATE dtvmcore gtest_main -fsanitize=address -static-libasan
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
@@ -101,6 +113,11 @@ if(ZEN_ENABLE_SPEC_TEST)
       PRIVATE dtvmcore gtest_main
       PUBLIC ${GTEST_BOTH_LIBRARIES}
     )
+    target_link_libraries(
+      evmInterpTests
+      PRIVATE dtvmcore gtest_main
+      PUBLIC ${GTEST_BOTH_LIBRARIES}
+    )
   endif()
 
   add_dependencies(specUnitTests spec_jsons)
@@ -112,4 +129,5 @@ if(ZEN_ENABLE_SPEC_TEST)
   )
   add_test(NAME mempoolTests COMMAND mempoolTests)
   add_test(NAME cAPITests COMMAND cAPITests)
+  add_test(NAME evmInterpTests COMMAND evmInterpTests)
 endif()
