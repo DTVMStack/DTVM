@@ -193,10 +193,10 @@ int main(int argc, char *argv[]) {
     }
     EVMInstance *Inst = *InstRet;
 
-    std::vector<uint8_t> result;
-    RT->callEVMInInterpMode(*Inst, result);
+    std::vector<uint8_t> Result;
+    RT->callEVMInInterpMode(*Inst, Result);
 
-    std::string output = zen::utils::toHex(result.data(), result.size());
+    std::string output = zen::utils::toHex(Result.data(), Result.size());
     std::cout << "output: 0x" << output << std::endl;
 
     if (!RT->unloadEVMModule(Mod)) {
