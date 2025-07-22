@@ -66,9 +66,7 @@ void BaseInterpreter::interpret() {
 
     // Check and deduct gas before executing operation
     uint64_t GasCost = getGasCost(Op);
-    if (Frame->GasLeft < GasCost) {
-      throw getError(ErrorCode::EVMOutOfGas);
-    }
+    EVM_THROW_IF(Frame->GasLeft, <, GasCost, EVMOutOfGas);
     Frame->GasLeft -= GasCost;
 
     switch (Op) {
@@ -269,9 +267,7 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_POP: {
-      if (Frame->stackHeight() < 1) {
-        throw getError(ErrorCode::UnexpectedNumArgs);
-      }
+      EVM_THROW_IF(Frame->stackHeight(), <, 1, UnexpectedNumArgs);
       Frame->pop();
       break;
     }

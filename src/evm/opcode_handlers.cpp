@@ -6,10 +6,6 @@
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
 
-#define EVM_STACK_CHECK(FramePtr, N)                                           \
-  if ((FramePtr)->stackHeight() < (N)) {                                       \
-    throw zen::common::getError(zen::common::ErrorCode::UnexpectedNumArgs);    \
-  }
 
 namespace {
 uint64_t uint256ToUint64(const intx::uint256 &Value) {
@@ -33,8 +29,6 @@ int64_t getGasCost(enum evmc_opcode Code,
 using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
-using zen::common::getError;
-using zen::common::ErrorCode;
 
 // Calculate memory expansion gas cost
 uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize) {
@@ -315,9 +309,7 @@ void zen::evm::handleOpMSTORE(EVMFrame *Frame) {
   intx::uint256 Value = Frame->pop();
 
   uint64_t Offset = uint256ToUint64(OffsetVal);
-  if (Offset > UINT32_MAX) {
-    throw getError(ErrorCode::IntegerOverflow);
-  }
+  EVM_THROW_IF(Offset, >, UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + 32;
   uint64_t CurrentSize = Frame->Memory.size();
@@ -325,9 +317,7 @@ void zen::evm::handleOpMSTORE(EVMFrame *Frame) {
   // Calculate and charge memory expansion gas
   uint64_t MemoryExpansionCost =
       calculateMemoryExpansionCost(CurrentSize, ReqSize);
-  if (Frame->GasLeft < MemoryExpansionCost) {
-    throw getError(ErrorCode::EVMOutOfGas);
-  }
+  EVM_THROW_IF(Frame->GasLeft, <, MemoryExpansionCost, EVMOutOfGas);
   Frame->GasLeft -= MemoryExpansionCost;
 
   // TODO: use EVMMemory class in the future
@@ -347,9 +337,7 @@ void zen::evm::handleOpMSTORE8(EVMFrame *Frame) {
   intx::uint256 Value = Frame->pop();
 
   uint64_t Offset = uint256ToUint64(OffsetVal);
-  if (Offset > UINT32_MAX) {
-    throw getError(ErrorCode::IntegerOverflow);
-  }
+  EVM_THROW_IF(Offset, >, UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + 1;
   uint64_t CurrentSize = Frame->Memory.size();
@@ -357,9 +345,7 @@ void zen::evm::handleOpMSTORE8(EVMFrame *Frame) {
   // Calculate and charge memory expansion gas
   uint64_t MemoryExpansionCost =
       calculateMemoryExpansionCost(CurrentSize, ReqSize);
-  if (Frame->GasLeft < MemoryExpansionCost) {
-    throw getError(ErrorCode::EVMOutOfGas);
-  }
+  EVM_THROW_IF(Frame->GasLeft, <, MemoryExpansionCost, EVMOutOfGas);
   Frame->GasLeft -= MemoryExpansionCost;
 
   // TODO: use EVMMemory class in the future
@@ -375,9 +361,7 @@ void zen::evm::handleOpMLOAD(EVMFrame *Frame) {
   intx::uint256 OffsetVal = Frame->pop();
   uint64_t Offset = uint256ToUint64(OffsetVal);
 
-  if (Offset > UINT32_MAX) {
-    throw getError(ErrorCode::IntegerOverflow);
-  }
+  EVM_THROW_IF(Offset, >, UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + 32;
   uint64_t CurrentSize = Frame->Memory.size();
@@ -385,9 +369,7 @@ void zen::evm::handleOpMLOAD(EVMFrame *Frame) {
   // Calculate and charge memory expansion gas
   uint64_t MemoryExpansionCost =
       calculateMemoryExpansionCost(CurrentSize, ReqSize);
-  if (Frame->GasLeft < MemoryExpansionCost) {
-    throw getError(ErrorCode::EVMOutOfGas);
-  }
+  EVM_THROW_IF(Frame->GasLeft, <, MemoryExpansionCost, EVMOutOfGas);
   Frame->GasLeft -= MemoryExpansionCost;
 
   // TODO: use EVMMemory class in the future
@@ -409,12 +391,8 @@ bool zen::evm::handleOpJUMP(EVMFrame *Frame, const uint8_t *Code, const size_t C
   // We can assume that valid destination can't greater than uint64_t
   uint64_t Dest = uint256ToUint64(Frame->pop());
 
-  if (Dest >= CodeSize) {
-    throw getError(ErrorCode::EVMBadJumpDestination);
-  }
-  if (static_cast<evmc_opcode>(Code[Dest]) != evmc_opcode::OP_JUMPDEST) {
-    throw getError(ErrorCode::EVMBadJumpDestination);
-  }
+  EVM_THROW_IF(Dest, >=, CodeSize, EVMBadJumpDestination);
+  EVM_THROW_IF(static_cast<evmc_opcode>(Code[Dest]), !=, evmc_opcode::OP_JUMPDEST, EVMBadJumpDestination);
 
   Frame->Pc = Dest;
   return true;
@@ -429,12 +407,8 @@ bool zen::evm::handleOpJUMPI(EVMFrame *Frame, const uint8_t *Code, const size_t 
   if (!Cond) {
     return false;
   }
-  if (Dest >= CodeSize) {
-    throw getError(ErrorCode::EVMBadJumpDestination);
-  }
-  if (static_cast<evmc_opcode>(Code[Dest]) != evmc_opcode::OP_JUMPDEST) {
-    throw getError(ErrorCode::EVMBadJumpDestination);
-  }
+  EVM_THROW_IF(Dest, >=, CodeSize, EVMBadJumpDestination);
+  EVM_THROW_IF(static_cast<evmc_opcode>(Code[Dest]), !=, evmc_opcode::OP_JUMPDEST, EVMBadJumpDestination);
 
   Frame->Pc = Dest;
   return true;
@@ -467,9 +441,8 @@ void zen::evm::handleOpRETURN(InterpreterExecContext &Context, EVMFrame *Frame) 
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
 
-  if (Offset > UINT32_MAX || Size > UINT32_MAX) {
-    throw getError(ErrorCode::IntegerOverflow);
-  }
+  // Check for overflow: Offset + Size > UINT32_MAX
+  EVM_THROW_IF(Offset + Size, >, UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + Size;
   // TODO: use EVMMemory class in the future
@@ -498,9 +471,8 @@ void zen::evm::handleOpREVERT(InterpreterExecContext &Context, EVMFrame *Frame) 
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
 
-  if (Offset > UINT32_MAX || Size > UINT32_MAX) {
-    throw getError(ErrorCode::IntegerOverflow);
-  }
+  // Check for overflow: Offset + Size > UINT32_MAX
+  EVM_THROW_IF(Offset + Size, >, UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + Size;
   // TODO: use EVMMemory class in the future
@@ -525,9 +497,7 @@ void zen::evm::handleOpPUSH(EVMFrame *Frame, uint8_t OpcodeByte, const uint8_t *
   // PUSH1 ~ PUSH32
   uint32_t NumBytes =
       OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
-  if (Frame->Pc + NumBytes >= CodeSize) {
-    throw getError(ErrorCode::UnexpectedEnd);
-  }
+  EVM_THROW_IF(Frame->Pc + NumBytes, >=, CodeSize, UnexpectedEnd);
   uint8_t ValueBytes[32];
   memset(ValueBytes, 0, sizeof(ValueBytes));
   std::memcpy(ValueBytes + (32 - NumBytes), Code + Frame->Pc + 1, NumBytes);
@@ -539,9 +509,7 @@ void zen::evm::handleOpPUSH(EVMFrame *Frame, uint8_t OpcodeByte, const uint8_t *
 void zen::evm::handleOpDUP(uint8_t OpcodeByte, EVMFrame *Frame) {
   // DUP1 ~ DUP16
   uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_DUP1) + 1;
-  if (Frame->stackHeight() < N) {
-    throw getError(ErrorCode::UnexpectedNumArgs);
-  }
+  EVM_THROW_IF(Frame->stackHeight(), <, N, UnexpectedNumArgs);
   intx::uint256 V = Frame->peek(N - 1);
   Frame->push(V);
 }
@@ -549,9 +517,7 @@ void zen::evm::handleOpDUP(uint8_t OpcodeByte, EVMFrame *Frame) {
 void zen::evm::handleOpSWAP(uint8_t OpcodeByte, EVMFrame *Frame) {
   // SWAP1 ~ SWAP16
   uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_SWAP1) + 1;
-  if (Frame->stackHeight() < N + 1) {
-    throw getError(ErrorCode::UnexpectedNumArgs);
-  }
+  EVM_THROW_IF(Frame->stackHeight(), <, N + 1, UnexpectedNumArgs);
   intx::uint256 &Top = Frame->peek(0);
   intx::uint256 &Nth = Frame->peek(N);
   std::swap(Top, Nth);

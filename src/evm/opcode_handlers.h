@@ -5,6 +5,27 @@
 #define ZEN_EVM_OPCODE_HANDLERS_H
 
 #include "evm/interpreter.h"
+#include "common/errors.h"
+
+// EVM error checking macro definitions
+#define EVM_STACK_CHECK(FramePtr, N)                                           \
+  if ((FramePtr)->stackHeight() < (N)) {                                       \
+    throw zen::common::getError(zen::common::ErrorCode::UnexpectedNumArgs);    \
+  }
+
+// Generic condition check + exception throwing macro
+#define EVM_THROW_IF(lhs, op, rhs, error_code)                               \
+  if ((lhs) op (rhs)) {                                                       \
+    throw zen::common::getError(zen::common::ErrorCode::error_code);          \
+  }
+
+
+// Simple boolean condition check macro
+#define EVM_THROW_IF_TRUE(condition, error_code)                             \
+  if (condition) {                                                           \
+    throw zen::common::getError(zen::common::ErrorCode::error_code);         \
+  }
+
 
 namespace zen::evm {
 
