@@ -15,20 +15,6 @@ namespace {
 uint64_t uint256ToUint64(const intx::uint256 &Value) {
   return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
 }
-
-int64_t
-getGasCost(enum evmc_opcode Code,
-           enum evmc_revision Revision = EVMC_CANCUN) { // EVMC_CANCUN = 12
-  const struct evmc_instruction_metrics *MetricsTable =
-      evmc_get_instruction_metrics_table(Revision);
-
-  if (MetricsTable == nullptr) {
-    throw zen::common::getError(zen::common::ErrorCode::EVMInvalidInstruction);
-  }
-  int16_t GasCost = MetricsTable[Code].gas_cost;
-  return GasCost;
-}
-
 } // namespace
 
 using namespace zen;
