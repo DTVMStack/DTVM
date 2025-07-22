@@ -4,8 +4,8 @@
 #ifndef ZEN_EVM_INTERPRETER_H
 #define ZEN_EVM_INTERPRETER_H
 
-#include "evmc/evmc.h"
 #include "common/errors.h"
+#include "evmc/evmc.h"
 #include "intx/intx.hpp"
 
 #include <array>
@@ -68,7 +68,7 @@ private:
 
 public:
   bool IsJump = false;
-  
+
   InterpreterExecContext(runtime::EVMInstance *Inst) : Inst(Inst) {}
 
   EVMFrame *allocFrame(uint64_t GasLimit = 0);
