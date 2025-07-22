@@ -44,7 +44,7 @@ public:
     CurrentContext = Context;
   }
   static EVMFrame *getCurFrame() { return CurrentFrame; }
-  static InterpreterExecContext *getInterpreterExecContent() {
+  static InterpreterExecContext *getInterpreterExecContext() {
     return CurrentContext;
   }
 };
@@ -55,7 +55,7 @@ protected:
   static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }
 
   static InterpreterExecContext *getContext() {
-    return EVMResource::getInterpreterExecContent();
+    return EVMResource::getInterpreterExecContext();
   }
 
 public:
