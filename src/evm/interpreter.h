@@ -41,21 +41,21 @@ struct EVMFrame {
 
   inline void push(const intx::uint256 &V) {
     if (Sp >= MAXSTACK) {
-      throw getError(common::ErrorCode::EVMDataStackOverflow);
+      throw getError(common::ErrorCode::EVMStackOverflow);
     }
     Stack[Sp++] = V; // TODO: use EVMMemory class in the future
   }
 
   inline intx::uint256 pop() {
     if (Sp <= 0) {
-      throw getError(common::ErrorCode::EVMDataStackUnderflow);
+      throw getError(common::ErrorCode::EVMStackUnderflow);
     }
     return Stack[--Sp]; // TODO: use EVMMemory class in the future
   }
 
   inline intx::uint256 &peek(size_t Index = 0) {
     if (Index >= Sp) {
-      throw getError(common::ErrorCode::EVMDataStackPeekOutRange);
+      throw getError(common::ErrorCode::EVMStackUnderflow);
     }
     return Stack[Sp - 1 - Index]; // TODO: use EVMMemory class in the future
   }

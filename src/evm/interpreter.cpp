@@ -50,7 +50,7 @@ getGasCost(enum evmc_opcode Code,
       evmc_get_instruction_metrics_table(Revision);
 
   if (MetricsTable == nullptr) {
-    throw common::getError(common::ErrorCode::EVMMetricsTableMissing);
+    throw common::getError(common::ErrorCode::EVMInvalidInstruction);
   }
   int16_t GasCost = MetricsTable[Code].gas_cost;
   return GasCost;
@@ -399,10 +399,10 @@ bool handleOpJUMP(EVMFrame *Frame, const uint8_t *Code, const size_t CodeSize) {
   uint64_t Dest = uint256ToUint64(Frame->pop());
 
   if (Dest >= CodeSize) {
-    throw common::getError(common::ErrorCode::EVMJumpDestOutOfRange);
+    throw common::getError(common::ErrorCode::EVMBadJumpDestination);
   }
   if (static_cast<evmc_opcode>(Code[Dest]) != evmc_opcode::OP_JUMPDEST) {
-    throw common::getError(common::ErrorCode::EVMInvalidJumpDest);
+    throw common::getError(common::ErrorCode::EVMBadJumpDestination);
   }
 
   Frame->Pc = Dest;
@@ -419,10 +419,10 @@ bool handleOpJUMPI(EVMFrame *Frame, const uint8_t *Code,
     return false;
   }
   if (Dest >= CodeSize) {
-    throw common::getError(common::ErrorCode::EVMJumpDestOutOfRange);
+    throw common::getError(common::ErrorCode::EVMBadJumpDestination);
   }
   if (static_cast<evmc_opcode>(Code[Dest]) != evmc_opcode::OP_JUMPDEST) {
-    throw common::getError(common::ErrorCode::EVMInvalidJumpDest);
+    throw common::getError(common::ErrorCode::EVMBadJumpDestination);
   }
 
   Frame->Pc = Dest;
