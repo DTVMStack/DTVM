@@ -21,6 +21,79 @@ using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
 
+#define DEFINE_CALCULATE_GAS(OpName, OpCode)                                   \
+  template <> uint64_t OpName##Handler::calculateGas() {                       \
+    static auto table = evmc_get_instruction_metrics_table(EVMC_CANCUN);       \
+    static const auto cost = table[OpCode].gas_cost;                           \
+    return cost;                                                               \
+  }
+
+#define DEFINE_NOT_TEMPLATE_CALCULATE_GAS(OpName, OpCode)                      \
+  uint64_t OpName##Handler::calculateGas() {                                   \
+    static auto table = evmc_get_instruction_metrics_table(EVMC_CANCUN);       \
+    static const auto cost = table[OpCode].gas_cost;                           \
+    return cost;                                                               \
+  }
+
+// Arithmetic operations
+DEFINE_CALCULATE_GAS(Add, OP_ADD);
+DEFINE_CALCULATE_GAS(Sub, OP_SUB);
+DEFINE_CALCULATE_GAS(Mul, OP_MUL);
+DEFINE_CALCULATE_GAS(Div, OP_DIV);
+DEFINE_CALCULATE_GAS(Mod, OP_MOD);
+DEFINE_CALCULATE_GAS(Exp, OP_EXP);
+DEFINE_CALCULATE_GAS(SDiv, OP_SDIV);
+DEFINE_CALCULATE_GAS(SMod, OP_SMOD);
+
+// Modular arithmetic operations
+DEFINE_CALCULATE_GAS(Addmod, OP_ADDMOD);
+DEFINE_CALCULATE_GAS(Mulmod, OP_MULMOD);
+
+// Unary operations
+DEFINE_CALCULATE_GAS(Not, OP_NOT);
+DEFINE_CALCULATE_GAS(IsZero, OP_ISZERO);
+
+// Bitwise operations
+DEFINE_CALCULATE_GAS(And, OP_AND);
+DEFINE_CALCULATE_GAS(Or, OP_OR);
+DEFINE_CALCULATE_GAS(Xor, OP_XOR);
+DEFINE_CALCULATE_GAS(Shl, OP_SHL);
+DEFINE_CALCULATE_GAS(Shr, OP_SHR);
+DEFINE_CALCULATE_GAS(Eq, OP_EQ);
+DEFINE_CALCULATE_GAS(Lt, OP_LT);
+DEFINE_CALCULATE_GAS(Gt, OP_GT);
+DEFINE_CALCULATE_GAS(Slt, OP_SLT);
+DEFINE_CALCULATE_GAS(Sgt, OP_SGT);
+
+// Arithmetic operations
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SignExtend, OP_SIGNEXTEND);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Byte, OP_BYTE);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Sar, OP_SAR);
+
+// Memory operations
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MStore, OP_MSTORE);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MStore8, OP_MSTORE8);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MLoad, OP_MLOAD);
+
+// Control flow operations
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Jump, OP_JUMP);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(JumpI, OP_JUMPI);
+
+// Environment operations
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PC, OP_PC);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MSize, OP_MSIZE);
+
+// Return operations
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Gas, OP_GAS);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(GasLimit, OP_GASLIMIT);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Return, OP_RETURN);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Revert, OP_REVERT);
+
+// Stack operations
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PUSH, OP_PUSH1);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(DUP, OP_DUP1);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SWAP, OP_SWAP1);
+
 // Calculate memory expansion gas cost
 uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize,
                                                 uint64_t NewSize) {
@@ -46,13 +119,13 @@ uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize,
   return NewCost - CurrentCost;
 }
 
-void GasHandler::execute() {
-  EVMFrame *Frame = getFrame();
-  uint64_t GasCost = calculateGas(evmc_opcode::OP_GAS);
-  Frame->push(intx::uint256(Frame->GasLeft - GasCost));
+void GasHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<GasHandler>;
+  auto *Frame = Base::getFrame();
+  Frame->push(intx::uint256(Frame->GasLeft));
 }
 
-void SignExtendHandler::execute() {
+void SignExtendHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<SignExtendHandler>;
   auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 2);
@@ -80,7 +153,7 @@ void SignExtendHandler::execute() {
   Frame->push(Res);
 }
 
-void ByteHandler::execute() {
+void ByteHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<ByteHandler>;
   auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 2);
@@ -95,7 +168,7 @@ void ByteHandler::execute() {
   Frame->push(Res);
 }
 
-void SarHandler::execute() {
+void SarHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<SarHandler>;
   auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 2);
@@ -120,7 +193,7 @@ void SarHandler::execute() {
 }
 
 // Memory operations
-void MStoreHandler::execute() {
+void MStoreHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<MStoreHandler>;
   auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 2);
@@ -150,7 +223,7 @@ void MStoreHandler::execute() {
   std::memcpy(Frame->Memory.data() + Offset, ValueBytes, 32);
 }
 
-void MStore8Handler::execute() {
+void MStore8Handler::doExecute() {
   using Base = EVMOpcodeHandlerBase<MStore8Handler>;
   auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 2);
@@ -177,7 +250,7 @@ void MStore8Handler::execute() {
   Frame->Memory[Offset] = ByteValue;
 }
 
-void MLoadHandler::execute() {
+void MLoadHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<MLoadHandler>;
   auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 1);
@@ -209,7 +282,7 @@ void MLoadHandler::execute() {
 }
 
 // Control flow operations
-void JumpHandler::execute() {
+void JumpHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<JumpHandler>;
   auto *Frame = Base::getFrame();
   auto *Context = Base::getContext();
@@ -229,7 +302,7 @@ void JumpHandler::execute() {
   Context->IsJump = true;
 }
 
-void JumpIHandler::execute() {
+void JumpIHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<JumpIHandler>;
   auto *Frame = Base::getFrame();
   auto *Context = Base::getContext();
@@ -254,13 +327,13 @@ void JumpIHandler::execute() {
 }
 
 // Environment operations
-void PCHandler::execute() {
+void PCHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<PCHandler>;
   auto *Frame = Base::getFrame();
   Frame->push(intx::uint256(Frame->Pc));
 }
 
-void MSizeHandler::execute() {
+void MSizeHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<MSizeHandler>;
   auto *Frame = Base::getFrame();
   // Return the current memory size in bytes
@@ -268,14 +341,14 @@ void MSizeHandler::execute() {
   Frame->push(MemSize);
 }
 
-void GasLimitHandler::execute() {
+void GasLimitHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<GasLimitHandler>;
   auto *Frame = Base::getFrame();
   Frame->push(intx::uint256(Frame->GasLimit));
 }
 
 // Return operations
-void ReturnHandler::execute() {
+void ReturnHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<ReturnHandler>;
   auto *Frame = Base::getFrame();
   auto *Context = Base::getContext();
@@ -308,7 +381,7 @@ void ReturnHandler::execute() {
 }
 
 // TODO: implement host storage revert in the future
-void RevertHandler::execute() {
+void RevertHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<RevertHandler>;
   auto *Frame = Base::getFrame();
   auto *Context = Base::getContext();
@@ -340,7 +413,7 @@ void RevertHandler::execute() {
 }
 
 // Stack operations
-void PUSHHandler::execute() {
+void PUSHHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<PUSHHandler>;
   auto *Frame = Base::getFrame();
   auto *Context = Base::getContext();
@@ -361,7 +434,7 @@ void PUSHHandler::execute() {
   Frame->Pc += NumBytes;
 }
 
-void DUPHandler::execute() {
+void DUPHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<DUPHandler>;
   auto *Frame = Base::getFrame();
   auto *Context = Base::getContext();
@@ -376,7 +449,7 @@ void DUPHandler::execute() {
   Frame->push(V);
 }
 
-void SWAPHandler::execute() {
+void SWAPHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<SWAPHandler>;
   auto *Frame = Base::getFrame();
   auto *Context = Base::getContext();

@@ -7,24 +7,6 @@
 #include "evmc/instructions.h"
 #include "runtime/evm_instance.h"
 
-namespace {
-
-int64_t
-getGasCost(enum evmc_opcode Code,
-           enum evmc_revision Revision = EVMC_CANCUN) { // EVMC_CANCUN = 12
-  // Get the instruction index table for the specified EVM version
-  const struct evmc_instruction_metrics *MetricsTable =
-      evmc_get_instruction_metrics_table(Revision);
-
-  if (MetricsTable == nullptr) {
-    throw zen::common::getError(zen::common::ErrorCode::EVMInvalidInstruction);
-  }
-  int16_t GasCost = MetricsTable[Code].gas_cost;
-  return GasCost;
-}
-
-} // namespace
-
 using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
@@ -65,11 +47,6 @@ void BaseInterpreter::interpret() {
     uint8_t OpcodeByte = Code[Frame->Pc];
     evmc_opcode Op = static_cast<evmc_opcode>(OpcodeByte);
     bool IsJumpSuccess = false;
-
-    // Check and deduct gas before executing operation
-    uint64_t GasCost = getGasCost(Op);
-    EVM_THROW_IF(Frame->GasLeft, <, GasCost, EVMOutOfGas);
-    Frame->GasLeft -= GasCost;
 
     switch (Op) {
     case evmc_opcode::OP_STOP:

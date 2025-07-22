@@ -59,24 +59,18 @@ protected:
   }
 
 public:
-  // Default gas calculation using EVMC table lookup
-  static uint64_t calculateGas(evmc_opcode Op,
-                               evmc_revision Revision = EVMC_CANCUN) {
-    const struct evmc_instruction_metrics *MetricsTable =
-        evmc_get_instruction_metrics_table(Revision);
-    if (MetricsTable == nullptr) {
-      throw zen::common::getError(
-          zen::common::ErrorCode::EVMInvalidInstruction);
-    }
-    return MetricsTable[Op].gas_cost;
-  }
-  void execute(){};
+  void execute() {
+    uint64_t GasCost = static_cast<Derived *>(this)->calculateGas();
+    EVM_THROW_IF(getFrame()->GasLeft, <, GasCost, EVMOutOfGas);
+    getFrame()->GasLeft -= GasCost;
+    static_cast<Derived *>(this)->doExecute();
+  };
 };
 
 template <typename UnaryOp>
 class UnaryOpHandler : public EVMOpcodeHandlerBase<UnaryOpHandler<UnaryOp>> {
 public:
-  static void execute() {
+  static void doExecute() {
     using Base = EVMOpcodeHandlerBase<UnaryOpHandler<UnaryOp>>;
     auto *Frame = Base::getFrame();
     EVM_STACK_CHECK(Frame, 1);
@@ -86,12 +80,13 @@ public:
     intx::uint256 Result = UnaryOp{}(A);
     Frame->push(Result);
   }
+  static uint64_t calculateGas();
 };
 
 template <typename BinaryOp>
 class BinaryOpHandler : public EVMOpcodeHandlerBase<BinaryOpHandler<BinaryOp>> {
 public:
-  static void execute() {
+  static void doExecute() {
     using Base = EVMOpcodeHandlerBase<BinaryOpHandler<BinaryOp>>;
     auto *Frame = Base::getFrame();
     EVM_STACK_CHECK(Frame, 2);
@@ -102,13 +97,14 @@ public:
     intx::uint256 Result = BinaryOp{}(A, B);
     Frame->push(Result);
   }
+  static uint64_t calculateGas();
 };
 
 template <typename TernaryOp>
 class TernaryOpHandler
     : public EVMOpcodeHandlerBase<TernaryOpHandler<TernaryOp>> {
 public:
-  static void execute() {
+  static void doExecute() {
     using Base = EVMOpcodeHandlerBase<TernaryOpHandler<TernaryOp>>;
     auto *Frame = Base::getFrame();
     EVM_STACK_CHECK(Frame, 3);
@@ -120,6 +116,7 @@ public:
     intx::uint256 Result = TernaryOp{}(A, B, C);
     Frame->push(Result);
   }
+  static uint64_t calculateGas();
 };
 
 #define DEFINE_UNARY_OP(OpName, Calc)                                          \
@@ -182,7 +179,8 @@ DEFINE_BINARY_OP(Sgt, intx::slt(B, A));
 #define DEFINE_UNIMPLEMENT_HANDLER(OpName)                                     \
   class OpName##Handler : public EVMOpcodeHandlerBase<OpName##Handler> {       \
   public:                                                                      \
-    static void execute();                                                     \
+    static void doExecute();                                                   \
+    static uint64_t calculateGas();                                            \
   };
 
 // Arithmetic operations
