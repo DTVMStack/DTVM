@@ -28,8 +28,8 @@ getGasCost(enum evmc_opcode Code,
 using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
-using zen::common::getError;
 using zen::common::ErrorCode;
+using zen::common::getError;
 
 EVMFrame *InterpreterExecContext::allocFrame(uint64_t GasLimit) {
   FrameStack.emplace_back();
@@ -56,6 +56,8 @@ void BaseInterpreter::interpret() {
 
   const EVMModule *Mod = Context.getInstance()->getModule();
 
+  EVMResource::setExecutionContext(Frame, &Context);
+
   size_t CodeSize = Mod->CodeSize;
   uint8_t *Code = Mod->Code;
 
@@ -79,87 +81,87 @@ void BaseInterpreter::interpret() {
       continue;
 
     case evmc_opcode::OP_ADD: {
-      handleOpADD(Frame);
+      EVMOpcodeHandlerRegistry::getAddHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_SUB: {
-      handleOpSUB(Frame);
+      EVMOpcodeHandlerRegistry::getSubHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_MUL: {
-      handleOpMUL(Frame);
+      EVMOpcodeHandlerRegistry::getMulHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_DIV: {
-      handleOpDIV(Frame);
+      EVMOpcodeHandlerRegistry::getDivHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_MOD: {
-      handleOpMOD(Frame);
+      EVMOpcodeHandlerRegistry::getModHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_AND: {
-      handleOpAND(Frame);
+      EVMOpcodeHandlerRegistry::getAndHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_EQ: {
-      handleOpEQ(Frame);
+      EVMOpcodeHandlerRegistry::getEqHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_ISZERO: {
-      handleOpISZERO(Frame);
+      EVMOpcodeHandlerRegistry::getIsZeroHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_LT: {
-      handleOpLT(Frame);
+      EVMOpcodeHandlerRegistry::getLtHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_GT: {
-      handleOpGT(Frame);
+      EVMOpcodeHandlerRegistry::getGtHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_SLT: {
-      handleOpSLT(Frame);
+      EVMOpcodeHandlerRegistry::getSltHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_SGT: {
-      handleOpSGT(Frame);
+      EVMOpcodeHandlerRegistry::getSgtHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_ADDMOD: {
-      handleOpADDMOD(Frame);
+      EVMOpcodeHandlerRegistry::getAddmodHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_MULMOD: {
-      handleOpMULMOD(Frame);
+      EVMOpcodeHandlerRegistry::getMulmodHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_EXP: {
-      handleOpEXP(Frame);
+      EVMOpcodeHandlerRegistry::getExpHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_SDIV: {
-      handleOpSDIV(Frame);
+      EVMOpcodeHandlerRegistry::getSDivHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_SMOD: {
-      handleOpSMOD(Frame);
+      EVMOpcodeHandlerRegistry::getSModHandler().execute();
       break;
     }
     case evmc_opcode::OP_SIGNEXTEND: {
@@ -168,17 +170,17 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_OR: {
-      handleOpOR(Frame);
+      EVMOpcodeHandlerRegistry::getOrHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_XOR: {
-      handleOpXOR(Frame);
+      EVMOpcodeHandlerRegistry::getXorHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_NOT: {
-      handleOpNOT(Frame);
+      EVMOpcodeHandlerRegistry::getNotHandler().execute();
       break;
     }
 
@@ -188,12 +190,12 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_SHL: {
-      handleOpSHL(Frame);
+      EVMOpcodeHandlerRegistry::getShlHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_SHR: {
-      handleOpSHR(Frame);
+      EVMOpcodeHandlerRegistry::getShrHandler().execute();
       break;
     }
 
@@ -240,7 +242,7 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_GAS: {
-      handleOpGAS(Frame);
+      EVMOpcodeHandlerRegistry::getGasHandler().execute();
       break;
     }
     case evmc_opcode::OP_GASLIMIT: {

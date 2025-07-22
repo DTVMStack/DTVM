@@ -6,14 +6,18 @@
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
 
+zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
+zen::evm::InterpreterExecContext *zen::evm::EVMResource::CurrentContext =
+    nullptr;
 
 namespace {
 uint64_t uint256ToUint64(const intx::uint256 &Value) {
   return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
 }
 
-int64_t getGasCost(enum evmc_opcode Code,
-                   enum evmc_revision Revision = EVMC_CANCUN) { // EVMC_CANCUN = 12
+int64_t
+getGasCost(enum evmc_opcode Code,
+           enum evmc_revision Revision = EVMC_CANCUN) { // EVMC_CANCUN = 12
   const struct evmc_instruction_metrics *MetricsTable =
       evmc_get_instruction_metrics_table(Revision);
 
@@ -31,7 +35,8 @@ using namespace zen::evm;
 using namespace zen::runtime;
 
 // Calculate memory expansion gas cost
-uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize) {
+uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize,
+                                                uint64_t NewSize) {
   if (NewSize <= CurrentSize) {
     return 0; // No expansion needed
   }
@@ -52,89 +57,6 @@ uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t N
   uint64_t NewCost = MemoryCost(NewWords);
 
   return NewCost - CurrentCost;
-}
-
-// Arithmetic operations
-void zen::evm::handleOpADD(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 C = A + B;
-  Frame->push(C);
-}
-
-void zen::evm::handleOpSUB(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = A - B;
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpMUL(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = A * B;
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpDIV(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Q = (B == 0) ? intx::uint256(0) : A / B;
-  Frame->push(Q);
-}
-
-void zen::evm::handleOpMOD(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 R = (B == 0) ? intx::uint256(0) : A % B;
-  Frame->push(R);
-}
-
-void zen::evm::handleOpADDMOD(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 3);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 C = Frame->pop();
-  intx::uint256 Res = (C == 0) ? intx::uint256(0) : intx::addmod(A, B, C);
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpMULMOD(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 3);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 C = Frame->pop();
-  intx::uint256 Res = (C == 0) ? intx::uint256(0) : intx::mulmod(A, B, C);
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpEXP(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 Base = Frame->pop();
-  intx::uint256 Exp = Frame->pop();
-  intx::uint256 Res = intx::exp(Base, Exp);
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpSDIV(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).quot;
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpSMOD(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).rem;
-  Frame->push(Res);
 }
 
 void zen::evm::handleOpSIGNEXTEND(EVMFrame *Frame) {
@@ -163,38 +85,6 @@ void zen::evm::handleOpSIGNEXTEND(EVMFrame *Frame) {
   Frame->push(Res);
 }
 
-// Bitwise operations
-void zen::evm::handleOpAND(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = A & B;
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpOR(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = A | B;
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpXOR(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = A ^ B;
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpNOT(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 1);
-  intx::uint256 V = Frame->pop();
-  intx::uint256 Res = ~V;
-  Frame->push(Res);
-}
-
 void zen::evm::handleOpBYTE(EVMFrame *Frame) {
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 I = Frame->pop();
@@ -204,30 +94,6 @@ void zen::evm::handleOpBYTE(EVMFrame *Frame) {
   if (I < 32) {
     uint8_t ByteVal = static_cast<uint8_t>((Val >> (8 * (31 - I))) & 0xFF);
     Res = intx::uint256(ByteVal);
-  }
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpSHL(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 Shift = Frame->pop();
-  intx::uint256 Value = Frame->pop();
-
-  intx::uint256 Res = 0;
-  if (Shift < 256) {
-    Res = Value << Shift;
-  }
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpSHR(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 Shift = Frame->pop();
-  intx::uint256 Value = Frame->pop();
-
-  intx::uint256 Res = 0;
-  if (Shift < 256) {
-    Res = Value >> Shift;
   }
   Frame->push(Res);
 }
@@ -251,54 +117,6 @@ void zen::evm::handleOpSAR(EVMFrame *Frame) {
     intx::uint256 IsNegative = (Value >> 255) & 1;
     Res = IsNegative ? intx::uint256(-1) : intx::uint256(0);
   }
-  Frame->push(Res);
-}
-
-// Comparison operations
-void zen::evm::handleOpEQ(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = (A == B) ? intx::uint256(1) : intx::uint256(0);
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpISZERO(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 1);
-  intx::uint256 V = Frame->pop();
-  intx::uint256 Res = (V == 0) ? intx::uint256(1) : intx::uint256(0);
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpLT(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = (A < B) ? intx::uint256(1) : intx::uint256(0);
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpGT(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = (A > B) ? intx::uint256(1) : intx::uint256(0);
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpSLT(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = intx::slt(A, B);
-  Frame->push(Res);
-}
-
-void zen::evm::handleOpSGT(EVMFrame *Frame) {
-  EVM_STACK_CHECK(Frame, 2);
-  intx::uint256 A = Frame->pop();
-  intx::uint256 B = Frame->pop();
-  intx::uint256 Res = intx::slt(B, A);
   Frame->push(Res);
 }
 
@@ -386,19 +204,22 @@ void zen::evm::handleOpMLOAD(EVMFrame *Frame) {
 }
 
 // Control flow operations
-bool zen::evm::handleOpJUMP(EVMFrame *Frame, const uint8_t *Code, const size_t CodeSize) {
+bool zen::evm::handleOpJUMP(EVMFrame *Frame, const uint8_t *Code,
+                            const size_t CodeSize) {
   EVM_STACK_CHECK(Frame, 1);
   // We can assume that valid destination can't greater than uint64_t
   uint64_t Dest = uint256ToUint64(Frame->pop());
 
   EVM_THROW_IF(Dest, >=, CodeSize, EVMBadJumpDestination);
-  EVM_THROW_IF(static_cast<evmc_opcode>(Code[Dest]), !=, evmc_opcode::OP_JUMPDEST, EVMBadJumpDestination);
+  EVM_THROW_IF(static_cast<evmc_opcode>(Code[Dest]), !=,
+               evmc_opcode::OP_JUMPDEST, EVMBadJumpDestination);
 
   Frame->Pc = Dest;
   return true;
 }
 
-bool zen::evm::handleOpJUMPI(EVMFrame *Frame, const uint8_t *Code, const size_t CodeSize) {
+bool zen::evm::handleOpJUMPI(EVMFrame *Frame, const uint8_t *Code,
+                             const size_t CodeSize) {
   EVM_STACK_CHECK(Frame, 2);
   // We can assume that valid destination can't greater than uint64_t
   uint64_t Dest = uint256ToUint64(Frame->pop());
@@ -408,15 +229,16 @@ bool zen::evm::handleOpJUMPI(EVMFrame *Frame, const uint8_t *Code, const size_t 
     return false;
   }
   EVM_THROW_IF(Dest, >=, CodeSize, EVMBadJumpDestination);
-  EVM_THROW_IF(static_cast<evmc_opcode>(Code[Dest]), !=, evmc_opcode::OP_JUMPDEST, EVMBadJumpDestination);
+  EVM_THROW_IF(static_cast<evmc_opcode>(Code[Dest]), !=,
+               evmc_opcode::OP_JUMPDEST, EVMBadJumpDestination);
 
   Frame->Pc = Dest;
   return true;
 }
 
 // Environment operations
-void zen::evm::handleOpPC(EVMFrame *Frame) { 
-  Frame->push(intx::uint256(Frame->Pc)); 
+void zen::evm::handleOpPC(EVMFrame *Frame) {
+  Frame->push(intx::uint256(Frame->Pc));
 }
 
 void zen::evm::handleOpMSize(EVMFrame *Frame) {
@@ -434,7 +256,8 @@ void zen::evm::handleOpGASLIMIT(EVMFrame *Frame) {
 }
 
 // Return operations
-void zen::evm::handleOpRETURN(InterpreterExecContext &Context, EVMFrame *Frame) {
+void zen::evm::handleOpRETURN(InterpreterExecContext &Context,
+                              EVMFrame *Frame) {
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
@@ -464,7 +287,8 @@ void zen::evm::handleOpRETURN(InterpreterExecContext &Context, EVMFrame *Frame) 
 }
 
 // TODO: implement host storage revert in the future
-void zen::evm::handleOpREVERT(InterpreterExecContext &Context, EVMFrame *Frame) {
+void zen::evm::handleOpREVERT(InterpreterExecContext &Context,
+                              EVMFrame *Frame) {
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
@@ -493,7 +317,8 @@ void zen::evm::handleOpREVERT(InterpreterExecContext &Context, EVMFrame *Frame) 
 }
 
 // Stack operations
-void zen::evm::handleOpPUSH(EVMFrame *Frame, uint8_t OpcodeByte, const uint8_t *Code, size_t CodeSize) {
+void zen::evm::handleOpPUSH(EVMFrame *Frame, uint8_t OpcodeByte,
+                            const uint8_t *Code, size_t CodeSize) {
   // PUSH1 ~ PUSH32
   uint32_t NumBytes =
       OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
