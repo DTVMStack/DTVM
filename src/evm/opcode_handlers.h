@@ -21,8 +21,8 @@
   }
 
 // Simple boolean condition check macro
-#define EVM_THROW_IF_TRUE(Condition, errorCode)                                \
-  if (Condition) {                                                             \
+#define EVM_REQUIRE(Condition, errorCode)                                      \
+  if (!Condition) {                                                            \
     throw zen::common::getError(zen::common::ErrorCode::errorCode);            \
   }
 
