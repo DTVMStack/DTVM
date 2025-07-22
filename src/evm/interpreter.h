@@ -5,13 +5,10 @@
 #define ZEN_EVM_INTERPRETER_H
 
 #include "evmc/evmc.h"
+#include "common/errors.h"
 #include "intx/intx.hpp"
-#include "runtime/destroyer.h"
-#include "runtime/object.h"
-#include "utils/logging.h"
 
 #include <array>
-#include <cstdint>
 #include <map>
 #include <vector>
 
@@ -19,7 +16,6 @@ namespace zen {
 
 namespace runtime {
 class EVMInstance;
-class Runtime;
 } // namespace runtime
 
 namespace evm {
