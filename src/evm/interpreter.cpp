@@ -44,7 +44,7 @@ namespace {
 
 int64_t
 getGasCost(enum evmc_opcode Code,
-           enum evmc_revision Revision = EVMC_SHANGHAI) { // EVMC_SHANGHAI = 11
+           enum evmc_revision Revision = EVMC_CANCUN) { // EVMC_CANCUN = 12
   // Get the instruction index table for the specified EVM version
   const struct evmc_instruction_metrics *MetricsTable =
       evmc_get_instruction_metrics_table(Revision);
