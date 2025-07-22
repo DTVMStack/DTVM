@@ -67,6 +67,8 @@ private:
   std::vector<uint8_t> ReturnData;
 
 public:
+  bool IsJump = false;
+  
   InterpreterExecContext(runtime::EVMInstance *Inst) : Inst(Inst) {}
 
   EVMFrame *allocFrame(uint64_t GasLimit = 0);

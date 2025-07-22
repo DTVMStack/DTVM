@@ -5,6 +5,7 @@
 #include "common/errors.h"
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
+#include "runtime/evm_instance.h"
 
 zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
 zen::evm::InterpreterExecContext *zen::evm::EVMResource::CurrentContext =
@@ -59,7 +60,15 @@ uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize,
   return NewCost - CurrentCost;
 }
 
-void zen::evm::handleOpSIGNEXTEND(EVMFrame *Frame) {
+void GasHandler::execute() {
+  EVMFrame *Frame = getFrame();
+  uint64_t GasCost = calculateGas(evmc_opcode::OP_GAS);
+  Frame->push(intx::uint256(Frame->GasLeft - GasCost));
+}
+
+void SignExtendHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<SignExtendHandler>;
+  auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 I = Frame->pop();
   intx::uint256 V = Frame->pop();
@@ -85,7 +94,9 @@ void zen::evm::handleOpSIGNEXTEND(EVMFrame *Frame) {
   Frame->push(Res);
 }
 
-void zen::evm::handleOpBYTE(EVMFrame *Frame) {
+void ByteHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<ByteHandler>;
+  auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 I = Frame->pop();
   intx::uint256 Val = Frame->pop();
@@ -98,7 +109,9 @@ void zen::evm::handleOpBYTE(EVMFrame *Frame) {
   Frame->push(Res);
 }
 
-void zen::evm::handleOpSAR(EVMFrame *Frame) {
+void SarHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<SarHandler>;
+  auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 Shift = Frame->pop();
   intx::uint256 Value = Frame->pop();
@@ -121,7 +134,9 @@ void zen::evm::handleOpSAR(EVMFrame *Frame) {
 }
 
 // Memory operations
-void zen::evm::handleOpMSTORE(EVMFrame *Frame) {
+void MStoreHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<MStoreHandler>;
+  auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 Value = Frame->pop();
@@ -149,7 +164,9 @@ void zen::evm::handleOpMSTORE(EVMFrame *Frame) {
   std::memcpy(Frame->Memory.data() + Offset, ValueBytes, 32);
 }
 
-void zen::evm::handleOpMSTORE8(EVMFrame *Frame) {
+void MStore8Handler::execute() {
+  using Base = EVMOpcodeHandlerBase<MStore8Handler>;
+  auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 Value = Frame->pop();
@@ -174,7 +191,9 @@ void zen::evm::handleOpMSTORE8(EVMFrame *Frame) {
   Frame->Memory[Offset] = ByteValue;
 }
 
-void zen::evm::handleOpMLOAD(EVMFrame *Frame) {
+void MLoadHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<MLoadHandler>;
+  auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 OffsetVal = Frame->pop();
   uint64_t Offset = uint256ToUint64(OffsetVal);
@@ -204,8 +223,14 @@ void zen::evm::handleOpMLOAD(EVMFrame *Frame) {
 }
 
 // Control flow operations
-bool zen::evm::handleOpJUMP(EVMFrame *Frame, const uint8_t *Code,
-                            const size_t CodeSize) {
+void JumpHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<JumpHandler>;
+  auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
+  auto *Inst = Context->getInstance();
+  auto *Mod = Inst->getModule();
+  const uint8_t *Code = Mod->Code;
+  size_t CodeSize = Mod->CodeSize;
   EVM_STACK_CHECK(Frame, 1);
   // We can assume that valid destination can't greater than uint64_t
   uint64_t Dest = uint256ToUint64(Frame->pop());
@@ -215,49 +240,59 @@ bool zen::evm::handleOpJUMP(EVMFrame *Frame, const uint8_t *Code,
                evmc_opcode::OP_JUMPDEST, EVMBadJumpDestination);
 
   Frame->Pc = Dest;
-  return true;
+  Context->IsJump = true;
 }
 
-bool zen::evm::handleOpJUMPI(EVMFrame *Frame, const uint8_t *Code,
-                             const size_t CodeSize) {
+void JumpIHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<JumpIHandler>;
+  auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
+  auto *Inst = Context->getInstance();
+  auto *Mod = Inst->getModule();
+  const uint8_t *Code = Mod->Code;
+  size_t CodeSize = Mod->CodeSize;
   EVM_STACK_CHECK(Frame, 2);
   // We can assume that valid destination can't greater than uint64_t
   uint64_t Dest = uint256ToUint64(Frame->pop());
   intx::uint256 Cond = Frame->pop();
 
   if (!Cond) {
-    return false;
+    return;
   }
   EVM_THROW_IF(Dest, >=, CodeSize, EVMBadJumpDestination);
   EVM_THROW_IF(static_cast<evmc_opcode>(Code[Dest]), !=,
                evmc_opcode::OP_JUMPDEST, EVMBadJumpDestination);
 
   Frame->Pc = Dest;
-  return true;
+  Context->IsJump = true;
 }
 
 // Environment operations
-void zen::evm::handleOpPC(EVMFrame *Frame) {
+void PCHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<PCHandler>;
+  auto *Frame = Base::getFrame();
   Frame->push(intx::uint256(Frame->Pc));
 }
 
-void zen::evm::handleOpMSize(EVMFrame *Frame) {
+void MSizeHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<MSizeHandler>;
+  auto *Frame = Base::getFrame();
   // Return the current memory size in bytes
   intx::uint256 MemSize = Frame->Memory.size();
   Frame->push(MemSize);
 }
 
-void zen::evm::handleOpGAS(EVMFrame *Frame) {
-  Frame->push(intx::uint256(Frame->GasLeft - getGasCost(evmc_opcode::OP_GAS)));
-}
-
-void zen::evm::handleOpGASLIMIT(EVMFrame *Frame) {
+void GasLimitHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<GasLimitHandler>;
+  auto *Frame = Base::getFrame();
   Frame->push(intx::uint256(Frame->GasLimit));
 }
 
 // Return operations
-void zen::evm::handleOpRETURN(InterpreterExecContext &Context,
-                              EVMFrame *Frame) {
+void ReturnHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<ReturnHandler>;
+  auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
@@ -275,20 +310,22 @@ void zen::evm::handleOpRETURN(InterpreterExecContext &Context,
   // TODO: use EVMMemory class in the future
   std::vector<uint8_t> ReturnData(Frame->Memory.begin() + Offset,
                                   Frame->Memory.begin() + Offset + Size);
-  Context.setReturnData(std::move(ReturnData));
+  Context->setReturnData(std::move(ReturnData));
 
-  Context.setStatus(EVMC_SUCCESS);
+  Context->setStatus(EVMC_SUCCESS);
   // Return remaining gas to parent frame before freeing current frame
   uint64_t RemainingGas = Frame->GasLeft;
-  Context.freeBackFrame();
-  if (Context.getCurFrame() != nullptr) {
-    Context.getCurFrame()->GasLeft += RemainingGas;
+  Context->freeBackFrame();
+  if (Context->getCurFrame() != nullptr) {
+    Context->getCurFrame()->GasLeft += RemainingGas;
   }
 }
 
 // TODO: implement host storage revert in the future
-void zen::evm::handleOpREVERT(InterpreterExecContext &Context,
-                              EVMFrame *Frame) {
+void RevertHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<RevertHandler>;
+  auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
@@ -306,19 +343,26 @@ void zen::evm::handleOpREVERT(InterpreterExecContext &Context,
   std::vector<uint8_t> RevertData(Frame->Memory.begin() + Offset,
                                   Frame->Memory.begin() + Offset + Size);
 
-  Context.setStatus(EVMC_REVERT);
-  Context.setReturnData(std::move(RevertData));
+  Context->setStatus(EVMC_REVERT);
+  Context->setReturnData(std::move(RevertData));
   // Return remaining gas to parent frame before freeing current frame
   uint64_t RemainingGas = Frame->GasLeft;
-  Context.freeBackFrame();
-  if (Context.getCurFrame() != nullptr) {
-    Context.getCurFrame()->GasLeft += RemainingGas;
+  Context->freeBackFrame();
+  if (Context->getCurFrame() != nullptr) {
+    Context->getCurFrame()->GasLeft += RemainingGas;
   }
 }
 
 // Stack operations
-void zen::evm::handleOpPUSH(EVMFrame *Frame, uint8_t OpcodeByte,
-                            const uint8_t *Code, size_t CodeSize) {
+void PUSHHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<PUSHHandler>;
+  auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
+  auto *Inst = Context->getInstance();
+  auto *Mod = Inst->getModule();
+  const uint8_t *Code = Mod->Code;
+  uint8_t OpcodeByte = Code[Frame->Pc];
+  size_t CodeSize = Mod->CodeSize;
   // PUSH1 ~ PUSH32
   uint32_t NumBytes =
       OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
@@ -331,7 +375,14 @@ void zen::evm::handleOpPUSH(EVMFrame *Frame, uint8_t OpcodeByte,
   Frame->Pc += NumBytes;
 }
 
-void zen::evm::handleOpDUP(uint8_t OpcodeByte, EVMFrame *Frame) {
+void DUPHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<DUPHandler>;
+  auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
+  auto *Inst = Context->getInstance();
+  auto *Mod = Inst->getModule();
+  const uint8_t *Code = Mod->Code;
+  uint8_t OpcodeByte = Code[Frame->Pc];
   // DUP1 ~ DUP16
   uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_DUP1) + 1;
   EVM_THROW_IF(Frame->stackHeight(), <, N, UnexpectedNumArgs);
@@ -339,7 +390,14 @@ void zen::evm::handleOpDUP(uint8_t OpcodeByte, EVMFrame *Frame) {
   Frame->push(V);
 }
 
-void zen::evm::handleOpSWAP(uint8_t OpcodeByte, EVMFrame *Frame) {
+void SWAPHandler::execute() {
+  using Base = EVMOpcodeHandlerBase<SWAPHandler>;
+  auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
+  auto *Inst = Context->getInstance();
+  auto *Mod = Inst->getModule();
+  const uint8_t *Code = Mod->Code;
+  uint8_t OpcodeByte = Code[Frame->Pc];
   // SWAP1 ~ SWAP16
   uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_SWAP1) + 1;
   EVM_THROW_IF(Frame->stackHeight(), <, N + 1, UnexpectedNumArgs);

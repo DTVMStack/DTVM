@@ -165,7 +165,7 @@ void BaseInterpreter::interpret() {
       break;
     }
     case evmc_opcode::OP_SIGNEXTEND: {
-      handleOpSIGNEXTEND(Frame);
+      EVMOpcodeHandlerRegistry::getSignExtendHandler().execute();
       break;
     }
 
@@ -185,7 +185,7 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_BYTE: {
-      handleOpBYTE(Frame);
+      EVMOpcodeHandlerRegistry::getByteHandler().execute();
       break;
     }
 
@@ -200,40 +200,44 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_SAR: {
-      handleOpSAR(Frame);
+      EVMOpcodeHandlerRegistry::getSarHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_MSTORE: {
-      handleOpMSTORE(Frame);
+      EVMOpcodeHandlerRegistry::getMStoreHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_MSTORE8: {
-      handleOpMSTORE8(Frame);
+      EVMOpcodeHandlerRegistry::getMStore8Handler().execute();
       break;
     }
     case evmc_opcode::OP_MLOAD: {
-      handleOpMLOAD(Frame);
+      EVMOpcodeHandlerRegistry::getMLoadHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_JUMP: {
-      IsJumpSuccess = handleOpJUMP(Frame, Mod->Code, Mod->CodeSize);
+      EVMOpcodeHandlerRegistry::getJumpHandler().execute();
+      IsJumpSuccess = Context.IsJump;
+      Context.IsJump = false;
       break;
     }
 
     case evmc_opcode::OP_JUMPI: {
-      IsJumpSuccess = handleOpJUMPI(Frame, Mod->Code, Mod->CodeSize);
+      EVMOpcodeHandlerRegistry::getJumpIHandler().execute();
+      IsJumpSuccess = Context.IsJump;
+      Context.IsJump = false;
       break;
     }
 
     case evmc_opcode::OP_PC: {
-      handleOpPC(Frame);
+      EVMOpcodeHandlerRegistry::getPCHandler().execute();
       break;
     }
     case evmc_opcode::OP_MSIZE: {
-      handleOpMSize(Frame);
+      EVMOpcodeHandlerRegistry::getMSizeHandler().execute();
       break;
     }
 
@@ -246,12 +250,12 @@ void BaseInterpreter::interpret() {
       break;
     }
     case evmc_opcode::OP_GASLIMIT: {
-      handleOpGASLIMIT(Frame);
+      EVMOpcodeHandlerRegistry::getGasLimitHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_RETURN: {
-      handleOpRETURN(Context, Frame);
+      EVMOpcodeHandlerRegistry::getReturnHandler().execute();
       Frame = Context.getCurFrame();
       if (!Frame) {
         return;
@@ -260,7 +264,7 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_REVERT: {
-      handleOpREVERT(Context, Frame);
+      EVMOpcodeHandlerRegistry::getRevertHandler().execute();
       Frame = Context.getCurFrame();
       if (!Frame) {
         return;
@@ -282,17 +286,17 @@ void BaseInterpreter::interpret() {
       if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_PUSH1) &&
           OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_PUSH32)) {
         // PUSH1 ~ PUSH32
-        handleOpPUSH(Frame, OpcodeByte, Code, CodeSize);
+        EVMOpcodeHandlerRegistry::getPUSHHandler().execute();
         break;
       } else if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_DUP1) &&
                  OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_DUP16)) {
         // DUP1 ~ DUP16
-        handleOpDUP(OpcodeByte, Frame);
+        EVMOpcodeHandlerRegistry::getDUPHandler().execute();
         break;
       } else if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_SWAP1) &&
                  OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_SWAP16)) {
         // SWAP1 ~ SWAP16
-        handleOpSWAP(OpcodeByte, Frame);
+        EVMOpcodeHandlerRegistry::getSWAPHandler().execute();
         break;
       } else {
         throw getError(ErrorCode::UnsupportedOpcode);

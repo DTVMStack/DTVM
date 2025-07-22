@@ -153,8 +153,9 @@ DEFINE_BINARY_OP(Mul, (A * B));
 DEFINE_BINARY_OP(Div, ((B == 0) ? intx::uint256(0) : (A / B)));
 DEFINE_BINARY_OP(Mod, ((B == 0) ? intx::uint256(0) : A % B));
 DEFINE_BINARY_OP(Exp, intx::exp(A, B));
-DEFINE_BINARY_OP(SDiv, intx::sdivrem(A, B).quot);
-DEFINE_BINARY_OP(SMod, intx::sdivrem(A, B).rem);
+DEFINE_BINARY_OP(SDiv,
+                 ((B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).quot));
+DEFINE_BINARY_OP(SMod, ((B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).rem));
 
 // Modular arithmetic operations
 DEFINE_TERNARY_OP(Addmod,
@@ -170,30 +171,52 @@ DEFINE_UNARY_OP(IsZero, (A == 0));
 DEFINE_BINARY_OP(And, (A & B));
 DEFINE_BINARY_OP(Or, (A | B));
 DEFINE_BINARY_OP(Xor, (A ^ B));
-// DEFINE_BINARY_OP(Byte, (A & (1 << (8 * B))));
-DEFINE_BINARY_OP(Shl, (A << B));
-DEFINE_BINARY_OP(Shr, (A >> B));
-// DEFINE_BINARY_OP(Sar, (A >> B));
+DEFINE_BINARY_OP(Shl, (A < 256 ? B << A : intx::uint256(0)));
+DEFINE_BINARY_OP(Shr, (A < 256 ? B >> A : intx::uint256(0)));
 DEFINE_BINARY_OP(Eq, (A == B));
 DEFINE_BINARY_OP(Lt, (A < B));
 DEFINE_BINARY_OP(Gt, (A > B));
 DEFINE_BINARY_OP(Slt, intx::slt(A, B));
 DEFINE_BINARY_OP(Sgt, intx::slt(B, A));
 
-// Temporary implementation for GAS opcode
-class GasHandler : public EVMOpcodeHandlerBase<GasHandler> {
-public:
-  static void execute() {
-    EVMFrame *Frame = getFrame();
-    uint64_t GasCost = calculateGas(evmc_opcode::OP_GAS);
-    Frame->push(intx::uint256(Frame->GasLeft - GasCost));
-  }
-};
+#define DEFINE_UNIMPLEMENT_HANDLER(OpName)                                     \
+  class OpName##Handler : public EVMOpcodeHandlerBase<OpName##Handler> {       \
+  public:                                                                      \
+    static void execute();                                                     \
+  };
+
+// Arithmetic operations
+DEFINE_UNIMPLEMENT_HANDLER(SignExtend);
+DEFINE_UNIMPLEMENT_HANDLER(Byte);
+DEFINE_UNIMPLEMENT_HANDLER(Sar);
+
+// Memory operations
+DEFINE_UNIMPLEMENT_HANDLER(MStore);
+DEFINE_UNIMPLEMENT_HANDLER(MStore8);
+DEFINE_UNIMPLEMENT_HANDLER(MLoad);
+
+// Control flow operations
+DEFINE_UNIMPLEMENT_HANDLER(Jump);
+DEFINE_UNIMPLEMENT_HANDLER(JumpI);
+
+// Environment operations
+DEFINE_UNIMPLEMENT_HANDLER(PC);
+DEFINE_UNIMPLEMENT_HANDLER(MSize);
+
+// Return operations
+DEFINE_UNIMPLEMENT_HANDLER(Gas);
+DEFINE_UNIMPLEMENT_HANDLER(GasLimit);
+DEFINE_UNIMPLEMENT_HANDLER(Return);
+DEFINE_UNIMPLEMENT_HANDLER(Revert);
+
+// Stack operations
+DEFINE_UNIMPLEMENT_HANDLER(PUSH);
+DEFINE_UNIMPLEMENT_HANDLER(DUP);
+DEFINE_UNIMPLEMENT_HANDLER(SWAP);
 
 // Registry class to manage execution context
 class EVMOpcodeHandlerRegistry {
 public:
-  EVM_REGISTRY_GET(Gas);
   // Arithmetic operations
   EVM_REGISTRY_GET(Add);
   EVM_REGISTRY_GET(Sub);
@@ -203,6 +226,7 @@ public:
   EVM_REGISTRY_GET(Exp);
   EVM_REGISTRY_GET(SDiv);
   EVM_REGISTRY_GET(SMod);
+  EVM_REGISTRY_GET(SignExtend);
   // Modular arithmetic operations
   EVM_REGISTRY_GET(Addmod);
   EVM_REGISTRY_GET(Mulmod);
@@ -220,39 +244,28 @@ public:
   EVM_REGISTRY_GET(Gt);
   EVM_REGISTRY_GET(Slt);
   EVM_REGISTRY_GET(Sgt);
+  EVM_REGISTRY_GET(Byte);
+  EVM_REGISTRY_GET(Sar);
+  // Memory operations
+  EVM_REGISTRY_GET(MStore);
+  EVM_REGISTRY_GET(MStore8);
+  EVM_REGISTRY_GET(MLoad);
+  // Control flow operations
+  EVM_REGISTRY_GET(Jump);
+  EVM_REGISTRY_GET(JumpI);
+  // Environment operations
+  EVM_REGISTRY_GET(PC);
+  EVM_REGISTRY_GET(MSize);
+  EVM_REGISTRY_GET(Gas);
+  EVM_REGISTRY_GET(GasLimit);
+  // Return operations
+  EVM_REGISTRY_GET(Return);
+  EVM_REGISTRY_GET(Revert);
+  // Stack operations
+  EVM_REGISTRY_GET(PUSH);
+  EVM_REGISTRY_GET(DUP);
+  EVM_REGISTRY_GET(SWAP);
 };
-
-// Arithmetic operations
-void handleOpSIGNEXTEND(EVMFrame *Frame);
-
-// Bitwise operations
-void handleOpBYTE(EVMFrame *Frame);
-void handleOpSAR(EVMFrame *Frame);
-
-// Memory operations
-void handleOpMSTORE(EVMFrame *Frame);
-void handleOpMSTORE8(EVMFrame *Frame);
-void handleOpMLOAD(EVMFrame *Frame);
-
-// Control flow operations
-bool handleOpJUMP(EVMFrame *Frame, const uint8_t *Code, size_t CodeSize);
-bool handleOpJUMPI(EVMFrame *Frame, const uint8_t *Code, size_t CodeSize);
-
-// Environment operations
-void handleOpPC(EVMFrame *Frame);
-void handleOpMSize(EVMFrame *Frame);
-void handleOpGAS(EVMFrame *Frame);
-void handleOpGASLIMIT(EVMFrame *Frame);
-
-// Return operations
-void handleOpRETURN(InterpreterExecContext &Context, EVMFrame *Frame);
-void handleOpREVERT(InterpreterExecContext &Context, EVMFrame *Frame);
-
-// Stack operations
-void handleOpPUSH(EVMFrame *Frame, uint8_t OpcodeByte, const uint8_t *Code,
-                  size_t CodeSize);
-void handleOpDUP(uint8_t OpcodeByte, EVMFrame *Frame);
-void handleOpSWAP(uint8_t OpcodeByte, EVMFrame *Frame);
 
 // Utility functions
 uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize);
