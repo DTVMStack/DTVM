@@ -6,6 +6,7 @@
 #include "compiler/mir/type.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
+#include <string>
 
 namespace COMPILER {
 
@@ -17,6 +18,10 @@ class MConstantInt : public MConstant {
 public:
   static MConstantInt *get(CompileContext &Ctx, MType &Ty, APInt V);
   static MConstantInt *get(CompileContext &Ctx, MType &Ty, uint64_t V);
+  static MConstantInt *getU256(CompileContext &Ctx, const std::string &HexStr);
+  static MConstantInt *getU256(CompileContext &Ctx, const APInt &V);
+  static MConstantInt *getU256Zero(CompileContext &Ctx);
+  static MConstantInt *getU256One(CompileContext &Ctx);
   static bool classof(const MConstant *Constant) {
     return Constant->getType().isInteger();
   }

@@ -9,3 +9,4 @@ PRIM_TYPE(i64, I64, 8)
 PRIM_TYPE(f32, F32, 4)
 PRIM_TYPE(f64, F64, 8)
 PRIM_TYPE(void, VOID, 0)   // PT_END
+PRIM_TYPE(u256, U256, 32)  // EVM specific

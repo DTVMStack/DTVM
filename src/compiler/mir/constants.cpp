@@ -42,6 +42,30 @@ MConstantFloat *MConstantFloat::get(CompileContext &Ctx, MType &Ty, double V) {
   return MConstantFloat::get(Ctx, Ty, APFloat(V));
 }
 
+MConstantInt *MConstantInt::getU256(CompileContext &Ctx,
+                                    const std::string &HexStr) {
+  std::string cleanHex = HexStr;
+  if (cleanHex.size() >= 2 && cleanHex.substr(0, 2) == "0x") {
+    cleanHex = cleanHex.substr(2);
+  }
+
+  APInt value(256, cleanHex, 16);
+  return MConstantInt::get(Ctx, Ctx.U256Type, value);
+}
+
+MConstantInt *MConstantInt::getU256(CompileContext &Ctx, const APInt &V) {
+  APInt val256 = V.getBitWidth() == 256 ? V : V.zextOrTrunc(256);
+  return MConstantInt::get(Ctx, Ctx.U256Type, val256);
+}
+
+MConstantInt *MConstantInt::getU256Zero(CompileContext &Ctx) {
+  return MConstantInt::get(Ctx, Ctx.U256Type, APInt(256, 0));
+}
+
+MConstantInt *MConstantInt::getU256One(CompileContext &Ctx) {
+  return MConstantInt::get(Ctx, Ctx.U256Type, APInt(256, 1));
+}
+
 void MConstant::print(llvm::raw_ostream &OS) const {
   if (Type.isInteger()) {
     const MConstantInt *ConstInt = cast<MConstantInt>(this);
