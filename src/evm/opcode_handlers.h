@@ -121,7 +121,7 @@ public:
 
 #define DEFINE_UNARY_OP(OpName, Calc)                                          \
   struct OpName##OP {                                                          \
-    intx::uint256 operator()(const intx::uint256 &A) const { return Calc; }    \
+    intx::uint256 operator()(const intx::uint256 &A) const { return (Calc); }    \
   };                                                                           \
   using OpName##Handler = UnaryOpHandler<OpName##OP>;
 
@@ -129,7 +129,7 @@ public:
   struct OpName##OP {                                                          \
     intx::uint256 operator()(const intx::uint256 &A,                           \
                              const intx::uint256 &B) const {                   \
-      return Calc;                                                             \
+      return (Calc);                                                             \
     }                                                                          \
   };                                                                           \
   using OpName##Handler = BinaryOpHandler<OpName##OP>;
@@ -138,7 +138,7 @@ public:
   struct OpName##OP {                                                          \
     intx::uint256 operator()(const intx::uint256 &A, const intx::uint256 &B,   \
                              const intx::uint256 &C) const {                   \
-      return Calc;                                                             \
+      return (Calc);                                                             \
     }                                                                          \
   };                                                                           \
   using OpName##Handler = TernaryOpHandler<OpName##OP>;
