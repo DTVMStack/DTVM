@@ -23,16 +23,16 @@ using namespace zen::runtime;
 
 #define DEFINE_CALCULATE_GAS(OpName, OpCode)                                   \
   template <> uint64_t OpName##Handler::calculateGas() {                       \
-    static auto table = evmc_get_instruction_metrics_table(EVMC_CANCUN);       \
-    static const auto cost = table[OpCode].gas_cost;                           \
-    return cost;                                                               \
+    static auto Table = evmc_get_instruction_metrics_table(EVMC_CANCUN);       \
+    static const auto Cost = Table[OpCode].gas_cost;                           \
+    return Cost;                                                               \
   }
 
 #define DEFINE_NOT_TEMPLATE_CALCULATE_GAS(OpName, OpCode)                      \
   uint64_t OpName##Handler::calculateGas() {                                   \
-    static auto table = evmc_get_instruction_metrics_table(EVMC_CANCUN);       \
-    static const auto cost = table[OpCode].gas_cost;                           \
-    return cost;                                                               \
+    static auto Table = evmc_get_instruction_metrics_table(EVMC_CANCUN);       \
+    static const auto Cost = Table[OpCode].gas_cost;                           \
+    return Cost;                                                               \
   }
 
 // Arithmetic operations
