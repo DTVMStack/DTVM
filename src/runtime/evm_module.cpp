@@ -51,12 +51,8 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
 
   Mod->CodeHolder = std::move(CodeHolder);
 
-  if (RT.getEVMHost()) {
-    Mod->Host = RT.getEVMHost();
-  } else {
-    ZEN_LOG_ERROR("EVMHost is nullptr");
-    return nullptr;
-  }
+  ZEN_ASSERT(!RT.getEVMHost());
+  Mod->Host = RT.getEVMHost();
 
   return Mod;
 }
