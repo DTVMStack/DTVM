@@ -6,6 +6,7 @@
 
 #include "common/defines.h"
 #include "common/errors.h"
+#include "evmc/evmc.hpp"
 #include "runtime/instance.h"
 #include "runtime/isolation.h"
 #include "runtime/module.h"

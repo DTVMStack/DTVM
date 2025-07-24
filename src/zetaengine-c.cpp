@@ -116,6 +116,7 @@ DEFINE_CONVERSION_FUNCTIONS(zen::runtime::HostModule, ZenHostModuleRef)
 DEFINE_CONVERSION_FUNCTIONS(BuiltinModuleDesc, ZenHostModuleDescRef)
 DEFINE_CONVERSION_FUNCTIONS(zen::runtime::Isolation, ZenIsolationRef)
 DEFINE_CONVERSION_FUNCTIONS(zen::runtime::Instance, ZenInstanceRef)
+DEFINE_CONVERSION_FUNCTIONS(evmc::Host, ZenEVMHostRef)
 
 // ==================== Runtime ====================
 
@@ -167,6 +168,36 @@ ZenRuntimeRef ZenCreateRuntime(ZenRuntimeConfig *Config) {
     }
   }
   auto RT = zen::runtime::Runtime::newRuntime(NewConfig);
+  return wrap(RT.release());
+}
+
+ZenRuntimeRef ZenCreateEVMRuntime(ZenRuntimeConfig *Config,
+                                  ZenEVMHostRef EVMHost) {
+  zen::runtime::RuntimeConfig NewConfig;
+  if (Config) {
+    NewConfig.DisableWasmMemoryMap = Config->DisableWasmMemoryMap;
+#ifdef ZEN_ENABLE_BUILTIN_WASI
+    NewConfig.DisableWASI = Config->DisableWASI;
+#endif
+    NewConfig.EnableStatistics = Config->EnableStatistics;
+    NewConfig.EnableGdbTracingHook = Config->EnableGdbTracingHook;
+    using ZenRunModeCPP = zen::common::RunMode;
+    switch (Config->Mode) {
+    case ZenModeInterp:
+      NewConfig.Mode = ZenRunModeCPP::InterpMode;
+      break;
+    case ZenModeSinglepass:
+      NewConfig.Mode = ZenRunModeCPP::SinglepassMode;
+      break;
+    case ZenModeMultipass:
+      NewConfig.Mode = ZenRunModeCPP::MultipassMode;
+      break;
+    case ZenModeUnknown:
+      NewConfig.Mode = ZenRunModeCPP::UnknownMode;
+      break;
+    }
+  }
+  auto RT = zen::runtime::Runtime::newEVMRuntime(NewConfig, unwrap(EVMHost));
   return wrap(RT.release());
 }
 
