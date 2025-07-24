@@ -55,8 +55,29 @@ public:
   ~Runtime() { cleanRuntime(); }
 
   static std::unique_ptr<Runtime>
-  newRuntime(RuntimeConfig Config = {},
-             evmc::Host *EVMHost = nullptr) noexcept {
+  newRuntime(RuntimeConfig Config = {}) noexcept {
+    if (!Config.validate()) {
+      ZEN_LOG_ERROR("runtime config validation failed");
+      return nullptr;
+    }
+
+    std::unique_ptr<Runtime> RT(new Runtime(Config));
+
+    if (!RT->initRuntime()) {
+      ZEN_LOG_ERROR("initialize runtime failed");
+      return nullptr;
+    }
+
+#ifdef ZEN_ENABLE_DWASM
+    RT->setVmMaxMemoryPages(DWASM_DEFAULT_MAX_VM_LINEAR_MEMORY_PAGES);
+#endif // ZEN_ENABLE_DWASM
+
+    return RT;
+  }
+
+  static std::unique_ptr<Runtime>
+  newEVMRuntime(RuntimeConfig Config = {},
+                evmc::Host *EVMHost = nullptr) noexcept {
     if (!Config.validate()) {
       ZEN_LOG_ERROR("runtime config validation failed");
       return nullptr;
@@ -339,7 +360,7 @@ private:
 
   ConstStringPool SymbolPool;
 
-  evmc::Host *EVMHost;
+  evmc::Host *EVMHost = nullptr;
 
   // supplementary module, libc, wasi, and other user defined native modules
   std::unordered_map<WASMSymbol, HostModuleUniquePtr> HostModulePool;

@@ -91,7 +91,7 @@ TEST_P(EVMSampleTest, ExecuteSample) {
 
   std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
 
-  auto RT = Runtime::newRuntime(Config, Host.get());
+  auto RT = Runtime::newEVMRuntime(Config, Host.get());
   ASSERT_TRUE(RT != nullptr) << "Failed to create runtime";
 
   auto ModRet = RT->loadEVMModule(FilePath);

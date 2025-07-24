@@ -50,7 +50,14 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
   Stats.stopRecord(Timer);
 
   Mod->CodeHolder = std::move(CodeHolder);
-  Mod->Host = RT.getEVMHost();
+
+  if (RT.getEVMHost()) {
+    Mod->Host = RT.getEVMHost();
+  } else {
+    ZEN_LOG_ERROR("EVMHost is nullptr");
+    return nullptr;
+  }
+
   return Mod;
 }
 
