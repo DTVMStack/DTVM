@@ -168,6 +168,7 @@ TEST(C_API, Trap) {
 TEST(C_API, EVM) {
   ZenEnableLogging();
 
+  RuntimeConfig.Mode = ZenModeInterp;
   std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
   ZenEVMHostRef EVMHost = reinterpret_cast<ZenEVMHostRef>(Host.get());
   ZenRuntimeRef Runtime = ZenCreateEVMRuntime(&RuntimeConfig, EVMHost);
