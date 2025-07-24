@@ -80,6 +80,9 @@ public:
                 evmc::Host *EVMHost = nullptr) noexcept {
     auto RT = newRuntime(Config);
 
+    // SinglepassMode is not supported for EVMRuntime
+    ZEN_ASSERT(Config.Mode != RunMode::SinglepassMode);
+
     RT->EVMHost = EVMHost;
 
     return RT;
