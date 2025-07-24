@@ -162,15 +162,12 @@ int main(int argc, char *argv[]) {
 
   if (Format == InputFormat::EVM) {
 
-    std::unique_ptr<Runtime> RT = Runtime::newRuntime(Config);
+    std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
+    std::unique_ptr<Runtime> RT = Runtime::newRuntime(Config, std::move(Host));
     if (!RT) {
       ZEN_LOG_ERROR("failed to create runtime");
       return exitMain(EXIT_FAILURE);
     }
-
-    evmc::Host *Host = new evmc::MockedHost();
-
-    RT->setEVMHost(Host);
 
     MayBe<EVMModule *> ModRet = RT->loadEVMModule(Filename);
     if (!ModRet) {

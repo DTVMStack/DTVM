@@ -89,11 +89,10 @@ TEST_P(EVMSampleTest, ExecuteSample) {
   RuntimeConfig Config;
   Config.Mode = common::RunMode::InterpMode;
 
-  auto RT = Runtime::newRuntime(Config);
-  ASSERT_TRUE(RT != nullptr) << "Failed to create runtime";
+  std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
 
-  evmc::Host *Host = new evmc::MockedHost();
-  RT->setEVMHost(Host);
+  auto RT = Runtime::newRuntime(Config, std::move(Host));
+  ASSERT_TRUE(RT != nullptr) << "Failed to create runtime";
 
   auto ModRet = RT->loadEVMModule(FilePath);
   ASSERT_TRUE(ModRet) << "Failed to load module: " << FilePath;

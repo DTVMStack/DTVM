@@ -15,8 +15,7 @@
 namespace zen::runtime {
 
 EVMModule::EVMModule(Runtime *RT)
-    : BaseModule(RT, ModuleType::EVM), Code(nullptr), CodeSize(0),
-      Host(nullptr) {
+    : BaseModule(RT, ModuleType::EVM), Code(nullptr), CodeSize(0) {
   // do nothing
 }
 

@@ -55,7 +55,8 @@ public:
   ~Runtime() { cleanRuntime(); }
 
   static std::unique_ptr<Runtime>
-  newRuntime(RuntimeConfig Config = {}) noexcept {
+  newRuntime(RuntimeConfig Config = {},
+             std::unique_ptr<evmc::Host> EVMHost = nullptr) noexcept {
     if (!Config.validate()) {
       ZEN_LOG_ERROR("runtime config validation failed");
       return nullptr;
@@ -71,6 +72,8 @@ public:
 #ifdef ZEN_ENABLE_DWASM
     RT->setVmMaxMemoryPages(DWASM_DEFAULT_MAX_VM_LINEAR_MEMORY_PAGES);
 #endif // ZEN_ENABLE_DWASM
+
+    RT->EVMHost = std::move(EVMHost);
 
     return RT;
   }
@@ -304,9 +307,7 @@ public:
 
   void callEVMInInterpMode(EVMInstance &Inst, std::vector<uint8_t> &Result);
 
-  void setEVMHost(evmc::Host *Host) { EVMHost = Host; }
-
-  evmc::Host *getEVMHost() const { return EVMHost; }
+  evmc::Host *getEVMHost() const { return EVMHost.get(); }
 
   /* **************** [End] Runtime Tool Methods  **************** */
 private:
@@ -338,7 +339,7 @@ private:
 
   ConstStringPool SymbolPool;
 
-  evmc::Host *EVMHost;
+  std::unique_ptr<evmc::Host> EVMHost;
 
   // supplementary module, libc, wasi, and other user defined native modules
   std::unordered_map<WASMSymbol, HostModuleUniquePtr> HostModulePool;
