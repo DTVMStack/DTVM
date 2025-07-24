@@ -187,7 +187,7 @@ ZenRuntimeRef ZenCreateEVMRuntime(ZenRuntimeConfig *Config,
       NewConfig.Mode = ZenRunModeCPP::InterpMode;
       break;
     case ZenModeSinglepass:
-      NewConfig.Mode = ZenRunModeCPP::SinglepassMode;
+      ZEN_ASSERT(false);
       break;
     case ZenModeMultipass:
       NewConfig.Mode = ZenRunModeCPP::MultipassMode;
