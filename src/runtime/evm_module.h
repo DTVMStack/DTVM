@@ -1,5 +1,5 @@
-#include "runtime/module.h"
 #include "evmc/mocked_host.hpp"
+#include "runtime/module.h"
 
 namespace zen {
 
