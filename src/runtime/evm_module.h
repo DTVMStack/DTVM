@@ -1,4 +1,5 @@
 #include "runtime/module.h"
+#include "evmc/mocked_host.hpp"
 
 namespace zen {
 
@@ -16,6 +17,7 @@ public:
 
   uint8_t *Code;
   size_t CodeSize;
+  std::unique_ptr<evmc::MockedHost> HostPtr;
 
 private:
   EVMModule(Runtime *RT);
