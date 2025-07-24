@@ -55,10 +55,8 @@ public:
   bool isI64() const { return _kind == I64; }
   bool isF32() const { return _kind == F32; }
   bool isF64() const { return _kind == F64; }
-  bool isU256() const { return _kind == U256; }
   bool is32Bits() const { return _kind == I32 || _kind == F32; }
   bool is64Bits() const { return _kind == I64 || _kind == F64; }
-  bool is256Bits() const { return _kind == U256; }
 
   static bool isInteger(Kind kind) {
     switch (kind) {
@@ -66,7 +64,6 @@ public:
     case I16:
     case I32:
     case I64:
-    case U256:
       return true;
     default:
       return false;

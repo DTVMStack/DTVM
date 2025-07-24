@@ -90,7 +90,6 @@ public:
   static inline MType I64Type = MType::I64;
   static inline MType F32Type = MType::F32;
   static inline MType F64Type = MType::F64;
-  static inline MType U256Type = MType::U256;
   static inline MType VoidType = MType::VOID;
 
   bool Inited = false;
