@@ -9,6 +9,7 @@
 #include <CLI/CLI.hpp>
 #include <evmc/evmc.h>
 #include <evmc/evmc.hpp>
+#include <evmc/mocked_host.hpp>
 #include <unistd.h>
 
 #ifdef ZEN_ENABLE_BUILTIN_WASI
@@ -166,6 +167,10 @@ int main(int argc, char *argv[]) {
       ZEN_LOG_ERROR("failed to create runtime");
       return exitMain(EXIT_FAILURE);
     }
+
+    evmc::Host *Host = new evmc::MockedHost();
+
+    RT->setEVMHost(Host);
 
     MayBe<EVMModule *> ModRet = RT->loadEVMModule(Filename);
     if (!ModRet) {

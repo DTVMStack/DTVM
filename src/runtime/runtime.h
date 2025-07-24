@@ -9,6 +9,7 @@
 #include "common/errors.h"
 #include "common/mem_pool.h"
 #include "common/type.h"
+#include "evmc/evmc.hpp"
 #include "runtime/config.h"
 #include "runtime/destroyer.h"
 #include "runtime/vnmi.h"
@@ -303,6 +304,10 @@ public:
 
   void callEVMInInterpMode(EVMInstance &Inst, std::vector<uint8_t> &Result);
 
+  void setEVMHost(evmc::Host *Host) { EVMHost = Host; }
+
+  evmc::Host *getEVMHost() const { return EVMHost; }
+
   /* **************** [End] Runtime Tool Methods  **************** */
 private:
   Runtime(const RuntimeConfig &Configuration)
@@ -332,6 +337,8 @@ private:
   MemPool MPool;
 
   ConstStringPool SymbolPool;
+
+  evmc::Host *EVMHost;
 
   // supplementary module, libc, wasi, and other user defined native modules
   std::unordered_map<WASMSymbol, HostModuleUniquePtr> HostModulePool;

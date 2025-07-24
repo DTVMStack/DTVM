@@ -16,7 +16,7 @@ namespace zen::runtime {
 
 EVMModule::EVMModule(Runtime *RT)
     : BaseModule(RT, ModuleType::EVM), Code(nullptr), CodeSize(0),
-      HostPtr(nullptr) {
+      Host(nullptr) {
   // do nothing
 }
 
@@ -51,7 +51,7 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
   Stats.stopRecord(Timer);
 
   Mod->CodeHolder = std::move(CodeHolder);
-
+  Mod->Host = RT.getEVMHost();
   return Mod;
 }
 

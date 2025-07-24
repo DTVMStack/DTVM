@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "evm/interpreter.h"
+#include "evmc/mocked_host.hpp"
 #include "utils/others.h"
 #include "zetaengine-c.h"
 #include "zetaengine.h"
@@ -90,6 +91,9 @@ TEST_P(EVMSampleTest, ExecuteSample) {
 
   auto RT = Runtime::newRuntime(Config);
   ASSERT_TRUE(RT != nullptr) << "Failed to create runtime";
+
+  evmc::Host *Host = new evmc::MockedHost();
+  RT->setEVMHost(Host);
 
   auto ModRet = RT->loadEVMModule(FilePath);
   ASSERT_TRUE(ModRet) << "Failed to load module: " << FilePath;

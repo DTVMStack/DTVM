@@ -299,9 +299,6 @@ EVMModule *Runtime::loadEVMModule(EVMSymbol Name,
   auto *ModulePtr = Mod.get();
   ModulePtr->setName(Name);
 
-  // Set the EVM Host
-  ModulePtr->HostPtr = std::make_unique<evmc::MockedHost>();
-
   // Ignore the return value, because the name is unique(checked in above)
   auto EmplaceRet =
       EVMModulePool.emplace(Name, std::forward<EVMModuleUniquePtr>(Mod));
