@@ -34,6 +34,34 @@ enum class WASMTypeKind { INTEGER, FLOAT, VECTOR };
 
 typedef std::underlying_type_t<WASMType> WASMTypeUnderlyingType;
 
+// EVM U256 type representation using 4 x WASMType::I64
+class EVMU256Type {
+public:
+  static constexpr size_t BIT_WIDTH = 256;
+  static constexpr size_t ELEMENTS_COUNT = 4;
+
+  using U256InnerTypes = std::array<const WASMType *, ELEMENTS_COUNT>;
+
+  EVMU256Type()
+      : InnerTypes{getI64Type(), getI64Type(), getI64Type(), getI64Type()} {}
+
+  const U256InnerTypes &getInnerTypes() const { return InnerTypes; }
+  const WASMType *getInnerType(size_t index) const {
+    ZEN_ASSERT(index < ELEMENTS_COUNT && "Index out of bounds");
+    return InnerTypes[index];
+  }
+  static constexpr size_t getBitWidth() { return BIT_WIDTH; }
+  static constexpr size_t getElementsCount() { return ELEMENTS_COUNT; }
+
+private:
+  U256InnerTypes InnerTypes;
+
+  static const WASMType *getI64Type() {
+    static const WASMType I64Type(WASMType::I64);
+    return &I64Type;
+  }
+};
+
 // ============================================================================
 // WASMTypeAttr
 //
