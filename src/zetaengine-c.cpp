@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "zetaengine-c.h"
+#include "evmc/evmc.hpp"
 #include "zetaengine.h"
 
 static inline zen::common::WASMType getWASMType(ZenType Type) {
