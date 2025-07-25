@@ -28,6 +28,8 @@ struct EVMFrame {
   std::vector<uint8_t> Memory;
   // TODO: use EVMHost in the future
   std::map<intx::uint256, intx::uint256> Storage;
+  const evmc_message *msg = nullptr;
+  evmc_revision rev = {};
 
   size_t Sp = 0;
   uint64_t GasLeft = 0;

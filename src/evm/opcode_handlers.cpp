@@ -70,6 +70,10 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SignExtend, OP_SIGNEXTEND);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Byte, OP_BYTE);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Sar, OP_SAR);
 
+// Environmental information
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Address, OP_ADDRESS);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Balance, OP_BALANCE);
+
 // Memory operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MStore, OP_MSTORE);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MStore8, OP_MSTORE8);
@@ -190,6 +194,38 @@ void SarHandler::doExecute() {
     Res = IsNegative ? intx::uint256(-1) : intx::uint256(0);
   }
   Frame->push(Res);
+}
+// environmental information operations
+void AddressHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<AddressHandler>;
+  auto *Frame = Base::getFrame();
+  Frame->push(intx::be::load<intx::uint256>(Frame->msg->recipient));
+}
+
+void BalanceHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<BalanceHandler>;
+  auto *Frame = Base::getFrame();
+  EVM_STACK_CHECK(Frame, 1);
+  intx::uint256 x = Frame->pop();
+  const auto addr = intx::be::trunc<evmc::address>(x);
+
+  auto *Context = Base::getContext();
+  auto *Inst = Context->getInstance();
+  auto *Mod = Inst->getModule();
+  auto *Host = Mod->Host;
+  if (Frame->rev >= EVMC_BERLIN &&
+      Host->access_account(addr) == EVMC_ACCESS_COLD) {
+    constexpr auto cold_account_acess_cost = 2600;
+    constexpr auto warm_account_access_cost = 100;
+    constexpr auto additional_cold_account_access_cost =
+        cold_account_acess_cost - warm_account_access_cost;
+    EVM_THROW_IF(Frame->GasLeft, <, additional_cold_account_access_cost,
+                 EVMOutOfGas);
+  }
+
+  intx::uint256 Balance =
+      intx::be::load<intx::uint256>(Host->get_balance(addr));
+  Frame->push(Balance);
 }
 
 // Memory operations
