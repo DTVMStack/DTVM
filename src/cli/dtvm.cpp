@@ -9,6 +9,7 @@
 #include <CLI/CLI.hpp>
 #include <evmc/evmc.h>
 #include <evmc/evmc.hpp>
+#include <evmc/mocked_host.hpp>
 #include <unistd.h>
 
 #ifdef ZEN_ENABLE_BUILTIN_WASI
@@ -161,7 +162,8 @@ int main(int argc, char *argv[]) {
 
   if (Format == InputFormat::EVM) {
 
-    std::unique_ptr<Runtime> RT = Runtime::newRuntime(Config);
+    std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
+    std::unique_ptr<Runtime> RT = Runtime::newEVMRuntime(Config, Host.get());
     if (!RT) {
       ZEN_LOG_ERROR("failed to create runtime");
       return exitMain(EXIT_FAILURE);

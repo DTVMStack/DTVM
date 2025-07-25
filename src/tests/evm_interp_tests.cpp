@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "evm/interpreter.h"
+#include "evmc/mocked_host.hpp"
 #include "utils/others.h"
 #include "zetaengine-c.h"
 #include "zetaengine.h"
@@ -88,7 +89,9 @@ TEST_P(EVMSampleTest, ExecuteSample) {
   RuntimeConfig Config;
   Config.Mode = common::RunMode::InterpMode;
 
-  auto RT = Runtime::newRuntime(Config);
+  std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
+
+  auto RT = Runtime::newEVMRuntime(Config, Host.get());
   ASSERT_TRUE(RT != nullptr) << "Failed to create runtime";
 
   auto ModRet = RT->loadEVMModule(FilePath);

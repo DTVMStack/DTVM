@@ -51,6 +51,9 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
 
   Mod->CodeHolder = std::move(CodeHolder);
 
+  ZEN_ASSERT(RT.getEVMHost());
+  Mod->Host = RT.getEVMHost();
+
   return Mod;
 }
 

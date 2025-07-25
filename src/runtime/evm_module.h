@@ -1,3 +1,4 @@
+#include "evmc/evmc.hpp"
 #include "runtime/module.h"
 
 namespace zen {
@@ -16,6 +17,7 @@ public:
 
   uint8_t *Code;
   size_t CodeSize;
+  evmc::Host *Host;
 
 private:
   EVMModule(Runtime *RT);

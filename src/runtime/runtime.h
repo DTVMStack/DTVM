@@ -9,6 +9,7 @@
 #include "common/errors.h"
 #include "common/mem_pool.h"
 #include "common/type.h"
+#include "evmc/evmc.hpp"
 #include "runtime/config.h"
 #include "runtime/destroyer.h"
 #include "runtime/vnmi.h"
@@ -70,6 +71,19 @@ public:
 #ifdef ZEN_ENABLE_DWASM
     RT->setVmMaxMemoryPages(DWASM_DEFAULT_MAX_VM_LINEAR_MEMORY_PAGES);
 #endif // ZEN_ENABLE_DWASM
+
+    return RT;
+  }
+
+  static std::unique_ptr<Runtime>
+  newEVMRuntime(RuntimeConfig Config = {},
+                evmc::Host *EVMHost = nullptr) noexcept {
+    auto RT = newRuntime(Config);
+
+    // SinglepassMode is not supported for EVMRuntime
+    ZEN_ASSERT(Config.Mode != RunMode::SinglepassMode);
+
+    RT->EVMHost = EVMHost;
 
     return RT;
   }
@@ -303,6 +317,8 @@ public:
 
   void callEVMInInterpMode(EVMInstance &Inst, std::vector<uint8_t> &Result);
 
+  evmc::Host *getEVMHost() const { return EVMHost; }
+
   /* **************** [End] Runtime Tool Methods  **************** */
 private:
   Runtime(const RuntimeConfig &Configuration)
@@ -332,6 +348,8 @@ private:
   MemPool MPool;
 
   ConstStringPool SymbolPool;
+
+  evmc::Host *EVMHost = nullptr;
 
   // supplementary module, libc, wasi, and other user defined native modules
   std::unordered_map<WASMSymbol, HostModuleUniquePtr> HostModulePool;

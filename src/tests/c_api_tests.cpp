@@ -1,6 +1,7 @@
 // Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "evmc/mocked_host.hpp"
 #include "utils/others.h"
 #include "zetaengine-c.h"
 #include "zetaengine.h"
@@ -166,7 +167,11 @@ TEST(C_API, Trap) {
 
 TEST(C_API, EVM) {
   ZenEnableLogging();
-  ZenRuntimeRef Runtime = ZenCreateRuntime(&RuntimeConfig);
+
+  RuntimeConfig.Mode = ZenModeInterp;
+  std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
+  ZenEVMHostRef EVMHost = reinterpret_cast<ZenEVMHostRef>(Host.get());
+  ZenRuntimeRef Runtime = ZenCreateEVMRuntime(&RuntimeConfig, EVMHost);
   EXPECT_NE(Runtime, nullptr);
 
   std::string HexContent = "600260010160005260206000F3";

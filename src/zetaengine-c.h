@@ -57,6 +57,7 @@ typedef struct ZenOpaqueHostModuleDesc *ZenHostModuleDescRef;
 typedef struct ZenOpaqueHostModule *ZenHostModuleRef;
 typedef struct ZenOpaqueIsolation *ZenIsolationRef;
 typedef struct ZenOpaqueInstance *ZenInstanceRef;
+typedef struct ZenOpaqueEVMHost *ZenEVMHostRef;
 
 // ==================== Runtime ====================
 
@@ -67,6 +68,9 @@ void ZenDeleteRuntimeConfig(ZenRuntimeConfigRef Config);
 void ZenRuntimeConfigSetWasmMemoryMap(ZenRuntimeConfigRef Config, bool Enabled);
 
 ZenRuntimeRef ZenCreateRuntime(ZenRuntimeConfig *Config);
+
+ZenRuntimeRef ZenCreateEVMRuntime(ZenRuntimeConfig *Config,
+                                  ZenEVMHostRef EVMHost);
 
 void ZenDeleteRuntime(ZenRuntimeRef Runtime);
 
