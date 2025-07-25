@@ -52,7 +52,6 @@ public:
   }
   static constexpr size_t getBitWidth() { return BIT_WIDTH; }
   static constexpr size_t getElementsCount() { return ELEMENTS_COUNT; }
-  bool isU256Type() const { return true; }
 
 private:
   U256InnerTypes InnerTypes;
