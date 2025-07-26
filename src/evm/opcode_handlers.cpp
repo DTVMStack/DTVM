@@ -218,6 +218,7 @@ void BalanceHandler::doExecute() {
         ColdAccountAccessCost - WarmAccountAccessCost;
     EVM_THROW_IF(Frame->GasLeft, <, AdditionalColdAccountAccessCost,
                  EVMOutOfGas);
+    Frame->GasLeft -= AdditionalColdAccountAccessCost;
   }
 
   intx::uint256 Balance =
