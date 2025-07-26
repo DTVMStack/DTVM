@@ -30,7 +30,7 @@ struct EVMFrame {
   std::map<intx::uint256, intx::uint256> Storage;
   const evmc_message *Msg = nullptr;
   evmc::Host *Host = nullptr;
-  evmc_revision Rev = {};
+  evmc_revision Rev =EVMC_CANCUN;
   evmc_tx_context MTx = {};
 
   size_t Sp = 0;
