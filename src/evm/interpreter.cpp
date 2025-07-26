@@ -181,6 +181,21 @@ void BaseInterpreter::interpret() {
       break;
     }
 
+    case evmc_opcode::OP_ADDRESS: {
+      EVMOpcodeHandlerRegistry::getAddressHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_BALANCE: {
+      EVMOpcodeHandlerRegistry::getBalanceHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_ORIGIN: {
+      EVMOpcodeHandlerRegistry::getOriginHandler().execute();
+      break;
+    }
+
     case evmc_opcode::OP_MSTORE: {
       EVMOpcodeHandlerRegistry::getMStoreHandler().execute();
       break;

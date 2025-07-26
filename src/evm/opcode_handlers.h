@@ -186,6 +186,7 @@ DEFINE_BINARY_OP(Sgt, intx::slt(B, A));
 // environmental information
 DEFINE_UNIMPLEMENT_HANDLER(Address);
 DEFINE_UNIMPLEMENT_HANDLER(Balance);
+DEFINE_UNIMPLEMENT_HANDLER(Origin);
 
 // Arithmetic operations
 DEFINE_UNIMPLEMENT_HANDLER(SignExtend);
@@ -251,6 +252,7 @@ public:
   // Environmental information
   EVM_REGISTRY_GET(Address);
   EVM_REGISTRY_GET(Balance);
+  EVM_REGISTRY_GET(Origin);
 
   // Memory operations
   EVM_REGISTRY_GET(MStore);

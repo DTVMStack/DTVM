@@ -73,6 +73,7 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Sar, OP_SAR);
 // Environmental information
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Address, OP_ADDRESS);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Balance, OP_BALANCE);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Origin, OP_ORIGIN);
 
 // Memory operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MStore, OP_MSTORE);
@@ -199,33 +200,34 @@ void SarHandler::doExecute() {
 void AddressHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<AddressHandler>;
   auto *Frame = Base::getFrame();
-  Frame->push(intx::be::load<intx::uint256>(Frame->msg->recipient));
+  Frame->push(intx::be::load<intx::uint256>(Frame->Msg->recipient));
 }
 
 void BalanceHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<BalanceHandler>;
   auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 1);
-  intx::uint256 x = Frame->pop();
-  const auto addr = intx::be::trunc<evmc::address>(x);
+  intx::uint256 X = Frame->pop();
+  const auto Addr = intx::be::trunc<evmc::address>(X);
 
-  auto *Context = Base::getContext();
-  auto *Inst = Context->getInstance();
-  auto *Mod = Inst->getModule();
-  auto *Host = Mod->Host;
-  if (Frame->rev >= EVMC_BERLIN &&
-      Host->access_account(addr) == EVMC_ACCESS_COLD) {
-    constexpr auto cold_account_acess_cost = 2600;
-    constexpr auto warm_account_access_cost = 100;
-    constexpr auto additional_cold_account_access_cost =
-        cold_account_acess_cost - warm_account_access_cost;
-    EVM_THROW_IF(Frame->GasLeft, <, additional_cold_account_access_cost,
+  if (Frame->Rev >= EVMC_BERLIN &&
+      Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
+    constexpr auto ColdAccountAccessCost = 2600;
+    constexpr auto WarmAccountAccessCost = 100;
+    constexpr auto AdditionalColdAccountAccessCost =
+        ColdAccountAccessCost - WarmAccountAccessCost;
+    EVM_THROW_IF(Frame->GasLeft, <, AdditionalColdAccountAccessCost,
                  EVMOutOfGas);
   }
 
   intx::uint256 Balance =
-      intx::be::load<intx::uint256>(Host->get_balance(addr));
+      intx::be::load<intx::uint256>(Frame->Host->get_balance(Addr));
   Frame->push(Balance);
+}
+void OriginHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<OriginHandler>;
+  auto *Frame = Base::getFrame();
+  Frame->push(intx::be::load<intx::uint256>(Frame->get_tx_context().tx_origin));
 }
 
 // Memory operations
