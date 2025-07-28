@@ -259,11 +259,6 @@ public:
   EVM_REGISTRY_GET(SWAP);
 };
 
-// Utility functions
-uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize);
-void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize);
-uint64_t uint256ToUint64(const intx::uint256 &Value);
-
 } // namespace zen::evm
 
 #endif // ZEN_EVM_OPCODE_HANDLERS_H

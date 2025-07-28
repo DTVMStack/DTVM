@@ -99,8 +99,7 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SWAP, OP_SWAP1);
 /* ---------- Implement utility functions begin ---------- */
 
 // Calculate memory expansion gas cost
-uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize,
-                                                uint64_t NewSize) {
+uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize) {
   if (NewSize <= CurrentSize) {
     return 0; // No expansion needed
   }
@@ -124,8 +123,7 @@ uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize,
 }
 
 // Expand memory and charge gas
-void zen::evm::expandMemoryAndChargeGas(EVMFrame *Frame,
-                                        uint64_t RequiredSize) {
+void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
   EVM_REQUIRE(RequiredSize <= UINT32_MAX, IntegerOverflow);
   uint64_t CurrentSize = Frame->Memory.size();
 
@@ -142,7 +140,7 @@ void zen::evm::expandMemoryAndChargeGas(EVMFrame *Frame,
 }
 
 // Convert uint256 to uint64
-uint64_t zen::evm::uint256ToUint64(const intx::uint256 &Value) {
+uint64_t uint256ToUint64(const intx::uint256 &Value) {
   return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
 }
 
