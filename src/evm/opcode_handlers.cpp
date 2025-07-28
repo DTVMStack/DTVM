@@ -131,7 +131,7 @@ void zen::evm::expandMemoryAndChargeGas(EVMFrame *Frame,
   // Calculate and charge memory expansion gas
   uint64_t MemoryExpansionCost =
       calculateMemoryExpansionCost(CurrentSize, RequiredSize);
-  EVM_THROW_IF(Frame->GasLeft, <, MemoryExpansionCost, EVMOutOfGas);
+  EVM_REQUIRE(Frame->GasLeft >= MemoryExpansionCost, EVMOutOfGas);
   Frame->GasLeft -= MemoryExpansionCost;
 
   // Expand memory if needed
@@ -231,7 +231,7 @@ void MStoreHandler::doExecute() {
   intx::uint256 Value = Frame->pop();
 
   uint64_t Offset = uint256ToUint64(OffsetVal);
-  EVM_THROW_IF(Offset, >, UINT32_MAX, IntegerOverflow);
+  EVM_REQUIRE(Offset <= UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + 32;
   expandMemoryAndChargeGas(Frame, ReqSize);
@@ -250,7 +250,7 @@ void MStore8Handler::doExecute() {
   intx::uint256 Value = Frame->pop();
 
   uint64_t Offset = uint256ToUint64(OffsetVal);
-  EVM_THROW_IF(Offset, >, UINT32_MAX, IntegerOverflow);
+  EVM_REQUIRE(Offset <= UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + 1;
   expandMemoryAndChargeGas(Frame, ReqSize);
@@ -265,7 +265,7 @@ void MLoadHandler::doExecute() {
   intx::uint256 OffsetVal = Frame->pop();
   uint64_t Offset = uint256ToUint64(OffsetVal);
 
-  EVM_THROW_IF(Offset, >, UINT32_MAX, IntegerOverflow);
+  EVM_REQUIRE(Offset <= UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + 32;
   expandMemoryAndChargeGas(Frame, ReqSize);
@@ -291,9 +291,9 @@ void JumpHandler::doExecute() {
   // We can assume that valid destination can't greater than uint64_t
   uint64_t Dest = uint256ToUint64(Frame->pop());
 
-  EVM_THROW_IF(Dest, >=, CodeSize, EVMBadJumpDestination);
-  EVM_THROW_IF(static_cast<evmc_opcode>(Code[Dest]), !=,
-               evmc_opcode::OP_JUMPDEST, EVMBadJumpDestination);
+  EVM_REQUIRE(Dest < CodeSize, EVMBadJumpDestination);
+  EVM_REQUIRE(static_cast<evmc_opcode>(Code[Dest]) == evmc_opcode::OP_JUMPDEST,
+              EVMBadJumpDestination);
 
   Frame->Pc = Dest;
   Context->IsJump = true;
@@ -315,9 +315,9 @@ void JumpIHandler::doExecute() {
   if (!Cond) {
     return;
   }
-  EVM_THROW_IF(Dest, >=, CodeSize, EVMBadJumpDestination);
-  EVM_THROW_IF(static_cast<evmc_opcode>(Code[Dest]), !=,
-               evmc_opcode::OP_JUMPDEST, EVMBadJumpDestination);
+  EVM_REQUIRE(Dest < CodeSize, EVMBadJumpDestination);
+  EVM_REQUIRE(static_cast<evmc_opcode>(Code[Dest]) == evmc_opcode::OP_JUMPDEST,
+              EVMBadJumpDestination);
 
   Frame->Pc = Dest;
   Context->IsJump = true;
@@ -356,7 +356,7 @@ void ReturnHandler::doExecute() {
   uint64_t Size = uint256ToUint64(SizeVal);
 
   // Check for overflow: Offset + Size > UINT32_MAX
-  EVM_THROW_IF(Offset + Size, >, UINT32_MAX, IntegerOverflow);
+  EVM_REQUIRE(Offset + Size <= UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + Size;
   expandMemoryAndChargeGas(Frame, ReqSize);
@@ -387,7 +387,7 @@ void RevertHandler::doExecute() {
   uint64_t Size = uint256ToUint64(SizeVal);
 
   // Check for overflow: Offset + Size > UINT32_MAX
-  EVM_THROW_IF(Offset + Size, >, UINT32_MAX, IntegerOverflow);
+  EVM_REQUIRE(Offset + Size <= UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + Size;
   expandMemoryAndChargeGas(Frame, ReqSize);
@@ -418,7 +418,7 @@ void PUSHHandler::doExecute() {
   // PUSH1 ~ PUSH32
   uint32_t NumBytes =
       OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
-  EVM_THROW_IF(Frame->Pc + NumBytes, >=, CodeSize, UnexpectedEnd);
+  EVM_REQUIRE(Frame->Pc + NumBytes < CodeSize, UnexpectedEnd);
   uint8_t ValueBytes[32];
   memset(ValueBytes, 0, sizeof(ValueBytes));
   std::memcpy(ValueBytes + (32 - NumBytes), Code + Frame->Pc + 1, NumBytes);
@@ -437,7 +437,7 @@ void DUPHandler::doExecute() {
   uint8_t OpcodeByte = Code[Frame->Pc];
   // DUP1 ~ DUP16
   uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_DUP1) + 1;
-  EVM_THROW_IF(Frame->stackHeight(), <, N, UnexpectedNumArgs);
+  EVM_REQUIRE(Frame->stackHeight() >= N, UnexpectedNumArgs);
   intx::uint256 V = Frame->peek(N - 1);
   Frame->push(V);
 }
@@ -452,7 +452,7 @@ void SWAPHandler::doExecute() {
   uint8_t OpcodeByte = Code[Frame->Pc];
   // SWAP1 ~ SWAP16
   uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_SWAP1) + 1;
-  EVM_THROW_IF(Frame->stackHeight(), <, N + 1, UnexpectedNumArgs);
+  EVM_REQUIRE(Frame->stackHeight() >= (N + 1), UnexpectedNumArgs);
   intx::uint256 &Top = Frame->peek(0);
   intx::uint256 &Nth = Frame->peek(N);
   std::swap(Top, Nth);
