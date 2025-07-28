@@ -267,6 +267,8 @@ public:
 
 // Utility functions
 uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize);
+void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize);
+uint64_t uint256ToUint64(const intx::uint256 &Value);
 
 } // namespace zen::evm
 

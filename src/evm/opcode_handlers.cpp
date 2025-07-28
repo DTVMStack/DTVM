@@ -7,19 +7,17 @@
 #include "evmc/instructions.h"
 #include "runtime/evm_instance.h"
 
+// Initialize static variables
 zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
 zen::evm::InterpreterExecContext *zen::evm::EVMResource::CurrentContext =
     nullptr;
 
-namespace {
-uint64_t uint256ToUint64(const intx::uint256 &Value) {
-  return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
-}
-} // namespace
-
+// Define namespaces
 using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
+
+/* ---------- Define gas cost macros begin ---------- */
 
 #define DEFINE_CALCULATE_GAS(OpName, OpCode)                                   \
   template <> uint64_t OpName##Handler::calculateGas() {                       \
@@ -34,6 +32,10 @@ using namespace zen::runtime;
     static const auto Cost = Table[OpCode].gas_cost;                           \
     return Cost;                                                               \
   }
+
+/* ---------- Define gas cost macros end ---------- */
+
+/* ---------- Implement gas cost begin ---------- */
 
 // Arithmetic operations
 DEFINE_CALCULATE_GAS(Add, OP_ADD);
@@ -94,6 +96,10 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PUSH, OP_PUSH1);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(DUP, OP_DUP1);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SWAP, OP_SWAP1);
 
+/* ---------- Implement gas cost end ---------- */
+
+/* ---------- Implement utility functions begin ---------- */
+
 // Calculate memory expansion gas cost
 uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize,
                                                 uint64_t NewSize) {
@@ -118,6 +124,32 @@ uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize,
 
   return NewCost - CurrentCost;
 }
+
+// Expand memory and charge gas
+void zen::evm::expandMemoryAndChargeGas(EVMFrame *Frame,
+                                        uint64_t RequiredSize) {
+  uint64_t CurrentSize = Frame->Memory.size();
+
+  // Calculate and charge memory expansion gas
+  uint64_t MemoryExpansionCost =
+      calculateMemoryExpansionCost(CurrentSize, RequiredSize);
+  EVM_THROW_IF(Frame->GasLeft, <, MemoryExpansionCost, EVMOutOfGas);
+  Frame->GasLeft -= MemoryExpansionCost;
+
+  // Expand memory if needed
+  if (RequiredSize > CurrentSize) {
+    Frame->Memory.resize(RequiredSize, 0);
+  }
+}
+
+// Convert uint256 to uint64
+uint64_t zen::evm::uint256ToUint64(const intx::uint256 &Value) {
+  return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
+}
+
+/* ---------- Implement utility functions end ---------- */
+
+/* ---------- Implement opcode handlers begin ---------- */
 
 void GasHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<GasHandler>;
@@ -204,18 +236,7 @@ void MStoreHandler::doExecute() {
   EVM_THROW_IF(Offset, >, UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + 32;
-  uint64_t CurrentSize = Frame->Memory.size();
-
-  // Calculate and charge memory expansion gas
-  uint64_t MemoryExpansionCost =
-      calculateMemoryExpansionCost(CurrentSize, ReqSize);
-  EVM_THROW_IF(Frame->GasLeft, <, MemoryExpansionCost, EVMOutOfGas);
-  Frame->GasLeft -= MemoryExpansionCost;
-
-  // TODO: use EVMMemory class in the future
-  if (ReqSize > CurrentSize) {
-    Frame->Memory.resize(ReqSize, 0);
-  }
+  expandMemoryAndChargeGas(Frame, ReqSize);
 
   uint8_t ValueBytes[32];
   intx::be::store(ValueBytes, Value);
@@ -234,18 +255,7 @@ void MStore8Handler::doExecute() {
   EVM_THROW_IF(Offset, >, UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + 1;
-  uint64_t CurrentSize = Frame->Memory.size();
-
-  // Calculate and charge memory expansion gas
-  uint64_t MemoryExpansionCost =
-      calculateMemoryExpansionCost(CurrentSize, ReqSize);
-  EVM_THROW_IF(Frame->GasLeft, <, MemoryExpansionCost, EVMOutOfGas);
-  Frame->GasLeft -= MemoryExpansionCost;
-
-  // TODO: use EVMMemory class in the future
-  if (ReqSize > CurrentSize) {
-    Frame->Memory.resize(ReqSize, 0);
-  }
+  expandMemoryAndChargeGas(Frame, ReqSize);
   uint8_t ByteValue = static_cast<uint8_t>(Value & intx::uint256{0xFF});
   Frame->Memory[Offset] = ByteValue;
 }
@@ -260,18 +270,7 @@ void MLoadHandler::doExecute() {
   EVM_THROW_IF(Offset, >, UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + 32;
-  uint64_t CurrentSize = Frame->Memory.size();
-
-  // Calculate and charge memory expansion gas
-  uint64_t MemoryExpansionCost =
-      calculateMemoryExpansionCost(CurrentSize, ReqSize);
-  EVM_THROW_IF(Frame->GasLeft, <, MemoryExpansionCost, EVMOutOfGas);
-  Frame->GasLeft -= MemoryExpansionCost;
-
-  // TODO: use EVMMemory class in the future
-  if (ReqSize > CurrentSize) {
-    Frame->Memory.resize(ReqSize, 0);
-  }
+  expandMemoryAndChargeGas(Frame, ReqSize);
 
   uint8_t ValueBytes[32];
   // TODO: use EVMMemory class in the future
@@ -362,10 +361,8 @@ void ReturnHandler::doExecute() {
   EVM_THROW_IF(Offset + Size, >, UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + Size;
-  // TODO: use EVMMemory class in the future
-  if (ReqSize > Frame->Memory.size()) {
-    Frame->Memory.resize(ReqSize, 0);
-  }
+  expandMemoryAndChargeGas(Frame, ReqSize);
+
   // TODO: use EVMMemory class in the future
   std::vector<uint8_t> ReturnData(Frame->Memory.begin() + Offset,
                                   Frame->Memory.begin() + Offset + Size);
@@ -395,10 +392,8 @@ void RevertHandler::doExecute() {
   EVM_THROW_IF(Offset + Size, >, UINT32_MAX, IntegerOverflow);
 
   uint64_t ReqSize = Offset + Size;
-  // TODO: use EVMMemory class in the future
-  if (ReqSize > Frame->Memory.size()) {
-    Frame->Memory.resize(ReqSize, 0);
-  }
+  expandMemoryAndChargeGas(Frame, ReqSize);
+
   std::vector<uint8_t> RevertData(Frame->Memory.begin() + Offset,
                                   Frame->Memory.begin() + Offset + Size);
 
@@ -464,3 +459,5 @@ void SWAPHandler::doExecute() {
   intx::uint256 &Nth = Frame->peek(N);
   std::swap(Top, Nth);
 }
+
+/* ---------- Implement opcode handlers end ---------- */
