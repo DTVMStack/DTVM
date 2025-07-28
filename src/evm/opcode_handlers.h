@@ -14,6 +14,12 @@
     throw zen::common::getError(zen::common::ErrorCode::UnexpectedNumArgs);    \
   }
 
+// EVMFrame check 
+#define EVM_FRAME_CHECK(FramePtr)                                              \
+  if (!(FramePtr)) {                                                            \
+    throw zen::common::getError(zen::common::ErrorCode::EVMFrameNotFound);     \
+  }
+
 // Generic condition check + exception throwing macro
 #define EVM_THROW_IF(Lhs, Op, Rhs, errorCode)                                  \
   if ((Lhs)Op(Rhs)) {                                                          \
