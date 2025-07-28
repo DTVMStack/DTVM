@@ -14,9 +14,9 @@
     throw zen::common::getError(zen::common::ErrorCode::UnexpectedNumArgs);    \
   }
 
-// EVMFrame check 
+// EVMFrame check
 #define EVM_FRAME_CHECK(FramePtr)                                              \
-  if (!(FramePtr)) {                                                            \
+  if (!(FramePtr)) {                                                           \
     throw zen::common::getError(zen::common::ErrorCode::EVMFrameNotFound);     \
   }
 
