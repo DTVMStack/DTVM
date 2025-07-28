@@ -126,6 +126,7 @@ uint64_t zen::evm::calculateMemoryExpansionCost(uint64_t CurrentSize,
 // Expand memory and charge gas
 void zen::evm::expandMemoryAndChargeGas(EVMFrame *Frame,
                                         uint64_t RequiredSize) {
+  EVM_REQUIRE(RequiredSize <= UINT32_MAX, IntegerOverflow);
   uint64_t CurrentSize = Frame->Memory.size();
 
   // Calculate and charge memory expansion gas
@@ -231,8 +232,6 @@ void MStoreHandler::doExecute() {
   intx::uint256 Value = Frame->pop();
 
   uint64_t Offset = uint256ToUint64(OffsetVal);
-  EVM_REQUIRE(Offset <= UINT32_MAX, IntegerOverflow);
-
   uint64_t ReqSize = Offset + 32;
   expandMemoryAndChargeGas(Frame, ReqSize);
 
@@ -250,10 +249,9 @@ void MStore8Handler::doExecute() {
   intx::uint256 Value = Frame->pop();
 
   uint64_t Offset = uint256ToUint64(OffsetVal);
-  EVM_REQUIRE(Offset <= UINT32_MAX, IntegerOverflow);
-
   uint64_t ReqSize = Offset + 1;
   expandMemoryAndChargeGas(Frame, ReqSize);
+
   uint8_t ByteValue = static_cast<uint8_t>(Value & intx::uint256{0xFF});
   Frame->Memory[Offset] = ByteValue;
 }
@@ -263,10 +261,8 @@ void MLoadHandler::doExecute() {
   auto *Frame = Base::getFrame();
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 OffsetVal = Frame->pop();
+
   uint64_t Offset = uint256ToUint64(OffsetVal);
-
-  EVM_REQUIRE(Offset <= UINT32_MAX, IntegerOverflow);
-
   uint64_t ReqSize = Offset + 32;
   expandMemoryAndChargeGas(Frame, ReqSize);
 
@@ -352,12 +348,9 @@ void ReturnHandler::doExecute() {
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
+
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
-
-  // Check for overflow: Offset + Size > UINT32_MAX
-  EVM_REQUIRE(Offset + Size <= UINT32_MAX, IntegerOverflow);
-
   uint64_t ReqSize = Offset + Size;
   expandMemoryAndChargeGas(Frame, ReqSize);
 
@@ -383,12 +376,9 @@ void RevertHandler::doExecute() {
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
+
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
-
-  // Check for overflow: Offset + Size > UINT32_MAX
-  EVM_REQUIRE(Offset + Size <= UINT32_MAX, IntegerOverflow);
-
   uint64_t ReqSize = Offset + Size;
   expandMemoryAndChargeGas(Frame, ReqSize);
 
