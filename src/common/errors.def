@@ -177,7 +177,7 @@ DEFINE_ERROR(Execution,     None,   EVMOutOfGas,               "EVM out of gas")
 DEFINE_ERROR(Execution,     None,   EVMFrameNotFound,          "EVMFrame is nullptr") 
 
 // EVM Error: About Memory
-DEFINE_ERROR(Execution,     None,   EVMTooLargeMemory,         "EVM Memory is too large") 
+DEFINE_ERROR(Execution,     None,   EVMTooLargeRequiredMemory, "EVM Required Memory is too large") 
 
 #endif
 

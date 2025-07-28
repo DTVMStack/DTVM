@@ -129,7 +129,8 @@ uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize) {
 
 // Expand memory and charge gas
 void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
-  EVM_REQUIRE(RequiredSize <= MAX_REQUIRED_MEMORY_SIZE, EVMTooLargeMemory);
+  EVM_REQUIRE(RequiredSize <= MAX_REQUIRED_MEMORY_SIZE,
+              EVMTooLargeRequiredMemory);
   uint64_t CurrentSize = Frame->Memory.size();
 
   // Calculate and charge memory expansion gas
