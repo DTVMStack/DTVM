@@ -7,12 +7,10 @@
 #include "evmc/instructions.h"
 #include "runtime/evm_instance.h"
 
-// Initialize static variables
 zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
 zen::evm::InterpreterExecContext *zen::evm::EVMResource::CurrentContext =
     nullptr;
 
-// Define namespaces
 using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
