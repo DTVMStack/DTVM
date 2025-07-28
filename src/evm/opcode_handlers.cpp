@@ -19,14 +19,14 @@ using namespace zen::runtime;
 
 #define DEFINE_CALCULATE_GAS(OpName, OpCode)                                   \
   template <> uint64_t OpName##Handler::calculateGas() {                       \
-    static auto Table = evmc_get_instruction_metrics_table(EVMC_CANCUN);       \
+    static auto Table = evmc_get_instruction_metrics_table(DEFAULT_REVISION);  \
     static const auto Cost = Table[OpCode].gas_cost;                           \
     return Cost;                                                               \
   }
 
 #define DEFINE_NOT_TEMPLATE_CALCULATE_GAS(OpName, OpCode)                      \
   uint64_t OpName##Handler::calculateGas() {                                   \
-    static auto Table = evmc_get_instruction_metrics_table(EVMC_CANCUN);       \
+    static auto Table = evmc_get_instruction_metrics_table(DEFAULT_REVISION);  \
     static const auto Cost = Table[OpCode].gas_cost;                           \
     return Cost;                                                               \
   }
@@ -129,7 +129,7 @@ uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize) {
 
 // Expand memory and charge gas
 void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
-  EVM_REQUIRE(RequiredSize <= UINT32_MAX, IntegerOverflow);
+  EVM_REQUIRE(RequiredSize <= MAX_MEMORY_SIZE, EVMTooLargeMemory);
   uint64_t CurrentSize = Frame->Memory.size();
 
   // Calculate and charge memory expansion gas

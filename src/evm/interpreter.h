@@ -5,6 +5,7 @@
 #define ZEN_EVM_INTERPRETER_H
 
 #include "common/errors.h"
+#include "evm/evm.h"
 #include "evmc/evmc.hpp"
 #include "intx/intx.hpp"
 
@@ -30,7 +31,7 @@ struct EVMFrame {
   std::map<intx::uint256, intx::uint256> Storage;
   const evmc_message *Msg = nullptr;
   evmc::Host *Host = nullptr;
-  evmc_revision Rev = EVMC_CANCUN;
+  evmc_revision Rev = DEFAULT_REVISION;
   evmc_tx_context MTx = {};
 
   size_t Sp = 0;
