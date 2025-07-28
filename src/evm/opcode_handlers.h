@@ -242,6 +242,21 @@ DEFINE_UNIMPLEMENT_HANDLER(PUSH);
 DEFINE_UNIMPLEMENT_HANDLER(DUP);
 DEFINE_UNIMPLEMENT_HANDLER(SWAP);
 
+// Call operations
+class CreateHandler : public EVMOpcodeHandlerBase<CreateHandler> {
+public:
+  static void doExecute();
+  static uint64_t calculateGas();
+  static evmc_opcode OpCode;
+};
+
+class CallHandler : public EVMOpcodeHandlerBase<CallHandler> {
+public:
+  static void doExecute();
+  static uint64_t calculateGas();
+  static evmc_opcode OpCode;
+};
+
 // Registry class to manage execution context
 class EVMOpcodeHandlerRegistry {
 public:
@@ -322,6 +337,9 @@ public:
   EVM_REGISTRY_GET(PUSH);
   EVM_REGISTRY_GET(DUP);
   EVM_REGISTRY_GET(SWAP);
+  // Call operations
+  EVM_REGISTRY_GET(Create);
+  EVM_REGISTRY_GET(Call);
 };
 
 } // namespace zen::evm

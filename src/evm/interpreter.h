@@ -36,9 +36,11 @@ struct EVMFrame {
 
   size_t Sp = 0;
   uint64_t GasLeft = 0;
+  uint64_t GasRefund = 0;
   uint64_t GasLimit = 0;
   uint64_t Pc = 0;
   intx::uint256 Value = 0;
+  bool IsStatic = false;
 
   inline void push(const intx::uint256 &V) {
     if (Sp >= MAXSTACK) {

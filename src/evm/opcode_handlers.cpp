@@ -31,6 +31,13 @@ using namespace zen::runtime;
     return Cost;                                                               \
   }
 
+#define DEFINE_MULTI_OPCODE_CALCULATE_GAS(OpName)                              \
+  uint64_t OpName##Handler::calculateGas() {                                   \
+    static auto Table = evmc_get_instruction_metrics_table(EVMC_CANCUN);       \
+    static const auto Cost = Table[OpCode].gas_cost;                           \
+    return Cost;                                                               \
+  }
+
 /* ---------- Define gas cost macros end ---------- */
 
 /* ---------- Implement gas cost begin ---------- */
@@ -122,6 +129,10 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Revert, OP_REVERT);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PUSH, OP_PUSH1);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(DUP, OP_DUP1);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SWAP, OP_SWAP1);
+
+// Call operations
+DEFINE_MULTI_OPCODE_CALCULATE_GAS(Create);
+DEFINE_MULTI_OPCODE_CALCULATE_GAS(Call);
 
 /* ---------- Implement gas cost end ---------- */
 
@@ -869,6 +880,142 @@ void SWAPHandler::doExecute() {
   intx::uint256 &Top = Frame->peek(0);
   intx::uint256 &Nth = Frame->peek(N);
   std::swap(Top, Nth);
+}
+
+void CreateHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<CreateHandler>;
+  auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
+
+  if (OpCode == evmc_opcode::OP_CREATE) {
+    EVM_STACK_CHECK(Frame, 3);
+  } else if (OpCode == evmc_opcode::OP_CREATE2) {
+    EVM_STACK_CHECK(Frame, 4);
+  } else {
+    throw common::getError(common::ErrorCode::EVMInvalidInstruction);
+  }
+  intx::uint256 Value = Frame->pop();
+  intx::uint256 CodeOffset = Frame->pop();
+  intx::uint256 CodeSizeVal = Frame->pop();
+  intx::uint256 Salt =
+      (OpCode == evmc_opcode::OP_CREATE2 ? Frame->pop() : intx::uint256(0));
+
+  // TODO)) expend memory
+
+  evmc_message NewMsg{.kind = evmc_call_kind::EVMC_CREATE,
+                      .depth = Frame->Msg->depth + 1,
+                      .gas = static_cast<int64_t>(Frame->GasLeft),
+                      .sender = Frame->Msg->sender,
+                      .input_data =
+                          Frame->Memory.data() + uint256ToUint64(CodeOffset),
+                      .input_size = uint256ToUint64(CodeSizeVal),
+                      .value = intx::be::load<evmc::uint256be>(Value),
+                      .create2_salt = intx::be::load<evmc::uint256be>(Salt)};
+
+  NewMsg.gas = NewMsg.gas - NewMsg.gas / 64;
+  evmc::Result Result = Frame->Host->call(NewMsg);
+  Frame->GasLeft -= NewMsg.gas - Result.gas_left;
+  Frame->GasRefund += Result.gas_refund;
+
+  if (Result.status_code == EVMC_SUCCESS) {
+    Frame->push(intx::be::load<intx::uint256>(Result.create_address));
+  } else {
+    Frame->push(intx::uint256(0));
+  }
+  Context->setStatus(Result.status_code);
+}
+
+void CallHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<CallHandler>;
+  auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
+
+  bool NeedValue = false;
+  if (OpCode == evmc_opcode::OP_CALL or OpCode == evmc_opcode::OP_CALLCODE) {
+    EVM_STACK_CHECK(Frame, 7);
+    NeedValue = true;
+  } else if (OpCode == evmc_opcode::OP_DELEGATECALL or
+             OpCode == evmc_opcode::OP_STATICCALL) {
+    EVM_STACK_CHECK(Frame, 6);
+  } else {
+    throw common::getError(common::ErrorCode::EVMInvalidInstruction);
+  }
+
+  const auto Gas = Frame->pop();
+  const auto Dest = intx::be::trunc<evmc::address>(Frame->pop());
+  const auto Value = NeedValue ? Frame->pop() : 0;
+  const auto InputOffset = Frame->pop();
+  const auto InputSize = Frame->pop();
+  const auto OutputOffset = Frame->pop();
+  const auto OutputSize = Frame->pop();
+
+  if (Frame->Rev >= EVMC_BERLIN and
+      Frame->Host->access_account(Dest) == EVMC_ACCESS_COLD) {
+    if (Frame->GasLeft < 2600) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
+    Frame->GasLeft -= 2600; // Charge for cold account access
+  } else {
+    if (Frame->GasLeft < 100) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
+    Frame->GasLeft -= 100; // Charge for warm account access
+  }
+
+  evmc_message NewMsg{
+      .kind = static_cast<evmc_call_kind>(OpCode),
+      .flags = (OpCode == evmc_opcode::OP_STATICCALL) ? uint32_t{EVMC_STATIC}
+                                                      : Frame->Msg->flags,
+      .depth = Frame->Msg->depth + 1,
+      .gas = static_cast<int64_t>(Gas),
+      .recipient = (OpCode == OP_CALL or OpCode == OP_STATICCALL)
+                       ? Dest
+                       : Frame->Msg->recipient,
+      .sender = (OpCode == OP_DELEGATECALL) ? Frame->Msg->sender
+                                            : Frame->Msg->recipient,
+      .input_data = Frame->Memory.data() + uint256ToUint64(InputOffset),
+      .input_size = uint256ToUint64(InputSize),
+      .value = (OpCode == OP_DELEGATECALL)
+                   ? Frame->Msg->value
+                   : intx::be::load<evmc::uint256be>(Value),
+      .code_address = Dest,
+  };
+  NewMsg.gas =
+      std::min(NewMsg.gas, (long)(Frame->GasLeft - Frame->GasLeft / 64));
+
+  uint64_t Cost = NeedValue ? 9000 : 0;
+  if (Frame->GasLeft < Cost) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
+  Frame->GasLeft -= Cost;
+
+  if (OpCode == OP_CALL and Frame->IsStatic) {
+    Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
+    return;
+  }
+
+  if (NeedValue) {
+    NewMsg.gas += 2300;
+    Frame->GasLeft += 2300;
+  }
+
+  const auto Result = Frame->Host->call(NewMsg);
+  Frame->push(Result.status_code == EVMC_SUCCESS);
+  // Context->setReturnData(new std::vector<uint8_t> {Result.output_data});
+
+  const auto CopySize =
+      std::min((size_t)uint256ToUint64(OutputSize), Result.output_size);
+  if (CopySize > 0) {
+    std::memcpy(Frame->Memory.data() + uint256ToUint64(OutputOffset),
+                Result.output_data, CopySize);
+  }
+
+  const auto GasUsed = NewMsg.gas - Result.gas_left;
+  Frame->GasLeft -= GasUsed;
+  Frame->GasRefund += Result.gas_refund;
 }
 
 /* ---------- Implement opcode handlers end ---------- */
