@@ -104,7 +104,7 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SWAP, OP_SWAP1);
 /* ---------- Implement utility functions begin ---------- */
 namespace {
 // Calculate memory expansion gas cost
-static uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize,
+uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize,
                                              uint64_t NewSize) {
   if (NewSize <= CurrentSize) {
     return 0; // No expansion needed
@@ -129,7 +129,7 @@ static uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize,
 }
 
 // Expand memory and charge gas
-static void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
+void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
   EVM_REQUIRE(RequiredSize <= UINT32_MAX, IntegerOverflow);
   uint64_t CurrentSize = Frame->Memory.size();
 
@@ -146,7 +146,7 @@ static void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
 }
 
 // Convert uint256 to uint64
-static uint64_t uint256ToUint64(const intx::uint256 &Value) {
+uint64_t uint256ToUint64(const intx::uint256 &Value) {
   return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
 }
 }//anonymous namespace
@@ -214,7 +214,7 @@ void SarHandler::doExecute() {
   intx::uint256 Shift = Frame->pop();
   intx::uint256 Value = Frame->pop();
 
-  intx::uint256 Res = 0;
+  intx::uint256 Res;
   if (Shift < 256) {
     intx::uint256 IsNegative = (Value >> 255) & 1;
     Res = Value >> Shift;
