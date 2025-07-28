@@ -4,10 +4,21 @@
 #include "compiler/mir/instructions.h"
 #include "compiler/mir/opcode.h"
 #include "compiler/mir/pointer.h"
+#include "common/type.h"
 #include "evmc/evmc.h"
 #include "intx/intx.hpp"
 
 namespace COMPILER {
+
+enum class EVMType : uint8_t {
+  VOID,    // No value
+  UINT8,   // Byte operations  
+  UINT32,  // Intermediate values
+  UINT64,  // Gas calculations
+  UINT256, // Main EVM type (256-bit integers) - maps to EVMU256Type from common/type.h
+  ADDRESS, // 20-byte Ethereum addresses
+  BYTES,   // Dynamic byte arrays
+};
 
 class Variable;
 
@@ -21,7 +32,8 @@ public:
   EVMFrontendContext(EVMFrontendContext &&OtherCtx) = delete;
   EVMFrontendContext &operator=(EVMFrontendContext &&OtherCtx) = delete;
 
-  // todo: static MType *getMIRTypeFromEVMType(EVMType Type);
+  static MType *getMIRTypeFromEVMType(EVMType Type);
+  static zen::common::EVMU256Type *getEVMU256Type();
 
   void setBytecode(const uint8_t *Code, size_t CodeSize) {
     Bytecode = Code;
@@ -47,11 +59,35 @@ public:
     Operand() = default;
     Operand(MInstruction *Instr, EVMType Type) : Instr(Instr), Type(Type) {}
     Operand(Variable *Var, EVMType Type) : Var(Var), Type(Type) {}
+    
+    // Constructor for EVMU256Type with 4 I64 components
+    Operand(std::array<MInstruction*, 4> Components, EVMType Type) 
+      : Type(Type), U256Components(Components), IsU256MultiComponent(true) {
+      ZEN_ASSERT(Type == EVMType::UINT256 && "Multi-component only for U256");
+    }
+    
+    Operand(std::array<Variable*, 4> VarComponents, EVMType Type)
+      : Type(Type), U256VarComponents(VarComponents), IsU256MultiComponent(true) {
+      ZEN_ASSERT(Type == EVMType::UINT256 && "Multi-component only for U256");
+    }
 
     MInstruction *getInstr() const { return Instr; }
     Variable *getVar() const { return Var; }
     EVMType getType() const { return Type; }
-    bool isEmpty() const { return !Instr && !Var && Type == EVMType::VOID; }
+    
+    bool isEmpty() const { 
+      return !Instr && !Var && !IsU256MultiComponent && Type == EVMType::VOID; 
+    }
+    
+    bool isU256MultiComponent() const { return IsU256MultiComponent; }
+    const std::array<MInstruction*, 4>& getU256Components() const { 
+      ZEN_ASSERT(IsU256MultiComponent && "Not a multi-component U256");
+      return U256Components; 
+    }
+    const std::array<Variable*, 4>& getU256VarComponents() const {
+      ZEN_ASSERT(IsU256MultiComponent && "Not a multi-component U256");
+      return U256VarComponents;
+    }
 
     constexpr bool isReg() { return false; }
     constexpr bool isTempReg() { return true; }
@@ -60,6 +96,11 @@ public:
     MInstruction *Instr = nullptr;
     Variable *Var = nullptr;
     EVMType Type = EVMType::VOID;
+    
+    // For EVMU256Type: 4 I64 components [0]=low, [1]=mid-low, [2]=mid-high, [3]=high
+    bool IsU256MultiComponent = false;
+    std::array<MInstruction*, 4> U256Components = {};
+    std::array<Variable*, 4> U256VarComponents = {};
   };
 
   template <class T>
@@ -117,6 +158,11 @@ public:
   void handleJumpI(Operand Dest, Operand Cond);
   void handleJumpDest();
 
+  // ==================== Arithmetic Instruction Handlers ====================
+
+  template <evmc_opcode OpCode>
+  Operand handleBinaryArithmetic(Operand LHSOp, Operand RHSOp);
+
   // ==================== Environment Instruction Handlers ====================
 
   Operand handlePC();
@@ -128,9 +174,20 @@ private:
   MInstruction *extractOperand(const Operand &Opnd);
 
   Operand createTempStackOperand(EVMType Type) {
-    MType *Mtype; // todo: getMIRTypeFromEVMType(EVMType::UINT256);
-    Variable *TempVar = CurFunc->createVariable(Mtype);
-    return Operand(TempVar, Type);
+    if (Type == EVMType::UINT256) {
+      // For U256, create 4 I64 variables to represent the full 256-bit value
+      MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+      std::array<Variable*, 4> VarComponents;
+      for (size_t i = 0; i < 4; ++i) {
+        VarComponents[i] = CurFunc->createVariable(I64Type);
+      }
+      return Operand(VarComponents, Type);
+    } else {
+      // For other types, use single variable
+      MType *Mtype = EVMFrontendContext::getMIRTypeFromEVMType(Type);
+      Variable *TempVar = CurFunc->createVariable(Mtype);
+      return Operand(TempVar, Type);
+    }
   }
 
   // ==================== MIR Util Methods ====================
@@ -147,6 +204,9 @@ private:
   }
 
   ConstantInstruction *createUInt256ConstInstruction(const intx::uint256 &V);
+  
+  // Create a full U256 operand from intx::uint256 value
+  Operand createU256ConstOperand(const intx::uint256 &V);
 
   MBasicBlock *createBasicBlock() { return CurFunc->createBasicBlock(); }
 
@@ -156,6 +216,18 @@ private:
   }
 
   void addSuccessor(MBasicBlock *Succ) { CurBB->addSuccessor(Succ); }
+
+  // ==================== EVMU256 Helper Methods ====================
+
+  // Create a 256-bit value from 4 x I64 components
+  Operand createU256FromComponents(Operand Low, Operand MidLow, Operand MidHigh, Operand High);
+  
+  // Extract I64 components from U256 operand (for operations that need component access)
+  std::array<Operand, 4> extractU256Components(Operand U256Op);
+
+  // ==================== EVM to MIR Opcode Mapping ====================
+
+  Opcode getEVMBinaryOpcode(evmc_opcode EVMOp);
 
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;

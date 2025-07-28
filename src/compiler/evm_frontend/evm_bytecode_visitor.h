@@ -108,11 +108,10 @@ private:
 
       // Arithmetic operations
       case OP_ADD: {
-        // Operand A = pop();
-        // Operand B = pop();
-        // TODO: handleBinaryArithmetic
-        // Operand Result = Builder.template handleBinaryArithmetic<OP_ADD>(A, B);
-        // push(Result);
+        Operand B = pop();
+        Operand A = pop();
+        Operand Result = Builder.template handleBinaryArithmetic<OP_ADD>(A, B);
+        push(Result);
         break;
       }
 
