@@ -252,8 +252,7 @@ void BalanceHandler::doExecute() {
     constexpr auto WarmAccountAccessCost = 100;
     constexpr auto AdditionalColdAccountAccessCost =
         ColdAccountAccessCost - WarmAccountAccessCost;
-    EVM_THROW_IF(Frame->GasLeft, <, AdditionalColdAccountAccessCost,
-                 EVMOutOfGas);
+    EVM_REQUIRE(Frame->GasLeft >= AdditionalColdAccountAccessCost, EVMOutOfGas);
     Frame->GasLeft -= AdditionalColdAccountAccessCost;
   }
 

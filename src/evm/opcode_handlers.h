@@ -20,12 +20,6 @@
     throw zen::common::getError(zen::common::ErrorCode::EVMFrameNotFound);     \
   }
 
-// Generic condition check + exception throwing macro
-#define EVM_THROW_IF(Lhs, Op, Rhs, errorCode)                                  \
-  if ((Lhs)Op(Rhs)) {                                                          \
-    throw zen::common::getError(zen::common::ErrorCode::errorCode);            \
-  }
-
 // Simple boolean condition check macro
 #define EVM_REQUIRE(Condition, errorCode)                                      \
   if (!(Condition)) {                                                          \

@@ -313,7 +313,7 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_POP: {
-      EVM_THROW_IF(Frame->stackHeight(), <, 1, UnexpectedNumArgs);
+      EVM_STACK_CHECK(Frame, 1);
       Frame->pop();
       break;
     }
