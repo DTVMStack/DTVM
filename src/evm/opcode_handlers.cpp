@@ -102,7 +102,7 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SWAP, OP_SWAP1);
 /* ---------- Implement gas cost end ---------- */
 
 /* ---------- Implement utility functions begin ---------- */
-
+namespace {
 // Calculate memory expansion gas cost
 static uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize,
                                              uint64_t NewSize) {
@@ -149,7 +149,7 @@ static void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
 static uint64_t uint256ToUint64(const intx::uint256 &Value) {
   return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
 }
-
+}//anonymous namespace
 /* ---------- Implement utility functions end ---------- */
 
 /* ---------- Implement opcode handlers begin ---------- */
