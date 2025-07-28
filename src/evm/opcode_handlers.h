@@ -14,6 +14,18 @@
     throw zen::common::getError(zen::common::ErrorCode::UnexpectedNumArgs);    \
   }
 
+// EVMFrame check
+#define EVM_FRAME_CHECK(FramePtr)                                              \
+  if (!(FramePtr)) {                                                           \
+    throw zen::common::getError(zen::common::ErrorCode::EVMFrameNotFound);     \
+  }
+
+// Generic condition check + exception throwing macro
+#define EVM_THROW_IF(Lhs, Op, Rhs, errorCode)                                  \
+  if ((Lhs)Op(Rhs)) {                                                          \
+    throw zen::common::getError(zen::common::ErrorCode::errorCode);            \
+  }
+
 // Simple boolean condition check macro
 #define EVM_REQUIRE(Condition, errorCode)                                      \
   if (!(Condition)) {                                                          \
@@ -177,6 +189,11 @@ DEFINE_BINARY_OP(Sgt, intx::slt(B, A));
     static uint64_t calculateGas();                                            \
   };
 
+// environmental information
+DEFINE_UNIMPLEMENT_HANDLER(Address);
+DEFINE_UNIMPLEMENT_HANDLER(Balance);
+DEFINE_UNIMPLEMENT_HANDLER(Origin);
+
 // Arithmetic operations
 DEFINE_UNIMPLEMENT_HANDLER(SignExtend);
 DEFINE_UNIMPLEMENT_HANDLER(Byte);
@@ -238,6 +255,11 @@ public:
   EVM_REGISTRY_GET(Sgt);
   EVM_REGISTRY_GET(Byte);
   EVM_REGISTRY_GET(Sar);
+  // Environmental information
+  EVM_REGISTRY_GET(Address);
+  EVM_REGISTRY_GET(Balance);
+  EVM_REGISTRY_GET(Origin);
+
   // Memory operations
   EVM_REGISTRY_GET(MStore);
   EVM_REGISTRY_GET(MStore8);

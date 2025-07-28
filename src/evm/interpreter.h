@@ -5,7 +5,7 @@
 #define ZEN_EVM_INTERPRETER_H
 
 #include "common/errors.h"
-#include "evmc/evmc.h"
+#include "evmc/evmc.hpp"
 #include "intx/intx.hpp"
 
 #include <array>
@@ -28,6 +28,10 @@ struct EVMFrame {
   std::vector<uint8_t> Memory;
   // TODO: use EVMHost in the future
   std::map<intx::uint256, intx::uint256> Storage;
+  const evmc_message *Msg = nullptr;
+  evmc::Host *Host = nullptr;
+  evmc_revision Rev = EVMC_CANCUN;
+  evmc_tx_context MTx = {};
 
   size_t Sp = 0;
   uint64_t GasLeft = 0;
@@ -57,6 +61,12 @@ struct EVMFrame {
   }
 
   inline size_t stackHeight() const { return Sp; }
+
+  const evmc_tx_context &get_tx_context() noexcept {
+    if (INTX_UNLIKELY(MTx.block_timestamp == 0))
+      MTx = Host->get_tx_context();
+    return MTx;
+  }
 };
 
 class InterpreterExecContext {

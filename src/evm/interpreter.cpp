@@ -62,13 +62,13 @@ void BaseInterpreter::interpret() {
       break;
     }
 
-    case evmc_opcode::OP_SUB: {
-      EVMOpcodeHandlerRegistry::getSubHandler().execute();
+    case evmc_opcode::OP_MUL: {
+      EVMOpcodeHandlerRegistry::getMulHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_MUL: {
-      EVMOpcodeHandlerRegistry::getMulHandler().execute();
+    case evmc_opcode::OP_SUB: {
+      EVMOpcodeHandlerRegistry::getSubHandler().execute();
       break;
     }
 
@@ -77,23 +77,38 @@ void BaseInterpreter::interpret() {
       break;
     }
 
+    case evmc_opcode::OP_SDIV: {
+      EVMOpcodeHandlerRegistry::getSDivHandler().execute();
+      break;
+    }
+
     case evmc_opcode::OP_MOD: {
       EVMOpcodeHandlerRegistry::getModHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_AND: {
-      EVMOpcodeHandlerRegistry::getAndHandler().execute();
+    case evmc_opcode::OP_SMOD: {
+      EVMOpcodeHandlerRegistry::getSModHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_EQ: {
-      EVMOpcodeHandlerRegistry::getEqHandler().execute();
+    case evmc_opcode::OP_ADDMOD: {
+      EVMOpcodeHandlerRegistry::getAddmodHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_ISZERO: {
-      EVMOpcodeHandlerRegistry::getIsZeroHandler().execute();
+    case evmc_opcode::OP_MULMOD: {
+      EVMOpcodeHandlerRegistry::getMulmodHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_EXP: {
+      EVMOpcodeHandlerRegistry::getExpHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_SIGNEXTEND: {
+      EVMOpcodeHandlerRegistry::getSignExtendHandler().execute();
       break;
     }
 
@@ -117,32 +132,18 @@ void BaseInterpreter::interpret() {
       break;
     }
 
-    case evmc_opcode::OP_ADDMOD: {
-      EVMOpcodeHandlerRegistry::getAddmodHandler().execute();
+    case evmc_opcode::OP_EQ: {
+      EVMOpcodeHandlerRegistry::getEqHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_MULMOD: {
-      EVMOpcodeHandlerRegistry::getMulmodHandler().execute();
+    case evmc_opcode::OP_ISZERO: {
+      EVMOpcodeHandlerRegistry::getIsZeroHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_EXP: {
-      EVMOpcodeHandlerRegistry::getExpHandler().execute();
-      break;
-    }
-
-    case evmc_opcode::OP_SDIV: {
-      EVMOpcodeHandlerRegistry::getSDivHandler().execute();
-      break;
-    }
-
-    case evmc_opcode::OP_SMOD: {
-      EVMOpcodeHandlerRegistry::getSModHandler().execute();
-      break;
-    }
-    case evmc_opcode::OP_SIGNEXTEND: {
-      EVMOpcodeHandlerRegistry::getSignExtendHandler().execute();
+    case evmc_opcode::OP_AND: {
+      EVMOpcodeHandlerRegistry::getAndHandler().execute();
       break;
     }
 
@@ -181,6 +182,147 @@ void BaseInterpreter::interpret() {
       break;
     }
 
+    case evmc_opcode::OP_KECCAK256: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_ADDRESS: {
+      EVMOpcodeHandlerRegistry::getAddressHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_BALANCE: {
+      EVMOpcodeHandlerRegistry::getBalanceHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_ORIGIN: {
+      EVMOpcodeHandlerRegistry::getOriginHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_CALLER: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_CALLVALUE: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_CALLDATALOAD: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_CALLDATASIZE: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_CALLDATACOPY: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_CODESIZE: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_CODECOPY: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_GASPRICE: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_EXTCODESIZE: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_EXTCODECOPY: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_RETURNDATASIZE: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_RETURNDATACOPY: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_EXTCODEHASH: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_BLOCKHASH: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_COINBASE: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_TIMESTAMP: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_NUMBER: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_PREVRANDAO: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_GASLIMIT: {
+      EVMOpcodeHandlerRegistry::getGasLimitHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_CHAINID: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_SELFBALANCE: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_BASEFEE: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_POP: {
+      EVM_THROW_IF(Frame->stackHeight(), <, 1, UnexpectedNumArgs);
+      Frame->pop();
+      break;
+    }
+
+    case evmc_opcode::OP_MLOAD: {
+      EVMOpcodeHandlerRegistry::getMLoadHandler().execute();
+      break;
+    }
+
     case evmc_opcode::OP_MSTORE: {
       EVMOpcodeHandlerRegistry::getMStoreHandler().execute();
       break;
@@ -190,8 +332,14 @@ void BaseInterpreter::interpret() {
       EVMOpcodeHandlerRegistry::getMStore8Handler().execute();
       break;
     }
-    case evmc_opcode::OP_MLOAD: {
-      EVMOpcodeHandlerRegistry::getMLoadHandler().execute();
+
+    case evmc_opcode::OP_SLOAD: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_SSTORE: {
+      ZEN_ASSERT_TODO();
       break;
     }
 
@@ -213,12 +361,9 @@ void BaseInterpreter::interpret() {
       EVMOpcodeHandlerRegistry::getPCHandler().execute();
       break;
     }
+
     case evmc_opcode::OP_MSIZE: {
       EVMOpcodeHandlerRegistry::getMSizeHandler().execute();
-      break;
-    }
-
-    case evmc_opcode::OP_JUMPDEST: {
       break;
     }
 
@@ -226,8 +371,48 @@ void BaseInterpreter::interpret() {
       EVMOpcodeHandlerRegistry::getGasHandler().execute();
       break;
     }
-    case evmc_opcode::OP_GASLIMIT: {
-      EVMOpcodeHandlerRegistry::getGasLimitHandler().execute();
+
+    case evmc_opcode::OP_JUMPDEST: {
+      break;
+    }
+
+    case evmc_opcode::OP_LOG0: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_LOG1: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_LOG2: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_LOG3: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_LOG4: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_CREATE: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_CALL: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_CALLCODE: {
+      ZEN_ASSERT_TODO();
       break;
     }
 
@@ -240,6 +425,21 @@ void BaseInterpreter::interpret() {
       break;
     }
 
+    case evmc_opcode::OP_DELEGATECALL: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_CREATE2: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
+    case evmc_opcode::OP_STATICCALL: {
+      ZEN_ASSERT_TODO();
+      break;
+    }
+
     case evmc_opcode::OP_REVERT: {
       EVMOpcodeHandlerRegistry::getRevertHandler().execute();
       Frame = Context.getCurFrame();
@@ -249,14 +449,13 @@ void BaseInterpreter::interpret() {
       break;
     }
 
-    case evmc_opcode::OP_POP: {
-      EVM_STACK_CHECK(Frame, 1);
-      Frame->pop();
-      break;
-    }
-
     case evmc_opcode::OP_INVALID: {
       throw getError(ErrorCode::EVMInvalidInstruction);
+    }
+
+    case evmc_opcode::OP_SELFDESTRUCT: {
+      ZEN_ASSERT_TODO();
+      break;
     }
 
     default:
