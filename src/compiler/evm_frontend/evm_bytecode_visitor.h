@@ -8,7 +8,7 @@ namespace COMPILER {
 template <typename IRBuilder> class EVMByteCodeVisitor {
   typedef typename IRBuilder::CompilerContext CompilerContext;
   typedef typename IRBuilder::Operand Operand;
-  typedef typename IRBuilder::template EVMEvalStack<Operand> EvalStack;
+  typedef typename IRBuilder::template EVMEvalStack<Operand> EVMEvalStack;
 
 public:
   EVMByteCodeVisitor(IRBuilder &Builder, CompilerContext *Ctx)
@@ -29,9 +29,7 @@ private:
   }
 
   Operand pop() {
-    if (Stack.empty()) {
-      throw std::runtime_error("EVM stack underflow");
-    }
+    ZEN_ASSERT(!Stack.empty());
     Operand Opnd = Stack.pop();
     Builder.releaseOperand(Opnd);
     return Opnd;
@@ -49,7 +47,8 @@ private:
 
     while (Ip < IpEnd) {
       evmc_opcode Opcode = static_cast<evmc_opcode>(*Ip);
-      PC = Ip - Bytecode;
+      ptrdiff_t diff = Ip - Bytecode;
+      PC = static_cast<uint64_t>(diff >= 0 ? diff : 0);
       Ip++;
 
       switch (Opcode) {
@@ -63,9 +62,7 @@ private:
       case OP_PUSH25: case OP_PUSH26: case OP_PUSH27: case OP_PUSH28:
       case OP_PUSH29: case OP_PUSH30: case OP_PUSH31: case OP_PUSH32: {
         uint32_t NumBytes = Opcode - OP_PUSH1 + 1;
-        if (Ip + NumBytes > IpEnd) {
-          throw std::runtime_error("Unexpected end of bytecode in PUSH");
-        }
+        ZEN_ASSERT(Ip + NumBytes <= IpEnd);
         Operand Result = Builder.handlePush(Ip, NumBytes);
         push(Result);
         Ip += NumBytes;
@@ -77,9 +74,7 @@ private:
       case OP_DUP9: case OP_DUP10: case OP_DUP11: case OP_DUP12:
       case OP_DUP13: case OP_DUP14: case OP_DUP15: case OP_DUP16: {
         uint32_t N = Opcode - OP_DUP1 + 1;
-        if (Stack.size() < N) {
-          throw std::runtime_error("EVM stack underflow in DUP");
-        }
+        ZEN_ASSERT(Stack.size() >= N);
         Operand Value = peek(N - 1);
         push(Value);
         break;
@@ -90,17 +85,13 @@ private:
       case OP_SWAP9: case OP_SWAP10: case OP_SWAP11: case OP_SWAP12:
       case OP_SWAP13: case OP_SWAP14: case OP_SWAP15: case OP_SWAP16: {
         uint32_t N = Opcode - OP_SWAP1 + 1;
-        if (Stack.size() < N + 1) {
-          throw std::runtime_error("EVM stack underflow in SWAP");
-        }
+        ZEN_ASSERT(Stack.size() >= N + 1);
         Builder.handleSwap(N);
         break;
       }
 
       case OP_POP: {
-        if (Stack.empty()) {
-          throw std::runtime_error("EVM stack underflow in POP");
-        }
+        ZEN_ASSERT(!Stack.empty());
         pop();
         Builder.handlePop();
         break;
@@ -154,11 +145,9 @@ private:
         // End execution
         return true;
 
-      case OP_INVALID:
-        throw std::runtime_error("Invalid EVM opcode");
-
       default:
-        throw std::runtime_error("Unimplemented EVM opcode: " + std::to_string(static_cast<int>(Opcode)));
+        throw getErrorWithExtraMessage(ErrorCode::UnsupportedOpcode,
+                                       std::to_string(Opcode));
       }
     }
 
@@ -167,10 +156,8 @@ private:
 
   IRBuilder &Builder;
   CompilerContext *Ctx;
-  EvalStack Stack;
+  EVMEvalStack Stack;
   uint64_t PC = 0;
 };
 
 } // namespace COMPILER
-
-#endif // EVM_FRONTEND_EVM_BYTECODE_VISITOR_H

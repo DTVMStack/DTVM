@@ -239,5 +239,3 @@ private:
 };
 
 } // namespace COMPILER
-
-#endif // EVM_FRONTEND_EVM_MIR_COMPILER_H
