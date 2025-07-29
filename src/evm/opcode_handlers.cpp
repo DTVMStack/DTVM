@@ -563,15 +563,13 @@ void BlockHashHandler::doExecute() {
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 BlockNumberVal = Frame->pop();
 
-  const auto upper_bound = Frame->get_tx_context().block_number;
-  const auto lower_bound =
-      std::max(upper_bound - 256, decltype(upper_bound){0});
+  const auto UpperBound = Frame->get_tx_context().block_number;
+  const auto LowerBound = std::max(UpperBound - 256, decltype(UpperBound){0});
   int64_t BlockNumber = static_cast<int64_t>(BlockNumberVal);
-  const auto header =
-      (BlockNumberVal < upper_bound && BlockNumber >= lower_bound)
-          ? Frame->Host->get_block_hash(BlockNumber)
-          : evmc::bytes32{};
-  Frame->push(intx::be::load<intx::uint256>(header));
+  const auto Header = (BlockNumberVal < UpperBound && BlockNumber >= LowerBound)
+                          ? Frame->Host->get_block_hash(BlockNumber)
+                          : evmc::bytes32{};
+  Frame->push(intx::be::load<intx::uint256>(Header));
 }
 void CoinBaseHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<CoinBaseHandler>;
