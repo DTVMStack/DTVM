@@ -872,8 +872,8 @@ void PUSHHandler::doExecute() {
   auto *Context = Base::getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
-  const uint8_t *Code = Mod->Code;
-  uint8_t OpcodeByte = Code[Frame->Pc];
+  auto *Code = Mod->Code;
+  uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
   size_t CodeSize = Mod->CodeSize;
   // PUSH1 ~ PUSH32
   uint32_t NumBytes =
@@ -891,11 +891,7 @@ void DUPHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<DUPHandler>;
   auto *Frame = Base::getFrame();
   EVM_FRAME_CHECK(Frame);
-  auto *Context = Base::getContext();
-  auto *Inst = Context->getInstance();
-  auto *Mod = Inst->getModule();
-  const uint8_t *Code = Mod->Code;
-  uint8_t OpcodeByte = Code[Frame->Pc];
+  uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
   // DUP1 ~ DUP16
   uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_DUP1) + 1;
   EVM_REQUIRE(Frame->stackHeight() >= N, UnexpectedNumArgs);
@@ -907,11 +903,7 @@ void SWAPHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<SWAPHandler>;
   auto *Frame = Base::getFrame();
   EVM_FRAME_CHECK(Frame);
-  auto *Context = Base::getContext();
-  auto *Inst = Context->getInstance();
-  auto *Mod = Inst->getModule();
-  const uint8_t *Code = Mod->Code;
-  uint8_t OpcodeByte = Code[Frame->Pc];
+  uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
   // SWAP1 ~ SWAP16
   uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_SWAP1) + 1;
   EVM_REQUIRE(Frame->stackHeight() >= (N + 1), UnexpectedNumArgs);
@@ -924,8 +916,6 @@ void CreateHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<CreateHandler>;
   auto *Frame = Base::getFrame();
   auto *Context = Base::getContext();
-  auto *Code = Context->getInstance()->getModule()->Code;
-  auto OpCode = static_cast<evmc_opcode>(Code[Frame->Pc]);
 
   EVM_FRAME_CHECK(Frame);
   if (OpCode == evmc_opcode::OP_CREATE) {
@@ -1017,8 +1007,6 @@ void CallHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<CallHandler>;
   auto *Frame = Base::getFrame();
   auto *Context = Base::getContext();
-  auto *Code = Context->getInstance()->getModule()->Code;
-  auto OpCode = static_cast<evmc_opcode>(Code[Frame->Pc]);
 
   EVM_FRAME_CHECK(Frame);
 

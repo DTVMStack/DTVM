@@ -33,6 +33,13 @@
     return OpName;                                                             \
   }
 
+#define EVM_REGISTRY_GET_MULTIOPCODE(OpName)                                   \
+  static OpName##Handler get##OpName##Handler(evmc_opcode OpCode) {            \
+    static OpName##Handler OpName;                                             \
+    OpName.OpCode = OpCode;                                                    \
+    return OpName;                                                             \
+  }
+
 namespace zen::evm {
 class EVMResource {
 public:
@@ -187,6 +194,14 @@ DEFINE_BINARY_OP(Sgt, intx::slt(B, A));
     static uint64_t calculateGas();                                            \
   };
 
+#define DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(OpName)                         \
+  class OpName##Handler : public EVMOpcodeHandlerBase<OpName##Handler> {       \
+  public:                                                                      \
+    inline static evmc_opcode OpCode = OP_INVALID;                             \
+    static void doExecute();                                                   \
+    static uint64_t calculateGas();                                            \
+  };
+
 // environmental information
 DEFINE_UNIMPLEMENT_HANDLER(Address);
 DEFINE_UNIMPLEMENT_HANDLER(Balance);
@@ -242,13 +257,13 @@ DEFINE_UNIMPLEMENT_HANDLER(Return);
 DEFINE_UNIMPLEMENT_HANDLER(Revert);
 
 // Stack operations
-DEFINE_UNIMPLEMENT_HANDLER(PUSH);
-DEFINE_UNIMPLEMENT_HANDLER(DUP);
-DEFINE_UNIMPLEMENT_HANDLER(SWAP);
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(PUSH);
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(DUP);
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(SWAP);
 
 // Call operations
-DEFINE_UNIMPLEMENT_HANDLER(Create);
-DEFINE_UNIMPLEMENT_HANDLER(Call);
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Create);
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Call);
 
 // Registry class to manage execution context
 class EVMOpcodeHandlerRegistry {
@@ -327,12 +342,12 @@ public:
   EVM_REGISTRY_GET(Return);
   EVM_REGISTRY_GET(Revert);
   // Stack operations
-  EVM_REGISTRY_GET(PUSH);
-  EVM_REGISTRY_GET(DUP);
-  EVM_REGISTRY_GET(SWAP);
+  EVM_REGISTRY_GET_MULTIOPCODE(PUSH);
+  EVM_REGISTRY_GET_MULTIOPCODE(DUP);
+  EVM_REGISTRY_GET_MULTIOPCODE(SWAP);
   // Call operations
-  EVM_REGISTRY_GET(Create);
-  EVM_REGISTRY_GET(Call);
+  EVM_REGISTRY_GET_MULTIOPCODE(Create);
+  EVM_REGISTRY_GET_MULTIOPCODE(Call);
 };
 
 } // namespace zen::evm
