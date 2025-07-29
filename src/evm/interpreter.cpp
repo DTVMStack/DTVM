@@ -268,27 +268,27 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_BLOCKHASH: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getBlockHashHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_COINBASE: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getCoinBaseHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_TIMESTAMP: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getTimeStampHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_NUMBER: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getNumberHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_PREVRANDAO: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getPrevRanDaoHandler().execute();
       break;
     }
 
@@ -298,17 +298,17 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_CHAINID: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getChainIdHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_SELFBALANCE: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getSelfBalanceHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_BASEFEE: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getBaseFeeHandler().execute();
       break;
     }
 

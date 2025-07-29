@@ -87,6 +87,15 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(ExtCodeCopy, OP_EXTCODECOPY);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(ReturnDataSize, OP_RETURNDATASIZE);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(ReturnDataCopy, OP_RETURNDATACOPY);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(ExtCodeHash, OP_EXTCODEHASH);
+// Block message
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(BlockHash, OP_BLOCKHASH);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(CoinBase, OP_COINBASE);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(TimeStamp, OP_TIMESTAMP);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Number, OP_NUMBER);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PrevRanDao, OP_PREVRANDAO);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(ChainId, OP_CHAINID);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SelfBalance, OP_SELFBALANCE);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(BaseFee, OP_BASEFEE);
 
 // Memory operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MStore, OP_MSTORE);
@@ -544,6 +553,71 @@ void ExtCodeHashHandler::doExecute() {
   Frame->push(intx::be::load<intx::uint256>(Frame->Host->get_code_hash(Addr)));
 }
 
+// block message operations
+void BlockHashHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<BlockHashHandler>;
+  auto *Frame = Base::getFrame();
+  EVM_FRAME_CHECK(Frame);
+  EVM_STACK_CHECK(Frame, 1);
+  intx::uint256 BlockNumberVal = Frame->pop();
+
+  const auto upper_bound = Frame->get_tx_context().block_number;
+  const auto lower_bound =
+      std::max(upper_bound - 256, decltype(upper_bound){0});
+  int64_t BlockNumber = static_cast<int64_t>(BlockNumberVal);
+  const auto header =
+      (BlockNumberVal < upper_bound && BlockNumber >= lower_bound)
+          ? Frame->Host->get_block_hash(BlockNumber)
+          : evmc::bytes32{};
+  Frame->push(intx::be::load<intx::uint256>(header));
+}
+void CoinBaseHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<CoinBaseHandler>;
+  auto *Frame = Base::getFrame();
+  EVM_FRAME_CHECK(Frame);
+  Frame->push(
+      intx::be::load<intx::uint256>(Frame->get_tx_context().block_coinbase));
+}
+void TimeStampHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<TimeStampHandler>;
+  auto *Frame = Base::getFrame();
+  EVM_FRAME_CHECK(Frame);
+  Frame->push(intx::uint256(Frame->get_tx_context().block_timestamp));
+}
+void NumberHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<NumberHandler>;
+  auto *Frame = Base::getFrame();
+  EVM_FRAME_CHECK(Frame);
+  Frame->push(intx::uint256(Frame->get_tx_context().block_number));
+}
+void PrevRanDaoHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<PrevRanDaoHandler>;
+  auto *Frame = Base::getFrame();
+  EVM_FRAME_CHECK(Frame);
+  Frame->push(
+      intx::be::load<intx::uint256>(Frame->get_tx_context().block_prev_randao));
+}
+void ChainIdHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<ChainIdHandler>;
+  auto *Frame = Base::getFrame();
+  EVM_FRAME_CHECK(Frame);
+  Frame->push(intx::be::load<intx::uint256>(Frame->get_tx_context().chain_id));
+}
+void SelfBalanceHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<SelfBalanceHandler>;
+  auto *Frame = Base::getFrame();
+  EVM_FRAME_CHECK(Frame);
+  Frame->push(intx::be::load<intx::uint256>(
+      Frame->Host->get_balance(Frame->Msg->recipient)));
+}
+void BaseFeeHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<BaseFeeHandler>;
+  auto *Frame = Base::getFrame();
+  EVM_FRAME_CHECK(Frame);
+  Frame->push(
+      intx::be::load<intx::uint256>(Frame->get_tx_context().block_base_fee));
+}
+
 // Memory operations
 void MStoreHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<MStoreHandler>;
@@ -666,7 +740,7 @@ void GasLimitHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<GasLimitHandler>;
   auto *Frame = Base::getFrame();
   EVM_FRAME_CHECK(Frame);
-  Frame->push(intx::uint256(Frame->GasLimit));
+  Frame->push(intx::uint256(Frame->get_tx_context().block_gas_limit));
 }
 
 // Return operations
