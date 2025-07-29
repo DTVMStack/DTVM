@@ -8,7 +8,7 @@ namespace COMPILER {
 
 class MConstant : public NonCopyable {
 public:
-  MConstant(const MType &Ty) : Type(Ty) {};
+  MConstant(const MType &Ty) : Type(Ty){};
 
   ~MConstant() = default;
 

@@ -37,7 +37,7 @@ enum CondCode {
   LT = (uint8_t)asmjit::a64::CondCode::kLT, // Less Than
   GT = (uint8_t)asmjit::a64::CondCode::kGT, // Greater Than
   LE = (uint8_t)asmjit::a64::CondCode::kLE, // Less or Equal
-}; // enum CondCode
+};                                          // enum CondCode
 
 } // namespace A64
 

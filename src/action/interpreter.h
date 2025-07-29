@@ -131,7 +131,7 @@ public:
   uint8_t *Bottom = nullptr;
 
 protected:
-  InterpStack(runtime::Runtime &RT) : RuntimeObject(RT) {};
+  InterpStack(runtime::Runtime &RT) : RuntimeObject(RT){};
 
 public:
   static runtime::RuntimeObjectUniquePtr<InterpStack>
@@ -172,7 +172,7 @@ private:
 
 public:
   InterpreterExecContext(runtime::Instance *ModInst, InterpStack *Stack)
-      : ModInst(ModInst), Stack(Stack) {};
+      : ModInst(ModInst), Stack(Stack){};
 
   InterpFrame *allocFrame(runtime::FunctionInstance *FuncInst,
                           uint32_t *LocalPtr);

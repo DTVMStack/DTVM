@@ -291,7 +291,7 @@ const uint8_t *skipCurrentBlock(const uint8_t *Ip, const uint8_t *End) {
       break;
 
     } // switch opcode
-  } // while ip < end
+  }   // while ip < end
   return nullptr;
 }
 

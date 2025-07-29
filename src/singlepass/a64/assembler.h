@@ -31,7 +31,7 @@ public:
   typedef int32_t Imm;          // immediate operand
   typedef A64InstOperand Opnd;  // general operands
   typedef A64RegType<Ty> Reg;   // asmjit register reference operand
-}; // TypedOperatorBase
+};                              // TypedOperatorBase
 
 // ============================================================================
 // BinaryOperatorBase<A64::WASMType type, BinaryOperator opr>

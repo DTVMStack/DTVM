@@ -252,7 +252,7 @@ enum GP {
   X30, // x30, x30
   XZR, // xzr, wzr
   SP,  // sp, wsp
-}; // GP
+};     // GP
 
 // FP
 // all supported floating point registers
@@ -295,7 +295,7 @@ enum FP {
   V29, // v29, d29, s29
   V30, // v30, d30, s30
   V31, // v31, d31, s31
-}; // FP
+};     // FP
 
 enum RegKind {
   GPR = 0, // general purpose register

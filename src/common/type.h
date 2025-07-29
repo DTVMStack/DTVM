@@ -415,7 +415,7 @@ public:
 struct TypedValue {
 public:
   TypedValue() = default;
-  TypedValue(UntypedValue Val, WASMType Ty) : Value(Val), Type(Ty) {};
+  TypedValue(UntypedValue Val, WASMType Ty) : Value(Val), Type(Ty){};
   UntypedValue Value;
   WASMType Type;
 };

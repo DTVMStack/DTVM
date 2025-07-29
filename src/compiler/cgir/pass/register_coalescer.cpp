@@ -3828,8 +3828,8 @@ bool CgRegisterCoalescer::runOnCgFunction(CgFunction &fn) {
   // if (EnableGlobalCopies == cl::BOU_UNSET)
   if (true)
     JoinGlobalCopies = STI.enableJoinGlobalCopies();
-  // else
-  //  JoinGlobalCopies = (EnableGlobalCopies == cl::BOU_TRUE);
+    // else
+    //  JoinGlobalCopies = (EnableGlobalCopies == cl::BOU_TRUE);
 
 #if 0
     // If there are PHIs tracked by debug-info, they will need updating during

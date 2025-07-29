@@ -7,7 +7,7 @@
 #ifdef ZEN_ENABLE_SPDLOG
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 #define SPDLOG_LEVEL_NAMES                                                     \
-  {"trace", "debug", "info", "warn", "error", "fatal", "off"}
+  { "trace", "debug", "info", "warn", "error", "fatal", "off" }
 #include <spdlog/async.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>

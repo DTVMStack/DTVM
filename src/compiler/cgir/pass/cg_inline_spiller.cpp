@@ -514,9 +514,9 @@ bool InlineSpiller::canGuaranteeAssignmentAfterRemat(Register VReg,
   // with the same problem, we need to revisit this.
   if (MI.getOpcode() != TargetOpcode::STATEPOINT)
     return true;
-  // For STATEPOINTs we allow re-materialization for fixed arguments only
-  // hoping that number of physical registers is enough to cover all fixed
-  // arguments. If it is not true we need to revisit it.
+    // For STATEPOINTs we allow re-materialization for fixed arguments only
+    // hoping that number of physical registers is enough to cover all fixed
+    // arguments. If it is not true we need to revisit it.
 #if 0
     for (unsigned Idx = StatepointOpers(&MI).getVarIdx(),
                   EndIdx = MI.getNumOperands();

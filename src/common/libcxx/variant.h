@@ -214,8 +214,8 @@ public:
                                  Index != find_detail::ambiguous,
                              int> = 0>
   variant &
-  operator=(T &&arg) noexcept(std::is_nothrow_assignable<T, T>::value &&
-                              std::is_nothrow_constructible<T>::value) {
+  operator=(T &&arg) noexcept(std::is_nothrow_assignable<T, T>::value
+                                  &&std::is_nothrow_constructible<T>::value) {
     if (idx != variant_npos) {
       helper_destroy(idx);
     }

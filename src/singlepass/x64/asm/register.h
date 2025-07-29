@@ -151,7 +151,7 @@ enum GP {
   R13, // r13, r13d, r13w, r13b
   R14, // r14, r14d, r14w, r14b
   R15, // r15, r15d, r15w, r15b
-}; // GP
+};     // GP
 
 // FP
 // all supported floating point registers
@@ -178,7 +178,7 @@ enum FP {
   XMM13, // xmm13
   XMM14, // xmm14
   XMM15, // xmm15
-}; // FP
+};       // FP
 
 enum RegKind {
   GPR = 0, // general purpose register

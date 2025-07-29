@@ -183,8 +183,8 @@ public:
                                  std::is_move_assignable<T>::value,
                              optional &>
   operator=(optional &&other) noexcept(
-      std::is_nothrow_move_assignable<T>::value &&
-      std::is_nothrow_move_constructible<T>::value) {
+      std::is_nothrow_move_assignable<T>::value
+          &&std::is_nothrow_move_constructible<T>::value) {
     if (this != &other) {
       reset();
       engaged = other.engaged;
@@ -265,22 +265,22 @@ public:
     return std::addressof(val);
   }
 
-  constexpr const value_type &operator*() const & noexcept {
+  constexpr const value_type &operator*() const &noexcept {
     assert(engaged && "optional operator* called on a disengaged value");
     return val;
   }
 
-  constexpr value_type &operator*() & noexcept {
+  constexpr value_type &operator*() &noexcept {
     assert(engaged && "optional operator* called on a disengaged value");
     return val;
   }
 
-  constexpr const value_type &&operator*() const && noexcept {
+  constexpr const value_type &&operator*() const &&noexcept {
     assert(engaged && "optional operator* called on a disengaged value");
     return std::move(val);
   }
 
-  constexpr value_type &&operator*() && noexcept {
+  constexpr value_type &&operator*() &&noexcept {
     assert(engaged && "optional operator* called on a disengaged value");
     return std::move(val);
   }
