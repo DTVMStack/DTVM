@@ -31,7 +31,7 @@ public:
   typedef asmjit::x86::Mem Mem; // asmjit memory operand
   typedef int32_t Imm;          // immediate operand
   typedef X64InstOperand Opnd;  // general operand
-};                              // TypedOperatorBase
+}; // TypedOperatorBase
 
 // ============================================================================
 // BinaryOperatorBase<X64::Type type, BinaryOperator opr>

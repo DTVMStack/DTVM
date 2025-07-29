@@ -167,11 +167,11 @@ public:
 
   uint32_t getMemoryOffset(void *Addr);
 
-  bool __attribute__((noinline))
-  validatedAppAddr(uint32_t Offset, uint32_t Size);
+  bool __attribute__((noinline)) validatedAppAddr(uint32_t Offset,
+                                                  uint32_t Size);
 
-  bool __attribute__((noinline))
-  validatedNativeAddr(uint8_t *NativeAddr, uint32_t Size);
+  bool __attribute__((noinline)) validatedNativeAddr(uint8_t *NativeAddr,
+                                                     uint32_t Size);
 
   // ==================== Global Accessing Methods ====================
 

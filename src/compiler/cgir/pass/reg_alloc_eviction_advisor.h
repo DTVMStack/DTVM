@@ -174,7 +174,7 @@ class CgRegAllocEvictionAdvisorAnalysis : public NonCopyable {
 public:
   enum class AdvisorMode : int { Default, Release, Development };
 
-  CgRegAllocEvictionAdvisorAnalysis(AdvisorMode Mode) : Mode(Mode){};
+  CgRegAllocEvictionAdvisorAnalysis(AdvisorMode Mode) : Mode(Mode) {};
 
   /// Get an advisor for the given context (i.e. machine function, etc)
   virtual std::unique_ptr<CgRegAllocEvictionAdvisor>

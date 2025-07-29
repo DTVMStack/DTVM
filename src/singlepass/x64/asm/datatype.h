@@ -28,7 +28,7 @@ enum Type {
   F64,  // double precision floating point, 64-bit
   V128, // vector, 128-bit
   VOID, // void, to catch error
-};      // WASMType
+}; // WASMType
 
 } // namespace X64
 

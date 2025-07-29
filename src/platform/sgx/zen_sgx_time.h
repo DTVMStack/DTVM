@@ -21,7 +21,7 @@ struct tp {
 };
 
 template <typename Rep, typename Period> struct duration {
-  duration(tp){};
+  duration(tp) {};
   static float count() { return 0.0; }
 };
 

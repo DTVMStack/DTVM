@@ -24,9 +24,7 @@ public:
   }
 
 private:
-  void push(Operand Opnd) {
-    Stack.push(Opnd);
-  }
+  void push(Operand Opnd) { Stack.push(Opnd); }
 
   Operand pop() {
     ZEN_ASSERT(!Stack.empty());
@@ -35,9 +33,7 @@ private:
     return Opnd;
   }
 
-  Operand peek(size_t Index = 0) {
-    return Stack.peek(Index);
-  }
+  Operand peek(size_t Index = 0) { return Stack.peek(Index); }
 
   bool decode() {
     const uint8_t *Bytecode = Ctx->getBytecode();
@@ -53,14 +49,38 @@ private:
 
       switch (Opcode) {
       // Stack operations
-      case OP_PUSH1: case OP_PUSH2: case OP_PUSH3: case OP_PUSH4:
-      case OP_PUSH5: case OP_PUSH6: case OP_PUSH7: case OP_PUSH8:
-      case OP_PUSH9: case OP_PUSH10: case OP_PUSH11: case OP_PUSH12:
-      case OP_PUSH13: case OP_PUSH14: case OP_PUSH15: case OP_PUSH16:
-      case OP_PUSH17: case OP_PUSH18: case OP_PUSH19: case OP_PUSH20:
-      case OP_PUSH21: case OP_PUSH22: case OP_PUSH23: case OP_PUSH24:
-      case OP_PUSH25: case OP_PUSH26: case OP_PUSH27: case OP_PUSH28:
-      case OP_PUSH29: case OP_PUSH30: case OP_PUSH31: case OP_PUSH32: {
+      case OP_PUSH1:
+      case OP_PUSH2:
+      case OP_PUSH3:
+      case OP_PUSH4:
+      case OP_PUSH5:
+      case OP_PUSH6:
+      case OP_PUSH7:
+      case OP_PUSH8:
+      case OP_PUSH9:
+      case OP_PUSH10:
+      case OP_PUSH11:
+      case OP_PUSH12:
+      case OP_PUSH13:
+      case OP_PUSH14:
+      case OP_PUSH15:
+      case OP_PUSH16:
+      case OP_PUSH17:
+      case OP_PUSH18:
+      case OP_PUSH19:
+      case OP_PUSH20:
+      case OP_PUSH21:
+      case OP_PUSH22:
+      case OP_PUSH23:
+      case OP_PUSH24:
+      case OP_PUSH25:
+      case OP_PUSH26:
+      case OP_PUSH27:
+      case OP_PUSH28:
+      case OP_PUSH29:
+      case OP_PUSH30:
+      case OP_PUSH31:
+      case OP_PUSH32: {
         uint32_t NumBytes = Opcode - OP_PUSH1 + 1;
         ZEN_ASSERT(Ip + NumBytes <= IpEnd);
         Operand Result = Builder.handlePush(Ip, NumBytes);
@@ -69,10 +89,22 @@ private:
         break;
       }
 
-      case OP_DUP1: case OP_DUP2: case OP_DUP3: case OP_DUP4:
-      case OP_DUP5: case OP_DUP6: case OP_DUP7: case OP_DUP8:
-      case OP_DUP9: case OP_DUP10: case OP_DUP11: case OP_DUP12:
-      case OP_DUP13: case OP_DUP14: case OP_DUP15: case OP_DUP16: {
+      case OP_DUP1:
+      case OP_DUP2:
+      case OP_DUP3:
+      case OP_DUP4:
+      case OP_DUP5:
+      case OP_DUP6:
+      case OP_DUP7:
+      case OP_DUP8:
+      case OP_DUP9:
+      case OP_DUP10:
+      case OP_DUP11:
+      case OP_DUP12:
+      case OP_DUP13:
+      case OP_DUP14:
+      case OP_DUP15:
+      case OP_DUP16: {
         uint32_t N = Opcode - OP_DUP1 + 1;
         ZEN_ASSERT(Stack.size() >= N);
         Operand Value = peek(N - 1);
@@ -80,10 +112,22 @@ private:
         break;
       }
 
-      case OP_SWAP1: case OP_SWAP2: case OP_SWAP3: case OP_SWAP4:
-      case OP_SWAP5: case OP_SWAP6: case OP_SWAP7: case OP_SWAP8:
-      case OP_SWAP9: case OP_SWAP10: case OP_SWAP11: case OP_SWAP12:
-      case OP_SWAP13: case OP_SWAP14: case OP_SWAP15: case OP_SWAP16: {
+      case OP_SWAP1:
+      case OP_SWAP2:
+      case OP_SWAP3:
+      case OP_SWAP4:
+      case OP_SWAP5:
+      case OP_SWAP6:
+      case OP_SWAP7:
+      case OP_SWAP8:
+      case OP_SWAP9:
+      case OP_SWAP10:
+      case OP_SWAP11:
+      case OP_SWAP12:
+      case OP_SWAP13:
+      case OP_SWAP14:
+      case OP_SWAP15:
+      case OP_SWAP16: {
         uint32_t N = Opcode - OP_SWAP1 + 1;
         ZEN_ASSERT(Stack.size() >= N + 1);
         Builder.handleSwap(N);
@@ -104,6 +148,355 @@ private:
         Operand Result = Builder.template handleBinaryArithmetic<OP_ADD>(A, B);
         push(Result);
         break;
+      }
+
+      case OP_MUL: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SUB: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_DIV: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SDIV: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_MOD: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SMOD: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_ADDMOD: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_MULMOD: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_EXP: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SIGNEXTEND: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_LT: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_GT: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SLT: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SGT: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_EQ: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_ISZERO: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_AND: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_OR: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_XOR: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_NOT: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_BYTE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SHL: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SHR: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SAR: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_KECCAK256: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_ADDRESS: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_BALANCE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_ORIGIN: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CALLER: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CALLVALUE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CALLDATALOAD: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CALLDATASIZE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CALLDATACOPY: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CODESIZE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CODECOPY: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_GASPRICE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_EXTCODESIZE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_EXTCODECOPY: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_RETURNDATASIZE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_RETURNDATACOPY: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_EXTCODEHASH: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_BLOCKHASH: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_COINBASE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_TIMESTAMP: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_NUMBER: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_PREVRANDAO: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_GASLIMIT: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CHAINID: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SELFBALANCE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_BASEFEE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_BLOBHASH: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_BLOBBASEFEE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_MLOAD: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_MSTORE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_MSTORE8: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SLOAD: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SSTORE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_MSIZE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_TLOAD: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_TSTORE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_MCOPY: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_LOG0:
+      case OP_LOG1:
+      case OP_LOG2:
+      case OP_LOG3:
+      case OP_LOG4: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CREATE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CALL: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CALLCODE: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_DELEGATECALL: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_CREATE2: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_STATICCALL: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
+      }
+
+      case OP_SELFDESTRUCT: {
+        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_ASSERT_TODO();
       }
 
       // Control flow operations

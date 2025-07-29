@@ -1225,8 +1225,7 @@ public:
       auto MemBasePtr = asmjit::a64::ptr(MemReg, MemoryBaseOffset);
       _ ldr(MemReg, MemBasePtr);
     };
-    return emitCall(
-        ArgInfo, Args, [] {}, GenCall, [] {});
+    return emitCall(ArgInfo, Args, [] {}, GenCall, [] {});
   }
 
   // memory size

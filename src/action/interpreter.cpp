@@ -2092,7 +2092,7 @@ void BaseInterpreterImpl::interpret() {
         }
         BREAK;
       }
-    DEFAULT : {
+    DEFAULT: {
       ZEN_LOG_ERROR("munimplemented opcode: 0x%x", Opcode);
       ZEN_ASSERT_TODO();
     }
