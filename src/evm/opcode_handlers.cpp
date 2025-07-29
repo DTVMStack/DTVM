@@ -119,9 +119,9 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Return, OP_RETURN);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Revert, OP_REVERT);
 
 // Stack operations
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PUSH, OP_PUSH1);
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(DUP, OP_DUP1);
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SWAP, OP_SWAP1);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Push, OP_PUSH1);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Dup, OP_DUP1);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Swap, OP_SWAP1);
 
 // Call operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Create, OP_CREATE) // CREATE CREATE
@@ -865,8 +865,8 @@ void RevertHandler::doExecute() {
 }
 
 // Stack operations
-void PUSHHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<PUSHHandler>;
+void PushHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<PushHandler>;
   auto *Frame = Base::getFrame();
   EVM_FRAME_CHECK(Frame);
   auto *Context = Base::getContext();
@@ -887,8 +887,8 @@ void PUSHHandler::doExecute() {
   Frame->Pc += NumBytes;
 }
 
-void DUPHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<DUPHandler>;
+void DupHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<DupHandler>;
   auto *Frame = Base::getFrame();
   EVM_FRAME_CHECK(Frame);
   uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
@@ -899,8 +899,8 @@ void DUPHandler::doExecute() {
   Frame->push(V);
 }
 
-void SWAPHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<SWAPHandler>;
+void SwapHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<SwapHandler>;
   auto *Frame = Base::getFrame();
   EVM_FRAME_CHECK(Frame);
   uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);

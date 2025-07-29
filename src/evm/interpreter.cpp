@@ -434,21 +434,21 @@ void BaseInterpreter::interpret() {
       if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_PUSH1) &&
           OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_PUSH32)) {
         // PUSH1 ~ PUSH32
-        EVMOpcodeHandlerRegistry::getPUSHHandler(
+        EVMOpcodeHandlerRegistry::getPushHandler(
             static_cast<evmc_opcode>(OpcodeByte))
             .execute();
         break;
       } else if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_DUP1) &&
                  OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_DUP16)) {
         // DUP1 ~ DUP16
-        EVMOpcodeHandlerRegistry::getDUPHandler(
+        EVMOpcodeHandlerRegistry::getDupHandler(
             static_cast<evmc_opcode>(OpcodeByte))
             .execute();
         break;
       } else if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_SWAP1) &&
                  OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_SWAP16)) {
         // SWAP1 ~ SWAP16
-        EVMOpcodeHandlerRegistry::getSWAPHandler(
+        EVMOpcodeHandlerRegistry::getSwapHandler(
             static_cast<evmc_opcode>(OpcodeByte))
             .execute();
         break;
