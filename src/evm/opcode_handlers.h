@@ -7,6 +7,7 @@
 #include "common/errors.h"
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
+#include <cstdint>
 
 // EVM error checking macro definitions
 #define EVM_STACK_CHECK(FramePtr, N)                                           \
@@ -61,10 +62,11 @@ protected:
 public:
   void execute() {
     uint64_t GasCost = static_cast<Derived *>(this)->calculateGas();
-    if ((getFrame()->GasLeft -= GasCost) < 0) {
+    if ((uint64_t)getFrame()->GasLeft < GasCost) {
       getContext()->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
+    getFrame()->GasLeft -= GasCost;
     static_cast<Derived *>(this)->doExecute();
   };
 };
