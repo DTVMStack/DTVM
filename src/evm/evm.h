@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "evmc/evmc.hpp"
-#include <cstdint>
 
 namespace zen {
 namespace evm {

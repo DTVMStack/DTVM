@@ -31,13 +31,6 @@ using namespace zen::runtime;
     return Cost;                                                               \
   }
 
-#define DEFINE_MULTI_OPCODE_CALCULATE_GAS(OpName)                              \
-  uint64_t OpName##Handler::calculateGas() {                                   \
-    static auto Table = evmc_get_instruction_metrics_table(EVMC_CANCUN);       \
-    static const auto Cost = Table[OpCode].gas_cost;                           \
-    return Cost;                                                               \
-  }
-
 /* ---------- Define gas cost macros end ---------- */
 
 /* ---------- Implement gas cost begin ---------- */
@@ -131,8 +124,9 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(DUP, OP_DUP1);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SWAP, OP_SWAP1);
 
 // Call operations
-DEFINE_MULTI_OPCODE_CALCULATE_GAS(Create);
-DEFINE_MULTI_OPCODE_CALCULATE_GAS(Call);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Create, OP_CREATE) // CREATE CREATE
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(
+    Call, OP_CALL) // CALL CALLCODE STATICCALL DELEGATECALL
 
 /* ---------- Implement gas cost end ---------- */
 
@@ -162,8 +156,15 @@ uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize) {
   return NewCost - CurrentCost;
 }
 
+bool chargeGas(EVMFrame *Frame, uint64_t GasCost) {
+  if ((Frame->GasLeft -= GasCost) < 0) {
+    return false;
+  }
+  return true;
+}
+
 // Expand memory and charge gas
-void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
+bool expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
   EVM_REQUIRE(RequiredSize <= MAX_REQUIRED_MEMORY_SIZE,
               EVMTooLargeRequiredMemory);
   uint64_t CurrentSize = Frame->Memory.size();
@@ -171,13 +172,15 @@ void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
   // Calculate and charge memory expansion gas
   uint64_t MemoryExpansionCost =
       calculateMemoryExpansionCost(CurrentSize, RequiredSize);
-  EVM_REQUIRE(Frame->GasLeft >= MemoryExpansionCost, EVMOutOfGas);
-  Frame->GasLeft -= MemoryExpansionCost;
+  if (!chargeGas(Frame, MemoryExpansionCost)) {
+    return false;
+  }
 
   // Expand memory if needed
   if (RequiredSize > CurrentSize) {
     Frame->Memory.resize(RequiredSize, 0);
   }
+  return true;
 }
 
 // Check memory requirements of a reasonable size.
@@ -204,6 +207,7 @@ void checkMemoryExpandAndChargeGas(EVMFrame *Frame, const intx::uint256 &Offset,
 uint64_t uint256ToUint64(const intx::uint256 &Value) {
   return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
 }
+
 } // anonymous namespace
 /* ---------- Implement utility functions end ---------- */
 
@@ -296,6 +300,7 @@ void AddressHandler::doExecute() {
 void BalanceHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<BalanceHandler>;
   auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 X = Frame->pop();
@@ -303,9 +308,10 @@ void BalanceHandler::doExecute() {
 
   if (Frame->Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    EVM_REQUIRE(Frame->GasLeft >= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST,
-                EVMOutOfGas);
-    Frame->GasLeft -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
+    if (!chargeGas(Frame, ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
   }
 
   intx::uint256 Balance =
@@ -653,6 +659,7 @@ void SLoadHandler::doExecute() {
 void MStoreHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<MStoreHandler>;
   auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
@@ -660,6 +667,11 @@ void MStoreHandler::doExecute() {
 
   checkMemoryExpandAndChargeGas(Frame, OffsetVal, 32);
   uint64_t Offset = uint256ToUint64(OffsetVal);
+  uint64_t ReqSize = Offset + 32;
+  if (!expandMemoryAndChargeGas(Frame, ReqSize)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   uint8_t ValueBytes[32];
   intx::be::store(ValueBytes, Value);
@@ -670,6 +682,7 @@ void MStoreHandler::doExecute() {
 void MStore8Handler::doExecute() {
   using Base = EVMOpcodeHandlerBase<MStore8Handler>;
   auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
@@ -677,6 +690,11 @@ void MStore8Handler::doExecute() {
 
   checkMemoryExpandAndChargeGas(Frame, OffsetVal, 1);
   uint64_t Offset = uint256ToUint64(OffsetVal);
+  uint64_t ReqSize = Offset + 1;
+  if (!expandMemoryAndChargeGas(Frame, ReqSize)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   uint8_t ByteValue = static_cast<uint8_t>(Value & intx::uint256{0xFF});
   Frame->Memory[Offset] = ByteValue;
@@ -685,12 +703,19 @@ void MStore8Handler::doExecute() {
 void MLoadHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<MLoadHandler>;
   auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 OffsetVal = Frame->pop();
 
   checkMemoryExpandAndChargeGas(Frame, OffsetVal, 32);
   uint64_t Offset = uint256ToUint64(OffsetVal);
+  uint64_t ReqSize = Offset + 32;
+
+  if (!expandMemoryAndChargeGas(Frame, ReqSize)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   uint8_t ValueBytes[32];
   // TODO: use EVMMemory class in the future
@@ -784,6 +809,12 @@ void ReturnHandler::doExecute() {
   checkMemoryExpandAndChargeGas(Frame, OffsetVal, SizeVal);
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
+  uint64_t ReqSize = Offset + Size;
+
+  if (!expandMemoryAndChargeGas(Frame, ReqSize)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   // TODO: use EVMMemory class in the future
   std::vector<uint8_t> ReturnData(Frame->Memory.begin() + Offset,
@@ -812,6 +843,12 @@ void RevertHandler::doExecute() {
   checkMemoryExpandAndChargeGas(Frame, OffsetVal, SizeVal);
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
+  uint64_t ReqSize = Offset + Size;
+
+  if (!expandMemoryAndChargeGas(Frame, ReqSize)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   std::vector<uint8_t> RevertData(Frame->Memory.begin() + Offset,
                                   Frame->Memory.begin() + Offset + Size);
@@ -886,6 +923,10 @@ void CreateHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<CreateHandler>;
   auto *Frame = Base::getFrame();
   auto *Context = Base::getContext();
+  auto *Code = Context->getInstance()->getModule()->Code;
+  auto OpCode = static_cast<evmc_opcode>(Code[Frame->Pc]);
+
+  EVM_FRAME_CHECK(Frame);
 
   if (OpCode == evmc_opcode::OP_CREATE) {
     EVM_STACK_CHECK(Frame, 3);
@@ -894,13 +935,23 @@ void CreateHandler::doExecute() {
   } else {
     throw common::getError(common::ErrorCode::EVMInvalidInstruction);
   }
+
+  if (Frame->IsStatic) {
+    Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
+    return;
+  }
+
   intx::uint256 Value = Frame->pop();
   intx::uint256 CodeOffset = Frame->pop();
   intx::uint256 CodeSizeVal = Frame->pop();
   intx::uint256 Salt =
       (OpCode == evmc_opcode::OP_CREATE2 ? Frame->pop() : intx::uint256(0));
 
-  // TODO)) expend memory
+  if (!expandMemoryAndChargeGas(Frame,
+                                uint256ToUint64(CodeOffset + CodeSizeVal))) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   evmc_message NewMsg{.kind = evmc_call_kind::EVMC_CREATE,
                       .depth = Frame->Msg->depth + 1,
@@ -909,12 +960,13 @@ void CreateHandler::doExecute() {
                       .input_data =
                           Frame->Memory.data() + uint256ToUint64(CodeOffset),
                       .input_size = uint256ToUint64(CodeSizeVal),
-                      .value = intx::be::load<evmc::uint256be>(Value),
-                      .create2_salt = intx::be::load<evmc::uint256be>(Salt)};
+                      .value = intx::be::store<evmc::bytes32>(Value),
+                      .create2_salt = intx::be::store<evmc::bytes32>(Salt)};
 
   NewMsg.gas = NewMsg.gas - NewMsg.gas / 64;
   evmc::Result Result = Frame->Host->call(NewMsg);
-  Frame->GasLeft -= NewMsg.gas - Result.gas_left;
+  chargeGas(Frame,
+            NewMsg.gas - Result.gas_left); // it's safe to charge gas here
   Frame->GasRefund += Result.gas_refund;
 
   if (Result.status_code == EVMC_SUCCESS) {
@@ -929,6 +981,10 @@ void CallHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<CallHandler>;
   auto *Frame = Base::getFrame();
   auto *Context = Base::getContext();
+  auto *Code = Context->getInstance()->getModule()->Code;
+  auto OpCode = static_cast<evmc_opcode>(Code[Frame->Pc]);
+
+  EVM_FRAME_CHECK(Frame);
 
   bool NeedValue = false;
   if (OpCode == evmc_opcode::OP_CALL or OpCode == evmc_opcode::OP_CALLCODE) {
@@ -951,18 +1007,19 @@ void CallHandler::doExecute() {
 
   if (Frame->Rev >= EVMC_BERLIN and
       Frame->Host->access_account(Dest) == EVMC_ACCESS_COLD) {
-    if (Frame->GasLeft < 2600) {
+    if (!chargeGas(Frame, 2600)) { // Charge for cold account access
       Context->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
-    Frame->GasLeft -= 2600; // Charge for cold account access
   } else {
-    if (Frame->GasLeft < 100) {
+    if (!chargeGas(Frame, 100)) { // Charge for warm account access
       Context->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
-    Frame->GasLeft -= 100; // Charge for warm account access
   }
+
+  expandMemoryAndChargeGas(Frame, uint256ToUint64(InputOffset + InputSize));
+  expandMemoryAndChargeGas(Frame, uint256ToUint64(OutputOffset + OutputSize));
 
   evmc_message NewMsg{
       .kind = static_cast<evmc_call_kind>(OpCode),
@@ -979,18 +1036,16 @@ void CallHandler::doExecute() {
       .input_size = uint256ToUint64(InputSize),
       .value = (OpCode == OP_DELEGATECALL)
                    ? Frame->Msg->value
-                   : intx::be::load<evmc::uint256be>(Value),
+                   : intx::be::store<evmc::bytes32>(Value),
       .code_address = Dest,
   };
-  NewMsg.gas =
-      std::min(NewMsg.gas, (long)(Frame->GasLeft - Frame->GasLeft / 64));
+  NewMsg.gas = std::min(NewMsg.gas, (Frame->GasLeft - Frame->GasLeft / 64));
 
-  uint64_t Cost = NeedValue ? 9000 : 0;
-  if (Frame->GasLeft < Cost) {
+  int64_t Cost = NeedValue ? 9000 : 0;
+  if (!chargeGas(Frame, Cost)) {
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
-  Frame->GasLeft -= Cost;
 
   if (OpCode == OP_CALL and Frame->IsStatic) {
     Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
@@ -1014,7 +1069,7 @@ void CallHandler::doExecute() {
   }
 
   const auto GasUsed = NewMsg.gas - Result.gas_left;
-  Frame->GasLeft -= GasUsed;
+  chargeGas(Frame, GasUsed); // it's safe to charge gas here
   Frame->GasRefund += Result.gas_refund;
 }
 

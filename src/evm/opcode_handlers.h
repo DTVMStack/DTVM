@@ -61,8 +61,10 @@ protected:
 public:
   void execute() {
     uint64_t GasCost = static_cast<Derived *>(this)->calculateGas();
-    EVM_REQUIRE(getFrame()->GasLeft >= GasCost, EVMOutOfGas);
-    getFrame()->GasLeft -= GasCost;
+    if ((getFrame()->GasLeft -= GasCost) < 0) {
+      getContext()->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
     static_cast<Derived *>(this)->doExecute();
   };
 };
@@ -243,19 +245,8 @@ DEFINE_UNIMPLEMENT_HANDLER(DUP);
 DEFINE_UNIMPLEMENT_HANDLER(SWAP);
 
 // Call operations
-class CreateHandler : public EVMOpcodeHandlerBase<CreateHandler> {
-public:
-  static void doExecute();
-  static uint64_t calculateGas();
-  static evmc_opcode OpCode;
-};
-
-class CallHandler : public EVMOpcodeHandlerBase<CallHandler> {
-public:
-  static void doExecute();
-  static uint64_t calculateGas();
-  static evmc_opcode OpCode;
-};
+DEFINE_UNIMPLEMENT_HANDLER(Create);
+DEFINE_UNIMPLEMENT_HANDLER(Call);
 
 // Registry class to manage execution context
 class EVMOpcodeHandlerRegistry {

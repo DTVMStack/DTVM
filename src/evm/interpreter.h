@@ -35,7 +35,7 @@ struct EVMFrame {
   evmc_tx_context MTx = {};
 
   size_t Sp = 0;
-  uint64_t GasLeft = 0;
+  int64_t GasLeft = 0;
   uint64_t GasRefund = 0;
   uint64_t GasLimit = 0;
   uint64_t Pc = 0;
