@@ -272,12 +272,9 @@ void BalanceHandler::doExecute() {
 
   if (Frame->Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    constexpr auto ColdAccountAccessCost = 2600;
-    constexpr auto WarmAccountAccessCost = 100;
-    constexpr auto AdditionalColdAccountAccessCost =
-        ColdAccountAccessCost - WarmAccountAccessCost;
-    EVM_REQUIRE(Frame->GasLeft >= AdditionalColdAccountAccessCost, EVMOutOfGas);
-    Frame->GasLeft -= AdditionalColdAccountAccessCost;
+    EVM_REQUIRE(Frame->GasLeft >= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST,
+                EVMOutOfGas);
+    Frame->GasLeft -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
   }
 
   intx::uint256 Balance =
@@ -427,12 +424,9 @@ void ExtCodeSizeHandler::doExecute() {
 
   if (Frame->Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    constexpr auto ColdAccountAccessCost = 2600;
-    constexpr auto WarmAccountAccessCost = 100;
-    constexpr auto AdditionalColdAccountAccessCost =
-        ColdAccountAccessCost - WarmAccountAccessCost;
-    EVM_REQUIRE(Frame->GasLeft >= AdditionalColdAccountAccessCost, EVMOutOfGas);
-    Frame->GasLeft -= AdditionalColdAccountAccessCost;
+    EVM_REQUIRE(Frame->GasLeft >= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST,
+                EVMOutOfGas);
+    Frame->GasLeft -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
   }
 
   size_t CodeSize = Frame->Host->get_code_size(Addr);
@@ -459,12 +453,9 @@ void ExtCodeCopyHandler::doExecute() {
 
   if (Frame->Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    constexpr auto ColdAccountAccessCost = 2600;
-    constexpr auto WarmAccountAccessCost = 100;
-    constexpr auto AdditionalColdAccountAccessCost =
-        ColdAccountAccessCost - WarmAccountAccessCost;
-    EVM_REQUIRE(Frame->GasLeft >= AdditionalColdAccountAccessCost, EVMOutOfGas);
-    Frame->GasLeft -= AdditionalColdAccountAccessCost;
+    EVM_REQUIRE(Frame->GasLeft >= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST,
+                EVMOutOfGas);
+    Frame->GasLeft -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
   }
 
   size_t CodeSize = Frame->Host->get_code_size(Addr);
@@ -544,12 +535,9 @@ void ExtCodeHashHandler::doExecute() {
 
   if (Frame->Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    constexpr auto ColdAccountAccessCost = 2600;
-    constexpr auto WarmAccountAccessCost = 100;
-    constexpr auto AdditionalColdAccountAccessCost =
-        ColdAccountAccessCost - WarmAccountAccessCost;
-    EVM_REQUIRE(Frame->GasLeft >= AdditionalColdAccountAccessCost, EVMOutOfGas);
-    Frame->GasLeft -= AdditionalColdAccountAccessCost;
+    EVM_REQUIRE(Frame->GasLeft >= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST,
+                EVMOutOfGas);
+    Frame->GasLeft -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
   }
 
   Frame->push(intx::be::load<intx::uint256>(Frame->Host->get_code_hash(Addr)));
@@ -627,12 +615,9 @@ void SLoadHandler::doExecute() {
   const auto KeyAddr = intx::be::store<evmc::bytes32>(Key);
   if (Frame->Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Frame->Msg->recipient) == EVMC_ACCESS_COLD) {
-    constexpr auto ColdAccountAccessCost = 2600;
-    constexpr auto WarmAccountAccessCost = 100;
-    constexpr auto AdditionalColdAccountAccessCost =
-        ColdAccountAccessCost - WarmAccountAccessCost;
-    EVM_REQUIRE(Frame->GasLeft >= AdditionalColdAccountAccessCost, EVMOutOfGas);
-    Frame->GasLeft -= AdditionalColdAccountAccessCost;
+    EVM_REQUIRE(Frame->GasLeft >= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST,
+                EVMOutOfGas);
+    Frame->GasLeft -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
   }
   intx::uint256 Value = intx::be::load<intx::uint256>(
       Frame->Host->get_storage(Frame->Msg->recipient, KeyAddr));
