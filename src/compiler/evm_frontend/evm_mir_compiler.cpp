@@ -91,7 +91,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handlePush(const uint8_t *Data,
 
   // Use EVMU256Type's structure to extract components properly
   // EVMU256Type defines 4 I64 elements, so we extract accordingly
-  uint64_t Components[U256Type->getElementsCount()];
+  uint64_t Components[4]; // u256
   const auto &InnerTypes = U256Type->getInnerTypes();
 
   // Extract components based on EVMU256Type's bit layout (256 bits total)
