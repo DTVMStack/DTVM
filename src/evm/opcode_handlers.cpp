@@ -927,18 +927,13 @@ void CreateHandler::doExecute() {
   auto OpCode = static_cast<evmc_opcode>(Code[Frame->Pc]);
 
   EVM_FRAME_CHECK(Frame);
-
   if (OpCode == evmc_opcode::OP_CREATE) {
     EVM_STACK_CHECK(Frame, 3);
   } else if (OpCode == evmc_opcode::OP_CREATE2) {
     EVM_STACK_CHECK(Frame, 4);
   } else {
+    // in fact, this should never happen, but we still need to handle it
     throw common::getError(common::ErrorCode::EVMInvalidInstruction);
-  }
-
-  if (Frame->IsStatic) {
-    Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
-    return;
   }
 
   intx::uint256 Value = Frame->pop();
@@ -946,6 +941,41 @@ void CreateHandler::doExecute() {
   intx::uint256 CodeSizeVal = Frame->pop();
   intx::uint256 Salt =
       (OpCode == evmc_opcode::OP_CREATE2 ? Frame->pop() : intx::uint256(0));
+
+  // Assume failure
+  Frame->push(0);
+  Context->setReturnData(std::vector<uint8_t>());
+
+  if (Frame->IsStatic) {
+    Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
+    return;
+  }
+
+  // EIP-3860
+  if (Frame->Rev >= EVMC_SHANGHAI and CodeSizeVal > MAX_SIZE_OF_INITCODE) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
+  const auto InitCodeWordCost =
+      6 * (OpCode == OP_CREATE2) + 2 * (Frame->Rev >= EVMC_SHANGHAI);
+  const auto InitCodeSize =
+      uint256ToUint64((CodeSizeVal + 31) / 32); // round up to the nearest word
+  const auto InitCodeCost = InitCodeWordCost * InitCodeSize;
+  if (!chargeGas(Frame, InitCodeCost)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
+
+  if (Frame->Msg->depth >= 1024) {
+    Context->setStatus(EVMC_SUCCESS); // "Light" failure
+    return;
+  }
+
+  if (intx::be::load<intx::uint256>(
+          Frame->Host->get_balance(Frame->Msg->recipient)) < Value) {
+    Context->setStatus(EVMC_SUCCESS); // "Light" failure
+    return;
+  }
 
   if (!expandMemoryAndChargeGas(Frame,
                                 uint256ToUint64(CodeOffset + CodeSizeVal))) {
@@ -955,7 +985,7 @@ void CreateHandler::doExecute() {
 
   evmc_message NewMsg{.kind = evmc_call_kind::EVMC_CREATE,
                       .depth = Frame->Msg->depth + 1,
-                      .gas = static_cast<int64_t>(Frame->GasLeft),
+                      .gas = Frame->GasLeft,
                       .sender = Frame->Msg->sender,
                       .input_data =
                           Frame->Memory.data() + uint256ToUint64(CodeOffset),
@@ -963,16 +993,21 @@ void CreateHandler::doExecute() {
                       .value = intx::be::store<evmc::bytes32>(Value),
                       .create2_salt = intx::be::store<evmc::bytes32>(Salt)};
 
-  NewMsg.gas = NewMsg.gas - NewMsg.gas / 64;
+  // EIP-150
+  if (Frame->Rev >= EVMC_TANGERINE_WHISTLE) {
+    NewMsg.gas = NewMsg.gas - NewMsg.gas / 64;
+  }
+
   evmc::Result Result = Frame->Host->call(NewMsg);
   chargeGas(Frame,
             NewMsg.gas - Result.gas_left); // it's safe to charge gas here
   Frame->GasRefund += Result.gas_refund;
 
+  Context->setReturnData(std::vector<uint8_t>(
+      Result.output_data, Result.output_data + Result.output_size));
   if (Result.status_code == EVMC_SUCCESS) {
+    Frame->pop(); // pop the assume value
     Frame->push(intx::be::load<intx::uint256>(Result.create_address));
-  } else {
-    Frame->push(intx::uint256(0));
   }
   Context->setStatus(Result.status_code);
 }
@@ -994,6 +1029,7 @@ void CallHandler::doExecute() {
              OpCode == evmc_opcode::OP_STATICCALL) {
     EVM_STACK_CHECK(Frame, 6);
   } else {
+    // in fact, this should never happen, but we still need to handle it
     throw common::getError(common::ErrorCode::EVMInvalidInstruction);
   }
 
@@ -1005,21 +1041,42 @@ void CallHandler::doExecute() {
   const auto OutputOffset = Frame->pop();
   const auto OutputSize = Frame->pop();
 
+  // Assume failure
+  Frame->push(0);
+  Context->setReturnData(std::vector<uint8_t>());
+
+  // EIP-2929
   if (Frame->Rev >= EVMC_BERLIN and
       Frame->Host->access_account(Dest) == EVMC_ACCESS_COLD) {
-    if (!chargeGas(Frame, 2600)) { // Charge for cold account access
+    if (!chargeGas(Frame, COLD_ACCOUNT_ACCESS_COST)) {
       Context->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
   } else {
-    if (!chargeGas(Frame, 100)) { // Charge for warm account access
+    if (!chargeGas(Frame, WARM_ACCOUNT_ACCESS_COST)) {
       Context->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
   }
 
-  expandMemoryAndChargeGas(Frame, uint256ToUint64(InputOffset + InputSize));
-  expandMemoryAndChargeGas(Frame, uint256ToUint64(OutputOffset + OutputSize));
+  if (Frame->Msg->depth >= 1024) {
+    Context->setStatus(EVMC_SUCCESS); // "Light" failure
+    return;
+  }
+
+  if (NeedValue and intx::be::load<intx::uint256>(Frame->Host->get_balance(
+                        Frame->Msg->recipient)) < Value) {
+    Context->setStatus(EVMC_SUCCESS); // "Light" failure
+    return;
+  }
+
+  if (!expandMemoryAndChargeGas(Frame,
+                                uint256ToUint64(InputOffset + InputSize)) or
+      !expandMemoryAndChargeGas(Frame,
+                                uint256ToUint64(OutputOffset + OutputSize))) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   evmc_message NewMsg{
       .kind = static_cast<evmc_call_kind>(OpCode),
@@ -1039,27 +1096,44 @@ void CallHandler::doExecute() {
                    : intx::be::store<evmc::bytes32>(Value),
       .code_address = Dest,
   };
-  NewMsg.gas = std::min(NewMsg.gas, (Frame->GasLeft - Frame->GasLeft / 64));
 
-  int64_t Cost = NeedValue ? 9000 : 0;
-  if (!chargeGas(Frame, Cost)) {
+  if (Frame->Rev >= EVMC_TANGERINE_WHISTLE) {
+    NewMsg.gas = std::min(NewMsg.gas, (Frame->GasLeft - Frame->GasLeft / 64));
+  } else if (NewMsg.gas > Frame->GasLeft) {
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
 
-  if (OpCode == OP_CALL and Frame->IsStatic) {
-    Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
+  int64_t Cost = NeedValue ? CALL_VALUE_COST : 0;
+
+  if (OpCode == OP_CALL) {
+    if (Frame->IsStatic) {
+      Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
+      return;
+    }
+    if (!Frame->Host->account_exists(Dest)) {
+      Cost += ACCOUNT_CREATION_COST;
+    }
+  }
+
+  if (!chargeGas(Frame, Cost)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    Frame->push(0);
     return;
   }
 
+  // EIP-150
   if (NeedValue) {
-    NewMsg.gas += 2300;
-    Frame->GasLeft += 2300;
+    NewMsg.gas += CALL_GAS_STIPEND;
   }
 
   const auto Result = Frame->Host->call(NewMsg);
-  Frame->push(Result.status_code == EVMC_SUCCESS);
-  // Context->setReturnData(new std::vector<uint8_t> {Result.output_data});
+  if (Result.status_code == EVMC_SUCCESS) {
+    Frame->pop(); // pop the assume value
+    Frame->push(intx::uint256(1));
+  }
+  Context->setReturnData(std::vector<uint8_t>(
+      Result.output_data, Result.output_data + Result.output_size));
 
   const auto CopySize =
       std::min((size_t)uint256ToUint64(OutputSize), Result.output_size);
@@ -1071,6 +1145,7 @@ void CallHandler::doExecute() {
   const auto GasUsed = NewMsg.gas - Result.gas_left;
   chargeGas(Frame, GasUsed); // it's safe to charge gas here
   Frame->GasRefund += Result.gas_refund;
+  Context->setStatus(Result.status_code);
 }
 
 /* ---------- Implement opcode handlers end ---------- */
