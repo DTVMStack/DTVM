@@ -323,7 +323,7 @@ void CallDataSizeHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<CallDataSizeHandler>;
   auto *Frame = Base::getFrame();
   EVM_FRAME_CHECK(Frame);
-  Frame->push(Frame->Msg->input_size);
+  Frame->push(intx::uint256(Frame->Msg->input_size));
 }
 void CallDataCopyHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<CallDataCopyHandler>;
@@ -365,7 +365,7 @@ void CodeSizeHandler::doExecute() {
   auto *Mod = Inst->getModule();
   size_t CodeSize = Mod->CodeSize;
 
-  Frame->push(CodeSize);
+  Frame->push(intx::uint256(CodeSize));
 }
 void CodeCopyHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<CodeCopyHandler>;
@@ -430,7 +430,7 @@ void ExtCodeSizeHandler::doExecute() {
   }
 
   size_t CodeSize = Frame->Host->get_code_size(Addr);
-  Frame->push(CodeSize);
+  Frame->push(intx::uint256(CodeSize));
 }
 void ExtCodeCopyHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<ExtCodeCopyHandler>;
