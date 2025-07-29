@@ -6,6 +6,7 @@
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
 #include "runtime/evm_instance.h"
+#include <cstdint>
 
 zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
 zen::evm::InterpreterExecContext *zen::evm::EVMResource::CurrentContext =
@@ -157,9 +158,10 @@ uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize) {
 }
 
 bool chargeGas(EVMFrame *Frame, uint64_t GasCost) {
-  if ((Frame->GasLeft -= GasCost) < 0) {
+  if ((uint64_t)Frame->GasLeft < GasCost) {
     return false;
   }
+  Frame->GasLeft -= GasCost;
   return true;
 }
 
