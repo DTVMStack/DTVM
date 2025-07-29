@@ -36,6 +36,8 @@ void BaseInterpreter::interpret() {
   Context.allocFrame(Context.getInstance()->getGas());
   EVMFrame *Frame = Context.getCurFrame();
 
+  Context.setStatus(EVMC_SUCCESS);
+
   const EVMModule *Mod = Context.getInstance()->getModule();
 
   EVMResource::setExecutionContext(Frame, &Context);
@@ -401,42 +403,12 @@ void BaseInterpreter::interpret() {
       break;
     }
 
-    case evmc_opcode::OP_CREATE: {
-      ZEN_ASSERT_TODO();
-      break;
-    }
-
-    case evmc_opcode::OP_CALL: {
-      ZEN_ASSERT_TODO();
-      break;
-    }
-
-    case evmc_opcode::OP_CALLCODE: {
-      ZEN_ASSERT_TODO();
-      break;
-    }
-
     case evmc_opcode::OP_RETURN: {
       EVMOpcodeHandlerRegistry::getReturnHandler().execute();
       Frame = Context.getCurFrame();
       if (!Frame) {
         return;
       }
-      break;
-    }
-
-    case evmc_opcode::OP_DELEGATECALL: {
-      ZEN_ASSERT_TODO();
-      break;
-    }
-
-    case evmc_opcode::OP_CREATE2: {
-      ZEN_ASSERT_TODO();
-      break;
-    }
-
-    case evmc_opcode::OP_STATICCALL: {
-      ZEN_ASSERT_TODO();
       break;
     }
 
@@ -474,6 +446,15 @@ void BaseInterpreter::interpret() {
         // SWAP1 ~ SWAP16
         EVMOpcodeHandlerRegistry::getSWAPHandler().execute();
         break;
+      } else if (OpcodeByte == evmc_opcode::OP_CREATE or
+                 OpcodeByte == evmc_opcode::OP_CREATE2) {
+        EVMOpcodeHandlerRegistry::getCreateHandler().execute();
+        break;
+      } else if (OpcodeByte == evmc_opcode::OP_CALL or
+                 OpcodeByte == evmc_opcode::OP_CALLCODE or
+                 OpcodeByte == evmc_opcode::OP_DELEGATECALL or
+                 OpcodeByte == evmc_opcode::OP_STATICCALL) {
+        EVMOpcodeHandlerRegistry::getCallHandler().execute();
       } else {
         throw getError(ErrorCode::UnsupportedOpcode);
       }
@@ -481,6 +462,11 @@ void BaseInterpreter::interpret() {
 
     if (IsJumpSuccess) {
       continue;
+    }
+
+    if (Context.getStatus() != EVMC_SUCCESS) {
+      // TODO: handle error
+      ZEN_ASSERT_TODO();
     }
 
     Frame->Pc++;
