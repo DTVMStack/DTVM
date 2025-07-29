@@ -169,13 +169,13 @@ void expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
   }
 }
 
-constexpr auto max_buffer_size = std::numeric_limits<uint32_t>::max();
 // Check memory requirements of a reasonable size.
 void checkMemoryExpandAndChargeGas(EVMFrame *Frame, const intx::uint256 &Offset,
                                    uint64_t Size) {
-  EVM_REQUIRE((Offset[3] | Offset[2] | Offset[1]) != 0 ||
-                  Offset[0] > max_buffer_size,
+  EVM_REQUIRE((Offset[3] | Offset[2] | Offset[1]) == 0,
               EVMTooLargeRequiredMemory);
+  EVM_REQUIRE(static_cast<uint64_t>(Offset) < UINT64_MAX - Size,
+              IntegerOverflow);
   const auto NewSize = static_cast<uint64_t>(Offset) + Size;
   expandMemoryAndChargeGas(Frame, NewSize);
 }
@@ -184,8 +184,7 @@ void checkMemoryExpandAndChargeGas(EVMFrame *Frame, const intx::uint256 &Offset,
   if (Size == 0) {
     return; // No memory required
   }
-  EVM_REQUIRE((Size[3] | Size[2] | Size[1]) != 0 || Size[0] > max_buffer_size,
-              EVMTooLargeRequiredMemory);
+  EVM_REQUIRE((Size[3] | Size[2] | Size[1]) == 0, EVMTooLargeRequiredMemory);
   checkMemoryExpandAndChargeGas(Frame, Offset, static_cast<uint64_t>(Size));
 }
 
