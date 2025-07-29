@@ -6,7 +6,6 @@
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
 #include "runtime/evm_instance.h"
-#include <cstdint>
 
 zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
 zen::evm::InterpreterExecContext *zen::evm::EVMResource::CurrentContext =
