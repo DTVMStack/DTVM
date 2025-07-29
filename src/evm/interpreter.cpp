@@ -203,67 +203,67 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_CALLER: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getCallerHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_CALLVALUE: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getCallValueHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_CALLDATALOAD: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getCallDataLoadHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_CALLDATASIZE: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getCallDataSizeHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_CALLDATACOPY: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getCallDataCopyHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_CODESIZE: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getCodeSizeHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_CODECOPY: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getCodeCopyHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_GASPRICE: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getGasPriceHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_EXTCODESIZE: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getExtCodeSizeHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_EXTCODECOPY: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getExtCodeCopyHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_RETURNDATASIZE: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getReturnDataSizeHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_RETURNDATACOPY: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getReturnDataCopyHandler().execute();
       break;
     }
 
     case evmc_opcode::OP_EXTCODEHASH: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getExtCodeHashHandler().execute();
       break;
     }
 
