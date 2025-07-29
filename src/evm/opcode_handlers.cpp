@@ -763,7 +763,7 @@ void GasLimitHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<GasLimitHandler>;
   auto *Frame = Base::getFrame();
   EVM_FRAME_CHECK(Frame);
-  Frame->push(intx::uint256(Frame->get_tx_context().block_gas_limit));
+  Frame->push(intx::uint256(Frame->GasLimit));
 }
 
 // Return operations
