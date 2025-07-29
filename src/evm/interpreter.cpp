@@ -455,6 +455,7 @@ void BaseInterpreter::interpret() {
                  OpcodeByte == evmc_opcode::OP_DELEGATECALL or
                  OpcodeByte == evmc_opcode::OP_STATICCALL) {
         EVMOpcodeHandlerRegistry::getCallHandler().execute();
+        break;
       } else {
         throw getError(ErrorCode::UnsupportedOpcode);
       }
@@ -466,7 +467,6 @@ void BaseInterpreter::interpret() {
 
     if (Context.getStatus() != EVMC_SUCCESS) {
       // TODO: handle error
-      ZEN_ASSERT_TODO();
     }
 
     Frame->Pc++;
