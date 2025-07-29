@@ -378,28 +378,14 @@ void BaseInterpreter::interpret() {
       break;
     }
 
-    case evmc_opcode::OP_LOG0: {
-      ZEN_ASSERT_TODO();
-      break;
-    }
-
-    case evmc_opcode::OP_LOG1: {
-      ZEN_ASSERT_TODO();
-      break;
-    }
-
-    case evmc_opcode::OP_LOG2: {
-      ZEN_ASSERT_TODO();
-      break;
-    }
-
-    case evmc_opcode::OP_LOG3: {
-      ZEN_ASSERT_TODO();
-      break;
-    }
-
+    case evmc_opcode::OP_LOG0:
+    case evmc_opcode::OP_LOG1:
+    case evmc_opcode::OP_LOG2:
+    case evmc_opcode::OP_LOG3:
     case evmc_opcode::OP_LOG4: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getLogHandler(
+          static_cast<evmc_opcode>(OpcodeByte))
+          .execute();
       break;
     }
 
@@ -426,7 +412,11 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_SELFDESTRUCT: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getSelfDestructHandler().execute();
+      Frame = Context.getCurFrame();
+      if (!Frame) {
+        return;
+      }
       break;
     }
 

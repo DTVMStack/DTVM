@@ -31,6 +31,13 @@ using namespace zen::runtime;
     return Cost;                                                               \
   }
 
+#define DEFINE_MULTICODE_NOT_TEMPLATE_CALCULATE_GAS(OpName)                    \
+  uint64_t OpName##Handler::calculateGas() {                                   \
+    static auto Table = evmc_get_instruction_metrics_table(DEFAULT_REVISION);  \
+    static const auto Cost = Table[OpCode].gas_cost;                           \
+    return Cost;                                                               \
+  }
+
 /* ---------- Define gas cost macros end ---------- */
 
 /* ---------- Implement gas cost begin ---------- */
@@ -124,9 +131,15 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Dup, OP_DUP1);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Swap, OP_SWAP1);
 
 // Call operations
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Create, OP_CREATE) // CREATE CREATE
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(
-    Call, OP_CALL) // CALL CALLCODE STATICCALL DELEGATECALL
+DEFINE_MULTICODE_NOT_TEMPLATE_CALCULATE_GAS(Create) // CREATE CREATE
+DEFINE_MULTICODE_NOT_TEMPLATE_CALCULATE_GAS(
+    Call) // CALL CALLCODE STATICCALL DELEGATECALL
+
+// Logging operations
+DEFINE_MULTICODE_NOT_TEMPLATE_CALCULATE_GAS(Log) // LOG0 LOG1 LOG2 LOG3 LOG4
+
+// Self-destruct operation
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SelfDestruct, OP_SELFDESTRUCT)
 
 /* ---------- Implement gas cost end ---------- */
 
@@ -1135,6 +1148,93 @@ void CallHandler::doExecute() {
   chargeGas(Frame, GasUsed); // it's safe to charge gas here
   Frame->GasRefund += Result.gas_refund;
   Context->setStatus(Result.status_code);
+}
+
+void LogHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<LogHandler>;
+  auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
+  EVM_FRAME_CHECK(Frame);
+
+  if (Frame->IsStatic) {
+    Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
+    return;
+  }
+
+  uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
+  // LOG0 ~ LOG4
+  uint32_t NumTopics = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_LOG0);
+  EVM_STACK_CHECK(Frame, NumTopics + 2);
+
+  intx::uint256 OffsetVal = Frame->pop();
+  intx::uint256 SizeVal = Frame->pop();
+
+  uint64_t Offset = uint256ToUint64(OffsetVal);
+  uint64_t Size = uint256ToUint64(SizeVal);
+  uint64_t ReqSize = Offset + Size;
+
+  if (!expandMemoryAndChargeGas(Frame, ReqSize)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
+
+  // Charge additional gas for log data (8 gas per byte)
+  uint64_t LogDataCost = 8 * Size;
+  if (!chargeGas(Frame, LogDataCost)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
+
+  evmc::bytes32 Topics[4];
+  for (uint32_t I = 0; I < NumTopics; ++I) {
+    intx::uint256 Topic = Frame->pop();
+    Topics[I] = intx::be::store<evmc::bytes32>(Topic);
+  }
+
+  Frame->Host->emit_log(Frame->Msg->recipient, Frame->Memory.data() + Offset,
+                        Size, Topics, NumTopics);
+}
+
+void SelfDestructHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<SelfDestructHandler>;
+  auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
+  EVM_FRAME_CHECK(Frame);
+
+  if (Frame->IsStatic) {
+    Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
+    return;
+  }
+
+  EVM_STACK_CHECK(Frame, 1);
+  intx::uint256 BeneficiaryAddr = Frame->pop();
+  const auto Beneficiary = intx::be::trunc<evmc::address>(BeneficiaryAddr);
+
+  // EIP-161: if target account does not exist, charge account creation cost
+  if (Frame->Rev >= EVMC_SPURIOUS_DRAGON &&
+      !Frame->Host->account_exists(Beneficiary)) {
+    if (!chargeGas(Frame, ACCOUNT_CREATION_COST)) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
+  }
+
+  // EIP-2929: Charge cold account access cost if needed
+  if (Frame->Rev >= EVMC_BERLIN &&
+      Frame->Host->access_account(Beneficiary) == EVMC_ACCESS_COLD) {
+    if (!chargeGas(Frame, ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
+  }
+
+  Frame->Host->selfdestruct(Frame->Msg->recipient, Beneficiary);
+
+  uint64_t RemainingGas = Frame->GasLeft;
+  Context->freeBackFrame();
+  if (Context->getCurFrame() != nullptr) {
+    Context->getCurFrame()->GasLeft += RemainingGas;
+  }
 }
 
 /* ---------- Implement opcode handlers end ---------- */

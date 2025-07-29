@@ -265,6 +265,12 @@ DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Swap);
 DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Create);
 DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Call);
 
+// Logging operations
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Log);
+
+// Self-destruct operation
+DEFINE_UNIMPLEMENT_HANDLER(SelfDestruct);
+
 // Registry class to manage execution context
 class EVMOpcodeHandlerRegistry {
 public:
@@ -348,6 +354,10 @@ public:
   // Call operations
   EVM_REGISTRY_GET_MULTIOPCODE(Create);
   EVM_REGISTRY_GET_MULTIOPCODE(Call);
+  // Logging operations
+  EVM_REGISTRY_GET_MULTIOPCODE(Log);
+  // Self-destruct operation
+  EVM_REGISTRY_GET(SelfDestruct);
 };
 
 } // namespace zen::evm
