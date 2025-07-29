@@ -466,7 +466,40 @@ void BaseInterpreter::interpret() {
     }
 
     if (Context.getStatus() != EVMC_SUCCESS) {
-      // TODO: handle error
+      // Handle execution errors according to EVM specification
+      evmc_status_code Status = Context.getStatus();
+      
+      switch (Status) {
+        case EVMC_REVERT:
+          // REVERT: Keep remaining gas and return data
+          // Gas and return data are already set by RevertHandler
+          break;
+          
+        case EVMC_OUT_OF_GAS:
+        case EVMC_STACK_OVERFLOW:
+        case EVMC_STACK_UNDERFLOW:
+        case EVMC_INVALID_INSTRUCTION:
+        case EVMC_UNDEFINED_INSTRUCTION:
+        case EVMC_BAD_JUMP_DESTINATION:
+        case EVMC_INVALID_MEMORY_ACCESS:
+        case EVMC_CALL_DEPTH_EXCEEDED:
+        case EVMC_STATIC_MODE_VIOLATION:
+        case EVMC_INSUFFICIENT_BALANCE:
+          // Fatal errors: consume all remaining gas and clear return data
+          Frame->GasLeft = 0;
+          Frame->GasRefund = 0;
+          Context.setReturnData(std::vector<uint8_t>());
+          break;
+          
+        case EVMC_FAILURE:
+        default:
+          // Generic failure: consume all remaining gas and clear return data
+          Frame->GasLeft = 0;
+          Frame->GasRefund = 0;
+          Context.setReturnData(std::vector<uint8_t>());
+      }
+      
+      break;
     }
 
     Frame->Pc++;
