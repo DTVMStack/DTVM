@@ -1,3 +1,6 @@
+// Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 #include "compiler/evm_frontend/evm_mir_compiler.h"
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
