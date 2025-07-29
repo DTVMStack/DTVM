@@ -96,6 +96,8 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PrevRanDao, OP_PREVRANDAO);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(ChainId, OP_CHAINID);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SelfBalance, OP_SELFBALANCE);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(BaseFee, OP_BASEFEE);
+// Storage operations
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SLoad, OP_SLOAD);
 
 // Memory operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MStore, OP_MSTORE);
@@ -616,6 +618,27 @@ void BaseFeeHandler::doExecute() {
   EVM_FRAME_CHECK(Frame);
   Frame->push(
       intx::be::load<intx::uint256>(Frame->get_tx_context().block_base_fee));
+}
+// Storage operations
+void SLoadHandler::doExecute() {
+  using Base = EVMOpcodeHandlerBase<SLoadHandler>;
+  auto *Frame = Base::getFrame();
+  EVM_FRAME_CHECK(Frame);
+  EVM_STACK_CHECK(Frame, 1);
+  intx::uint256 Key = Frame->pop();
+  const auto KeyAddr = intx::be::store<evmc::bytes32>(Key);
+  if (Frame->Rev >= EVMC_BERLIN &&
+      Frame->Host->access_account(Frame->Msg->recipient) == EVMC_ACCESS_COLD) {
+    constexpr auto ColdAccountAccessCost = 2600;
+    constexpr auto WarmAccountAccessCost = 100;
+    constexpr auto AdditionalColdAccountAccessCost =
+        ColdAccountAccessCost - WarmAccountAccessCost;
+    EVM_REQUIRE(Frame->GasLeft >= AdditionalColdAccountAccessCost, EVMOutOfGas);
+    Frame->GasLeft -= AdditionalColdAccountAccessCost;
+  }
+  intx::uint256 Value = intx::be::load<intx::uint256>(
+      Frame->Host->get_storage(Frame->Msg->recipient, KeyAddr));
+  Frame->push(Value);
 }
 
 // Memory operations

@@ -210,6 +210,8 @@ DEFINE_UNIMPLEMENT_HANDLER(PrevRanDao);
 DEFINE_UNIMPLEMENT_HANDLER(ChainId);
 DEFINE_UNIMPLEMENT_HANDLER(SelfBalance);
 DEFINE_UNIMPLEMENT_HANDLER(BaseFee);
+// storage operations
+DEFINE_UNIMPLEMENT_HANDLER(SLoad);
 
 // Arithmetic operations
 DEFINE_UNIMPLEMENT_HANDLER(SignExtend);
@@ -298,6 +300,8 @@ public:
   EVM_REGISTRY_GET(ChainId);
   EVM_REGISTRY_GET(SelfBalance);
   EVM_REGISTRY_GET(BaseFee);
+  // storage operations
+  EVM_REGISTRY_GET(SLoad);
 
   // Memory operations
   EVM_REGISTRY_GET(MStore);

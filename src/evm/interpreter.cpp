@@ -334,7 +334,7 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_SLOAD: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getSLoadHandler().execute();
       break;
     }
 
