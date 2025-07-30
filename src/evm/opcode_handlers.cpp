@@ -198,23 +198,24 @@ bool expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
 }
 
 // Check memory requirements of a reasonable size.
-void checkMemoryExpandAndChargeGas(EVMFrame *Frame, const intx::uint256 &Offset,
+bool checkMemoryExpandAndChargeGas(EVMFrame *Frame, const intx::uint256 &Offset,
                                    uint64_t Size) {
   EVM_REQUIRE(Offset <= std::numeric_limits<uint64_t>::max(),
               EVMTooLargeRequiredMemory);
   EVM_REQUIRE(static_cast<uint64_t>(Offset) < UINT64_MAX - Size,
               IntegerOverflow);
   const auto NewSize = static_cast<uint64_t>(Offset) + Size;
-  expandMemoryAndChargeGas(Frame, NewSize);
+  return expandMemoryAndChargeGas(Frame, NewSize);
 }
-void checkMemoryExpandAndChargeGas(EVMFrame *Frame, const intx::uint256 &Offset,
+bool checkMemoryExpandAndChargeGas(EVMFrame *Frame, const intx::uint256 &Offset,
                                    const intx::uint256 &Size) {
   if (Size == 0) {
-    return; // No memory required
+    return true; // No memory required
   }
   EVM_REQUIRE(Size <= std::numeric_limits<uint64_t>::max(),
               EVMTooLargeRequiredMemory);
-  checkMemoryExpandAndChargeGas(Frame, Offset, static_cast<uint64_t>(Size));
+  return checkMemoryExpandAndChargeGas(Frame, Offset,
+                                       static_cast<uint64_t>(Size));
 }
 
 // Convert uint256 to uint64
@@ -379,30 +380,34 @@ void CallDataSizeHandler::doExecute() {
 void CallDataCopyHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<CallDataCopyHandler>;
   auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 3);
   intx::uint256 DestOffsetVal = Frame->pop();
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
   // Ensure memory is large enough
-  checkMemoryExpandAndChargeGas(Frame, DestOffsetVal, SizeVal);
+  if (!checkMemoryExpandAndChargeGas(Frame, DestOffsetVal, SizeVal)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   uint64_t DestOffset = uint256ToUint64(DestOffsetVal);
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
 
-  auto src = Frame->Msg->input_size < Offset ? Frame->Msg->input_size : Offset;
-  auto copy_size = std::min(Size, Frame->Msg->input_size - src);
+  auto Src = Frame->Msg->input_size < Offset ? Frame->Msg->input_size : Offset;
+  auto CopySize = std::min(Size, Frame->Msg->input_size - Src);
 
   // Copy data to memory
-  if (copy_size > 0) {
-    std::memcpy(Frame->Memory.data() + DestOffset, Frame->Msg->input_data + src,
-                copy_size);
+  if (CopySize > 0) {
+    std::memcpy(Frame->Memory.data() + DestOffset, Frame->Msg->input_data + Src,
+                CopySize);
   }
-  if (Size > copy_size) {
+  if (Size > CopySize) {
     // Fill the rest with zeros if Size is larger than the actual copied size
-    std::memset(Frame->Memory.data() + DestOffset + copy_size, 0,
-                Size - copy_size);
+    std::memset(Frame->Memory.data() + DestOffset + CopySize, 0,
+                Size - CopySize);
   }
 }
 void CodeSizeHandler::doExecute() {
@@ -433,7 +438,10 @@ void CodeCopyHandler::doExecute() {
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
   // Ensure memory is large enough
-  checkMemoryExpandAndChargeGas(Frame, DestOffsetVal, SizeVal);
+  if (!checkMemoryExpandAndChargeGas(Frame, DestOffsetVal, SizeVal)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   uint64_t DestOffset = uint256ToUint64(DestOffsetVal);
   uint64_t Offset = uint256ToUint64(OffsetVal);
@@ -441,12 +449,12 @@ void CodeCopyHandler::doExecute() {
 
   // Copy code to memory
   if (Offset < CodeSize) {
-    auto copy_size = std::min(Size, CodeSize - Offset);
-    std::memcpy(Frame->Memory.data() + DestOffset, Code + Offset, copy_size);
-    if (Size > copy_size) {
+    auto CopySize = std::min(Size, CodeSize - Offset);
+    std::memcpy(Frame->Memory.data() + DestOffset, Code + Offset, CopySize);
+    if (Size > CopySize) {
       // Fill the rest with zeros if Size is larger than the actual copied size
-      std::memset(Frame->Memory.data() + DestOffset + copy_size, 0,
-                  Size - copy_size);
+      std::memset(Frame->Memory.data() + DestOffset + CopySize, 0,
+                  Size - CopySize);
     }
   } else {
     // If Offset is beyond the code size, fill with zeros
@@ -483,6 +491,7 @@ void ExtCodeSizeHandler::doExecute() {
 void ExtCodeCopyHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<ExtCodeCopyHandler>;
   auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 4);
   intx::uint256 X = Frame->pop();
@@ -492,7 +501,10 @@ void ExtCodeCopyHandler::doExecute() {
   const auto Addr = intx::be::trunc<evmc::address>(X);
 
   // Ensure memory is large enough
-  checkMemoryExpandAndChargeGas(Frame, DestOffsetVal, SizeVal);
+  if (!checkMemoryExpandAndChargeGas(Frame, DestOffsetVal, SizeVal)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   uint64_t DestOffset = uint256ToUint64(DestOffsetVal);
   uint64_t Offset = uint256ToUint64(OffsetVal);
@@ -514,9 +526,9 @@ void ExtCodeCopyHandler::doExecute() {
     }
   } else {
     // Copy code to memory
-    auto copy_size = std::min(Size, CodeSize - Offset);
+    auto CopySize = std::min(Size, CodeSize - Offset);
     size_t CopiedSize = Frame->Host->copy_code(
-        Addr, Offset, Frame->Memory.data() + DestOffset, copy_size);
+        Addr, Offset, Frame->Memory.data() + DestOffset, CopySize);
     if (CopiedSize < Size) {
       // If the copied size is less than requested, fill the rest with zeros
       std::memset(Frame->Memory.data() + DestOffset + CopiedSize, 0,
@@ -535,19 +547,22 @@ void ReturnDataSizeHandler::doExecute() {
 void ReturnDataCopyHandler::doExecute() {
   using Base = EVMOpcodeHandlerBase<ReturnDataCopyHandler>;
   auto *Frame = Base::getFrame();
+  auto *Context = Base::getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 3);
   intx::uint256 DestOffsetVal = Frame->pop();
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
   // Ensure memory is large enough
-  checkMemoryExpandAndChargeGas(Frame, DestOffsetVal, SizeVal);
+  if (!checkMemoryExpandAndChargeGas(Frame, DestOffsetVal, SizeVal)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   uint64_t DestOffset = uint256ToUint64(DestOffsetVal);
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
 
-  auto *Context = Base::getContext();
   const auto &ReturnData = Context->getReturnData();
 
   if (Offset >= ReturnData.size()) {
@@ -559,15 +574,15 @@ void ReturnDataCopyHandler::doExecute() {
   }
 
   // Copy return data to memory
-  auto copy_size = std::min(Size, ReturnData.size() - Offset);
+  auto CopySize = std::min(Size, ReturnData.size() - Offset);
 
   std::memcpy(Frame->Memory.data() + DestOffset, ReturnData.data() + Offset,
-              copy_size);
+              CopySize);
 
-  if (Size > copy_size) {
+  if (Size > CopySize) {
     // Fill the rest with zeros if Size is larger than the actual copied size
-    std::memset(Frame->Memory.data() + DestOffset + copy_size, 0,
-                Size - copy_size);
+    std::memset(Frame->Memory.data() + DestOffset + CopySize, 0,
+                Size - CopySize);
   }
 }
 void ExtCodeHashHandler::doExecute() {
@@ -679,10 +694,8 @@ void MStoreHandler::doExecute() {
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 Value = Frame->pop();
 
-  checkMemoryExpandAndChargeGas(Frame, OffsetVal, 32);
   uint64_t Offset = uint256ToUint64(OffsetVal);
-  uint64_t ReqSize = Offset + 32;
-  if (!expandMemoryAndChargeGas(Frame, ReqSize)) {
+  if (!checkMemoryExpandAndChargeGas(Frame, Offset, 32)) {
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
@@ -702,10 +715,8 @@ void MStore8Handler::doExecute() {
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 Value = Frame->pop();
 
-  checkMemoryExpandAndChargeGas(Frame, OffsetVal, 1);
   uint64_t Offset = uint256ToUint64(OffsetVal);
-  uint64_t ReqSize = Offset + 1;
-  if (!expandMemoryAndChargeGas(Frame, ReqSize)) {
+  if (!checkMemoryExpandAndChargeGas(Frame, Offset, 1)) {
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
@@ -722,11 +733,8 @@ void MLoadHandler::doExecute() {
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 OffsetVal = Frame->pop();
 
-  checkMemoryExpandAndChargeGas(Frame, OffsetVal, 32);
   uint64_t Offset = uint256ToUint64(OffsetVal);
-  uint64_t ReqSize = Offset + 32;
-
-  if (!expandMemoryAndChargeGas(Frame, ReqSize)) {
+  if (!checkMemoryExpandAndChargeGas(Frame, Offset, 32)) {
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
@@ -820,12 +828,9 @@ void ReturnHandler::doExecute() {
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
 
-  checkMemoryExpandAndChargeGas(Frame, OffsetVal, SizeVal);
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
-  uint64_t ReqSize = Offset + Size;
-
-  if (!expandMemoryAndChargeGas(Frame, ReqSize)) {
+  if (!checkMemoryExpandAndChargeGas(Frame, Offset, Size)) {
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
@@ -854,12 +859,9 @@ void RevertHandler::doExecute() {
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
 
-  checkMemoryExpandAndChargeGas(Frame, OffsetVal, SizeVal);
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
-  uint64_t ReqSize = Offset + Size;
-
-  if (!expandMemoryAndChargeGas(Frame, ReqSize)) {
+  if (!checkMemoryExpandAndChargeGas(Frame, Offset, Size)) {
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
