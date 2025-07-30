@@ -285,6 +285,9 @@ DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Call);
 // Logging operations
 DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Log);
 
+// Crypto operations
+DEFINE_UNIMPLEMENT_HANDLER(Keccak256);
+
 // Self-destruct operation
 DEFINE_UNIMPLEMENT_HANDLER(SelfDestruct);
 
@@ -373,6 +376,8 @@ public:
   EVM_REGISTRY_GET_MULTIOPCODE(Call);
   // Logging operations
   EVM_REGISTRY_GET_MULTIOPCODE(Log);
+  // Crypto operations
+  EVM_REGISTRY_GET(Keccak256);
   // Self-destruct operation
   EVM_REGISTRY_GET(SelfDestruct);
 };

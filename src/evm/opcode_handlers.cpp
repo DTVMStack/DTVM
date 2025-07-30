@@ -3,6 +3,7 @@
 
 #include "evm/opcode_handlers.h"
 #include "common/errors.h"
+#include "evm/crypto.h"
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
 #include "runtime/evm_instance.h"
@@ -137,6 +138,9 @@ DEFINE_MULTICODE_NOT_TEMPLATE_CALCULATE_GAS(
 
 // Logging operations
 DEFINE_MULTICODE_NOT_TEMPLATE_CALCULATE_GAS(Log) // LOG0 LOG1 LOG2 LOG3 LOG4
+
+// Crypto operations
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Keccak256, OP_KECCAK256);
 
 // Self-destruct operation
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SelfDestruct, OP_SELFDESTRUCT)
@@ -653,6 +657,32 @@ void SLoadHandler::doExecute() {
   intx::uint256 Value = intx::be::load<intx::uint256>(
       Frame->Host->get_storage(Frame->Msg->recipient, KeyAddr));
   Frame->push(Value);
+}
+
+void Keccak256Handler::doExecute() {
+  auto *Frame = getFrame();
+  EVM_FRAME_CHECK(Frame);
+  EVM_STACK_CHECK(Frame, 2);
+
+  const auto Offset = Frame->pop();
+  const auto Length = Frame->pop();
+
+  const size_t MemOffset = static_cast<size_t>(Offset);
+  const size_t DataLength = static_cast<size_t>(Length);
+
+  const uint64_t RequiredSize = MemOffset + DataLength;
+  if (!expandMemoryAndChargeGas(Frame, RequiredSize)) {
+    getContext()->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
+
+  const uint8_t *InputData = Frame->Memory.data() + MemOffset;
+
+  uint8_t HashResult[32];
+  crypto::keccak256(InputData, DataLength, HashResult);
+
+  const auto ResultValue = intx::be::load<intx::uint256>(HashResult);
+  Frame->push(ResultValue);
 }
 
 // Memory operations

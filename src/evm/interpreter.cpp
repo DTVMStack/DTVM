@@ -185,7 +185,7 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_KECCAK256: {
-      ZEN_ASSERT_TODO();
+      EVMOpcodeHandlerRegistry::getKeccak256Handler().execute();
       break;
     }
 
