@@ -670,8 +670,7 @@ void Keccak256Handler::doExecute() {
   const size_t MemOffset = static_cast<size_t>(Offset);
   const size_t DataLength = static_cast<size_t>(Length);
 
-  const uint64_t RequiredSize = MemOffset + DataLength;
-  if (!expandMemoryAndChargeGas(Frame, RequiredSize)) {
+  if (!checkMemoryExpandAndChargeGas(Frame, MemOffset, DataLength)) {
     getContext()->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
