@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace zen::evm::crypto {
+namespace zen::host::evm::crypto {
 
 class CryptoInterface {
 public:
@@ -30,20 +30,7 @@ public:
   virtual std::vector<uint8_t> keccak256(const std::vector<uint8_t> &Input) = 0;
 };
 
-/**
- * Real implementation of crypto functions
- */
-class RealCrypto : public CryptoInterface {
-public:
-  void keccak256(const uint8_t *Input, std::size_t InputLen,
-                 uint8_t *Output) override;
-  std::vector<uint8_t> keccak256(const std::vector<uint8_t> &Input) override;
-};
-
-/**
- * Mock implementation for testing
- */
-class MockCrypto : public CryptoInterface {
+class CryptoHost : public CryptoInterface {
 public:
   void keccak256(const uint8_t *Input, std::size_t InputLen,
                  uint8_t *Output) override;
@@ -56,18 +43,15 @@ public:
 class CryptoProvider {
 public:
   static CryptoInterface &getInstance();
-  static void setMockMode(bool EnableMock);
 
 private:
-  static bool MockMode;
-  static RealCrypto RealCryptoInstance;
-  static MockCrypto MockCryptoInstance;
+  static CryptoHost CryptoInstance;
 };
 
 // Convenience functions for direct use
 void keccak256(const uint8_t *Input, std::size_t InputLen, uint8_t *Output);
 std::vector<uint8_t> keccak256(const std::vector<uint8_t> &Input);
 
-} // namespace zen::evm::crypto
+} // namespace zen::host::evm::crypto
 
 #endif // ZEN_EVM_CRYPTO_H

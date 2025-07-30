@@ -3,9 +3,9 @@
 
 #include "evm/opcode_handlers.h"
 #include "common/errors.h"
-#include "evm/crypto.h"
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
+#include "host/evm/crypto.h"
 #include "runtime/evm_instance.h"
 
 zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
@@ -678,7 +678,7 @@ void Keccak256Handler::doExecute() {
   const uint8_t *InputData = Frame->Memory.data() + MemOffset;
 
   uint8_t HashResult[32];
-  crypto::keccak256(InputData, DataLength, HashResult);
+  host::evm::crypto::keccak256(InputData, DataLength, HashResult);
 
   const auto ResultValue = intx::be::load<intx::uint256>(HashResult);
   Frame->push(ResultValue);
