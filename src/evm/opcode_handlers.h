@@ -81,9 +81,12 @@ public:
 template <typename UnaryOp>
 class UnaryOpHandler : public EVMOpcodeHandlerBase<UnaryOpHandler<UnaryOp>> {
 public:
+  static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }
+  static InterpreterExecContext *getContext() {
+    return EVMResource::getInterpreterExecContext();
+  }
   static void doExecute() {
-    using Base = EVMOpcodeHandlerBase<UnaryOpHandler<UnaryOp>>;
-    auto *Frame = Base::getFrame();
+    auto *Frame = getFrame();
     EVM_STACK_CHECK(Frame, 1);
 
     intx::uint256 A = Frame->pop();
@@ -97,9 +100,12 @@ public:
 template <typename BinaryOp>
 class BinaryOpHandler : public EVMOpcodeHandlerBase<BinaryOpHandler<BinaryOp>> {
 public:
+  static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }
+  static InterpreterExecContext *getContext() {
+    return EVMResource::getInterpreterExecContext();
+  }
   static void doExecute() {
-    using Base = EVMOpcodeHandlerBase<BinaryOpHandler<BinaryOp>>;
-    auto *Frame = Base::getFrame();
+    auto *Frame = getFrame();
     EVM_STACK_CHECK(Frame, 2);
 
     intx::uint256 A = Frame->pop();
@@ -115,9 +121,12 @@ template <typename TernaryOp>
 class TernaryOpHandler
     : public EVMOpcodeHandlerBase<TernaryOpHandler<TernaryOp>> {
 public:
+  static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }
+  static InterpreterExecContext *getContext() {
+    return EVMResource::getInterpreterExecContext();
+  }
   static void doExecute() {
-    using Base = EVMOpcodeHandlerBase<TernaryOpHandler<TernaryOp>>;
-    auto *Frame = Base::getFrame();
+    auto *Frame = getFrame();
     EVM_STACK_CHECK(Frame, 3);
 
     intx::uint256 A = Frame->pop();
@@ -190,6 +199,10 @@ DEFINE_BINARY_OP(Sgt, intx::slt(B, A));
 #define DEFINE_UNIMPLEMENT_HANDLER(OpName)                                     \
   class OpName##Handler : public EVMOpcodeHandlerBase<OpName##Handler> {       \
   public:                                                                      \
+    static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }         \
+    static InterpreterExecContext *getContext() {                              \
+      return EVMResource::getInterpreterExecContext();                         \
+    }                                                                          \
     static void doExecute();                                                   \
     static uint64_t calculateGas();                                            \
   };
@@ -198,6 +211,10 @@ DEFINE_BINARY_OP(Sgt, intx::slt(B, A));
   class OpName##Handler : public EVMOpcodeHandlerBase<OpName##Handler> {       \
   public:                                                                      \
     inline static evmc_opcode OpCode = OP_INVALID;                             \
+    static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }         \
+    static InterpreterExecContext *getContext() {                              \
+      return EVMResource::getInterpreterExecContext();                         \
+    }                                                                          \
     static void doExecute();                                                   \
     static uint64_t calculateGas();                                            \
   };

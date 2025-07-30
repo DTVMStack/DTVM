@@ -229,15 +229,13 @@ uint64_t uint256ToUint64(const intx::uint256 &Value) {
 /* ---------- Implement opcode handlers begin ---------- */
 
 void GasHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<GasHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::uint256(Frame->GasLeft));
 }
 
 void SignExtendHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<SignExtendHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 I = Frame->pop();
@@ -265,8 +263,7 @@ void SignExtendHandler::doExecute() {
 }
 
 void ByteHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<ByteHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 I = Frame->pop();
@@ -281,8 +278,7 @@ void ByteHandler::doExecute() {
 }
 
 void SarHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<SarHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 Shift = Frame->pop();
@@ -306,16 +302,14 @@ void SarHandler::doExecute() {
 }
 // environmental information operations
 void AddressHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<AddressHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::be::load<intx::uint256>(Frame->Msg->recipient));
 }
 
 void BalanceHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<BalanceHandler>;
-  auto *Frame = Base::getFrame();
-  auto *Context = Base::getContext();
+  auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 X = Frame->pop();
@@ -334,26 +328,22 @@ void BalanceHandler::doExecute() {
   Frame->push(Balance);
 }
 void OriginHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<OriginHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::be::load<intx::uint256>(Frame->get_tx_context().tx_origin));
 }
 void CallerHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<CallerHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::be::load<intx::uint256>(Frame->Msg->sender));
 }
 void CallValueHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<CallValueHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::be::load<intx::uint256>(Frame->Msg->value));
 }
 void CallDataLoadHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<CallDataLoadHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 OffsetVal = Frame->pop();
@@ -372,15 +362,13 @@ void CallDataLoadHandler::doExecute() {
   Frame->push(Value);
 }
 void CallDataSizeHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<CallDataSizeHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::uint256(Frame->Msg->input_size));
 }
 void CallDataCopyHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<CallDataCopyHandler>;
-  auto *Frame = Base::getFrame();
-  auto *Context = Base::getContext();
+  auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 3);
   intx::uint256 DestOffsetVal = Frame->pop();
@@ -411,11 +399,10 @@ void CallDataCopyHandler::doExecute() {
   }
 }
 void CodeSizeHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<CodeSizeHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
 
-  auto *Context = Base::getContext();
+  auto *Context = getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
   size_t CodeSize = Mod->CodeSize;
@@ -423,12 +410,11 @@ void CodeSizeHandler::doExecute() {
   Frame->push(intx::uint256(CodeSize));
 }
 void CodeCopyHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<CodeCopyHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 3);
 
-  auto *Context = Base::getContext();
+  auto *Context = getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
   const uint8_t *Code = Mod->Code;
@@ -464,15 +450,13 @@ void CodeCopyHandler::doExecute() {
   }
 }
 void GasPriceHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<GasPriceHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(
       intx::be::load<intx::uint256>(Frame->get_tx_context().tx_gas_price));
 }
 void ExtCodeSizeHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<ExtCodeSizeHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 X = Frame->pop();
@@ -489,9 +473,8 @@ void ExtCodeSizeHandler::doExecute() {
   Frame->push(intx::uint256(CodeSize));
 }
 void ExtCodeCopyHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<ExtCodeCopyHandler>;
-  auto *Frame = Base::getFrame();
-  auto *Context = Base::getContext();
+  auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 4);
   intx::uint256 X = Frame->pop();
@@ -537,17 +520,15 @@ void ExtCodeCopyHandler::doExecute() {
   }
 }
 void ReturnDataSizeHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<ReturnDataSizeHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  auto *Context = Base::getContext();
+  auto *Context = getContext();
   const auto &ReturnData = Context->getReturnData();
   Frame->push(ReturnData.size());
 }
 void ReturnDataCopyHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<ReturnDataCopyHandler>;
-  auto *Frame = Base::getFrame();
-  auto *Context = Base::getContext();
+  auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 3);
   intx::uint256 DestOffsetVal = Frame->pop();
@@ -586,8 +567,7 @@ void ReturnDataCopyHandler::doExecute() {
   }
 }
 void ExtCodeHashHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<ExtCodeHashHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 X = Frame->pop();
@@ -605,8 +585,7 @@ void ExtCodeHashHandler::doExecute() {
 
 // block message operations
 void BlockHashHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<BlockHashHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 BlockNumberVal = Frame->pop();
@@ -620,55 +599,47 @@ void BlockHashHandler::doExecute() {
   Frame->push(intx::be::load<intx::uint256>(Header));
 }
 void CoinBaseHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<CoinBaseHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(
       intx::be::load<intx::uint256>(Frame->get_tx_context().block_coinbase));
 }
 void TimeStampHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<TimeStampHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::uint256(Frame->get_tx_context().block_timestamp));
 }
 void NumberHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<NumberHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::uint256(Frame->get_tx_context().block_number));
 }
 void PrevRanDaoHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<PrevRanDaoHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(
       intx::be::load<intx::uint256>(Frame->get_tx_context().block_prev_randao));
 }
 void ChainIdHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<ChainIdHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::be::load<intx::uint256>(Frame->get_tx_context().chain_id));
 }
 void SelfBalanceHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<SelfBalanceHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::be::load<intx::uint256>(
       Frame->Host->get_balance(Frame->Msg->recipient)));
 }
 void BaseFeeHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<BaseFeeHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(
       intx::be::load<intx::uint256>(Frame->get_tx_context().block_base_fee));
 }
 // Storage operations
 void SLoadHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<SLoadHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 Key = Frame->pop();
@@ -686,9 +657,8 @@ void SLoadHandler::doExecute() {
 
 // Memory operations
 void MStoreHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<MStoreHandler>;
-  auto *Frame = Base::getFrame();
-  auto *Context = Base::getContext();
+  auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
@@ -707,9 +677,8 @@ void MStoreHandler::doExecute() {
 }
 
 void MStore8Handler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<MStore8Handler>;
-  auto *Frame = Base::getFrame();
-  auto *Context = Base::getContext();
+  auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
@@ -726,9 +695,8 @@ void MStore8Handler::doExecute() {
 }
 
 void MLoadHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<MLoadHandler>;
-  auto *Frame = Base::getFrame();
-  auto *Context = Base::getContext();
+  auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 OffsetVal = Frame->pop();
@@ -749,10 +717,9 @@ void MLoadHandler::doExecute() {
 
 // Control flow operations
 void JumpHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<JumpHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  auto *Context = Base::getContext();
+  auto *Context = getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
   const uint8_t *Code = Mod->Code;
@@ -770,10 +737,9 @@ void JumpHandler::doExecute() {
 }
 
 void JumpIHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<JumpIHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  auto *Context = Base::getContext();
+  auto *Context = getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
   const uint8_t *Code = Mod->Code;
@@ -796,15 +762,13 @@ void JumpIHandler::doExecute() {
 
 // Environment operations
 void PCHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<PCHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::uint256(Frame->Pc));
 }
 
 void MSizeHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<MSizeHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   // Return the current memory size in bytes
   intx::uint256 MemSize = Frame->Memory.size();
@@ -812,18 +776,16 @@ void MSizeHandler::doExecute() {
 }
 
 void GasLimitHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<GasLimitHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(intx::uint256(Frame->GasLimit));
 }
 
 // Return operations
 void ReturnHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<ReturnHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  auto *Context = Base::getContext();
+  auto *Context = getContext();
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
@@ -851,10 +813,9 @@ void ReturnHandler::doExecute() {
 
 // TODO: implement host storage revert in the future
 void RevertHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<RevertHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  auto *Context = Base::getContext();
+  auto *Context = getContext();
   EVM_STACK_CHECK(Frame, 2);
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
@@ -881,10 +842,9 @@ void RevertHandler::doExecute() {
 
 // Stack operations
 void PushHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<PushHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  auto *Context = Base::getContext();
+  auto *Context = getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
   auto *Code = Mod->Code;
@@ -903,8 +863,7 @@ void PushHandler::doExecute() {
 }
 
 void DupHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<DupHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
   // DUP1 ~ DUP16
@@ -915,8 +874,7 @@ void DupHandler::doExecute() {
 }
 
 void SwapHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<SwapHandler>;
-  auto *Frame = Base::getFrame();
+  auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
   // SWAP1 ~ SWAP16
@@ -928,9 +886,8 @@ void SwapHandler::doExecute() {
 }
 
 void CreateHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<CreateHandler>;
-  auto *Frame = Base::getFrame();
-  auto *Context = Base::getContext();
+  auto *Frame = getFrame();
+  auto *Context = getContext();
 
   EVM_FRAME_CHECK(Frame);
   if (OpCode == evmc_opcode::OP_CREATE) {
@@ -1019,9 +976,8 @@ void CreateHandler::doExecute() {
 }
 
 void CallHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<CallHandler>;
-  auto *Frame = Base::getFrame();
-  auto *Context = Base::getContext();
+  auto *Frame = getFrame();
+  auto *Context = getContext();
 
   EVM_FRAME_CHECK(Frame);
 
@@ -1153,9 +1109,8 @@ void CallHandler::doExecute() {
 }
 
 void LogHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<LogHandler>;
-  auto *Frame = Base::getFrame();
-  auto *Context = Base::getContext();
+  auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
 
   if (Frame->IsStatic) {
@@ -1198,9 +1153,8 @@ void LogHandler::doExecute() {
 }
 
 void SelfDestructHandler::doExecute() {
-  using Base = EVMOpcodeHandlerBase<SelfDestructHandler>;
-  auto *Frame = Base::getFrame();
-  auto *Context = Base::getContext();
+  auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
 
   if (Frame->IsStatic) {
