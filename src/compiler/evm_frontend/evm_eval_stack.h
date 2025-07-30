@@ -19,7 +19,9 @@ public:
 
   T pop() {
     if (Stack.empty()) {
-      throw std::runtime_error("EVM stack underflow");
+      throw getErrorWithPhase(ErrorCode::EVMStackUnderflow,
+                              ErrorPhase::Compilation,
+                              ErrorSubphase::MIREmission);
     }
     T Item = Stack.back();
     Stack.pop_back();
@@ -28,7 +30,9 @@ public:
 
   T &peek(size_t Index = 0) {
     if (Index >= Stack.size()) {
-      throw std::runtime_error("EVM stack underflow");
+      throw getErrorWithPhase(ErrorCode::EVMStackUnderflow,
+                              ErrorPhase::Compilation,
+                              ErrorSubphase::MIREmission);
     }
     return Stack[Stack.size() - 1 - Index];
   }
