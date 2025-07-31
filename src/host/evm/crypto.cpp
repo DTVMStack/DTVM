@@ -8,6 +8,10 @@
 
 namespace zen::host::evm::crypto {
 
+// Static member definitions
+std::unique_ptr<CryptoInterface> CryptoProvider::Instance;
+std::once_flag CryptoProvider::Initialized;
+
 // RealCrypto implementation
 void CryptoHost::keccak256(const uint8_t *Input, std::size_t InputLen,
                            uint8_t *Output) {
