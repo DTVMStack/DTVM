@@ -5,6 +5,8 @@
 #define ZEN_EVM_CRYPTO_H
 
 #include <cstdint>
+#include <memory>
+#include <mutex>
 #include <vector>
 
 namespace zen::host::evm::crypto {
@@ -37,15 +39,26 @@ public:
   std::vector<uint8_t> keccak256(const std::vector<uint8_t> &Input) override;
 };
 
-/**
- * Global crypto instance - can be switched between real and mock
- */
 class CryptoProvider {
-public:
-  static CryptoInterface &getInstance();
-
 private:
-  static CryptoHost CryptoInstance;
+  static std::unique_ptr<CryptoInterface> Instance;
+  static std::once_flag Initialized;
+
+  static void initializeDefault() {
+    if (!Instance) {
+      Instance = std::make_unique<CryptoHost>();
+    }
+  }
+
+public:
+  static CryptoInterface &getInstance() {
+    std::call_once(Initialized, initializeDefault);
+    return *Instance;
+  }
+
+  static void setInstance(std::unique_ptr<CryptoInterface> NewInstance) {
+    Instance = std::move(NewInstance);
+  }
 };
 
 // Convenience functions for direct use

@@ -8,9 +8,6 @@
 
 namespace zen::host::evm::crypto {
 
-// Static members
-CryptoHost CryptoProvider::CryptoInstance;
-
 // RealCrypto implementation
 void CryptoHost::keccak256(const uint8_t *Input, std::size_t InputLen,
                            uint8_t *Output) {
@@ -23,11 +20,6 @@ std::vector<uint8_t> CryptoHost::keccak256(const std::vector<uint8_t> &Input) {
   std::vector<uint8_t> Result(32);
   keccak256(Input.data(), Input.size(), Result.data());
   return Result;
-}
-
-// CryptoProvider implementation
-CryptoInterface &CryptoProvider::getInstance() {
-  return static_cast<CryptoInterface &>(CryptoInstance);
 }
 
 // Convenience functions
