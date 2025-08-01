@@ -68,6 +68,33 @@ private:
   }
 };
 
+class AdcInstruction : public FixedOperandInstruction<3> {
+public:
+  template <typename... Arguments>
+  static AdcInstruction *create(Arguments &&...args) {
+    return FixedOperandInstruction::create<AdcInstruction>(
+        std::forward<Arguments>(args)...);
+  }
+
+  static bool classof(const MInstruction *inst) {
+    return inst->getOpcode() == OP_adc;
+  }
+
+  const MInstruction *getOperand1() const { return getOperand<0>(); }
+  const MInstruction *getOperand2() const { return getOperand<1>(); }
+  const MInstruction *getCarry() const { return getOperand<2>(); }
+
+private:
+  friend class FixedOperandInstruction;
+  AdcInstruction(MType *type, MInstruction *operand1, MInstruction *operand2,
+                 MInstruction *carry)
+      : FixedOperandInstruction(MInstruction::ADC, OP_adc, 3, type) {
+    setOperand<0>(operand1);
+    setOperand<1>(operand2);
+    setOperand<2>(carry);
+  }
+};
+
 class UnaryInstruction : public FixedOperandInstruction<1> {
 public:
   template <typename... Arguments>
