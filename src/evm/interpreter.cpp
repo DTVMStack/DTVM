@@ -36,6 +36,8 @@ void BaseInterpreter::interpret() {
   Context.allocFrame(Context.getInstance()->getGas());
   EVMFrame *Frame = Context.getCurFrame();
 
+  Context.setStatus(EVMC_SUCCESS);
+
   const EVMModule *Mod = Context.getInstance()->getModule();
 
   EVMResource::setExecutionContext(Frame, &Context);
@@ -62,13 +64,13 @@ void BaseInterpreter::interpret() {
       break;
     }
 
-    case evmc_opcode::OP_SUB: {
-      EVMOpcodeHandlerRegistry::getSubHandler().execute();
+    case evmc_opcode::OP_MUL: {
+      EVMOpcodeHandlerRegistry::getMulHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_MUL: {
-      EVMOpcodeHandlerRegistry::getMulHandler().execute();
+    case evmc_opcode::OP_SUB: {
+      EVMOpcodeHandlerRegistry::getSubHandler().execute();
       break;
     }
 
@@ -77,23 +79,38 @@ void BaseInterpreter::interpret() {
       break;
     }
 
+    case evmc_opcode::OP_SDIV: {
+      EVMOpcodeHandlerRegistry::getSDivHandler().execute();
+      break;
+    }
+
     case evmc_opcode::OP_MOD: {
       EVMOpcodeHandlerRegistry::getModHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_AND: {
-      EVMOpcodeHandlerRegistry::getAndHandler().execute();
+    case evmc_opcode::OP_SMOD: {
+      EVMOpcodeHandlerRegistry::getSModHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_EQ: {
-      EVMOpcodeHandlerRegistry::getEqHandler().execute();
+    case evmc_opcode::OP_ADDMOD: {
+      EVMOpcodeHandlerRegistry::getAddmodHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_ISZERO: {
-      EVMOpcodeHandlerRegistry::getIsZeroHandler().execute();
+    case evmc_opcode::OP_MULMOD: {
+      EVMOpcodeHandlerRegistry::getMulmodHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_EXP: {
+      EVMOpcodeHandlerRegistry::getExpHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_SIGNEXTEND: {
+      EVMOpcodeHandlerRegistry::getSignExtendHandler().execute();
       break;
     }
 
@@ -117,32 +134,18 @@ void BaseInterpreter::interpret() {
       break;
     }
 
-    case evmc_opcode::OP_ADDMOD: {
-      EVMOpcodeHandlerRegistry::getAddmodHandler().execute();
+    case evmc_opcode::OP_EQ: {
+      EVMOpcodeHandlerRegistry::getEqHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_MULMOD: {
-      EVMOpcodeHandlerRegistry::getMulmodHandler().execute();
+    case evmc_opcode::OP_ISZERO: {
+      EVMOpcodeHandlerRegistry::getIsZeroHandler().execute();
       break;
     }
 
-    case evmc_opcode::OP_EXP: {
-      EVMOpcodeHandlerRegistry::getExpHandler().execute();
-      break;
-    }
-
-    case evmc_opcode::OP_SDIV: {
-      EVMOpcodeHandlerRegistry::getSDivHandler().execute();
-      break;
-    }
-
-    case evmc_opcode::OP_SMOD: {
-      EVMOpcodeHandlerRegistry::getSModHandler().execute();
-      break;
-    }
-    case evmc_opcode::OP_SIGNEXTEND: {
-      EVMOpcodeHandlerRegistry::getSignExtendHandler().execute();
+    case evmc_opcode::OP_AND: {
+      EVMOpcodeHandlerRegistry::getAndHandler().execute();
       break;
     }
 
@@ -181,6 +184,147 @@ void BaseInterpreter::interpret() {
       break;
     }
 
+    case evmc_opcode::OP_KECCAK256: {
+      EVMOpcodeHandlerRegistry::getKeccak256Handler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_ADDRESS: {
+      EVMOpcodeHandlerRegistry::getAddressHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_BALANCE: {
+      EVMOpcodeHandlerRegistry::getBalanceHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_ORIGIN: {
+      EVMOpcodeHandlerRegistry::getOriginHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_CALLER: {
+      EVMOpcodeHandlerRegistry::getCallerHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_CALLVALUE: {
+      EVMOpcodeHandlerRegistry::getCallValueHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_CALLDATALOAD: {
+      EVMOpcodeHandlerRegistry::getCallDataLoadHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_CALLDATASIZE: {
+      EVMOpcodeHandlerRegistry::getCallDataSizeHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_CALLDATACOPY: {
+      EVMOpcodeHandlerRegistry::getCallDataCopyHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_CODESIZE: {
+      EVMOpcodeHandlerRegistry::getCodeSizeHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_CODECOPY: {
+      EVMOpcodeHandlerRegistry::getCodeCopyHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_GASPRICE: {
+      EVMOpcodeHandlerRegistry::getGasPriceHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_EXTCODESIZE: {
+      EVMOpcodeHandlerRegistry::getExtCodeSizeHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_EXTCODECOPY: {
+      EVMOpcodeHandlerRegistry::getExtCodeCopyHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_RETURNDATASIZE: {
+      EVMOpcodeHandlerRegistry::getReturnDataSizeHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_RETURNDATACOPY: {
+      EVMOpcodeHandlerRegistry::getReturnDataCopyHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_EXTCODEHASH: {
+      EVMOpcodeHandlerRegistry::getExtCodeHashHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_BLOCKHASH: {
+      EVMOpcodeHandlerRegistry::getBlockHashHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_COINBASE: {
+      EVMOpcodeHandlerRegistry::getCoinBaseHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_TIMESTAMP: {
+      EVMOpcodeHandlerRegistry::getTimeStampHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_NUMBER: {
+      EVMOpcodeHandlerRegistry::getNumberHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_PREVRANDAO: {
+      EVMOpcodeHandlerRegistry::getPrevRanDaoHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_GASLIMIT: {
+      EVMOpcodeHandlerRegistry::getGasLimitHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_CHAINID: {
+      EVMOpcodeHandlerRegistry::getChainIdHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_SELFBALANCE: {
+      EVMOpcodeHandlerRegistry::getSelfBalanceHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_BASEFEE: {
+      EVMOpcodeHandlerRegistry::getBaseFeeHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_POP: {
+      EVM_STACK_CHECK(Frame, 1);
+      Frame->pop();
+      break;
+    }
+
+    case evmc_opcode::OP_MLOAD: {
+      EVMOpcodeHandlerRegistry::getMLoadHandler().execute();
+      break;
+    }
+
     case evmc_opcode::OP_MSTORE: {
       EVMOpcodeHandlerRegistry::getMStoreHandler().execute();
       break;
@@ -190,8 +334,14 @@ void BaseInterpreter::interpret() {
       EVMOpcodeHandlerRegistry::getMStore8Handler().execute();
       break;
     }
-    case evmc_opcode::OP_MLOAD: {
-      EVMOpcodeHandlerRegistry::getMLoadHandler().execute();
+
+    case evmc_opcode::OP_SLOAD: {
+      EVMOpcodeHandlerRegistry::getSLoadHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_SSTORE: {
+      EVMOpcodeHandlerRegistry::getSStoreHandler().execute();
       break;
     }
 
@@ -213,12 +363,9 @@ void BaseInterpreter::interpret() {
       EVMOpcodeHandlerRegistry::getPCHandler().execute();
       break;
     }
+
     case evmc_opcode::OP_MSIZE: {
       EVMOpcodeHandlerRegistry::getMSizeHandler().execute();
-      break;
-    }
-
-    case evmc_opcode::OP_JUMPDEST: {
       break;
     }
 
@@ -226,8 +373,19 @@ void BaseInterpreter::interpret() {
       EVMOpcodeHandlerRegistry::getGasHandler().execute();
       break;
     }
-    case evmc_opcode::OP_GASLIMIT: {
-      EVMOpcodeHandlerRegistry::getGasLimitHandler().execute();
+
+    case evmc_opcode::OP_JUMPDEST: {
+      break;
+    }
+
+    case evmc_opcode::OP_LOG0:
+    case evmc_opcode::OP_LOG1:
+    case evmc_opcode::OP_LOG2:
+    case evmc_opcode::OP_LOG3:
+    case evmc_opcode::OP_LOG4: {
+      EVMOpcodeHandlerRegistry::getLogHandler(
+          static_cast<evmc_opcode>(OpcodeByte))
+          .execute();
       break;
     }
 
@@ -249,31 +407,54 @@ void BaseInterpreter::interpret() {
       break;
     }
 
-    case evmc_opcode::OP_POP: {
-      EVM_THROW_IF(Frame->stackHeight(), <, 1, UnexpectedNumArgs);
-      Frame->pop();
-      break;
-    }
-
     case evmc_opcode::OP_INVALID: {
       throw getError(ErrorCode::EVMInvalidInstruction);
+    }
+
+    case evmc_opcode::OP_SELFDESTRUCT: {
+      EVMOpcodeHandlerRegistry::getSelfDestructHandler().execute();
+      Frame = Context.getCurFrame();
+      if (!Frame) {
+        return;
+      }
+      break;
     }
 
     default:
       if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_PUSH1) &&
           OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_PUSH32)) {
         // PUSH1 ~ PUSH32
-        EVMOpcodeHandlerRegistry::getPUSHHandler().execute();
+        EVMOpcodeHandlerRegistry::getPushHandler(
+            static_cast<evmc_opcode>(OpcodeByte))
+            .execute();
         break;
       } else if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_DUP1) &&
                  OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_DUP16)) {
         // DUP1 ~ DUP16
-        EVMOpcodeHandlerRegistry::getDUPHandler().execute();
+        EVMOpcodeHandlerRegistry::getDupHandler(
+            static_cast<evmc_opcode>(OpcodeByte))
+            .execute();
         break;
       } else if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_SWAP1) &&
                  OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_SWAP16)) {
         // SWAP1 ~ SWAP16
-        EVMOpcodeHandlerRegistry::getSWAPHandler().execute();
+        EVMOpcodeHandlerRegistry::getSwapHandler(
+            static_cast<evmc_opcode>(OpcodeByte))
+            .execute();
+        break;
+      } else if (OpcodeByte == evmc_opcode::OP_CREATE or
+                 OpcodeByte == evmc_opcode::OP_CREATE2) {
+        EVMOpcodeHandlerRegistry::getCreateHandler(
+            static_cast<evmc_opcode>(OpcodeByte))
+            .execute();
+        break;
+      } else if (OpcodeByte == evmc_opcode::OP_CALL or
+                 OpcodeByte == evmc_opcode::OP_CALLCODE or
+                 OpcodeByte == evmc_opcode::OP_DELEGATECALL or
+                 OpcodeByte == evmc_opcode::OP_STATICCALL) {
+        EVMOpcodeHandlerRegistry::getCallHandler(
+            static_cast<evmc_opcode>(OpcodeByte))
+            .execute();
         break;
       } else {
         throw getError(ErrorCode::UnsupportedOpcode);
@@ -282,6 +463,43 @@ void BaseInterpreter::interpret() {
 
     if (IsJumpSuccess) {
       continue;
+    }
+
+    if (Context.getStatus() != EVMC_SUCCESS) {
+      // Handle execution errors according to EVM specification
+      evmc_status_code Status = Context.getStatus();
+
+      switch (Status) {
+      case EVMC_REVERT:
+        // REVERT: Keep remaining gas and return data
+        // Gas and return data are already set by RevertHandler
+        break;
+
+      case EVMC_OUT_OF_GAS:
+      case EVMC_STACK_OVERFLOW:
+      case EVMC_STACK_UNDERFLOW:
+      case EVMC_INVALID_INSTRUCTION:
+      case EVMC_UNDEFINED_INSTRUCTION:
+      case EVMC_BAD_JUMP_DESTINATION:
+      case EVMC_INVALID_MEMORY_ACCESS:
+      case EVMC_CALL_DEPTH_EXCEEDED:
+      case EVMC_STATIC_MODE_VIOLATION:
+      case EVMC_INSUFFICIENT_BALANCE:
+        // Fatal errors: consume all remaining gas and clear return data
+        Frame->GasLeft = 0;
+        Frame->GasRefund = 0;
+        Context.setReturnData(std::vector<uint8_t>());
+        break;
+
+      case EVMC_FAILURE:
+      default:
+        // Generic failure: consume all remaining gas and clear return data
+        Frame->GasLeft = 0;
+        Frame->GasRefund = 0;
+        Context.setReturnData(std::vector<uint8_t>());
+      }
+
+      break;
     }
 
     Frame->Pc++;

@@ -7,6 +7,7 @@
 #include "common/errors.h"
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
+#include <cstdint>
 
 // EVM error checking macro definitions
 #define EVM_STACK_CHECK(FramePtr, N)                                           \
@@ -14,21 +15,28 @@
     throw zen::common::getError(zen::common::ErrorCode::UnexpectedNumArgs);    \
   }
 
-// Generic condition check + exception throwing macro
-#define EVM_THROW_IF(Lhs, Op, Rhs, errorCode)                                  \
-  if ((Lhs)Op(Rhs)) {                                                          \
-    throw zen::common::getError(zen::common::ErrorCode::errorCode);            \
+// EVMFrame check
+#define EVM_FRAME_CHECK(FramePtr)                                              \
+  if (!(FramePtr)) {                                                           \
+    throw zen::common::getError(zen::common::ErrorCode::EVMFrameNotFound);     \
   }
 
 // Simple boolean condition check macro
 #define EVM_REQUIRE(Condition, errorCode)                                      \
-  if (!Condition) {                                                            \
+  if (!(Condition)) {                                                          \
     throw zen::common::getError(zen::common::ErrorCode::errorCode);            \
   }
 
 #define EVM_REGISTRY_GET(OpName)                                               \
   static OpName##Handler get##OpName##Handler() {                              \
     static OpName##Handler OpName;                                             \
+    return OpName;                                                             \
+  }
+
+#define EVM_REGISTRY_GET_MULTIOPCODE(OpName)                                   \
+  static OpName##Handler get##OpName##Handler(evmc_opcode OpCode) {            \
+    static OpName##Handler OpName;                                             \
+    OpName.OpCode = OpCode;                                                    \
     return OpName;                                                             \
   }
 
@@ -61,7 +69,10 @@ protected:
 public:
   void execute() {
     uint64_t GasCost = static_cast<Derived *>(this)->calculateGas();
-    EVM_THROW_IF(getFrame()->GasLeft, <, GasCost, EVMOutOfGas);
+    if ((uint64_t)getFrame()->GasLeft < GasCost) {
+      getContext()->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
     getFrame()->GasLeft -= GasCost;
     static_cast<Derived *>(this)->doExecute();
   };
@@ -70,9 +81,12 @@ public:
 template <typename UnaryOp>
 class UnaryOpHandler : public EVMOpcodeHandlerBase<UnaryOpHandler<UnaryOp>> {
 public:
+  static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }
+  static InterpreterExecContext *getContext() {
+    return EVMResource::getInterpreterExecContext();
+  }
   static void doExecute() {
-    using Base = EVMOpcodeHandlerBase<UnaryOpHandler<UnaryOp>>;
-    auto *Frame = Base::getFrame();
+    auto *Frame = getFrame();
     EVM_STACK_CHECK(Frame, 1);
 
     intx::uint256 A = Frame->pop();
@@ -86,9 +100,12 @@ public:
 template <typename BinaryOp>
 class BinaryOpHandler : public EVMOpcodeHandlerBase<BinaryOpHandler<BinaryOp>> {
 public:
+  static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }
+  static InterpreterExecContext *getContext() {
+    return EVMResource::getInterpreterExecContext();
+  }
   static void doExecute() {
-    using Base = EVMOpcodeHandlerBase<BinaryOpHandler<BinaryOp>>;
-    auto *Frame = Base::getFrame();
+    auto *Frame = getFrame();
     EVM_STACK_CHECK(Frame, 2);
 
     intx::uint256 A = Frame->pop();
@@ -104,9 +121,12 @@ template <typename TernaryOp>
 class TernaryOpHandler
     : public EVMOpcodeHandlerBase<TernaryOpHandler<TernaryOp>> {
 public:
+  static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }
+  static InterpreterExecContext *getContext() {
+    return EVMResource::getInterpreterExecContext();
+  }
   static void doExecute() {
-    using Base = EVMOpcodeHandlerBase<TernaryOpHandler<TernaryOp>>;
-    auto *Frame = Base::getFrame();
+    auto *Frame = getFrame();
     EVM_STACK_CHECK(Frame, 3);
 
     intx::uint256 A = Frame->pop();
@@ -179,9 +199,56 @@ DEFINE_BINARY_OP(Sgt, intx::slt(B, A));
 #define DEFINE_UNIMPLEMENT_HANDLER(OpName)                                     \
   class OpName##Handler : public EVMOpcodeHandlerBase<OpName##Handler> {       \
   public:                                                                      \
+    static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }         \
+    static InterpreterExecContext *getContext() {                              \
+      return EVMResource::getInterpreterExecContext();                         \
+    }                                                                          \
     static void doExecute();                                                   \
     static uint64_t calculateGas();                                            \
   };
+
+#define DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(OpName)                         \
+  class OpName##Handler : public EVMOpcodeHandlerBase<OpName##Handler> {       \
+  public:                                                                      \
+    inline static evmc_opcode OpCode = OP_INVALID;                             \
+    static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }         \
+    static InterpreterExecContext *getContext() {                              \
+      return EVMResource::getInterpreterExecContext();                         \
+    }                                                                          \
+    static void doExecute();                                                   \
+    static uint64_t calculateGas();                                            \
+  };
+
+// environmental information
+DEFINE_UNIMPLEMENT_HANDLER(Address);
+DEFINE_UNIMPLEMENT_HANDLER(Balance);
+DEFINE_UNIMPLEMENT_HANDLER(Origin);
+DEFINE_UNIMPLEMENT_HANDLER(Caller);
+DEFINE_UNIMPLEMENT_HANDLER(CallValue);
+DEFINE_UNIMPLEMENT_HANDLER(CallDataLoad);
+DEFINE_UNIMPLEMENT_HANDLER(CallDataSize);
+DEFINE_UNIMPLEMENT_HANDLER(CodeSize);
+DEFINE_UNIMPLEMENT_HANDLER(CallDataCopy);
+DEFINE_UNIMPLEMENT_HANDLER(CodeCopy);
+DEFINE_UNIMPLEMENT_HANDLER(GasPrice);
+DEFINE_UNIMPLEMENT_HANDLER(ExtCodeSize);
+DEFINE_UNIMPLEMENT_HANDLER(ExtCodeCopy);
+DEFINE_UNIMPLEMENT_HANDLER(ReturnDataSize);
+DEFINE_UNIMPLEMENT_HANDLER(ReturnDataCopy);
+DEFINE_UNIMPLEMENT_HANDLER(ExtCodeHash);
+
+// block message
+DEFINE_UNIMPLEMENT_HANDLER(BlockHash);
+DEFINE_UNIMPLEMENT_HANDLER(CoinBase);
+DEFINE_UNIMPLEMENT_HANDLER(TimeStamp);
+DEFINE_UNIMPLEMENT_HANDLER(Number);
+DEFINE_UNIMPLEMENT_HANDLER(PrevRanDao);
+DEFINE_UNIMPLEMENT_HANDLER(ChainId);
+DEFINE_UNIMPLEMENT_HANDLER(SelfBalance);
+DEFINE_UNIMPLEMENT_HANDLER(BaseFee);
+// storage operations
+DEFINE_UNIMPLEMENT_HANDLER(SLoad);
+DEFINE_UNIMPLEMENT_HANDLER(SStore);
 
 // Arithmetic operations
 DEFINE_UNIMPLEMENT_HANDLER(SignExtend);
@@ -208,9 +275,22 @@ DEFINE_UNIMPLEMENT_HANDLER(Return);
 DEFINE_UNIMPLEMENT_HANDLER(Revert);
 
 // Stack operations
-DEFINE_UNIMPLEMENT_HANDLER(PUSH);
-DEFINE_UNIMPLEMENT_HANDLER(DUP);
-DEFINE_UNIMPLEMENT_HANDLER(SWAP);
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Push);
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Dup);
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Swap);
+
+// Call operations
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Create);
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Call);
+
+// Logging operations
+DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Log);
+
+// Crypto operations
+DEFINE_UNIMPLEMENT_HANDLER(Keccak256);
+
+// Self-destruct operation
+DEFINE_UNIMPLEMENT_HANDLER(SelfDestruct);
 
 // Registry class to manage execution context
 class EVMOpcodeHandlerRegistry {
@@ -244,6 +324,35 @@ public:
   EVM_REGISTRY_GET(Sgt);
   EVM_REGISTRY_GET(Byte);
   EVM_REGISTRY_GET(Sar);
+  // Environmental information
+  EVM_REGISTRY_GET(Address);
+  EVM_REGISTRY_GET(Balance);
+  EVM_REGISTRY_GET(Origin);
+  EVM_REGISTRY_GET(Caller);
+  EVM_REGISTRY_GET(CallValue);
+  EVM_REGISTRY_GET(CallDataLoad);
+  EVM_REGISTRY_GET(CallDataSize);
+  EVM_REGISTRY_GET(CodeSize);
+  EVM_REGISTRY_GET(CallDataCopy);
+  EVM_REGISTRY_GET(CodeCopy);
+  EVM_REGISTRY_GET(GasPrice);
+  EVM_REGISTRY_GET(ExtCodeSize);
+  EVM_REGISTRY_GET(ExtCodeCopy);
+  EVM_REGISTRY_GET(ReturnDataSize);
+  EVM_REGISTRY_GET(ReturnDataCopy);
+  EVM_REGISTRY_GET(ExtCodeHash);
+  // Block message
+  EVM_REGISTRY_GET(BlockHash);
+  EVM_REGISTRY_GET(CoinBase);
+  EVM_REGISTRY_GET(TimeStamp);
+  EVM_REGISTRY_GET(Number);
+  EVM_REGISTRY_GET(PrevRanDao);
+  EVM_REGISTRY_GET(ChainId);
+  EVM_REGISTRY_GET(SelfBalance);
+  EVM_REGISTRY_GET(BaseFee);
+  // storage operations
+  EVM_REGISTRY_GET(SLoad);
+  EVM_REGISTRY_GET(SStore);
   // Memory operations
   EVM_REGISTRY_GET(MStore);
   EVM_REGISTRY_GET(MStore8);
@@ -260,13 +369,19 @@ public:
   EVM_REGISTRY_GET(Return);
   EVM_REGISTRY_GET(Revert);
   // Stack operations
-  EVM_REGISTRY_GET(PUSH);
-  EVM_REGISTRY_GET(DUP);
-  EVM_REGISTRY_GET(SWAP);
+  EVM_REGISTRY_GET_MULTIOPCODE(Push);
+  EVM_REGISTRY_GET_MULTIOPCODE(Dup);
+  EVM_REGISTRY_GET_MULTIOPCODE(Swap);
+  // Call operations
+  EVM_REGISTRY_GET_MULTIOPCODE(Create);
+  EVM_REGISTRY_GET_MULTIOPCODE(Call);
+  // Logging operations
+  EVM_REGISTRY_GET_MULTIOPCODE(Log);
+  // Crypto operations
+  EVM_REGISTRY_GET(Keccak256);
+  // Self-destruct operation
+  EVM_REGISTRY_GET(SelfDestruct);
 };
-
-// Utility functions
-uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize);
 
 } // namespace zen::evm
 

@@ -5,7 +5,9 @@
 #define ZEN_EVM_INTERPRETER_H
 
 #include "common/errors.h"
-#include "evmc/evmc.h"
+#include "evm/evm.h"
+#include "evm/gas_storage_cost.h"
+#include "evmc/evmc.hpp"
 #include "intx/intx.hpp"
 
 #include <array>
@@ -28,12 +30,18 @@ struct EVMFrame {
   std::vector<uint8_t> Memory;
   // TODO: use EVMHost in the future
   std::map<intx::uint256, intx::uint256> Storage;
+  const evmc_message *Msg = nullptr;
+  evmc::Host *Host = nullptr;
+  evmc_revision Rev = DEFAULT_REVISION;
+  evmc_tx_context MTx = {};
 
   size_t Sp = 0;
-  uint64_t GasLeft = 0;
+  int64_t GasLeft = 0;
+  uint64_t GasRefund = 0;
   uint64_t GasLimit = 0;
   uint64_t Pc = 0;
   intx::uint256 Value = 0;
+  bool IsStatic = false;
 
   inline void push(const intx::uint256 &V) {
     if (Sp >= MAXSTACK) {
@@ -57,6 +65,13 @@ struct EVMFrame {
   }
 
   inline size_t stackHeight() const { return Sp; }
+
+  const evmc_tx_context &get_tx_context() noexcept {
+    if (INTX_UNLIKELY(MTx.block_timestamp == 0))
+      MTx = Host->get_tx_context();
+    return MTx;
+  }
+  bool isStaticMode() const { return (Msg->flags & EVMC_STATIC) != 0; }
 };
 
 class InterpreterExecContext {
