@@ -332,7 +332,7 @@ private:
 
   U256ConstInt createU256Constants(const U256Value &value);
   /// Create u256 value from bytes with big-endian conversion
-  U256Value createU256FromBytes(const Byte *bytes, size_t length);
+  U256Value createU256FromBytes(const Byte *bytes, size_t Length);
 
   U256Value bytesToU256(const Bytes &data);
 

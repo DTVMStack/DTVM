@@ -29,7 +29,7 @@ public:
   }
 
 private:
-  void push(const Operand &op) { Stack.push(op); }
+  void push(const Operand &Opnd) { Stack.push(Opnd); }
 
   Operand pop() {
     ZEN_ASSERT(!Stack.empty());
@@ -494,13 +494,13 @@ private:
     }
   }
 
-  Bytes readBytes(uint8_t count) {
-    if (PC + count > Module.CodeSize) {
+  Bytes readBytes(uint8_t Count) {
+    if (PC + Count > Module.CodeSize) {
       throw getError(common::ErrorCode::ArgOutOfRange);
     }
-    Bytes result(Module.Code + PC, Module.Code + PC + count);
-    PC += count;
-    return result;
+    Bytes Result(Module.Code + PC, Module.Code + PC + Count);
+    PC += Count;
+    return Result;
   }
 
   void handleDup(uint8_t Index) {
@@ -509,24 +509,6 @@ private:
   }
 
   void handleSwap(uint8_t Index) { Builder.handleSwap(Index); }
-
-  void handleJump() {
-    Operand target = pop();
-    Builder.handleJump(target);
-  }
-
-  void handleJumpI() {
-    Operand target = pop();
-    Operand condition = pop();
-    Builder.handleJumpI(target, condition);
-  }
-
-  void handleJumpDest() {
-    // JUMPDEST is a no-op instruction that marks a valid jump target
-    // The actual basic block creation is handled by the jump analyzer
-    // We just need to ensure we're in the correct basic block
-    Builder.handleJumpDest(PC - 1); // PC was incremented after reading opcode
-  }
 
   IRBuilder &Builder;
   CompilerContext *Ctx;

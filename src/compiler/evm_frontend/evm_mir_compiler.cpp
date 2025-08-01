@@ -1,4 +1,4 @@
-// Copyright (C) 2021-205 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #include "compiler/evm_frontend/evm_mir_compiler.h"
@@ -83,25 +83,25 @@ void EVMMirBuilder::finalizeEVMBase() {
 
 // Convert big-endian bytes to uint256(4 x uint64_t)
 EVMMirBuilder::U256Value EVMMirBuilder::createU256FromBytes(const Byte *bytes,
-                                                            size_t length) {
-  U256Value result = {0, 0, 0, 0};
+                                                            size_t Length) {
+  U256Value Result = {0, 0, 0, 0};
 
-  size_t start = (length > 32) ? (length - 32) : 0;
-  size_t actualLength = (length > 32) ? 32 : length;
+  size_t Start = (Length > 32) ? (Length - 32) : 0;
+  size_t ActualLength = (Length > 32) ? 32 : Length;
 
-  for (size_t i = 0; i < actualLength; ++i) {
-    size_t byteIndex = start + i;
-    size_t globalBytePos = actualLength - 1 - i; // Position from right (LSB)
-    size_t u64Index = globalBytePos / 8;
-    size_t byteInU64 = globalBytePos % 8;
+  for (size_t i = 0; i < ActualLength; ++i) {
+    size_t ByteIndex = Start + i;
+    size_t GlobalBytePos = ActualLength - 1 - i; // Position from right (LSB)
+    size_t U64Index = GlobalBytePos / 8;
+    size_t ByteInU64 = GlobalBytePos % 8;
 
-    if (u64Index < 4) {
-      result[u64Index] |=
-          (static_cast<uint64_t>(bytes[byteIndex]) << (byteInU64 * 8));
+    if (U64Index < 4) {
+      Result[U64Index] |=
+          (static_cast<uint64_t>(bytes[ByteIndex]) << (ByteInU64 * 8));
     }
   }
 
-  return result;
+  return Result;
 }
 
 EVMMirBuilder::U256ConstInt
@@ -117,8 +117,8 @@ EVMMirBuilder::createU256Constants(const U256Value &value) {
 }
 
 EVMMirBuilder::Operand EVMMirBuilder::handlePush(const Bytes &Data) {
-  U256Value value = bytesToU256(Data);
-  return Operand(value);
+  U256Value Value = bytesToU256(Data);
+  return Operand(Value);
 }
 
 EVMMirBuilder::Operand EVMMirBuilder::handleDup(uint8_t Index) {
