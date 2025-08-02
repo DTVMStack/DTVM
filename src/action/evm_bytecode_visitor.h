@@ -13,7 +13,7 @@ namespace COMPILER {
 template <typename IRBuilder> class EVMByteCodeVisitor {
   typedef typename IRBuilder::CompilerContext CompilerContext;
   typedef typename IRBuilder::Operand Operand;
-  typedef VMValueStack<Operand> EvalStack;
+  typedef VMEvalStack<Operand> EvalStack;
 
 public:
   EVMByteCodeVisitor(IRBuilder &Builder, CompilerContext *Ctx)
@@ -51,49 +51,47 @@ private:
       Ip++;
 
       switch (Opcode) {
-      case OP_STOP:   // 0x00: stop
-      case OP_RETURN: // 0xf3: return
+      case OP_STOP:
         handleStop();
         return true;
-      case OP_ADD: // 0x01: add
+      case OP_ADD:
         handleBinaryArithmetic<BinaryOperator::BO_ADD>();
         break;
-      case OP_SUB: // 0x03: sub
+      case OP_SUB:
         handleBinaryArithmetic<BinaryOperator::BO_SUB>();
         break;
-      case OP_LT: // 0x10: lt
+      case OP_LT:
         handleCompare<CompareOperator::CO_LT>();
         break;
-      case OP_GT: // 0x11: gt
+      case OP_GT:
         handleCompare<CompareOperator::CO_GT>();
         break;
-      case OP_SLT: // 0x12: slt
+      case OP_SLT:
         handleCompare<CompareOperator::CO_LT_S>();
         break;
-      case OP_SGT: // 0x13: sgt
+      case OP_SGT:
         handleCompare<CompareOperator::CO_GT_S>();
         break;
-      case OP_EQ: // 0x14: eq
+      case OP_EQ:
         handleCompare<CompareOperator::CO_EQ>();
         break;
-      case OP_ISZERO: // 0x15: iszero
+      case OP_ISZERO:
         handleCompare<CompareOperator::CO_EQZ>();
         break;
-      case OP_AND: // 0x16: and
+      case OP_AND:
         handleBitwiseOp<BinaryOperator::BO_AND>();
         break;
-      case OP_OR: // 0x17: or
+      case OP_OR:
         handleBitwiseOp<BinaryOperator::BO_OR>();
         break;
-      case OP_XOR: // 0x18: xor
+      case OP_XOR:
         handleBitwiseOp<BinaryOperator::BO_XOR>();
         break;
-      case OP_POP: // 0x50: pop
-        handlePop();
+      case OP_POP:
+        Builder.handlePop();
         break;
 
-      // PUSH Operations (0x5f-0x7f)
-      case OP_PUSH0: // place value 0 on stack
+      case OP_PUSH0:
       case OP_PUSH1:
       case OP_PUSH2:
       case OP_PUSH3:
@@ -132,7 +130,6 @@ private:
         break;
       }
 
-      // DUP Operations (0x80-0x8f)
       case OP_DUP1:
       case OP_DUP2:
       case OP_DUP3:
@@ -154,7 +151,6 @@ private:
         break;
       }
 
-      // SWAP Operations (0x90-0x9f)
       case OP_SWAP1:
       case OP_SWAP2:
       case OP_SWAP3:
@@ -445,6 +441,10 @@ private:
       }
 
       // Halt operations
+      case OP_RETURN: {
+        ZEN_ASSERT_TODO();
+      }
+
       case OP_REVERT:
         // End execution
         return true;
@@ -482,21 +482,14 @@ private:
   }
 
   void handlePush(uint8_t NumBytes) {
-    if (NumBytes == 0) {
-      // PUSH0: place value 0 on stack
-      Operand Result = Builder.handlePush(Bytes());
-      push(Result);
-    } else {
-      // PUSH1-PUSH32: read specified bytes and push value
-      Bytes Data = readBytes(NumBytes);
-      Operand Result = Builder.handlePush(Data);
-      push(Result);
-    }
+    Bytes Data = readBytes(NumBytes);
+    Operand Result = Builder.handlePush(Data);
+    push(Result);
   }
 
   Bytes readBytes(uint8_t Count) {
     if (PC + Count > Module.CodeSize) {
-      throw getError(common::ErrorCode::ArgOutOfRange);
+      throw getError(common::ErrorCode::UnexpectedEnd);
     }
     Bytes Result(Module.Code + PC, Module.Code + PC + Count);
     PC += Count;

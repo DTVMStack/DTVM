@@ -50,7 +50,7 @@ template <typename IRBuilder> class WASMByteCodeVisitor {
   typedef typename IRBuilder::BlockInfo CtrlBlockInfo;
   typedef typename IRBuilder::CompilerContext CompilerContext;
   typedef typename IRBuilder::Operand Operand; // operand to build ir
-  typedef VMValueStack<Operand> EvalStack;     // byte code evaluation stack
+  typedef VMEvalStack<Operand> EvalStack;      // byte code evaluation stack
 
 public:
   WASMByteCodeVisitor(IRBuilder &Builder, CompilerContext *Ctx)

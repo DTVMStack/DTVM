@@ -9,7 +9,7 @@
 
 namespace zen::action {
 
-template <typename Operand> class VMValueStack {
+template <typename Operand> class VMEvalStack {
 public:
   void push(const Operand &Op) { StackImpl.push(Op); }
 
