@@ -71,13 +71,13 @@ private:
 class AdcInstruction : public FixedOperandInstruction<3> {
 public:
   template <typename... Arguments>
-  static AdcInstruction *create(Arguments &&...args) {
+  static AdcInstruction *create(Arguments &&...Args) {
     return FixedOperandInstruction::create<AdcInstruction>(
-        std::forward<Arguments>(args)...);
+        std::forward<Arguments>(Args)...);
   }
 
-  static bool classof(const MInstruction *inst) {
-    return inst->getOpcode() == OP_adc;
+  static bool classof(const MInstruction *Inst) {
+    return Inst->getOpcode() == OP_adc;
   }
 
   const MInstruction *getOperand1() const { return getOperand<0>(); }
@@ -86,12 +86,12 @@ public:
 
 private:
   friend class FixedOperandInstruction;
-  AdcInstruction(MType *type, MInstruction *operand1, MInstruction *operand2,
-                 MInstruction *carry)
-      : FixedOperandInstruction(MInstruction::ADC, OP_adc, 3, type) {
-    setOperand<0>(operand1);
-    setOperand<1>(operand2);
-    setOperand<2>(carry);
+  AdcInstruction(MType *Type, MInstruction *Operand1, MInstruction *Operand2,
+                 MInstruction *Carry)
+      : FixedOperandInstruction(MInstruction::ADC, OP_adc, 3, Type) {
+    setOperand<0>(Operand1);
+    setOperand<1>(Operand2);
+    setOperand<2>(Carry);
   }
 };
 
