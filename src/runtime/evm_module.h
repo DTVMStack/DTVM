@@ -13,7 +13,6 @@ class EVMModule final : public BaseModule<EVMModule> {
   friend class action::EVMModuleLoader;
 
 public:
-  using Byte = common::Byte;
   static EVMModuleUniquePtr newEVMModule(Runtime &RT,
                                          CodeHolderUniquePtr CodeHolder);
 
