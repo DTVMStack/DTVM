@@ -1,9 +1,9 @@
-//return 2 pc(0)+2=2
-PC
+// return memory[4:36]: 0000000000000000000000000000000000000000000000000000000000000002
+PC          // PC=0x00(PUSH1 0x00)
 PUSH1 0x02
 ADD
-PC
-MSTORE
+PC          // PC=0x04(PUSH1 0x04)
+MSTORE      // store to memory: offset=0x04, value=0x02
 PUSH1 0x20
 PUSH1 0x04
-RETURN
+RETURN      // return: offset=0x04, size=0x20
