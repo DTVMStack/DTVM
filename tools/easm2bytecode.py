@@ -187,9 +187,14 @@ def evm_to_bytecode(input_file_path, output_file_path):
 
         # parse each line of instructions and convert to bytecode
         for line in lines:
-            # ignore empty line and comment
+            # ignore empty line and comments
             line = line.strip()
-            if not line or line.startswith("//"):
+            if not line:
+                continue
+
+            # remove comments after //
+            line = line.split("//")[0].strip()
+            if not line:
                 continue
 
             parts = line.split()
