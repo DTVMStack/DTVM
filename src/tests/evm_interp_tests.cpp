@@ -7,6 +7,8 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <rapidjson/document.h>
+#include <rapidjson/istreamwrapper.h>
 
 #include "evm/interpreter.h"
 #include "evmc/mocked_host.hpp"
@@ -48,23 +50,31 @@ std::vector<std::string> getAllEvmBytecodeFiles() {
   return Files;
 }
 
-std::string readAnswerFile(const std::string &FilePath) {
+std::string readExpectedReturnValue(const std::string &FilePath) {
   std::filesystem::path InputFilePath(FilePath);
 
-  // Use filesystem API instead of manual path parsing
-  std::filesystem::path AnswerPath =
+  std::filesystem::path ExpectedPath =
       InputFilePath.parent_path() /
-      (InputFilePath.stem().stem().string() + ".answer");
+      (InputFilePath.stem().stem().string() + ".expected");
 
-  // Read file content
-  std::ifstream Fin(AnswerPath);
+  std::ifstream Fin(ExpectedPath);
   if (!Fin) {
     return "";
   }
 
-  std::string Answer;
-  Fin >> Answer;
-  return Answer;
+  rapidjson::IStreamWrapper JSONISWrapper(Fin);
+  rapidjson::Document Doc;
+  Doc.ParseStream(JSONISWrapper);
+
+  if (Doc.HasParseError() || !Doc.IsObject()) {
+    return "";
+  }
+
+  if (!Doc.HasMember("return") || !Doc["return"].IsString()) {
+    return "";
+  }
+
+  return Doc["return"].GetString();
 }
 
 } // namespace
@@ -125,14 +135,14 @@ TEST_P(EVMSampleTest, ExecuteSample) {
   const auto &Ret = Ctx.getReturnData();
   std::string HexRet = zen::utils::toHex(Ret.data(), Ret.size());
 
-  // Read expected answer
-  std::string ExpectedAnswer = readAnswerFile(FilePath);
-  if (!ExpectedAnswer.empty()) {
-    EXPECT_EQ(HexRet, ExpectedAnswer)
+  // Read expected return value from .expected file
+  std::string ExpectedReturn = readExpectedReturnValue(FilePath);
+  if (!ExpectedReturn.empty()) {
+    EXPECT_EQ(HexRet, ExpectedReturn)
         << "Test: " << std::filesystem::path(FilePath).filename().string()
-        << "\nExpected: " << ExpectedAnswer << "\nActual:   " << HexRet;
+        << "\nExpected: " << ExpectedReturn << "\nActual:   " << HexRet;
   } else {
-    ASSERT_TRUE(false) << "No answer file found for: " << FilePath;
+    ASSERT_TRUE(false) << "No expected file found for: " << FilePath;
   }
 
   EXPECT_EQ(Ctx.getCurFrame(), nullptr)
