@@ -114,7 +114,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 n=2
             fi
             for i in {1..$n}; do
-                ./cAPITests --gtest_filter=C_API.EVM
+                SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose -R "evmInterpTests"
             done
             cd ..
             ;;
