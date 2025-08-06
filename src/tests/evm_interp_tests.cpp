@@ -94,14 +94,21 @@ ExpectedResult readExpectedResult(const std::string &FilePath) {
       Result.Memory = Doc["memory"].as<std::string>();
     }
 
-    if (Doc["storage"] && Doc["storage"].IsMap()) {
+    if (Doc["storage"]) {
+      if (!Doc["storage"].IsMap()) {
+        throw std::runtime_error("Expected 'storage' to be a map type");
+      }
       for (const auto &item : Doc["storage"]) {
         Result.Storage[item.first.as<std::string>()] =
             item.second.as<std::string>();
       }
     }
 
-    if (Doc["transient_storage"] && Doc["transient_storage"].IsMap()) {
+    if (Doc["transient_storage"]) {
+      if (!Doc["transient_storage"].IsMap()) {
+        throw std::runtime_error(
+            "Expected 'transient_storage' to be a map type");
+      }
       for (const auto &item : Doc["transient_storage"]) {
         Result.TransientStorage[item.first.as<std::string>()] =
             item.second.as<std::string>();
@@ -112,8 +119,14 @@ ExpectedResult readExpectedResult(const std::string &FilePath) {
       Result.ReturnValue = Doc["return"].as<std::string>();
     }
 
-    if (Doc["events"] && Doc["events"].IsSequence()) {
+    if (Doc["events"]) {
+      if (!Doc["events"].IsSequence()) {
+        throw std::runtime_error("Expected 'events' to be a sequence type");
+      }
       for (const auto &item : Doc["events"]) {
+        if (!item.IsScalar()) {
+          throw std::runtime_error("Expected each event to be a string type");
+        }
         Result.Events.push_back(item.as<std::string>());
       }
     }

@@ -127,7 +127,7 @@ EVMMirBuilder::Operand EVMMirBuilder::handleDup(uint8_t Index) {
 
 void EVMMirBuilder::handleSwap(uint8_t Index) {
   if (OperandStack.size() < Index + 1) {
-    throw getError(common::ErrorCode::EVMStackOverflow);
+    throw getError(common::ErrorCode::EVMStackUnderflow);
   }
 
   std::vector<Operand> Temp;
@@ -154,7 +154,7 @@ EVMMirBuilder::Operand EVMMirBuilder::popOperand() {
 
 EVMMirBuilder::Operand EVMMirBuilder::peekOperand(size_t Index) const {
   if (OperandStack.size() <= Index) {
-    throw getError(common::ErrorCode::EVMStackOverflow);
+    throw getError(common::ErrorCode::EVMStackUnderflow);
   }
 
   std::stack<Operand> StackCopy = OperandStack;
