@@ -7,8 +7,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include <rapidjson/document.h>
-#include <rapidjson/istreamwrapper.h>
+#include <yaml-cpp/yaml.h>
 
 #include "evm/interpreter.h"
 #include "evmc/mocked_host.hpp"
@@ -50,8 +49,20 @@ std::vector<std::string> getAllEvmBytecodeFiles() {
   return Files;
 }
 
-std::string readExpectedReturnValue(const std::string &FilePath) {
+struct ExpectedResult {
+  std::string Status;
+  uint8_t ErrorCode = 0;
+  std::vector<std::string> Stack;
+  std::string Memory;
+  std::map<std::string, std::string> Storage;
+  std::map<std::string, std::string> TransientStorage;
+  std::string ReturnValue;
+  std::vector<std::string> Events;
+};
+
+ExpectedResult readExpectedResult(const std::string &FilePath) {
   std::filesystem::path InputFilePath(FilePath);
+  ExpectedResult Result;
 
   std::filesystem::path ExpectedPath =
       InputFilePath.parent_path() /
@@ -59,22 +70,59 @@ std::string readExpectedReturnValue(const std::string &FilePath) {
 
   std::ifstream Fin(ExpectedPath);
   if (!Fin) {
-    return "";
+    return Result;
   }
 
-  rapidjson::IStreamWrapper JSONISWrapper(Fin);
-  rapidjson::Document Doc;
-  Doc.ParseStream(JSONISWrapper);
+  try {
+    YAML::Node Doc = YAML::Load(Fin);
 
-  if (Doc.HasParseError() || !Doc.IsObject()) {
-    return "";
+    if (Doc["status"]) {
+      Result.Status = Doc["status"].as<std::string>();
+    }
+
+    if (Doc["error_code"]) {
+      Result.ErrorCode = Doc["error_code"].as<uint8_t>();
+    }
+
+    if (Doc["stack"] && Doc["stack"].IsSequence()) {
+      for (const auto &item : Doc["stack"]) {
+        Result.Stack.push_back(item.as<std::string>());
+      }
+    }
+
+    if (Doc["memory"]) {
+      Result.Memory = Doc["memory"].as<std::string>();
+    }
+
+    if (Doc["storage"] && Doc["storage"].IsMap()) {
+      for (const auto &item : Doc["storage"]) {
+        Result.Storage[item.first.as<std::string>()] =
+            item.second.as<std::string>();
+      }
+    }
+
+    if (Doc["transient_storage"] && Doc["transient_storage"].IsMap()) {
+      for (const auto &item : Doc["transient_storage"]) {
+        Result.TransientStorage[item.first.as<std::string>()] =
+            item.second.as<std::string>();
+      }
+    }
+
+    if (Doc["return"]) {
+      Result.ReturnValue = Doc["return"].as<std::string>();
+    }
+
+    if (Doc["events"] && Doc["events"].IsSequence()) {
+      for (const auto &item : Doc["events"]) {
+        Result.Events.push_back(item.as<std::string>());
+      }
+    }
+  } catch (const YAML::Exception &E) {
+    std::cerr << "YAML parsing error: " << E.what() << std::endl;
+    return Result;
   }
 
-  if (!Doc.HasMember("return") || !Doc["return"].IsString()) {
-    return "";
-  }
-
-  return Doc["return"].GetString();
+  return Result;
 }
 
 } // namespace
@@ -132,18 +180,46 @@ TEST_P(EVMSampleTest, ExecuteSample) {
 
   EXPECT_NO_THROW({ Interpreter.interpret(); });
 
+  // Read expected result from .expected file
+  ExpectedResult Expected = readExpectedResult(FilePath);
+  if (Expected.ReturnValue.empty() && Expected.Status.empty()) {
+    ASSERT_TRUE(false) << "No expected file found for: " << FilePath;
+  }
+
+  evmc_status_code ActualStatus = Ctx.getStatus();
+  std::string ActualStatusStr =
+      (ActualStatus == EVMC_SUCCESS) ? "success" : "fail";
+
+  if (!Expected.Status.empty()) {
+    EXPECT_EQ(ActualStatusStr, Expected.Status)
+        << "Test: " << std::filesystem::path(FilePath).filename().string()
+        << "\nExpected status: " << Expected.Status
+        << "\nActual status: " << ActualStatusStr;
+  }
+
+  if (Expected.ErrorCode != 0) {
+    EXPECT_NE(ActualStatus, EVMC_SUCCESS)
+        << "Test: " << std::filesystem::path(FilePath).filename().string()
+        << "\nExpected error_code: " << Expected.ErrorCode
+        << "\nActual status: " << ActualStatus;
+  } else {
+    EXPECT_EQ(ActualStatus, EVMC_SUCCESS)
+        << "Test: " << std::filesystem::path(FilePath).filename().string()
+        << "\nExpected success but got status: " << ActualStatus;
+  }
+
   const auto &Ret = Ctx.getReturnData();
   std::string HexRet = zen::utils::toHex(Ret.data(), Ret.size());
 
-  // Read expected return value from .expected file
-  std::string ExpectedReturn = readExpectedReturnValue(FilePath);
-  if (!ExpectedReturn.empty()) {
-    EXPECT_EQ(HexRet, ExpectedReturn)
+  if (!Expected.ReturnValue.empty()) {
+    EXPECT_EQ(HexRet, Expected.ReturnValue)
         << "Test: " << std::filesystem::path(FilePath).filename().string()
-        << "\nExpected: " << ExpectedReturn << "\nActual:   " << HexRet;
-  } else {
-    ASSERT_TRUE(false) << "No expected file found for: " << FilePath;
+        << "\nExpected return: " << Expected.ReturnValue
+        << "\nActual return: " << HexRet;
   }
+
+  // TODO: frame has been freed and can't check stack and memory values
+  // TODO: storage, transient storage, and events check
 
   EXPECT_EQ(Ctx.getCurFrame(), nullptr)
       << "Frame should be deallocated after execution";

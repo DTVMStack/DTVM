@@ -84,7 +84,7 @@ if(ZEN_ENABLE_SPEC_TEST)
       )
       target_link_libraries(
         evmInterpTests
-        PRIVATE dtvmcore rapidjson gtest_main -fsanitize=address
+        PRIVATE dtvmcore rapidjson yaml-cpp gtest_main -fsanitize=address
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
       target_link_libraries(
@@ -105,7 +105,12 @@ if(ZEN_ENABLE_SPEC_TEST)
       )
       target_link_libraries(
         evmInterpTests
-        PRIVATE dtvmcore rapidjson gtest_main -fsanitize=address -static-libasan
+        PRIVATE dtvmcore
+                rapidjson
+                yaml-cpp
+                gtest_main
+                -fsanitize=address
+                -static-libasan
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
       target_link_libraries(
@@ -127,7 +132,7 @@ if(ZEN_ENABLE_SPEC_TEST)
     )
     target_link_libraries(
       evmInterpTests
-      PRIVATE dtvmcore rapidjson gtest_main
+      PRIVATE dtvmcore rapidjson yaml-cpp gtest_main
       PUBLIC ${GTEST_BOTH_LIBRARIES}
     )
     target_link_libraries(

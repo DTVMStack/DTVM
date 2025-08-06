@@ -100,4 +100,16 @@ if(ZEN_ENABLE_SPEC_TEST)
   target_include_directories(
     rapidjson INTERFACE ${rapidjson_SOURCE_DIR}/include
   )
+
+  FetchContent_Declare(
+    yaml-cpp
+    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+    GIT_TAG 0.8.0
+    GIT_SHALLOW TRUE
+  )
+  set(YAML_CPP_BUILD_TESTS OFF)
+  set(YAML_CPP_BUILD_TOOLS OFF)
+  set(YAML_CPP_BUILD_CONTRIB OFF)
+  set(YAML_CPP_INSTALL OFF)
+  FetchContent_MakeAvailable(yaml-cpp)
 endif()

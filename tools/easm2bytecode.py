@@ -74,6 +74,9 @@ def evm_to_bytecode(input_file_path, output_file_path):
         "GASLIMIT": "45",
         "CHAINID": "46",
         "SELFBALANCE": "47",
+        "BASEFEE": "48",
+        "BLOBHASH": "49",
+        "BLOBBASEFEE": "4A",
 
         # 5x: storage and memory operations
         "POP": "50",
@@ -88,8 +91,12 @@ def evm_to_bytecode(input_file_path, output_file_path):
         "MSIZE": "59",
         "GAS": "5A",
         "JUMPDEST": "5B",
+        "TLOAD": "5C",
+        "TSTORE": "5D",
+        "MCOPY": "5E",
 
-        # 6x: Push operations
+        # 5F-7F: Push operations
+        "PUSH0": "5F",
         "PUSH1": "60",
         "PUSH2": "61",
         "PUSH3": "62",
@@ -213,9 +220,14 @@ def evm_to_bytecode(input_file_path, output_file_path):
             if len(parts) > 1:
                 argument = parts[1]
                 if argument.startswith("0x"):
-                    bytecode.append(argument[2:])
+                    hex_value = argument[2:]
                 else:
-                    bytecode.append(argument)
+                    hex_value = argument
+
+                # Ensure even length for hex values
+                if len(hex_value) % 2 != 0:
+                    hex_value = '0' + hex_value
+                bytecode.append(hex_value)
 
         # write bytecode to output file
         with open(output_file_path, 'w') as output_file:
