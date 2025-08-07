@@ -232,8 +232,31 @@ public:
     } else {
       ZEN_ASSERT_TODO();
     }
-    return Operand(Result);
+    return Operand(Result, EVMType::UINT256);
   }
+
+  template <CompareOperator Operator>
+  Operand handleCompareOp(Operand LHSOp, Operand RHSOp) {
+    U256Inst Result = handleCompareImpl<Operator>(LHSOp, RHSOp, &Ctx.I64Type);
+    return Operand(Result, EVMType::UINT256);
+  }
+
+  // EVM bitwise opcode: and, or, xor
+  template <BinaryOperator Operator>
+  Operand handleBitwiseOp(const Operand &LHSOp, const Operand &RHSOp) {
+    U256Inst Result = {};
+    U256Inst LHS = extractU256Operand(LHSOp);
+    U256Inst RHS = extractU256Operand(RHSOp);
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      Result[I] = createInstruction<BinaryInstruction>(
+          false, getMirOpcode(Operator),
+          EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64), LHS[I],
+          RHS[I]);
+    }
+    return Operand(Result, EVMType::UINT256);
+  }
+
+  Operand handleNot(const Operand &LHSOp);
 
   // ==================== Environment Instruction Handlers ====================
 
@@ -322,12 +345,6 @@ private:
   U256Value bytesToU256(const Bytes &Data);
 
   template <CompareOperator Operator>
-  Operand handleCompareOp(Operand LHSOp, Operand RHSOp) {
-    U256Inst Result = handleCompareImpl<Operator>(LHSOp, RHSOp, &Ctx.I64Type);
-    return Operand(Result, EVMType::UINT256);
-  }
-
-  template <CompareOperator Operator>
   U256Inst handleCompareImpl(Operand LHSOp, [[maybe_unused]] Operand RHSOp,
                              MType *ResultType) {
     ZEN_ASSERT(ResultType == &Ctx.I64Type);
@@ -353,21 +370,6 @@ private:
 
   U256Inst handleCompareGT_LT(const U256Inst &LHS, const U256Inst &RHS,
                               MType *ResultType, CompareOperator Operator);
-
-  // EVM bitwise opcode: and, or, xor
-  template <BinaryOperator Operator>
-  Operand handleBitwiseOp(const Operand &LHSOp, const Operand &RHSOp) {
-    U256Inst Result = {};
-    U256Inst LHS = extractU256Operand(LHSOp);
-    U256Inst RHS = extractU256Operand(RHSOp);
-    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-      Result[I] = createInstruction<BinaryInstruction>(
-          false, getMirOpcode(Operator),
-          EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64), LHS[I],
-          RHS[I]);
-    }
-    return Operand(Result);
-  }
 
   // ==================== EVM to MIR Opcode Mapping ====================
 

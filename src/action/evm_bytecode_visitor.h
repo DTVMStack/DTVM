@@ -87,6 +87,9 @@ private:
       case OP_XOR:
         handleBitwiseOp<BinaryOperator::BO_XOR>();
         break;
+      case OP_NOT:
+        handleNot();
+        break;
       case OP_POP:
         Builder.handlePop();
         break;
@@ -478,6 +481,12 @@ private:
     Operand RHS = pop();
     Operand LHS = pop();
     Operand Result = Builder.template handleBitwiseOp<Opr>(LHS, RHS);
+    push(Result);
+  }
+
+  void handleNot() {
+    Operand Opnd = pop();
+    Operand Result = Builder.handleNot(Opnd);
     push(Result);
   }
 

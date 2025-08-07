@@ -334,6 +334,20 @@ EVMMirBuilder::handleCompareGT_LT(const U256Inst &LHS, const U256Inst &RHS,
   return Result;
 }
 
+EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
+  U256Inst Result = {};
+  U256Inst LHS = extractU256Operand(LHSOp);
+
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    Result[I] = createInstruction<NotInstruction>(false, MirI64Type, LHS[I]);
+  }
+
+  return Operand(Result, EVMType::UINT256);
+}
+
 // ==================== Environment Instruction Handlers ====================
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handlePC() {

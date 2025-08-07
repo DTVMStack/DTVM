@@ -158,6 +158,24 @@ private:
   uint32_t _var_idx;
 };
 
+class NotInstruction : public UnaryInstruction {
+public:
+  template <typename... Arguments>
+  static NotInstruction *create(Arguments &&...Args) {
+    return FixedOperandInstruction::create<NotInstruction>(
+        std::forward<Arguments>(Args)...);
+  }
+
+  static bool classof(const MInstruction *Inst) {
+    return Inst->getOpcode() == OP_not;
+  }
+
+private:
+  friend class FixedOperandInstruction;
+  NotInstruction(MType *Type, MInstruction *Operand)
+      : UnaryInstruction(MInstruction::UNARY, OP_not, Type, Operand) {}
+};
+
 class LoadInstruction : public UnaryInstruction {
 public:
   template <typename... Arguments>
