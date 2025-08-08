@@ -453,6 +453,6 @@ INSTANTIATE_TEST_SUITE_P(
     ::testing::ValuesIn(
         SolidityTests.empty()
             ? std::vector<SolidityContractTestData>{{SolidityContractTestData{
-                  "", {}, {}, "", {}}}}
+                  "dummy_empty_test", {}, {}, "dummy", {}}}}
             : SolidityTests),
     SolidityTestNameGenerator{});
