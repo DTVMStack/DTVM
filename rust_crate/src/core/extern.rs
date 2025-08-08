@@ -55,7 +55,6 @@ pub struct ZenValueExtern {
     pub value: cty::int64_t,    // union of i32/i64/f32/f64
 }
 
-#[link(name = "stdc++", kind = "static")]
 #[link(name = "zetaengine", kind = "static")]
 #[link(name = "utils_lib", kind = "static")]
 #[link(name = "asmjit", kind = "static")]
