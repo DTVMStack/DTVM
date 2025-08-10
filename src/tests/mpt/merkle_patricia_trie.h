@@ -9,69 +9,37 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace zen::evm::mpt {
 
-// Nibble type (4-bit value)
 using Nibble = uint8_t;
 using Nibbles = std::vector<Nibble>;
 
-// Forward declarations
-class Node;
-class EmptyNode;
-class LeafNode;
-class BranchNode;
-class ExtensionNode;
-
-// Node type enumeration
-enum class NodeType { Empty, Leaf, Branch, Extension };
-
-// Node interface
-class Node {
-public:
-  virtual ~Node() = default;
-  virtual std::vector<uint8_t> hash() const = 0;
-  virtual std::vector<uint8_t> serialize() const = 0;
-  virtual NodeType getType() const = 0;
-  virtual bool isEmpty() const { return false; }
+struct EmptyNode {
+  bool operator==(const EmptyNode &) const { return true; }
+  static EmptyNode getInstance() { return EmptyNode{}; }
 };
 
-// Empty node (null node)
-class EmptyNode : public Node {
-public:
-  std::vector<uint8_t> hash() const override;
-  std::vector<uint8_t> serialize() const override;
-  NodeType getType() const override { return NodeType::Empty; }
-  bool isEmpty() const override { return true; }
-
-  static std::shared_ptr<EmptyNode> getInstance();
-
-private:
-  static std::shared_ptr<EmptyNode> Instance;
-};
-
-// Leaf node: stores key-value pair at the end of a path
-class LeafNode : public Node {
-public:
+struct LeafNode {
   Nibbles Path;
   std::vector<uint8_t> Value;
 
-  LeafNode(const Nibbles &Path, const std::vector<uint8_t> &Value);
+  LeafNode(const Nibbles &Path, const std::vector<uint8_t> &Value)
+      : Path(Path), Value(Value) {}
 
-  // Helper factory method for creating from key bytes
-  static std::shared_ptr<LeafNode>
-  fromKeyValue(const std::vector<uint8_t> &Key,
-               const std::vector<uint8_t> &Value);
+  static LeafNode fromKeyValue(const std::vector<uint8_t> &Key,
+                               const std::vector<uint8_t> &Value);
 
-  std::vector<uint8_t> hash() const override;
-  std::vector<uint8_t> serialize() const override;
-  NodeType getType() const override { return NodeType::Leaf; }
+  bool operator==(const LeafNode &Other) const {
+    return Path == Other.Path && Value == Other.Value;
+  }
 };
 
-// Branch node: has up to 16 children (for each hex digit) + optional value
-class BranchNode : public Node {
-public:
+struct Node;
+
+struct BranchNode {
   std::array<std::shared_ptr<Node>, 16> Branches;
   std::optional<std::vector<uint8_t>> Value;
 
@@ -81,33 +49,34 @@ public:
   void removeBranch(Nibble Index);
   void setValue(const std::vector<uint8_t> &Val);
   void removeValue();
-
-  std::vector<uint8_t> hash() const override;
-  std::vector<uint8_t> serialize() const override;
-  NodeType getType() const override { return NodeType::Branch; }
-
-  // Check if node has any branches or value
   bool hasContent() const;
-
-  // Count non-empty branches
   size_t branchCount() const;
-
-  // Get the single branch index (if only one branch exists)
   std::optional<Nibble> getSingleBranch() const;
 };
 
-// Extension node: compress common path prefix
-class ExtensionNode : public Node {
-public:
+struct ExtensionNode {
   Nibbles Path;
   std::shared_ptr<Node> Next;
 
-  ExtensionNode(const Nibbles &Path, std::shared_ptr<Node> Next);
+  ExtensionNode(const Nibbles &Path, std::shared_ptr<Node> Next)
+      : Path(Path), Next(std::move(Next)) {}
 
-  std::vector<uint8_t> hash() const override;
-  std::vector<uint8_t> serialize() const override;
-  NodeType getType() const override { return NodeType::Extension; }
+  bool operator==(const ExtensionNode &Other) const {
+    return Path == Other.Path && Next == Other.Next;
+  }
 };
+
+struct Node
+    : public std::variant<EmptyNode, LeafNode, BranchNode, ExtensionNode> {
+  using variant::variant;
+};
+
+std::vector<uint8_t> serialize(const Node &Node);
+std::vector<uint8_t> hash(const Node &Node);
+
+inline bool isEmpty(const Node &Node) {
+  return std::holds_alternative<EmptyNode>(Node);
+}
 
 // Nibbles utility functions
 namespace nibbles {
@@ -153,16 +122,15 @@ private:
                                const Nibbles &Key);
 
   // Helper functions for node operations
-  std::shared_ptr<Node> putInBranch(std::shared_ptr<BranchNode> Branch,
+  std::shared_ptr<Node> putInBranch(const BranchNode &Branch,
                                     const Nibbles &Key,
                                     const std::vector<uint8_t> &Value);
 
-  std::shared_ptr<Node> putInExtension(std::shared_ptr<ExtensionNode> Ext,
+  std::shared_ptr<Node> putInExtension(const ExtensionNode &Ext,
                                        const Nibbles &Key,
                                        const std::vector<uint8_t> &Value);
 
-  std::shared_ptr<Node> putInLeaf(std::shared_ptr<LeafNode> Leaf,
-                                  const Nibbles &Key,
+  std::shared_ptr<Node> putInLeaf(const LeafNode &Leaf, const Nibbles &Key,
                                   const std::vector<uint8_t> &Value);
 
 public:
