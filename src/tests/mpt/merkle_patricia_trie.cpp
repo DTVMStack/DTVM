@@ -26,6 +26,9 @@ template <typename T> const T *getIf(const std::shared_ptr<Node> &Node) {
   return Node ? std::get_if<T>(Node.get()) : nullptr;
 }
 
+// Shared empty node to avoid repeated allocations
+const auto EmptyNodePtr = std::make_shared<Node>(EmptyNode{});
+
 } // anonymous namespace
 
 // Nibbles utility functions implementation
@@ -193,7 +196,7 @@ LeafNode LeafNode::fromKeyValue(const std::vector<uint8_t> &Key,
 BranchNode::BranchNode() {
   // Initialize all branches to empty nodes
   for (auto &Branch : Branches) {
-    Branch = std::make_shared<Node>(EmptyNode{});
+    Branch = EmptyNodePtr;
   }
 }
 
@@ -204,7 +207,7 @@ void BranchNode::setBranch(Nibble Index, std::shared_ptr<Node> NodePtr) {
 
 void BranchNode::removeBranch(Nibble Index) {
   assert(Index < 16);
-  Branches[Index] = std::make_shared<Node>(EmptyNode{});
+  Branches[Index] = EmptyNodePtr;
 }
 
 void BranchNode::setValue(const std::vector<uint8_t> &Val) { Value = Val; }
@@ -250,9 +253,7 @@ std::optional<Nibble> BranchNode::getSingleBranch() const {
   return Result;
 }
 
-MerklePatriciaTrie::MerklePatriciaTrie() {
-  Root = std::make_shared<Node>(EmptyNode{});
-}
+MerklePatriciaTrie::MerklePatriciaTrie() { Root = EmptyNodePtr; }
 
 std::optional<std::vector<uint8_t>>
 MerklePatriciaTrie::get(const std::vector<uint8_t> &Key) const {
@@ -263,38 +264,35 @@ MerklePatriciaTrie::get(const std::vector<uint8_t> &Key) const {
 std::optional<std::vector<uint8_t>>
 MerklePatriciaTrie::getWithPath(std::shared_ptr<Node> NodePtr,
                                 const Nibbles &Key) const {
-  if (isEmpty(*NodePtr)) {
-    return std::nullopt;
-  }
+  return std::visit(
+      [&](const auto &N) -> std::optional<std::vector<uint8_t>> {
+        using T = std::decay_t<decltype(N)>;
 
-  if (const auto *LeafNodePtr = getIf<LeafNode>(NodePtr)) {
-    if (LeafNodePtr->Path == Key) {
-      return LeafNodePtr->Value;
-    }
-    return std::nullopt;
-  }
+        if constexpr (std::is_same_v<T, EmptyNode>) {
+          return std::nullopt;
+        } else if constexpr (std::is_same_v<T, LeafNode>) {
+          if (N.Path == Key) {
+            return N.Value;
+          }
+          return std::nullopt;
+        } else if constexpr (std::is_same_v<T, BranchNode>) {
+          if (Key.empty()) {
+            return N.Value;
+          }
+          Nibble Index = Key[0];
+          Nibbles RemainingKey = nibbles::subslice(Key, 1);
+          return getWithPath(N.Branches[Index], RemainingKey);
+        } else if constexpr (std::is_same_v<T, ExtensionNode>) {
+          size_t MatchedLen = nibbles::commonPrefixLength(Key, N.Path);
 
-  if (const auto *BranchNodePtr = getIf<BranchNode>(NodePtr)) {
-    if (Key.empty()) {
-      return BranchNodePtr->Value;
-    }
-    Nibble Index = Key[0];
-    Nibbles RemainingKey = nibbles::subslice(Key, 1);
-    return getWithPath(BranchNodePtr->Branches[Index], RemainingKey);
-  }
-
-  if (const auto *ExtensionNodePtr = getIf<ExtensionNode>(NodePtr)) {
-    size_t MatchedLen =
-        nibbles::commonPrefixLength(Key, ExtensionNodePtr->Path);
-
-    if (MatchedLen == ExtensionNodePtr->Path.size()) {
-      Nibbles RemainingKey = nibbles::subslice(Key, MatchedLen);
-      return getWithPath(ExtensionNodePtr->Next, RemainingKey);
-    }
-    return std::nullopt;
-  }
-
-  return std::nullopt;
+          if (MatchedLen == N.Path.size()) {
+            Nibbles RemainingKey = nibbles::subslice(Key, MatchedLen);
+            return getWithPath(N.Next, RemainingKey);
+          }
+          return std::nullopt;
+        }
+      },
+      *NodePtr);
 }
 
 void MerklePatriciaTrie::put(const std::vector<uint8_t> &Key,
@@ -340,32 +338,30 @@ std::shared_ptr<Node> MerklePatriciaTrie::get(std::shared_ptr<Node> NodePtr,
       Nibbles RemainingKey = nibbles::subslice(Key, MatchedLen);
       return get(ExtensionNodePtr->Next, RemainingKey);
     }
-    return std::make_shared<Node>(EmptyNode{});
+    return EmptyNodePtr;
   }
 
-  return std::make_shared<Node>(EmptyNode{});
+  return EmptyNodePtr;
 }
 
 std::shared_ptr<Node>
 MerklePatriciaTrie::put(std::shared_ptr<Node> NodePtr, const Nibbles &Key,
                         const std::vector<uint8_t> &Value) {
-  if (isEmpty(*NodePtr)) {
-    return std::make_shared<Node>(LeafNode(Key, Value));
-  }
+  return std::visit(
+      [&](const auto &N) -> std::shared_ptr<Node> {
+        using T = std::decay_t<decltype(N)>;
 
-  if (const auto *LeafNodePtr = getIf<LeafNode>(NodePtr)) {
-    return putInLeaf(*LeafNodePtr, Key, Value);
-  }
-
-  if (const auto *BranchNodePtr = getIf<BranchNode>(NodePtr)) {
-    return putInBranch(*BranchNodePtr, Key, Value);
-  }
-
-  if (const auto *ExtensionNodePtr = getIf<ExtensionNode>(NodePtr)) {
-    return putInExtension(*ExtensionNodePtr, Key, Value);
-  }
-
-  return NodePtr;
+        if constexpr (std::is_same_v<T, EmptyNode>) {
+          return std::make_shared<Node>(LeafNode(Key, Value));
+        } else if constexpr (std::is_same_v<T, LeafNode>) {
+          return putInLeaf(N, Key, Value);
+        } else if constexpr (std::is_same_v<T, BranchNode>) {
+          return putInBranch(N, Key, Value);
+        } else if constexpr (std::is_same_v<T, ExtensionNode>) {
+          return putInExtension(N, Key, Value);
+        }
+      },
+      *NodePtr);
 }
 
 std::shared_ptr<Node>
@@ -501,7 +497,7 @@ std::shared_ptr<Node> MerklePatriciaTrie::remove(std::shared_ptr<Node> NodePtr,
 
   if (const auto *LeafNodePtr = getIf<LeafNode>(NodePtr)) {
     if (LeafNodePtr->Path == Key) {
-      return std::make_shared<Node>(EmptyNode{});
+      return EmptyNodePtr;
     }
     return NodePtr; // Key not found
   }
@@ -516,7 +512,7 @@ std::shared_ptr<Node> MerklePatriciaTrie::remove(std::shared_ptr<Node> NodePtr,
       // Check if branch can be simplified
       size_t BranchCount = NewBranchPtr->branchCount();
       if (BranchCount == 0) {
-        return std::make_shared<Node>(EmptyNode{});
+        return EmptyNodePtr;
       }
       if (BranchCount == 1 && !NewBranchPtr->Value.has_value()) {
         // Convert to extension or leaf
@@ -557,7 +553,7 @@ std::shared_ptr<Node> MerklePatriciaTrie::remove(std::shared_ptr<Node> NodePtr,
     // Check if branch can be simplified after removal
     size_t BranchCount = NewBranchPtr->branchCount();
     if (BranchCount == 0 && !NewBranchPtr->Value.has_value()) {
-      return std::make_shared<Node>(EmptyNode{});
+      return EmptyNodePtr;
     }
     if (BranchCount == 1 && !NewBranchPtr->Value.has_value()) {
       auto SingleBranch = NewBranchPtr->getSingleBranch();
@@ -597,7 +593,7 @@ std::shared_ptr<Node> MerklePatriciaTrie::remove(std::shared_ptr<Node> NodePtr,
     }
 
     if (isEmpty(*NewNext)) {
-      return std::make_shared<Node>(EmptyNode{});
+      return EmptyNodePtr;
     }
 
     // Check if extension can be merged with child

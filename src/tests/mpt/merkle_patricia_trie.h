@@ -17,10 +17,7 @@ namespace zen::evm::mpt {
 using Nibble = uint8_t;
 using Nibbles = std::vector<Nibble>;
 
-struct EmptyNode {
-  bool operator==(const EmptyNode &) const { return true; }
-  static EmptyNode getInstance() { return EmptyNode{}; }
-};
+struct EmptyNode {};
 
 struct LeafNode {
   Nibbles Path;
@@ -31,10 +28,6 @@ struct LeafNode {
 
   static LeafNode fromKeyValue(const std::vector<uint8_t> &Key,
                                const std::vector<uint8_t> &Value);
-
-  bool operator==(const LeafNode &Other) const {
-    return Path == Other.Path && Value == Other.Value;
-  }
 };
 
 struct Node;
@@ -60,10 +53,6 @@ struct ExtensionNode {
 
   ExtensionNode(const Nibbles &Path, std::shared_ptr<Node> Next)
       : Path(Path), Next(std::move(Next)) {}
-
-  bool operator==(const ExtensionNode &Other) const {
-    return Path == Other.Path && Next == Other.Next;
-  }
 };
 
 struct Node
