@@ -318,22 +318,8 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
         PriorityFee = GasPrice > BaseFee ? GasPrice - BaseFee : 0;
       }
 
-      if (Debug) {
-        std::cout << "GasPrice: " << GasPrice << std::endl;
-        std::cout << "BaseFee: " << BaseFee << std::endl;
-        std::cout << "PriorityFee: " << PriorityFee << std::endl;
-      }
-
       uint64_t TotalGasCost = TotalGasUsed * GasPrice;
       uint64_t CoinBaseGas = TotalGasUsed * PriorityFee;
-      uint64_t CoinBaseGasExecutionOnly = ExecutionGasUsed * PriorityFee;
-      if (Debug) {
-        std::cout << "TotalGasCost: " << TotalGasCost << std::endl;
-        std::cout << "CoinBaseGas (total): " << CoinBaseGas << std::endl;
-        std::cout << "CoinBaseGas (exec only): " << CoinBaseGasExecutionOnly
-                  << std::endl;
-        std::cout << "Expected coinbase: 70684" << std::endl;
-      }
 
       // Subtract gas cost from sender balance using intx arithmetic
       intx::uint256 SenderBalance =
