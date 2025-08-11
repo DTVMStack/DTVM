@@ -243,7 +243,8 @@ std::vector<StateTestFixture> parseStateTestFile(const std::string &FilePath) {
         // EIP-1559 transaction format
         // For EIP-1559, tx_gas_price should be the effective gas price:
         // min(maxFeePerGas, baseFee + maxPriorityFeePerGas)
-        // However, since we don't know baseFee at parsing time, we use maxFeePerGas
+        // However, since we don't know baseFee at parsing time, we use
+        // maxFeePerGas
         // The actual effective price calculation is done during execution
         Fixture.Environment.tx_gas_price =
             parseUint256(Transaction["maxFeePerGas"].GetString());
