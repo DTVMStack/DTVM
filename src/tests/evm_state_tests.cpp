@@ -263,16 +263,25 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
     }
 
     bool ExecutionSucceeded = true;
-    uint64_t GasUsed = 21000; // Base gas cost
+    uint64_t BaseTransactionCost = 21000; // Base gas cost for transaction
+    uint64_t ExecutionGasUsed = 0;
     try {
       Interpreter.interpret();
-      GasUsed += Ctx.getGasUsed();
+      ExecutionGasUsed = Ctx.getGasUsed();
     } catch (const std::exception &E) {
       ExecutionSucceeded = false;
       std::cout << "Execution failed for " << Fixture.TestName << ": "
                 << E.what() << std::endl;
     }
 
+    uint64_t TotalGasUsed = BaseTransactionCost + ExecutionGasUsed;
+
+    if (Debug) {
+      std::cout << "ExecutionSucceeded: " << ExecutionSucceeded << std::endl;
+      std::cout << "BaseTransactionCost: " << BaseTransactionCost << std::endl;
+      std::cout << "ExecutionGasUsed: " << ExecutionGasUsed << std::endl;
+      std::cout << "TotalGasUsed: " << TotalGasUsed << std::endl;
+    }
     // 3. Deduct gas cost after execution (gas_used * gas_price)
     if (ExecutionSucceeded) {
       intx::uint256 GasPrice256 =
@@ -280,21 +289,45 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
       uint64_t GasPrice =
           static_cast<uint64_t>(GasPrice256 & 0xFFFFFFFFFFFFFFFFULL);
 
-      if (Debug) {
-        std::cout << "GasPrice: " << GasPrice << std::endl;
-      }
-
       // Get base fee from tx_context
       intx::uint256 BaseFee256 =
           intx::be::load<intx::uint256>(MockedHost->tx_context.block_base_fee);
       uint64_t BaseFee =
-          GasPrice - static_cast<uint64_t>(BaseFee256 & 0xFFFFFFFFFFFFFFFFULL);
+          static_cast<uint64_t>(BaseFee256 & 0xFFFFFFFFFFFFFFFFULL);
 
-      uint64_t TotalGasCost = GasUsed * GasPrice;
-      uint64_t CoinBaseGas = GasUsed * BaseFee;
+      // EIP-1559: Calculate priority fee (tip) for coinbase
+      // Priority fee = min(maxPriorityFeePerGas, maxFeePerGas - baseFee)
+      uint64_t PriorityFee = 0;
+
+      // Check if this is an EIP-1559 transaction by looking for maxPriorityFeePerGas
+      const rapidjson::Value &Transaction = *Fixture.Transaction;
+      if (Transaction.HasMember("maxPriorityFeePerGas") &&
+          Transaction["maxPriorityFeePerGas"].IsString()) {
+        // EIP-1559 transaction
+        evmc::uint256be MaxPriorityFee256be = parseUint256(Transaction["maxPriorityFeePerGas"].GetString());
+        intx::uint256 MaxPriorityFee256 = intx::be::load<intx::uint256>(MaxPriorityFee256be);
+        uint64_t MaxPriorityFeePerGas = static_cast<uint64_t>(MaxPriorityFee256 & 0xFFFFFFFFFFFFFFFFULL);
+        uint64_t MaxFeeMinusBase = GasPrice > BaseFee ? GasPrice - BaseFee : 0;
+        PriorityFee = std::min(MaxPriorityFeePerGas, MaxFeeMinusBase);
+      } else {
+        // Legacy transaction: all gas price goes to miner minus base fee
+        PriorityFee = GasPrice > BaseFee ? GasPrice - BaseFee : 0;
+      }
+
+      if (Debug) {
+        std::cout << "GasPrice: " << GasPrice << std::endl;
+        std::cout << "BaseFee: " << BaseFee << std::endl;
+        std::cout << "PriorityFee: " << PriorityFee << std::endl;
+      }
+
+      uint64_t TotalGasCost = TotalGasUsed * GasPrice;
+      uint64_t CoinBaseGas = TotalGasUsed * PriorityFee;
+      uint64_t CoinBaseGasExecutionOnly = ExecutionGasUsed * PriorityFee;
       if (Debug) {
         std::cout << "TotalGasCost: " << TotalGasCost << std::endl;
-        std::cout << "CoinBaseGas: " << CoinBaseGas << std::endl;
+        std::cout << "CoinBaseGas (total): " << CoinBaseGas << std::endl;
+        std::cout << "CoinBaseGas (exec only): " << CoinBaseGasExecutionOnly << std::endl;
+        std::cout << "Expected coinbase: 70684" << std::endl;
       }
 
       // Subtract gas cost from sender balance using intx arithmetic

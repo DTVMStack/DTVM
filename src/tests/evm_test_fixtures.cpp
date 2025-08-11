@@ -233,8 +233,20 @@ std::vector<StateTestFixture> parseStateTestFile(const std::string &FilePath) {
       const rapidjson::Value &Transaction = TestCase["transaction"];
       if (Transaction.HasMember("gasPrice") &&
           Transaction["gasPrice"].IsString()) {
+        // Legacy transaction format
         Fixture.Environment.tx_gas_price =
             parseUint256(Transaction["gasPrice"].GetString());
+      } else if (Transaction.HasMember("maxFeePerGas") &&
+                 Transaction["maxFeePerGas"].IsString() &&
+                 Transaction.HasMember("maxPriorityFeePerGas") &&
+                 Transaction["maxPriorityFeePerGas"].IsString()) {
+        // EIP-1559 transaction format
+        // For EIP-1559, tx_gas_price should be the effective gas price:
+        // min(maxFeePerGas, baseFee + maxPriorityFeePerGas)
+        // However, since we don't know baseFee at parsing time, we use maxFeePerGas
+        // The actual effective price calculation is done during execution
+        Fixture.Environment.tx_gas_price =
+            parseUint256(Transaction["maxFeePerGas"].GetString());
       }
     }
 
