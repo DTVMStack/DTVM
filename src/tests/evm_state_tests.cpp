@@ -299,14 +299,18 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
       // Priority fee = min(maxPriorityFeePerGas, maxFeePerGas - baseFee)
       uint64_t PriorityFee = 0;
 
-      // Check if this is an EIP-1559 transaction by looking for maxPriorityFeePerGas
+      // Check if this is an EIP-1559 transaction by looking for
+      // maxPriorityFeePerGas
       const rapidjson::Value &Transaction = *Fixture.Transaction;
       if (Transaction.HasMember("maxPriorityFeePerGas") &&
           Transaction["maxPriorityFeePerGas"].IsString()) {
         // EIP-1559 transaction
-        evmc::uint256be MaxPriorityFee256be = parseUint256(Transaction["maxPriorityFeePerGas"].GetString());
-        intx::uint256 MaxPriorityFee256 = intx::be::load<intx::uint256>(MaxPriorityFee256be);
-        uint64_t MaxPriorityFeePerGas = static_cast<uint64_t>(MaxPriorityFee256 & 0xFFFFFFFFFFFFFFFFULL);
+        evmc::uint256be MaxPriorityFee256be =
+            parseUint256(Transaction["maxPriorityFeePerGas"].GetString());
+        intx::uint256 MaxPriorityFee256 =
+            intx::be::load<intx::uint256>(MaxPriorityFee256be);
+        uint64_t MaxPriorityFeePerGas =
+            static_cast<uint64_t>(MaxPriorityFee256 & 0xFFFFFFFFFFFFFFFFULL);
         uint64_t MaxFeeMinusBase = GasPrice > BaseFee ? GasPrice - BaseFee : 0;
         PriorityFee = std::min(MaxPriorityFeePerGas, MaxFeeMinusBase);
       } else {
@@ -326,7 +330,8 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
       if (Debug) {
         std::cout << "TotalGasCost: " << TotalGasCost << std::endl;
         std::cout << "CoinBaseGas (total): " << CoinBaseGas << std::endl;
-        std::cout << "CoinBaseGas (exec only): " << CoinBaseGasExecutionOnly << std::endl;
+        std::cout << "CoinBaseGas (exec only): " << CoinBaseGasExecutionOnly
+                  << std::endl;
         std::cout << "Expected coinbase: 70684" << std::endl;
       }
 
