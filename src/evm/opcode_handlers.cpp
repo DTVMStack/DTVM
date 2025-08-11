@@ -138,6 +138,7 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Return, OP_RETURN);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Revert, OP_REVERT);
 
 // Stack operations
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Pop, OP_POP);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Push, OP_PUSH1);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Push0, OP_PUSH0);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Dup, OP_DUP1);
@@ -1019,6 +1020,13 @@ void RevertHandler::doExecute() {
 }
 
 // Stack operations
+void PopHandler::doExecute() {
+  auto *Frame = getFrame();
+  EVM_FRAME_CHECK(Frame);
+  EVM_STACK_CHECK(Frame, 1);
+  Frame->pop();
+}
+
 void PushHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
