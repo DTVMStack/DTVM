@@ -39,6 +39,9 @@ using namespace zen::runtime;
     return Cost;                                                               \
   }
 
+#define DEFINE_UNIMPLEMENT_CALCULATE_GAS(OpName, Cost)                         \
+  uint64_t OpName##Handler::calculateGas() { return Cost; }
+
 /* ---------- Define gas cost macros end ---------- */
 
 /* ---------- Implement gas cost begin ---------- */
@@ -119,9 +122,10 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MLoad, OP_MLOAD);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Jump, OP_JUMP);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(JumpI, OP_JUMPI);
 // Temporary Storage
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(TLoad, OP_TLOAD);
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(TStore, OP_TSTORE);
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MCopy, OP_MCOPY);
+// Evmc do not support these opcodes
+DEFINE_UNIMPLEMENT_CALCULATE_GAS(TLoad, 100);
+DEFINE_UNIMPLEMENT_CALCULATE_GAS(TStore, 100);
+DEFINE_UNIMPLEMENT_CALCULATE_GAS(MCopy, 3);
 
 // Environment operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PC, OP_PC);
