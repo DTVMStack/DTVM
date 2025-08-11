@@ -31,5 +31,9 @@ constexpr evmc_opcode OP_TLOAD = static_cast<evmc_opcode>(0x5c);
 constexpr evmc_opcode OP_TSTORE = static_cast<evmc_opcode>(0x5d);
 constexpr evmc_opcode OP_MCOPY = static_cast<evmc_opcode>(0x5e);
 
+constexpr uint64_t TLOAD_GAS_COST = 100;
+constexpr uint64_t TSTORE_GAS_COST = 100;
+constexpr uint64_t MCOPY_GAS_COST = 3;
+
 } // namespace evm
 } // namespace zen
