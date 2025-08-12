@@ -14,6 +14,7 @@ constexpr uint64_t MAX_REQUIRED_MEMORY_SIZE = 1024 * 1024;
 constexpr evmc_revision DEFAULT_REVISION = EVMC_CANCUN;
 
 // About gas cost
+constexpr auto BASIC_EXECUTION_COST = 21000;
 constexpr auto COLD_ACCOUNT_ACCESS_COST = 2600;
 constexpr auto WARM_ACCOUNT_ACCESS_COST = 100;
 constexpr auto ADDITIONAL_COLD_ACCOUNT_ACCESS_COST =

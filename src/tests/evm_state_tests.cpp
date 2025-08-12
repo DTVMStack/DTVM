@@ -263,7 +263,6 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
     }
 
     bool ExecutionSucceeded = true;
-    uint64_t BaseTransactionCost = 21000; // Base gas cost for transaction
     uint64_t ExecutionGasUsed = 0;
     try {
       Interpreter.interpret();
@@ -274,13 +273,9 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
                 << E.what() << std::endl;
     }
 
-    uint64_t TotalGasUsed = BaseTransactionCost + ExecutionGasUsed;
-
     if (Debug) {
       std::cout << "ExecutionSucceeded: " << ExecutionSucceeded << std::endl;
-      std::cout << "BaseTransactionCost: " << BaseTransactionCost << std::endl;
       std::cout << "ExecutionGasUsed: " << ExecutionGasUsed << std::endl;
-      std::cout << "TotalGasUsed: " << TotalGasUsed << std::endl;
     }
     // 3. Deduct gas cost after execution (gas_used * gas_price)
     if (ExecutionSucceeded) {
@@ -318,8 +313,8 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
         PriorityFee = GasPrice > BaseFee ? GasPrice - BaseFee : 0;
       }
 
-      uint64_t TotalGasCost = TotalGasUsed * GasPrice;
-      uint64_t CoinBaseGas = TotalGasUsed * PriorityFee;
+      uint64_t TotalGasCost = ExecutionGasUsed * GasPrice;
+      uint64_t CoinBaseGas = ExecutionGasUsed * PriorityFee;
 
       // Subtract gas cost from sender balance using intx arithmetic
       intx::uint256 SenderBalance =
