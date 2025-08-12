@@ -436,14 +436,14 @@ public:
           if (Result.Passed) {
             Summary.PassedTests++;
             if (Debug) {
-              std::cout << "✓ " << Result.TestName << " [" << Result.ForkName
+              std::cout << "✅ " << Result.TestName << " [" << Result.ForkName
                         << "]" << std::endl;
             }
           } else {
             Summary.FailedTests++;
             Summary.FailedTestDetails.push_back(Result);
             if (Debug) {
-              std::cout << "✗ " << Result.TestName << " [" << Result.ForkName
+              std::cout << "❌ " << Result.TestName << " [" << Result.ForkName
                         << "]" << std::endl;
             }
           }
