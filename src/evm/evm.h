@@ -26,6 +26,8 @@ constexpr auto CALL_GAS_STIPEND = 2300;
 constexpr auto MAX_SIZE_OF_INITCODE = 0xC000;
 
 // evmc missing-opcode gas cost
+constexpr uint64_t BLOBHASH_GAS_COST = 3;
+constexpr uint64_t BLOBBASEFEE_GAS_COST = 2;
 constexpr uint64_t TLOAD_GAS_COST = 100;
 constexpr uint64_t TSTORE_GAS_COST = 100;
 constexpr uint64_t MCOPY_GAS_COST = 3;
