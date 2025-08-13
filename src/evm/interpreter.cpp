@@ -61,10 +61,11 @@ void InterpreterExecContext::freeBackFrame() {
   if (FrameStack.empty())
     return;
 
-  GasUsed = GasUsed - FrameStack.back().Msg->gas;
-  uint64_t GasRefund =
-      std::min(FrameStack.back().GasRefund,
-               static_cast<uint64_t>(FrameStack.back().Msg->gas / 2LL));
+  auto &BackFrame = FrameStack.back();
+
+  GasUsed = GasUsed - BackFrame.Msg->gas;
+  uint64_t GasRefund = std::min(
+      BackFrame.GasRefund, static_cast<uint64_t>(BackFrame.Msg->gas / 2LL));
   GasUsed = GasUsed - GasRefund;
 
   FrameStack.pop_back();
