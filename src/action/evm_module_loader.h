@@ -1,3 +1,8 @@
+// Copyright (C) 2025 the DTVM authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+#ifndef ZEN_ACTION_EVM_MODULE_LOADER_H
+#define ZEN_ACTION_EVM_MODULE_LOADER_H
+
 #include "action/module_loader.h"
 #include "runtime/evm_module.h"
 
@@ -24,3 +29,5 @@ private:
 };
 
 } // namespace zen::action
+
+#endif // ZEN_ACTION_EVM_MODULE_LOADER_H
