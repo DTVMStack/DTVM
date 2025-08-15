@@ -36,7 +36,7 @@ private:
   void push(const Operand &Opnd) { Stack.push(Opnd); }
 
   Operand pop() {
-    ZEN_ASSERT(Stack.getSize() != 0);
+    ZEN_ASSERT(!Stack.empty());
     Operand Opnd = Stack.pop();
     Builder.releaseOperand(Opnd);
     return Opnd;

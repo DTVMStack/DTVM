@@ -28,6 +28,8 @@ public:
 
   uint32_t getSize() const { return StackImpl.size(); }
 
+  bool empty() const { return StackImpl.empty(); }
+
 private:
   std::stack<Operand> StackImpl;
 };
