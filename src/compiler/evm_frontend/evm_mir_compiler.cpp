@@ -443,16 +443,16 @@ EVMMirBuilder::createU256ConstOperand(const intx::uint256 &V) {
 
   // Use EVMU256Type's element count and structure
   uint64_t Components[U256Type->getElementsCount()];
-  for (size_t i = 0; i < U256Type->getElementsCount(); ++i) {
-    Components[i] =
-        static_cast<uint64_t>((V >> (i * 64)) & 0xFFFFFFFFFFFFFFFFULL);
+  for (size_t I = 0; I < U256Type->getElementsCount(); ++I) {
+    Components[I] =
+        static_cast<uint64_t>((V >> (I * 64)) & 0xFFFFFFFFFFFFFFFFULL);
   }
 
   // Create constant instructions based on EVMU256Type's inner types
   U256Inst ComponentInstrs;
-  for (size_t i = 0; i < U256Type->getElementsCount(); ++i) {
-    MConstant *Constant = MConstantInt::get(Ctx, *I64Type, Components[i]);
-    ComponentInstrs[i] =
+  for (size_t I = 0; I < U256Type->getElementsCount(); ++I) {
+    MConstant *Constant = MConstantInt::get(Ctx, *I64Type, Components[I]);
+    ComponentInstrs[I] =
         createInstruction<ConstantInstruction>(false, I64Type, *Constant);
   }
 

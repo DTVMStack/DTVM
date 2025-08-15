@@ -51,8 +51,8 @@ private:
 
     while (Ip < IpEnd) {
       evmc_opcode Opcode = static_cast<evmc_opcode>(*Ip);
-      ptrdiff_t diff = Ip - Bytecode;
-      PC = static_cast<uint64_t>(diff >= 0 ? diff : 0);
+      ptrdiff_t Diff = Ip - Bytecode;
+      PC = static_cast<uint64_t>(Diff >= 0 ? Diff : 0);
       Ip++;
 
       switch (Opcode) {

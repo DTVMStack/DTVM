@@ -280,8 +280,8 @@ private:
       MType *I64Type =
           EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
       U256Var VarComponents;
-      for (size_t i = 0; i < 4; ++i) {
-        VarComponents[i] = CurFunc->createVariable(I64Type);
+      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+        VarComponents[I] = CurFunc->createVariable(I64Type);
       }
       return Operand(VarComponents, Type);
     } else {
@@ -327,14 +327,14 @@ private:
 
   // Extract I64 components from U256 operand (for operations that need
   // component access)
-  std::array<Operand, 4> extractU256Components(Operand U256Op);
+  std::array<Operand, EVM_ELEMENTS_COUNT> extractU256Components(Operand U256Op);
 
-  void extractU256ComponentsExplicit(uint64_t *components,
-                                     const intx::uint256 &value,
-                                     size_t numComponents) {
-    for (size_t i = 0; i < numComponents; ++i) {
-      components[i] =
-          static_cast<uint64_t>((value >> (i * 64)) & 0xFFFFFFFFFFFFFFFFULL);
+  void extractU256ComponentsExplicit(uint64_t *Components,
+                                     const intx::uint256 &Value,
+                                     size_t NumComponents) {
+    for (size_t I = 0; I < NumComponents; ++I) {
+      Components[I] =
+          static_cast<uint64_t>((Value >> (I * 64)) & 0xFFFFFFFFFFFFFFFFULL);
     }
   }
 
