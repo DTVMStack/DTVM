@@ -5,15 +5,19 @@
 #define ZEN_ACTION_EVM_BYTECODE_VISITOR_H
 
 #include "compiler/evm_frontend/evm_mir_compiler.h"
+#include "evm/evm.h"
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
+#include "runtime/evm_module.h"
 
 namespace COMPILER {
 
 template <typename IRBuilder> class EVMByteCodeVisitor {
   typedef typename IRBuilder::CompilerContext CompilerContext;
   typedef typename IRBuilder::Operand Operand;
-  typedef VMEvalStack<Operand> EvalStack;
+  typedef zen::action::VMEvalStack<Operand> EvalStack;
+  using Byte = zen::common::Byte;
+  using Bytes = zen::common::Bytes;
 
 public:
   EVMByteCodeVisitor(IRBuilder &Builder, CompilerContext *Ctx)
@@ -32,14 +36,15 @@ private:
   void push(const Operand &Opnd) { Stack.push(Opnd); }
 
   Operand pop() {
-    ZEN_ASSERT(!Stack.empty());
+    ZEN_ASSERT(Stack.getSize() != 0);
     Operand Opnd = Stack.pop();
     Builder.releaseOperand(Opnd);
     return Opnd;
   }
 
   bool decode() {
-    const uint8_t *Bytecode = Ctx->getBytecode();
+    const uint8_t *Bytecode =
+        reinterpret_cast<const uint8_t *>(Ctx->getBytecode());
     size_t BytecodeSize = Ctx->getBytecodeSize();
     const uint8_t *Ip = Bytecode;
     const uint8_t *IpEnd = Bytecode + BytecodeSize;
@@ -331,11 +336,11 @@ private:
         ZEN_ASSERT_TODO();
       }
 
-      case OP_BLOBHASH: {
+      case zen::evm::OP_BLOBHASH: {
         ZEN_ASSERT_TODO();
       }
 
-      case OP_BLOBBASEFEE: {
+      case zen::evm::OP_BLOBBASEFEE: {
         ZEN_ASSERT_TODO();
       }
 
@@ -363,15 +368,15 @@ private:
         ZEN_ASSERT_TODO();
       }
 
-      case OP_TLOAD: {
+      case zen::evm::OP_TLOAD: {
         ZEN_ASSERT_TODO();
       }
 
-      case OP_TSTORE: {
+      case zen::evm::OP_TSTORE: {
         ZEN_ASSERT_TODO();
       }
 
-      case OP_MCOPY: {
+      case zen::evm::OP_MCOPY: {
         ZEN_ASSERT_TODO();
       }
 

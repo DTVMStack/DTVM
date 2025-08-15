@@ -330,7 +330,7 @@ private:
   std::array<Operand, 4> extractU256Components(Operand U256Op);
 
   void extractU256ComponentsExplicit(uint64_t *components,
-                                     const uint256_t &value,
+                                     const intx::uint256 &value,
                                      size_t numComponents) {
     for (size_t i = 0; i < numComponents; ++i) {
       components[i] =

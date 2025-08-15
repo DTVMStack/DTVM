@@ -1,4 +1,5 @@
 #include "action/module_loader.h"
+#include "runtime/evm_module.h"
 
 namespace zen::action {
 

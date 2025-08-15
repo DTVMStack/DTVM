@@ -4,6 +4,7 @@
 #ifndef ZEN_ACTION_VALUE_STACK_H_
 #define ZEN_ACTION_VALUE_STACK_H_
 
+#include "common/defines.h"
 #include <cstdint>
 #include <stack>
 
