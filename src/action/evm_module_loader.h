@@ -10,9 +10,9 @@ namespace zen::action {
 
 class EVMModuleLoader final {
 public:
-  explicit EVMModuleLoader(runtime::EVMModule &mod,
-                           const std::vector<uint8_t> &data)
-      : Mod(mod), Data(data) {}
+  explicit EVMModuleLoader(runtime::EVMModule &Mod,
+                           const std::vector<uint8_t> &Data)
+      : Mod(Mod), Data(Data) {}
 
   void load() {
     if (Data.empty()) {

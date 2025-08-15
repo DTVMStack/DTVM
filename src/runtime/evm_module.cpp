@@ -33,19 +33,19 @@ EVMModule::~EVMModule() {
   }
 }
 
-std::vector<uint8_t> padCode(const uint8_t *code, size_t code_size) {
+std::vector<uint8_t> padCode(const uint8_t *Code, size_t CodeSize) {
   // We need at most 33 bytes of code padding: 32 for possible missing all data
   // bytes of PUSH32 at the very end of the code; and one more byte for STOP to
   // guarantee there is a terminating instruction at the code end.
-  constexpr auto padding = 32 + 1;
+  constexpr auto Padding = 32 + 1;
   constexpr uint8_t OP_STOP = 0x00;
 
-  std::vector<uint8_t> padded_code(code_size + padding);
+  std::vector<uint8_t> PaddedCode(CodeSize + Padding);
 
-  std::copy(code, code + code_size, padded_code.begin());
-  std::fill_n(padded_code.begin() + code_size, padding, OP_STOP);
+  std::copy(Code, Code + CodeSize, PaddedCode.begin());
+  std::fill_n(PaddedCode.begin() + CodeSize, Padding, OP_STOP);
 
-  return padded_code;
+  return PaddedCode;
 }
 
 EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
