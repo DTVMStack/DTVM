@@ -502,10 +502,12 @@ private:
   }
 
   Bytes readBytes(uint8_t Count) {
-    if (PC + Count > Module.CodeSize) {
+    if (PC + Count > Ctx->getBytecodeSize()) {
       throw getError(common::ErrorCode::UnexpectedEnd);
     }
-    Bytes Result(Module.Code + PC, Module.Code + PC + Count);
+    const uint8_t *Bytecode =
+        reinterpret_cast<const uint8_t *>(Ctx->getBytecode());
+    Bytes Result(reinterpret_cast<const std::byte *>(Bytecode + PC), Count);
     PC += Count;
     return Result;
   }
