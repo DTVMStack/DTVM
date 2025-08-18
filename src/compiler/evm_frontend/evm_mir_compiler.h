@@ -8,6 +8,7 @@
 #include "compiler/context.h"
 #include "compiler/mir/function.h"
 #include "compiler/mir/instructions.h"
+#include "compiler/mir/pointer.h"
 #include "intx/intx.hpp"
 
 namespace COMPILER {
@@ -262,6 +263,13 @@ public:
 
   Operand handlePC();
   Operand handleGas();
+  Operand handleAddress();
+  Operand handleOrigin();
+  Operand handleCaller();
+  Operand handleCallValue();
+  Operand handleGasPrice();
+  Operand handleCallDataSize();
+  Operand handleCodeSize();
 
 private:
   // ==================== Operand Methods ====================
@@ -293,6 +301,10 @@ private:
   }
 
   // ==================== MIR Util Methods ====================
+
+  MPointerType *createVoidPtrType() const {
+    return MPointerType::create(Ctx, Ctx.VoidType);
+  }
 
   template <class T, typename... Arguments>
   T *createInstruction(bool IsStmt, Arguments &&...Args) {
@@ -375,13 +387,27 @@ private:
 
   Opcode getMirOpcode(BinaryOperator BinOpr);
 
+  // ==================== Helper Methods ====================
+
+  // Convert single instruction result to U256 format (for environment calls)
+  Operand convertSingleToU256(MInstruction *SingleInstr);
+  // Convert single U256 instruction to EVM U256 components format
+  Operand convertU256InstrToU256Components(MInstruction *U256Instr);
+
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;
   MBasicBlock *CurBB = nullptr;
   std::stack<Operand> OperandStack;
 
+  // Instance address for JIT function calls
+  MInstruction *InstanceAddr = nullptr;
+
   // Program counter for current instruction
   uint64_t PC = 0;
+
+private:
+  // Helper method to get instance pointer as instruction
+  MInstruction *getCurrentInstancePointer();
 };
 
 } // namespace COMPILER

@@ -8,6 +8,9 @@
 #include "common/traphandler.h"
 #include "runtime/evm_module.h"
 #include "utils/backtrace.h"
+
+// Forward declaration for evmc_message
+struct evmc_message;
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
 #include "utils/virtual_stack.h"
 #include <queue>
@@ -50,6 +53,14 @@ public:
   uint64_t getGas() const { return Gas; }
   void setGas(uint64_t NewGas) { Gas = NewGas; }
 
+  // ==================== Evmc Message Context Methods ====================
+  // Note: These methods are necessary evil for JIT host interface functions
+  // that need access to evmc_message without explicit parameter passing.
+  // The message lifetime must be carefully managed by the caller.
+  
+  void setCurrentMessage(const evmc_message *Msg) { CurrentMessage = Msg; }
+  const evmc_message *getCurrentMessage() const { return CurrentMessage; }
+
 private:
   EVMInstance(const EVMModule &M, Runtime &RT)
       : RuntimeObject<EVMInstance>(RT), Mod(&M) {}
@@ -65,6 +76,10 @@ private:
   Error Err = ErrorCode::NoError;
 
   uint64_t Gas = 0;
+
+  // Current message context for JIT host interface calls
+  // WARNING: This is a temporary reference, caller must manage lifetime
+  const evmc_message *CurrentMessage = nullptr;
 
   // exit code set by Instance.exit(ExitCode)
   int32_t InstanceExitCode = 0;
