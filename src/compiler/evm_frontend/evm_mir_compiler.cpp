@@ -3,13 +3,16 @@
 
 #include "compiler/evm_frontend/evm_mir_compiler.h"
 #include "action/evm_bytecode_visitor.h"
-#include "compiler/evm_frontend/evm_host_interface.h"
+#include "common/defines.h"
+#include "common/errors.h"
 #include "compiler/mir/basic_block.h"
 #include "compiler/mir/constants.h"
 #include "compiler/mir/function.h"
 #include "compiler/mir/instructions.h"
 #include "compiler/mir/type.h"
+#include "evmc/evmc.hpp"
 #include "evmc/instructions.h"
+#include "runtime/evm_instance.h"
 
 namespace COMPILER {
 
@@ -386,9 +389,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
   // Get function address from dispatch table
-  const auto &HostFunctions = EVMHostInterface::getFunctionTable();
+  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
   uint64_t FuncAddr =
-      EVMHostInterface::getFunctionAddress(HostFunctions.GetAddress);
+      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetAddress);
   MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
 
   MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
@@ -403,9 +406,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleOrigin() {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
-  const auto &HostFunctions = EVMHostInterface::getFunctionTable();
+  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
   uint64_t FuncAddr =
-      EVMHostInterface::getFunctionAddress(HostFunctions.GetOrigin);
+      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetOrigin);
   MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
 
   MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
@@ -420,9 +423,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleOrigin() {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCaller() {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
-  const auto &HostFunctions = EVMHostInterface::getFunctionTable();
+  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
   uint64_t FuncAddr =
-      EVMHostInterface::getFunctionAddress(HostFunctions.GetCaller);
+      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetCaller);
   MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
 
   MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
@@ -437,9 +440,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCaller() {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallValue() {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
-  const auto &HostFunctions = EVMHostInterface::getFunctionTable();
+  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
   uint64_t FuncAddr =
-      EVMHostInterface::getFunctionAddress(HostFunctions.GetCallValue);
+      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetCallValue);
   MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
 
   MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
@@ -454,9 +457,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCallValue() {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleGasPrice() {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
-  const auto &HostFunctions = EVMHostInterface::getFunctionTable();
+  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
   uint64_t FuncAddr =
-      EVMHostInterface::getFunctionAddress(HostFunctions.GetGasPrice);
+      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetGasPrice);
   MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
 
   MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
@@ -471,9 +474,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleGasPrice() {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallDataSize() {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
-  const auto &HostFunctions = EVMHostInterface::getFunctionTable();
+  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
   uint64_t FuncAddr =
-      EVMHostInterface::getFunctionAddress(HostFunctions.GetCallDataSize);
+      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetCallDataSize);
   MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
 
   MInstruction *InstancePtr = getCurrentInstancePointer();
@@ -487,9 +490,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCallDataSize() {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCodeSize() {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
-  const auto &HostFunctions = EVMHostInterface::getFunctionTable();
+  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
   uint64_t FuncAddr =
-      EVMHostInterface::getFunctionAddress(HostFunctions.GetCodeSize);
+      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetCodeSize);
   MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
 
   MInstruction *InstancePtr = getCurrentInstancePointer();
@@ -499,7 +502,6 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCodeSize() {
 
   return convertSingleToU256(CallInstr);
 }
-
 
 // ==================== Private Helper Methods ====================
 
@@ -771,13 +773,98 @@ EVMMirBuilder::convertU256InstrToU256Components(MInstruction *U256Instr) {
   return Operand(Result, EVMType::UINT256);
 }
 
-// ==================== Private Helper Methods ====================
+// ==================== Interface Helper Methods ====================
 
 MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
   ZEN_ASSERT(InstanceAddr);
   // Convert instance address back to pointer type
   return createInstruction<ConversionInstruction>(
       false, OP_inttoptr, createVoidPtrType(), InstanceAddr);
+}
+
+const EVMMirBuilder::RuntimeFunctions &
+EVMMirBuilder::getRuntimeFunctionTable() {
+  static const RuntimeFunctions Table = {
+      .GetAddress = &EVMMirBuilder::getAddressImpl,
+      .GetOrigin = &EVMMirBuilder::getOriginImpl,
+      .GetCaller = &EVMMirBuilder::getCallerImpl,
+      .GetCallValue = &EVMMirBuilder::getCallValueImpl,
+      .GetGasPrice = &EVMMirBuilder::getGasPriceImpl,
+      .GetCallDataSize = &EVMMirBuilder::getCallDataSizeImpl,
+      .GetCodeSize = &EVMMirBuilder::getCodeSizeImpl};
+  return Table;
+}
+
+intx::uint256
+EVMMirBuilder::getAddressImpl(zen::runtime::EVMInstance *Instance) {
+  ZEN_ASSERT(Instance);
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module && Module->Host);
+
+  const evmc_message *Msg = Instance->getCurrentMessage();
+  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
+  return intx::be::load<intx::uint256>(Msg->recipient);
+}
+
+intx::uint256
+EVMMirBuilder::getOriginImpl(zen::runtime::EVMInstance *Instance) {
+  ZEN_ASSERT(Instance);
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module && Module->Host);
+
+  evmc_tx_context TxContext = Module->Host->get_tx_context();
+  return intx::be::load<intx::uint256>(TxContext.tx_origin);
+}
+
+intx::uint256
+EVMMirBuilder::getCallerImpl(zen::runtime::EVMInstance *Instance) {
+  ZEN_ASSERT(Instance);
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module && Module->Host);
+
+  const evmc_message *Msg = Instance->getCurrentMessage();
+  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
+  return intx::be::load<intx::uint256>(Msg->sender);
+}
+
+intx::uint256
+EVMMirBuilder::getCallValueImpl(zen::runtime::EVMInstance *Instance) {
+  ZEN_ASSERT(Instance);
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module && Module->Host);
+
+  const evmc_message *Msg = Instance->getCurrentMessage();
+  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
+  return intx::be::load<intx::uint256>(Msg->value);
+}
+
+intx::uint256
+EVMMirBuilder::getGasPriceImpl(zen::runtime::EVMInstance *Instance) {
+  ZEN_ASSERT(Instance);
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module && Module->Host);
+
+  evmc_tx_context TxContext = Module->Host->get_tx_context();
+  return intx::be::load<intx::uint256>(TxContext.tx_gas_price);
+}
+
+uint64_t
+EVMMirBuilder::getCallDataSizeImpl(zen::runtime::EVMInstance *Instance) {
+  ZEN_ASSERT(Instance);
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module && Module->Host);
+
+  const evmc_message *Msg = Instance->getCurrentMessage();
+  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
+  return Msg->input_size;
+}
+
+uint64_t EVMMirBuilder::getCodeSizeImpl(zen::runtime::EVMInstance *Instance) {
+  ZEN_ASSERT(Instance);
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module);
+
+  return Module->CodeSize;
 }
 
 } // namespace COMPILER

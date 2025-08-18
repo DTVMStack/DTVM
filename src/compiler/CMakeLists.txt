@@ -35,7 +35,6 @@ set(COMPILER_SRCS
     frontend/lexer.cpp
     wasm_frontend/wasm_mir_compiler.cpp
     evm_frontend/evm_mir_compiler.cpp
-    evm_frontend/evm_host_interface.cpp
     mir/function.cpp
     mir/pointer.cpp
     mir/module.cpp

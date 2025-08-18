@@ -11,6 +11,10 @@
 #include "compiler/mir/pointer.h"
 #include "intx/intx.hpp"
 
+namespace zen::runtime {
+class EVMInstance;
+} // namespace zen::runtime
+
 namespace COMPILER {
 
 enum class EVMType : uint8_t {
@@ -271,6 +275,31 @@ public:
   Operand handleCallDataSize();
   Operand handleCodeSize();
 
+  // ==================== Runtime Interface for JIT ====================
+
+  using AddressFn = intx::uint256 (*)(zen::runtime::EVMInstance *);
+  using SizeFn = uint64_t (*)(zen::runtime::EVMInstance *);
+
+  // Function dispatch table for JIT compilation
+  struct RuntimeFunctions {
+    AddressFn GetAddress;
+    AddressFn GetOrigin;
+    AddressFn GetCaller;
+    AddressFn GetCallValue;
+    AddressFn GetGasPrice;
+    SizeFn GetCallDataSize;
+    SizeFn GetCodeSize;
+  };
+
+  // Get function addresses for JIT compilation
+  static const RuntimeFunctions &getRuntimeFunctionTable();
+
+  // Template-based function address getter
+  template <typename FuncType>
+  static uint64_t getFunctionAddress(FuncType Func) {
+    return reinterpret_cast<uint64_t>(Func);
+  }
+
 private:
   // ==================== Operand Methods ====================
 
@@ -405,9 +434,19 @@ private:
   // Program counter for current instruction
   uint64_t PC = 0;
 
-private:
+  // ==================== Interface Helper Methods ====================
+
   // Helper method to get instance pointer as instruction
   MInstruction *getCurrentInstancePointer();
+
+  // Runtime interface implementation functions
+  static intx::uint256 getAddressImpl(zen::runtime::EVMInstance *Instance);
+  static intx::uint256 getOriginImpl(zen::runtime::EVMInstance *Instance);
+  static intx::uint256 getCallerImpl(zen::runtime::EVMInstance *Instance);
+  static intx::uint256 getCallValueImpl(zen::runtime::EVMInstance *Instance);
+  static intx::uint256 getGasPriceImpl(zen::runtime::EVMInstance *Instance);
+  static uint64_t getCallDataSizeImpl(zen::runtime::EVMInstance *Instance);
+  static uint64_t getCodeSizeImpl(zen::runtime::EVMInstance *Instance);
 };
 
 } // namespace COMPILER
