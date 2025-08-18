@@ -130,7 +130,7 @@ pip install lit
 Execute the test script:
 
 ```sh
-cd tests/compiler/ && ./test_mir.sh 
+cd tests/compiler/ && ./test_mir.sh
 ```
 
 Manual testing:
@@ -146,13 +146,13 @@ lit mir/add.ir mir/sub.ir --no-indirectly-run-check
 ## Running Wasm Files
 
 ```sh
-dtvm -f add i32.wasm --fargs "2 3"
+dtvm -f add i32.wasm --args "2" "3"
 
 dtvm i32.wasm --repl
 webassembly>add 1 1
 0x2:i32
 
-dtvm --dir . -f add i32.wasm --fargs "3 1"
+dtvm --dir . -f add i32.wasm --args "3" "1"
 0x4:i32
 
 dtvm --mode interpreter i32.wasm
@@ -163,7 +163,7 @@ dtvm --mode multipass i32.wasm
 ```
 
 -f      Specify the function name to test
---fargs Specify parameters, which need to be enclosed in ""
+--args  Specify parameters, preferably quoted with ""
 --repl  Enter REPL mode
 --dir   Specify directory
 --mode  Specify mode to run, currently supported modes include: interpreter / singlepass / multipass

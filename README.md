@@ -34,7 +34,7 @@ DTVM introduces:
 ![SmartCogent Overflow](./resources/smart_cogent_overflow.png)
 
 
-> For more information about SmartCogent, including an *introduction video* and *detailed documentation*, please visit [SmartCogent website](https://zan.top/0x/dtvm-smart-cogent). 
+> For more information about SmartCogent, including an *introduction video* and *detailed documentation*, please visit [SmartCogent website](https://zan.top/0x/dtvm-smart-cogent).
 > You can also apply for a *trial license* there to experience SmartCogent's *powerful features* firsthand.
 
 
@@ -52,7 +52,7 @@ ZetaEngine currently supports three execution modes: `lazy-jit` mode (also known
 
 **FLAS Mode**: Function Level Adaptive hot-Switching mode
 
-ZetaEngine provides comprehensive programming interfaces in C++, C, and Rust, enabling seamless integration as both a library and a command-line tool for Wasm execution. 
+ZetaEngine provides comprehensive programming interfaces in C++, C, and Rust, enabling seamless integration as both a library and a command-line tool for Wasm execution.
 Additionally, it offers native support for Intel SGX enclaves, ensuring secure execution in trusted environments.
 
 <a name="teEUv"></a>
@@ -179,7 +179,7 @@ We welcome interested developers to join us in implementing these features and e
 
 ## Contributing
 
-We welcome contributions to DTVM! Before contributing, please read our [Contributing Guidelines](CONTRIBUTING.md). 
+We welcome contributions to DTVM! Before contributing, please read our [Contributing Guidelines](CONTRIBUTING.md).
 
 <a name="Ry0Ak"></a>
 ## Test
@@ -197,9 +197,9 @@ ctest --verbose
 or
 
 ./build/specUnitTests 0  // interpreter mode
-    
+
 ./build/specUnitTests 1  // singlepass mode
-    
+
 ./build/specUnitTests 2  // multipass mode
 ```
 <a name="GDqeE"></a>
