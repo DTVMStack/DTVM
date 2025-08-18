@@ -39,6 +39,9 @@ using namespace zen::runtime;
     return Cost;                                                               \
   }
 
+#define DEFINE_UNIMPLEMENT_CALCULATE_GAS(OpName, Cost)                         \
+  uint64_t OpName##Handler::calculateGas() { return Cost; }
+
 /* ---------- Define gas cost macros end ---------- */
 
 /* ---------- Implement gas cost begin ---------- */
@@ -104,6 +107,8 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PrevRanDao, OP_PREVRANDAO);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(ChainId, OP_CHAINID);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SelfBalance, OP_SELFBALANCE);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(BaseFee, OP_BASEFEE);
+DEFINE_UNIMPLEMENT_CALCULATE_GAS(BlobHash, BLOBHASH_GAS_COST);
+DEFINE_UNIMPLEMENT_CALCULATE_GAS(BlobBaseFee, BLOBBASEFEE_GAS_COST);
 // Storage operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SLoad, OP_SLOAD);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SStore, OP_SSTORE);
@@ -116,6 +121,11 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MLoad, OP_MLOAD);
 // Control flow operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Jump, OP_JUMP);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(JumpI, OP_JUMPI);
+// Temporary Storage
+// Evmc do not support these opcodes
+DEFINE_UNIMPLEMENT_CALCULATE_GAS(TLoad, TLOAD_GAS_COST);
+DEFINE_UNIMPLEMENT_CALCULATE_GAS(TStore, TSTORE_GAS_COST);
+DEFINE_UNIMPLEMENT_CALCULATE_GAS(MCopy, MCOPY_GAS_COST);
 
 // Environment operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PC, OP_PC);
@@ -128,7 +138,9 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Return, OP_RETURN);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Revert, OP_REVERT);
 
 // Stack operations
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Pop, OP_POP);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Push, OP_PUSH1);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Push0, OP_PUSH0);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Dup, OP_DUP1);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Swap, OP_SWAP1);
 
@@ -175,11 +187,20 @@ uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize, uint64_t NewSize) {
 }
 
 bool chargeGas(EVMFrame *Frame, uint64_t GasCost) {
-  if ((uint64_t)Frame->GasLeft < GasCost) {
+  if ((uint64_t)Frame->Msg->gas < GasCost) {
     return false;
   }
-  Frame->GasLeft -= GasCost;
+  Frame->Msg->gas -= GasCost;
   return true;
+}
+// copy cose and charge gas
+constexpr int64_t numWords(uint64_t Size) noexcept {
+  /// The size of the EVM 256-bit word.
+  constexpr auto WORD_SIZE = 32;
+  return static_cast<int64_t>((Size + (WORD_SIZE - 1)) / WORD_SIZE);
+}
+bool copyCodeAndChargeGas(EVMFrame *Frame, uint64_t Size) {
+  return chargeGas(Frame, numWords(Size) * WORD_COPY_COST);
 }
 
 // Expand memory and charge gas
@@ -236,7 +257,7 @@ uint64_t uint256ToUint64(const intx::uint256 &Value) {
 void GasHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  Frame->push(intx::uint256(Frame->GasLeft));
+  Frame->push(intx::uint256(Frame->Msg->gas));
 }
 
 void SignExtendHandler::doExecute() {
@@ -335,7 +356,7 @@ void BalanceHandler::doExecute() {
 void OriginHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  Frame->push(intx::be::load<intx::uint256>(Frame->get_tx_context().tx_origin));
+  Frame->push(intx::be::load<intx::uint256>(Frame->getTxContext().tx_origin));
 }
 void CallerHandler::doExecute() {
   auto *Frame = getFrame();
@@ -391,6 +412,10 @@ void CallDataCopyHandler::doExecute() {
 
   auto Src = Frame->Msg->input_size < Offset ? Frame->Msg->input_size : Offset;
   auto CopySize = std::min(Size, Frame->Msg->input_size - Src);
+  if (copyCodeAndChargeGas(Frame, Size) == false) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   // Copy data to memory
   if (CopySize > 0) {
@@ -437,6 +462,10 @@ void CodeCopyHandler::doExecute() {
   uint64_t DestOffset = uint256ToUint64(DestOffsetVal);
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
+  if (copyCodeAndChargeGas(Frame, Size) == false) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   // Copy code to memory
   if (Offset < CodeSize) {
@@ -458,10 +487,11 @@ void GasPriceHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(
-      intx::be::load<intx::uint256>(Frame->get_tx_context().tx_gas_price));
+      intx::be::load<intx::uint256>(Frame->getTxContext().tx_gas_price));
 }
 void ExtCodeSizeHandler::doExecute() {
   auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 X = Frame->pop();
@@ -469,9 +499,11 @@ void ExtCodeSizeHandler::doExecute() {
 
   if (Frame->Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    EVM_REQUIRE(Frame->GasLeft >= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST,
-                EVMOutOfGas);
-    Frame->GasLeft -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
+    if (Frame->Msg->gas < ADDITIONAL_COLD_ACCOUNT_ACCESS_COST) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
+    Frame->Msg->gas -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
   }
 
   size_t CodeSize = Frame->Host->get_code_size(Addr);
@@ -497,12 +529,18 @@ void ExtCodeCopyHandler::doExecute() {
   uint64_t DestOffset = uint256ToUint64(DestOffsetVal);
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
+  if (copyCodeAndChargeGas(Frame, Size) == false) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   if (Frame->Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    EVM_REQUIRE(Frame->GasLeft >= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST,
-                EVMOutOfGas);
-    Frame->GasLeft -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
+    if (Frame->Msg->gas < ADDITIONAL_COLD_ACCOUNT_ACCESS_COST) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
+    Frame->Msg->gas -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
   }
 
   size_t CodeSize = Frame->Host->get_code_size(Addr);
@@ -548,6 +586,10 @@ void ReturnDataCopyHandler::doExecute() {
   uint64_t DestOffset = uint256ToUint64(DestOffsetVal);
   uint64_t Offset = uint256ToUint64(OffsetVal);
   uint64_t Size = uint256ToUint64(SizeVal);
+  if (copyCodeAndChargeGas(Frame, Size) == false) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
 
   const auto &ReturnData = Context->getReturnData();
 
@@ -573,6 +615,7 @@ void ReturnDataCopyHandler::doExecute() {
 }
 void ExtCodeHashHandler::doExecute() {
   auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 X = Frame->pop();
@@ -580,9 +623,11 @@ void ExtCodeHashHandler::doExecute() {
 
   if (Frame->Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    EVM_REQUIRE(Frame->GasLeft >= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST,
-                EVMOutOfGas);
-    Frame->GasLeft -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
+    if (Frame->Msg->gas < ADDITIONAL_COLD_ACCOUNT_ACCESS_COST) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
+    Frame->Msg->gas -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
   }
 
   Frame->push(intx::be::load<intx::uint256>(Frame->Host->get_code_hash(Addr)));
@@ -595,7 +640,7 @@ void BlockHashHandler::doExecute() {
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 BlockNumberVal = Frame->pop();
 
-  const auto UpperBound = Frame->get_tx_context().block_number;
+  const auto UpperBound = Frame->getTxContext().block_number;
   const auto LowerBound = std::max(UpperBound - 256, decltype(UpperBound){0});
   int64_t BlockNumber = static_cast<int64_t>(BlockNumberVal);
   const auto Header = (BlockNumberVal < UpperBound && BlockNumber >= LowerBound)
@@ -607,28 +652,28 @@ void CoinBaseHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(
-      intx::be::load<intx::uint256>(Frame->get_tx_context().block_coinbase));
+      intx::be::load<intx::uint256>(Frame->getTxContext().block_coinbase));
 }
 void TimeStampHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  Frame->push(intx::uint256(Frame->get_tx_context().block_timestamp));
+  Frame->push(intx::uint256(Frame->getTxContext().block_timestamp));
 }
 void NumberHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  Frame->push(intx::uint256(Frame->get_tx_context().block_number));
+  Frame->push(intx::uint256(Frame->getTxContext().block_number));
 }
 void PrevRanDaoHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(
-      intx::be::load<intx::uint256>(Frame->get_tx_context().block_prev_randao));
+      intx::be::load<intx::uint256>(Frame->getTxContext().block_prev_randao));
 }
 void ChainIdHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  Frame->push(intx::be::load<intx::uint256>(Frame->get_tx_context().chain_id));
+  Frame->push(intx::be::load<intx::uint256>(Frame->getTxContext().chain_id));
 }
 void SelfBalanceHandler::doExecute() {
   auto *Frame = getFrame();
@@ -640,20 +685,45 @@ void BaseFeeHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   Frame->push(
-      intx::be::load<intx::uint256>(Frame->get_tx_context().block_base_fee));
+      intx::be::load<intx::uint256>(Frame->getTxContext().block_base_fee));
+}
+void BlobHashHandler::doExecute() {
+  auto *Frame = getFrame();
+  EVM_FRAME_CHECK(Frame);
+  EVM_STACK_CHECK(Frame, 1);
+  intx::uint256 IndexVal = Frame->pop();
+  uint64_t Index = uint256ToUint64(IndexVal);
+
+  if (IndexVal >= Frame->getTxContext().blob_hashes_count) {
+    Frame->push(intx::uint256(0));
+    return;
+  }
+
+  const auto &BlobHash = Frame->getTxContext().blob_hashes[Index];
+  Frame->push(intx::be::load<intx::uint256>(BlobHash));
+}
+void BlobBaseFeeHandler::doExecute() {
+  auto *Frame = getFrame();
+  EVM_FRAME_CHECK(Frame);
+  Frame->push(
+      intx::be::load<intx::uint256>(Frame->getTxContext().blob_base_fee));
 }
 // Storage operations
 void SLoadHandler::doExecute() {
   auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 Key = Frame->pop();
   const auto KeyAddr = intx::be::store<evmc::bytes32>(Key);
   if (Frame->Rev >= EVMC_BERLIN &&
-      Frame->Host->access_account(Frame->Msg->recipient) == EVMC_ACCESS_COLD) {
-    EVM_REQUIRE(Frame->GasLeft >= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST,
-                EVMOutOfGas);
-    Frame->GasLeft -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
+      Frame->Host->access_storage(Frame->Msg->recipient, KeyAddr) ==
+          EVMC_ACCESS_COLD) {
+    if (Frame->Msg->gas < ADDITIONAL_COLD_ACCOUNT_ACCESS_COST) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
+    Frame->Msg->gas -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
   }
   intx::uint256 Value = intx::be::load<intx::uint256>(
       Frame->Host->get_storage(Frame->Msg->recipient, KeyAddr));
@@ -661,6 +731,7 @@ void SLoadHandler::doExecute() {
 }
 void SStoreHandler::doExecute() {
   auto *Frame = getFrame();
+  auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
   EVM_REQUIRE(!Frame->isStaticMode(), EVMStaticModeViolation);
 
@@ -668,19 +739,22 @@ void SStoreHandler::doExecute() {
   const auto Key = intx::be::store<evmc::bytes32>(Frame->pop());
   const auto Value = intx::be::store<evmc::bytes32>(Frame->pop());
 
-  const auto GasCostCold =
-      (Frame->Rev >= EVMC_BERLIN &&
-       Frame->Host->access_account(Frame->Msg->recipient) == EVMC_ACCESS_COLD)
-          ? COLD_SLOAD_COST
-          : 0;
+  const auto GasCostCold = (Frame->Rev >= EVMC_BERLIN &&
+                            Frame->Host->access_storage(
+                                Frame->Msg->recipient, Key) == EVMC_ACCESS_COLD)
+                               ? COLD_SLOAD_COST
+                               : 0;
   const auto Status =
       Frame->Host->set_storage(Frame->Msg->recipient, Key, Value);
 
   const auto [GasCostWarm, GasReFund] = SstoreCosts[Frame->Rev][Status];
 
   const auto GasCost = GasCostCold + GasCostWarm;
-  EVM_REQUIRE(Frame->GasLeft >= GasCost, EVMOutOfGas);
-  Frame->GasLeft -= GasCost;
+  if (Frame->Msg->gas < GasCost) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
+  Frame->Msg->gas -= GasCost;
   Frame->GasRefund += GasReFund;
 }
 
@@ -813,6 +887,57 @@ void JumpIHandler::doExecute() {
   Frame->Pc = Dest;
   Context->IsJump = true;
 }
+// Temporary storage operations
+void TLoadHandler::doExecute() {
+  auto *Frame = getFrame();
+  EVM_FRAME_CHECK(Frame);
+  EVM_STACK_CHECK(Frame, 1);
+  intx::uint256 X = Frame->pop(); // Key is uint256, can be used as index
+  const auto Key = intx::be::store<evmc::bytes32>(X);
+  const auto Value =
+      Frame->Host->get_transient_storage(Frame->Msg->recipient, Key);
+  Frame->push(intx::be::load<intx::uint256>(Value));
+}
+void TStoreHandler::doExecute() {
+  auto *Frame = getFrame();
+  EVM_FRAME_CHECK(Frame);
+  EVM_REQUIRE(!Frame->isStaticMode(), EVMStaticModeViolation);
+
+  EVM_STACK_CHECK(Frame, 2);
+  const auto Key = intx::be::store<evmc::bytes32>(Frame->pop());
+  const auto Value = intx::be::store<evmc::bytes32>(Frame->pop());
+
+  Frame->Host->set_transient_storage(Frame->Msg->recipient, Key, Value);
+}
+void MCopyHandler::doExecute() {
+  auto *Frame = getFrame();
+  auto *Context = getContext();
+  EVM_FRAME_CHECK(Frame);
+  EVM_STACK_CHECK(Frame, 3);
+  intx::uint256 DestOffsetVal = Frame->pop();
+  intx::uint256 OffsetVal = Frame->pop();
+  intx::uint256 SizeVal = Frame->pop();
+
+  // Ensure memory is large enough
+  if (!checkMemoryExpandAndChargeGas(Frame, std::max(DestOffsetVal, OffsetVal),
+                                     SizeVal)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
+
+  uint64_t DestOffset = uint256ToUint64(DestOffsetVal);
+  uint64_t Offset = uint256ToUint64(OffsetVal);
+  uint64_t Size = uint256ToUint64(SizeVal);
+
+  if (copyCodeAndChargeGas(Frame, Size) == false) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
+  if (Size > 0) {
+    std::memmove(Frame->Memory.data() + DestOffset,
+                 Frame->Memory.data() + Offset, Size);
+  }
+}
 
 // Environment operations
 void PCHandler::doExecute() {
@@ -832,7 +957,7 @@ void MSizeHandler::doExecute() {
 void GasLimitHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  Frame->push(intx::uint256(Frame->GasLimit));
+  Frame->push(intx::uint256(Frame->getTxContext().block_gas_limit));
 }
 
 // Return operations
@@ -858,10 +983,10 @@ void ReturnHandler::doExecute() {
 
   Context->setStatus(EVMC_SUCCESS);
   // Return remaining gas to parent frame before freeing current frame
-  uint64_t RemainingGas = Frame->GasLeft;
+  uint64_t RemainingGas = Frame->Msg->gas;
   Context->freeBackFrame();
   if (Context->getCurFrame() != nullptr) {
-    Context->getCurFrame()->GasLeft += RemainingGas;
+    Context->getCurFrame()->Msg->gas += RemainingGas;
   }
 }
 
@@ -887,14 +1012,21 @@ void RevertHandler::doExecute() {
   Context->setStatus(EVMC_REVERT);
   Context->setReturnData(std::move(RevertData));
   // Return remaining gas to parent frame before freeing current frame
-  uint64_t RemainingGas = Frame->GasLeft;
+  uint64_t RemainingGas = Frame->Msg->gas;
   Context->freeBackFrame();
   if (Context->getCurFrame() != nullptr) {
-    Context->getCurFrame()->GasLeft += RemainingGas;
+    Context->getCurFrame()->Msg->gas += RemainingGas;
   }
 }
 
 // Stack operations
+void PopHandler::doExecute() {
+  auto *Frame = getFrame();
+  EVM_FRAME_CHECK(Frame);
+  EVM_STACK_CHECK(Frame, 1);
+  Frame->pop();
+}
+
 void PushHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
@@ -914,6 +1046,12 @@ void PushHandler::doExecute() {
   intx::uint256 Val = intx::be::load<intx::uint256>(ValueBytes);
   Frame->push(Val);
   Frame->Pc += NumBytes;
+}
+
+void Push0Handler::doExecute() {
+  auto *Frame = getFrame();
+  EVM_FRAME_CHECK(Frame);
+  Frame->push(0);
 }
 
 void DupHandler::doExecute() {
@@ -963,7 +1101,7 @@ void CreateHandler::doExecute() {
   Frame->push(0);
   Context->setReturnData(std::vector<uint8_t>());
 
-  if (Frame->IsStatic) {
+  if (Frame->isStaticMode()) {
     Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
     return;
   }
@@ -983,7 +1121,7 @@ void CreateHandler::doExecute() {
     return;
   }
 
-  if (Frame->Msg->depth >= 1024) {
+  if (Frame->Msg->depth >= MAXSTACK) {
     Context->setStatus(EVMC_SUCCESS); // "Light" failure
     return;
   }
@@ -1002,7 +1140,7 @@ void CreateHandler::doExecute() {
 
   evmc_message NewMsg{.kind = evmc_call_kind::EVMC_CREATE,
                       .depth = Frame->Msg->depth + 1,
-                      .gas = Frame->GasLeft,
+                      .gas = Frame->Msg->gas,
                       .sender = Frame->Msg->sender,
                       .input_data =
                           Frame->Memory.data() + uint256ToUint64(CodeOffset),
@@ -1048,7 +1186,7 @@ void CallHandler::doExecute() {
   }
 
   const auto Gas = Frame->pop();
-  const auto Dest = intx::be::trunc<evmc::address>(Frame->pop());
+  auto Dest = intx::be::trunc<evmc::address>(Frame->pop());
   const auto Value = NeedValue ? Frame->pop() : 0;
   const auto InputOffset = Frame->pop();
   const auto InputSize = Frame->pop();
@@ -1073,7 +1211,7 @@ void CallHandler::doExecute() {
     }
   }
 
-  if (Frame->Msg->depth >= 1024) {
+  if (Frame->Msg->depth >= MAXSTACK) {
     Context->setStatus(EVMC_SUCCESS); // "Light" failure
     return;
   }
@@ -1112,8 +1250,8 @@ void CallHandler::doExecute() {
   };
 
   if (Frame->Rev >= EVMC_TANGERINE_WHISTLE) {
-    NewMsg.gas = std::min(NewMsg.gas, (Frame->GasLeft - Frame->GasLeft / 64));
-  } else if (NewMsg.gas > Frame->GasLeft) {
+    NewMsg.gas = std::min(NewMsg.gas, (Frame->Msg->gas - Frame->Msg->gas / 64));
+  } else if (NewMsg.gas > Frame->Msg->gas) {
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
@@ -1121,7 +1259,7 @@ void CallHandler::doExecute() {
   int64_t Cost = NeedValue ? CALL_VALUE_COST : 0;
 
   if (OpCode == OP_CALL) {
-    if (Frame->IsStatic) {
+    if (Frame->isStaticMode()) {
       Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
       return;
     }
@@ -1142,6 +1280,7 @@ void CallHandler::doExecute() {
   }
 
   const auto Result = Frame->Host->call(NewMsg);
+  Context->setResource();
   if (Result.status_code == EVMC_SUCCESS) {
     Frame->pop(); // pop the assume value
     Frame->push(intx::uint256(1));
@@ -1167,7 +1306,7 @@ void LogHandler::doExecute() {
   auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
 
-  if (Frame->IsStatic) {
+  if (Frame->isStaticMode()) {
     Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
     return;
   }
@@ -1211,7 +1350,7 @@ void SelfDestructHandler::doExecute() {
   auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
 
-  if (Frame->IsStatic) {
+  if (Frame->isStaticMode()) {
     Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
     return;
   }
@@ -1240,10 +1379,10 @@ void SelfDestructHandler::doExecute() {
 
   Frame->Host->selfdestruct(Frame->Msg->recipient, Beneficiary);
 
-  uint64_t RemainingGas = Frame->GasLeft;
+  uint64_t RemainingGas = Frame->Msg->gas;
   Context->freeBackFrame();
   if (Context->getCurFrame() != nullptr) {
-    Context->getCurFrame()->GasLeft += RemainingGas;
+    Context->getCurFrame()->Msg->gas += RemainingGas;
   }
 }
 

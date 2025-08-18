@@ -35,7 +35,7 @@ Explanation:
 | -dir | (directory) <br />type: string | "" |
 | -env | (environment variables)<br />type: string | "" |
 | -f | (function name) <br />type: string | "" |
-| -fargs | (function parameters) <br />type: string | "" |
+| -args | (function parameters) <br />type: string | "" |
 | -log | (log level: <br />0/trace <br />1/debug <br />2/info<br />3/warn<br />4/error<br />5/fatal) <br />type: string | "2"/"info" |
 | -mode | (execution mode: <br />0/interpreter<br />1/singlepass <br />2/multipass) <br />type: string | "0"/"interpreter" |
 | -repl | (REPL mode) type: bool | false |
@@ -48,7 +48,7 @@ Explanation:
 | -dir | (directory) <br />type: string | "" |
 | -env | (environment variables)<br />type: string | "" |
 | -f | (function name) <br />type: string | "" |
-| -fargs | (function parameters) <br />type: string | "" |
+| -args | (function parameters) <br />type: string | "" |
 | -log | (log level: <br />0/trace <br />1/debug <br />2/info<br />3/warn<br />4/error<br />5/fatal) <br />type: string | "2"/"info" |
 | -mode | (execution mode: <br />0/interpreter<br />1/singlepass <br />2/multipass) <br />type: string | "0"/"interpreter" |
 | -runTimes | (Set the number of execution runs) <br />type: uint32 | 1 |

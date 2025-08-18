@@ -1,0 +1,7 @@
+# Ignore compiled contract metadata JSON (e.g., basic/basic.json, fibonacci/fibonacci.json)
+# Ignore every .json directly inside any sub-folder under tests/evm_solidity
+*/*.json
+
+# Keep test case definitions (test_cases.json)
+!*/test_cases.json
+

@@ -1,3 +1,8 @@
+// Copyright (C) 2025 the DTVM authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+#ifndef ZEN_RUNTIME_EVM_MODULE_H
+#define ZEN_RUNTIME_EVM_MODULE_H
+
 #include "evmc/evmc.hpp"
 #include "runtime/module.h"
 
@@ -30,3 +35,5 @@ private:
 
 } // namespace runtime
 } // namespace zen
+
+#endif // ZEN_RUNTIME_EVM_MODULE_H

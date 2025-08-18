@@ -1,0 +1,30 @@
+{
+  "main_contract": "TestFib",
+  "deploy_contracts": [
+    "TestFib",
+    "FibonacciLib"
+  ],
+  "test_cases": [
+    {
+      "name": "test_fibonacci_5",
+      "function": "fib(uint256)",
+      "calldata": "c6c2ea170000000000000000000000000000000000000000000000000000000000000005",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000005",
+      "contract": "TestFib"
+    },
+    {
+      "name": "test_fibonacci_7",
+      "function": "fib(uint256)",
+      "calldata": "c6c2ea170000000000000000000000000000000000000000000000000000000000000007",
+      "expected": "000000000000000000000000000000000000000000000000000000000000000d",
+      "contract": "TestFib"
+    },
+    {
+      "name": "test_fibonacci_114514",
+      "function": "fib(uint256)",
+      "calldata": "c6c2ea17000000000000000000000000000000000000000000000000000000000001bf52",
+      "expected": "0000000000000000000000000000000000000000000000000000000027d1a0ef",
+      "contract": "TestFib"
+    }
+  ]
+}

@@ -23,25 +23,20 @@ class EVMInstance;
 namespace evm {
 
 struct EVMFrame {
-  static constexpr size_t MAXSTACK = 1024;
-
   // TODO: use EVMMemory class in the future
   std::array<intx::uint256, MAXSTACK> Stack;
   std::vector<uint8_t> Memory;
-  // TODO: use EVMHost in the future
-  std::map<intx::uint256, intx::uint256> Storage;
-  const evmc_message *Msg = nullptr;
+
+  std::vector<uint8_t> CallData;
+  std::unique_ptr<evmc_message> Msg;
   evmc::Host *Host = nullptr;
   evmc_revision Rev = DEFAULT_REVISION;
   evmc_tx_context MTx = {};
 
   size_t Sp = 0;
-  int64_t GasLeft = 0;
   uint64_t GasRefund = 0;
-  uint64_t GasLimit = 0;
   uint64_t Pc = 0;
   intx::uint256 Value = 0;
-  bool IsStatic = false;
 
   inline void push(const intx::uint256 &V) {
     if (Sp >= MAXSTACK) {
@@ -66,7 +61,7 @@ struct EVMFrame {
 
   inline size_t stackHeight() const { return Sp; }
 
-  const evmc_tx_context &get_tx_context() noexcept {
+  const evmc_tx_context &getTxContext() noexcept {
     if (INTX_UNLIKELY(MTx.block_timestamp == 0))
       MTx = Host->get_tx_context();
     return MTx;
@@ -80,13 +75,18 @@ private:
   std::vector<EVMFrame> FrameStack;
   evmc_status_code Status = EVMC_SUCCESS;
   std::vector<uint8_t> ReturnData;
+  uint64_t GasUsed = 0;
 
 public:
   bool IsJump = false;
 
   InterpreterExecContext(runtime::EVMInstance *Inst) : Inst(Inst) {}
 
-  EVMFrame *allocFrame(uint64_t GasLimit = 0);
+  EVMFrame *allocFrame(evmc_message *ParentMsg, uint64_t GasLimit,
+                       evmc_call_kind Kind, evmc::address Recipient,
+                       evmc::address Sender, std::vector<uint8_t> CallData,
+                       intx::uint256 Value);
+  EVMFrame *allocFrame(evmc_message *Msg);
   void freeBackFrame();
 
   EVMFrame *getCurFrame() {
@@ -97,6 +97,12 @@ public:
   }
 
   runtime::EVMInstance *getInstance() { return Inst; }
+
+  uint64_t getGasUsed() const { return GasUsed; }
+
+  void setCallData(const std::vector<uint8_t> &Data);
+  void setTxContext(const evmc_tx_context &TxContext);
+  void setResource();
 
   evmc_status_code getStatus() const { return Status; }
   void setStatus(evmc_status_code Status) { this->Status = Status; }

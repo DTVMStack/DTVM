@@ -1,5 +1,8 @@
+// Copyright (C) 2025 the DTVM authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 #include "compiler/evm_frontend/evm_mir_compiler.h"
-#include "compiler/evm_frontend/evm_bytecode_visitor.h"
+#include "action/evm_bytecode_visitor.h"
 #include "compiler/mir/basic_block.h"
 #include "compiler/mir/constants.h"
 #include "compiler/mir/function.h"
@@ -69,63 +72,97 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
 
 void EVMMirBuilder::finalizeEVMBase() {
   // Ensure all basic blocks are properly terminated
-  if (CurBB && !CurBB->isTerminated()) {
-    // Add implicit return if not terminated
-    createInstruction<RetInstruction>(true, &Ctx.VoidType);
-  }
+  // TODO: invalid interface: MBasicBlock::isTerminated()
+  // if (CurBB && !CurBB->isTerminated()) {
+  //   // Add implicit return if not terminated
+  //   createInstruction<ReturnInstruction>(true, &Ctx.VoidType);
+  // }
 }
 
 // ==================== Stack Instruction Handlers ====================
 
-typename EVMMirBuilder::Operand EVMMirBuilder::handlePush(const uint8_t *Data,
-                                                          size_t NumBytes) {
-  // Convert bytes to uint256 value
-  intx::uint256 Value = 0;
-  for (size_t I = 0; I < NumBytes; ++I) {
-    Value = (Value << 8) | Data[I];
+// Convert big-endian bytes to uint256(4 x uint64_t)
+EVMMirBuilder::U256Value EVMMirBuilder::createU256FromBytes(const Byte *Data,
+                                                            size_t Length) {
+  U256Value Result = {0, 0, 0, 0};
+
+  size_t Start = (Length > 32) ? (Length - 32) : 0;
+  size_t ActualLength = (Length > 32) ? 32 : Length;
+
+  for (size_t I = 0; I < ActualLength; ++I) {
+    size_t ByteIndex = Start + I;
+    size_t GlobalBytePos = ActualLength - 1 - I; // Position from right (LSB)
+    size_t U64Index = GlobalBytePos / 8;
+    size_t ByteInU64 = GlobalBytePos % 8;
+
+    if (U64Index < 4) {
+      Result[U64Index] |=
+          (static_cast<uint64_t>(Data[ByteIndex]) << (ByteInU64 * 8));
+    }
   }
 
-  // Get EVMU256Type to guide 4-component creation
-  zen::common::EVMU256Type *U256Type = EVMFrontendContext::getEVMU256Type();
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  return Result;
+}
 
-  // Use EVMU256Type's structure to extract components properly
-  // EVMU256Type defines 4 I64 elements, so we extract accordingly
-  uint64_t Components[4]; // u256
-  const auto &InnerTypes = U256Type->getInnerTypes();
+EVMMirBuilder::U256ConstInt
+EVMMirBuilder::createU256Constants(const U256Value &Value) {
+  EVMMirBuilder::U256ConstInt Result;
 
-  // Extract components based on EVMU256Type's bit layout (256 bits total)
-  extractU256ComponentsExplicit(Components, Value,
-                                U256Type->getElementsCount());
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    Result[I] = MConstantInt::get(
+        Ctx, *EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64),
+        Value[I]);
+  }
+  return Result;
+}
 
-  // Create constant instructions using EVMU256Type's inner type information
-  std::array<MInstruction *, 4> ComponentInstrs;
-  for (size_t i = 0; i < U256Type->getElementsCount(); ++i) {
-    // Verify we're using the correct inner type (should be I64)
-    ZEN_ASSERT(U256Type->getInnerType(i) == &zen::common::WASMType::I64 &&
-               "EVMU256Type inner type mismatch");
+EVMMirBuilder::Operand EVMMirBuilder::handlePush(const Bytes &Data) {
+  U256Value Value = bytesToU256(Data);
+  return Operand(Value);
+}
 
-    MConstant *Constant = MConstantInt::get(Ctx, *I64Type, Components[i]);
-    ComponentInstrs[i] =
-        createInstruction<ConstantInstruction>(false, I64Type, *Constant);
+EVMMirBuilder::Operand EVMMirBuilder::handleDup(uint8_t Index) {
+  return peekOperand(Index - 1);
+}
+
+void EVMMirBuilder::handleSwap(uint8_t Index) {
+  if (OperandStack.size() < Index + 1) {
+    throw getError(common::ErrorCode::EVMStackUnderflow);
   }
 
-  return Operand(ComponentInstrs, EVMType::UINT256);
+  std::vector<Operand> Temp;
+  for (uint8_t I = 0; I <= Index; ++I) {
+    Temp.push_back(popOperand());
+  }
+  std::swap(Temp[0], Temp[Index]);
+
+  for (int I = Index; I >= 0; --I) {
+    pushOperand(Temp[I]);
+  }
 }
 
-void EVMMirBuilder::handleDup(uint32_t N) {
-  // DUP is handled in the visitor by manipulating the evaluation stack
-  // No DMIR instruction needed
+void EVMMirBuilder::handlePop() { popOperand(); }
+
+EVMMirBuilder::Operand EVMMirBuilder::popOperand() {
+  if (OperandStack.empty()) {
+    throw getError(common::ErrorCode::EVMStackUnderflow);
+  }
+  Operand Result = OperandStack.top();
+  OperandStack.pop();
+  return Result;
 }
 
-void EVMMirBuilder::handleSwap(uint32_t N) {
-  // SWAP is handled in the visitor by manipulating the evaluation stack
-  // No DMIR instruction needed
-}
+EVMMirBuilder::Operand EVMMirBuilder::peekOperand(size_t Index) const {
+  if (OperandStack.size() <= Index) {
+    throw getError(common::ErrorCode::EVMStackUnderflow);
+  }
 
-void EVMMirBuilder::handlePop() {
-  // POP is handled in the visitor by removing from evaluation stack
-  // No DMIR instruction needed
+  std::stack<Operand> StackCopy = OperandStack;
+  size_t Depth = StackCopy.size() - Index - 1;
+  while (Depth--) {
+    StackCopy.pop();
+  }
+  return StackCopy.top();
 }
 
 // ==================== Control Flow Instruction Handlers ====================
@@ -165,84 +202,151 @@ void EVMMirBuilder::handleJumpDest() {
 
 // ==================== Arithmetic Instruction Handlers ====================
 
-template <evmc_opcode OpCode>
-typename EVMMirBuilder::Operand
-EVMMirBuilder::handleBinaryArithmetic(Operand LHSOp, Operand RHSOp) {
-  // Get EVMU256Type for semantic awareness and verify our assumptions
-  zen::common::EVMU256Type *U256Type = EVMFrontendContext::getEVMU256Type();
+EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQZ(const U256Inst &LHS,
+                                                        MType *ResultType) {
+  U256Inst Result = {};
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
-  // Extract 4 components from both operands using EVMU256Type structure
-  auto LHSComponents = extractU256Components(LHSOp);
-  auto RHSComponents = extractU256Components(RHSOp);
-
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  std::array<MInstruction *, U256Type->getElementsCount()> ResultComponents;
-
-  switch (OpCode) {
-  case OP_ADD: {
-    // Implement 256-bit addition using EVMU256Type's element structure
-    // For now, simplified implementation: add each component separately
-    // TODO: Implement proper carry propagation for full 256-bit addition
-    for (size_t i = 0; i < U256Type->getElementsCount(); ++i) {
-      MInstruction *LHS = extractOperand(LHSComponents[i]);
-      MInstruction *RHS = extractOperand(RHSComponents[i]);
-      ResultComponents[i] = createInstruction<BinaryInstruction>(
-          false, OP_add, I64Type, LHS, RHS);
+  // For ISZERO: OR all components, then compare with 0
+  MInstruction *OrResult = nullptr;
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    if (OrResult == nullptr) {
+      OrResult = LHS[I];
+    } else {
+      OrResult = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                      OrResult, LHS[I]);
     }
-    break;
-  }
-  case OP_SUB: {
-    // Implement 256-bit subtraction using EVMU256Type's element structure
-    // For now, simplified implementation: subtract each component separately
-    // TODO: Implement proper borrow propagation for full 256-bit subtraction
-    for (size_t i = 0; i < U256Type->getElementsCount(); ++i) {
-      MInstruction *LHS = extractOperand(LHSComponents[i]);
-      MInstruction *RHS = extractOperand(RHSComponents[i]);
-      ResultComponents[i] = createInstruction<BinaryInstruction>(
-          false, OP_sub, I64Type, LHS, RHS);
-    }
-    break;
-  }
-  case OP_AND:
-  case OP_OR:
-  case OP_XOR: {
-    // Bitwise operations can be done component-wise using EVMU256Type structure
-    Opcode MIROpcode = getEVMBinaryOpcode(OpCode);
-    for (size_t i = 0; i < U256Type->getElementsCount(); ++i) {
-      MInstruction *LHS = extractOperand(LHSComponents[i]);
-      MInstruction *RHS = extractOperand(RHSComponents[i]);
-      ResultComponents[i] = createInstruction<BinaryInstruction>(
-          false, MIROpcode, I64Type, LHS, RHS);
-    }
-    break;
-  }
-  default: {
-    // For other operations (MUL, DIV, etc.), implement as needed
-    // For now, fall back to component-wise operation on low component only
-    MInstruction *LHS = extractOperand(LHSComponents[0]);
-    MInstruction *RHS = extractOperand(RHSComponents[0]);
-    Opcode MIROpcode = getEVMBinaryOpcode(OpCode);
-
-    ResultComponents[0] = createInstruction<BinaryInstruction>(
-        false, MIROpcode, I64Type, LHS, RHS);
-
-    // Set higher components to zero for simplicity, using EVMU256Type element
-    // count
-    MConstant *ZeroConstant = MConstantInt::get(Ctx, *I64Type, 0);
-    for (size_t i = 1; i < U256Type->getElementsCount(); ++i) {
-      ResultComponents[i] =
-          createInstruction<ConstantInstruction>(false, I64Type, *ZeroConstant);
-    }
-    break;
-  }
   }
 
-  return Operand(ResultComponents, EVMType::UINT256);
+  // Final result is 1 if all are zero, 0 otherwise
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  auto Predicate = CmpInstruction::Predicate::ICMP_EQ;
+  MInstruction *CmpResult = createInstruction<CmpInstruction>(
+      false, Predicate, ResultType, OrResult, Zero);
+
+  // Convert to u256: result[0] = CmpResult extended to i64, others = 0
+  Result[0] = createInstruction<ConversionInstruction>(false, OP_uext,
+                                                       MirI64Type, CmpResult);
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    Result[I] = Zero;
+  }
+
+  return Result;
 }
 
-// Explicit template instantiation for ADD
-template typename EVMMirBuilder::Operand
-EVMMirBuilder::handleBinaryArithmetic<OP_ADD>(Operand LHSOp, Operand RHSOp);
+EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQ(const U256Inst &LHS,
+                                                       const U256Inst &RHS,
+                                                       MType *ResultType) {
+  U256Inst Result = {};
+
+  // For EQ: all components must be equal (AND all component comparisons)
+  MInstruction *AndResult = nullptr;
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    ZEN_ASSERT(LHS[I] && RHS[I]);
+    auto Predicate = CmpInstruction::Predicate::ICMP_EQ;
+    MInstruction *CmpResult = createInstruction<CmpInstruction>(
+        false, Predicate, ResultType, LHS[I], RHS[I]);
+    if (AndResult == nullptr) {
+      AndResult = CmpResult;
+    } else {
+      AndResult = createInstruction<BinaryInstruction>(
+          false, OP_and, ResultType, AndResult, CmpResult);
+    }
+  }
+
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  Result[0] = createInstruction<ConversionInstruction>(false, OP_uext,
+                                                       MirI64Type, AndResult);
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    Result[I] = Zero;
+  }
+
+  return Result;
+}
+
+EVMMirBuilder::U256Inst
+EVMMirBuilder::handleCompareGT_LT(const U256Inst &LHS, const U256Inst &RHS,
+                                  MType *ResultType, CompareOperator Operator) {
+  U256Inst Result = {};
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  // Compare from most significant to least significant component
+  // If components are equal, continue to next
+  MInstruction *FinalResult = nullptr;
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  MInstruction *One = createIntConstInstruction(ResultType, 1);
+
+  for (int I = EVM_ELEMENTS_COUNT - 1; I >= 0; --I) {
+    ZEN_ASSERT(LHS[I] && RHS[I]);
+
+    CmpInstruction::Predicate LTPredicate;
+    if (Operator == CompareOperator::CO_LT) {
+      LTPredicate = CmpInstruction::Predicate::ICMP_ULT;
+    } else if (Operator == CompareOperator::CO_LT_S) {
+      LTPredicate = CmpInstruction::Predicate::ICMP_SLT;
+    } else if (Operator == CompareOperator::CO_GT) {
+      LTPredicate = CmpInstruction::Predicate::ICMP_UGT;
+    } else if (Operator == CompareOperator::CO_GT_S) {
+      LTPredicate = CmpInstruction::Predicate::ICMP_SGT;
+    } else {
+      ZEN_ASSERT_TODO();
+    }
+
+    auto EQPredicate = CmpInstruction::Predicate::ICMP_EQ;
+
+    MInstruction *CompResult = createInstruction<CmpInstruction>(
+        false, LTPredicate, ResultType, LHS[I], RHS[I]);
+    MInstruction *EqResult = createInstruction<CmpInstruction>(
+        false, EQPredicate, ResultType, LHS[I], RHS[I]);
+
+    if (FinalResult == nullptr) {
+      FinalResult = CompResult;
+    } else {
+      // FinalResult = EqResult_prev ? CompResult : FinalResult
+      FinalResult = createInstruction<SelectInstruction>(
+          false, ResultType, EqResult, CompResult, FinalResult);
+    }
+
+    // Update equality check for next iteration
+    if (I > 0) {
+      MInstruction *NotEq = createInstruction<BinaryInstruction>(
+          false, OP_xor, ResultType, EqResult, One);
+      // Skip remaining iterations by breaking the loop if not equal
+      MInstruction *IsNotEqual = createInstruction<BinaryInstruction>(
+          false, OP_and, ResultType, NotEq, One);
+      // Use select to keep current result if not equal, continue if equal
+      FinalResult = createInstruction<SelectInstruction>(
+          false, ResultType, IsNotEqual, CompResult, FinalResult);
+    }
+  }
+
+  ZEN_ASSERT(FinalResult);
+  Result[0] = createInstruction<ConversionInstruction>(false, OP_uext,
+                                                       MirI64Type, FinalResult);
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    Result[I] = Zero;
+  }
+
+  return Result;
+}
+
+EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
+  U256Inst Result = {};
+  U256Inst LHS = extractU256Operand(LHSOp);
+
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    Result[I] = createInstruction<NotInstruction>(false, MirI64Type, LHS[I]);
+  }
+
+  return Operand(Result, EVMType::UINT256);
+}
 
 // ==================== Environment Instruction Handlers ====================
 
@@ -339,20 +443,56 @@ EVMMirBuilder::createU256ConstOperand(const intx::uint256 &V) {
 
   // Use EVMU256Type's element count and structure
   uint64_t Components[U256Type->getElementsCount()];
-  for (size_t i = 0; i < U256Type->getElementsCount(); ++i) {
-    Components[i] =
-        static_cast<uint64_t>((V >> (i * 64)) & 0xFFFFFFFFFFFFFFFFULL);
+  for (size_t I = 0; I < U256Type->getElementsCount(); ++I) {
+    Components[I] =
+        static_cast<uint64_t>((V >> (I * 64)) & 0xFFFFFFFFFFFFFFFFULL);
   }
 
   // Create constant instructions based on EVMU256Type's inner types
-  std::array<MInstruction *, 4> ComponentInstrs;
-  for (size_t i = 0; i < U256Type->getElementsCount(); ++i) {
-    MConstant *Constant = MConstantInt::get(Ctx, *I64Type, Components[i]);
-    ComponentInstrs[i] =
+  U256Inst ComponentInstrs;
+  for (size_t I = 0; I < U256Type->getElementsCount(); ++I) {
+    MConstant *Constant = MConstantInt::get(Ctx, *I64Type, Components[I]);
+    ComponentInstrs[I] =
         createInstruction<ConstantInstruction>(false, I64Type, *Constant);
   }
 
   return Operand(ComponentInstrs, EVMType::UINT256);
+}
+
+EVMMirBuilder::U256Inst EVMMirBuilder::extractU256Operand(const Operand &Opnd) {
+  U256Inst Result = {};
+
+  if (Opnd.isEmpty()) {
+    return Result;
+  }
+
+  if (Opnd.isConstant()) {
+    U256ConstInt Constants = createU256Constants(Opnd.getConstValue());
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      Result[I] = createInstruction<ConstantInstruction>(
+          false, EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256),
+          *Constants[I]);
+    }
+    return Result;
+  }
+
+  if (Opnd.isU256MultiComponent()) {
+    U256Inst Instrs = Opnd.getU256Components();
+    if (Instrs[0] != nullptr) {
+      return Instrs;
+    }
+
+    U256Var Vars = Opnd.getU256VarComponents();
+    if (Vars[0] != nullptr) {
+      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+        ZEN_ASSERT(Vars[I] != nullptr);
+        Result[I] = createInstruction<DreadInstruction>(
+            false, Vars[I]->getType(), Vars[I]->getVarIdx());
+      }
+    }
+  }
+
+  return Result;
 }
 
 // ==================== EVMU256 Helper Methods ====================
@@ -361,13 +501,17 @@ typename EVMMirBuilder::Operand
 EVMMirBuilder::createU256FromComponents(Operand Low, Operand MidLow,
                                         Operand MidHigh, Operand High) {
   // Extract MInstructions from the component operands
-  std::array<MInstruction *, 4> ComponentInstrs;
+  U256Inst ComponentInstrs;
   ComponentInstrs[0] = extractOperand(Low);     // Low (bits 0-63)
   ComponentInstrs[1] = extractOperand(MidLow);  // Mid-low (bits 64-127)
   ComponentInstrs[2] = extractOperand(MidHigh); // Mid-high (bits 128-191)
   ComponentInstrs[3] = extractOperand(High);    // High (bits 192-255)
 
   return Operand(ComponentInstrs, EVMType::UINT256);
+}
+
+EVMMirBuilder::U256Value EVMMirBuilder::bytesToU256(const Bytes &Data) {
+  return createU256FromBytes(Data.data(), Data.size());
 }
 
 ///
@@ -429,27 +573,23 @@ EVMMirBuilder::extractU256Components(Operand U256Op) {
 
 // ==================== EVM to MIR Opcode Mapping ====================
 
-Opcode EVMMirBuilder::getEVMBinaryOpcode(evmc_opcode EVMOp) {
-  switch (EVMOp) {
-  case OP_ADD:
+Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
+  switch (BinOpr) {
+  case BinaryOperator::BO_ADD:
     return OP_add;
-  case OP_SUB:
+  case BinaryOperator::BO_SUB:
     return OP_sub;
-  case OP_MUL:
+  case BinaryOperator::BO_MUL:
     return OP_mul;
-  case OP_DIV:
-    return OP_udiv;
-  case OP_MOD:
-    return OP_urem;
-  case OP_AND:
+  case BinaryOperator::BO_AND:
     return OP_and;
-  case OP_OR:
+  case BinaryOperator::BO_OR:
     return OP_or;
-  case OP_XOR:
+  case BinaryOperator::BO_XOR:
     return OP_xor;
   default:
     throw std::runtime_error("Unsupported EVM binary opcode: " +
-                             std::to_string(static_cast<int>(EVMOp)));
+                             std::to_string(static_cast<int>(BinOpr)));
   }
 }
 

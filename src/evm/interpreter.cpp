@@ -13,12 +13,44 @@ using namespace zen::runtime;
 using zen::common::ErrorCode;
 using zen::common::getError;
 
-EVMFrame *InterpreterExecContext::allocFrame(uint64_t GasLimit) {
+EVMFrame *InterpreterExecContext::allocFrame(
+    evmc_message *ParentMsg, uint64_t GasLimit, evmc_call_kind Kind,
+    evmc::address Recipient, evmc::address Sender,
+    std::vector<uint8_t> CallData, intx::uint256 Value) {
+  EVM_REQUIRE(GasLimit >= BASIC_EXECUTION_COST, EVMOutOfGas);
+
   FrameStack.emplace_back();
 
   EVMFrame &Frame = FrameStack.back();
-  Frame.GasLimit = GasLimit;
-  Frame.GasLeft = GasLimit;
+
+  Frame.Msg = std::make_unique<evmc_message>();
+  Frame.Msg->kind = Kind;
+  Frame.Msg->flags = ParentMsg->flags;
+  Frame.Msg->depth = ParentMsg->depth + 1;
+  Frame.Msg->gas = GasLimit - BASIC_EXECUTION_COST;
+  Frame.Msg->value = intx::be::store<evmc::bytes32>(Value);
+  Frame.Msg->recipient = Recipient;
+  Frame.Msg->sender = Sender;
+  Frame.Msg->input_data = CallData.data();
+  Frame.Msg->input_size = CallData.size();
+
+  GasUsed = GasLimit;
+
+  return &Frame;
+}
+
+EVMFrame *InterpreterExecContext::allocFrame(evmc_message *Msg) {
+  EVM_REQUIRE(Msg->gas >= BASIC_EXECUTION_COST, EVMOutOfGas);
+
+  FrameStack.emplace_back();
+
+  EVMFrame &Frame = FrameStack.back();
+
+  Frame.Msg = std::make_unique<evmc_message>(*Msg);
+
+  GasUsed = Frame.Msg->gas;
+
+  Frame.Msg->gas = Frame.Msg->gas - BASIC_EXECUTION_COST;
 
   return &Frame;
 }
@@ -29,12 +61,36 @@ void InterpreterExecContext::freeBackFrame() {
   if (FrameStack.empty())
     return;
 
+  auto &BackFrame = FrameStack.back();
+
+  GasUsed = GasUsed - BackFrame.Msg->gas;
+  uint64_t GasRefund = std::min(
+      BackFrame.GasRefund, static_cast<uint64_t>(BackFrame.Msg->gas / 2LL));
+  GasUsed = GasUsed - GasRefund;
+
   FrameStack.pop_back();
 }
 
+void InterpreterExecContext::setCallData(const std::vector<uint8_t> &Data) {
+  EVM_FRAME_CHECK(getCurFrame());
+  getCurFrame()->CallData = Data;
+  getCurFrame()->Msg->input_data = getCurFrame()->CallData.data();
+  getCurFrame()->Msg->input_size = getCurFrame()->CallData.size();
+}
+
+void InterpreterExecContext::setTxContext(const evmc_tx_context &TxContext) {
+  EVM_FRAME_CHECK(getCurFrame());
+  getCurFrame()->MTx = TxContext;
+}
+
+void InterpreterExecContext::setResource() {
+  EVMResource::setExecutionContext(getCurFrame(), this);
+}
+
 void BaseInterpreter::interpret() {
-  Context.allocFrame(Context.getInstance()->getGas());
   EVMFrame *Frame = Context.getCurFrame();
+
+  EVM_FRAME_CHECK(Frame);
 
   Context.setStatus(EVMC_SUCCESS);
 
@@ -44,6 +100,10 @@ void BaseInterpreter::interpret() {
 
   size_t CodeSize = Mod->CodeSize;
   uint8_t *Code = Mod->Code;
+
+  if (!Frame->Host) {
+    Frame->Host = Context.getInstance()->getRuntime()->getEVMHost();
+  }
 
   while (Frame->Pc < CodeSize) {
     uint8_t OpcodeByte = Code[Frame->Pc];
@@ -314,9 +374,18 @@ void BaseInterpreter::interpret() {
       break;
     }
 
+    case OP_BLOBHASH: {
+      EVMOpcodeHandlerRegistry::getBlobHashHandler().execute();
+      break;
+    }
+
+    case OP_BLOBBASEFEE: {
+      EVMOpcodeHandlerRegistry::getBlobBaseFeeHandler().execute();
+      break;
+    }
+
     case evmc_opcode::OP_POP: {
-      EVM_STACK_CHECK(Frame, 1);
-      Frame->pop();
+      EVMOpcodeHandlerRegistry::getPopHandler().execute();
       break;
     }
 
@@ -375,6 +444,29 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_JUMPDEST: {
+      static auto *Table = evmc_get_instruction_metrics_table(Frame->Rev);
+      static const auto Cost = Table[OP_JUMPDEST].gas_cost;
+      Frame->Msg->gas -= Cost;
+      break;
+    }
+
+    case OP_TLOAD: {
+      EVMOpcodeHandlerRegistry::getTLoadHandler().execute();
+      break;
+    }
+
+    case OP_TSTORE: {
+      EVMOpcodeHandlerRegistry::getTStoreHandler().execute();
+      break;
+    }
+
+    case OP_MCOPY: {
+      EVMOpcodeHandlerRegistry::getMCopyHandler().execute();
+      break;
+    }
+
+    case evmc_opcode::OP_PUSH0: { // PUSH0 (EIP-3855)
+      EVMOpcodeHandlerRegistry::getPush0Handler().execute();
       break;
     }
 
@@ -486,7 +578,7 @@ void BaseInterpreter::interpret() {
       case EVMC_STATIC_MODE_VIOLATION:
       case EVMC_INSUFFICIENT_BALANCE:
         // Fatal errors: consume all remaining gas and clear return data
-        Frame->GasLeft = 0;
+        Frame->Msg->gas = 0;
         Frame->GasRefund = 0;
         Context.setReturnData(std::vector<uint8_t>());
         break;
@@ -494,7 +586,7 @@ void BaseInterpreter::interpret() {
       case EVMC_FAILURE:
       default:
         // Generic failure: consume all remaining gas and clear return data
-        Frame->GasLeft = 0;
+        Frame->Msg->gas = 0;
         Frame->GasRefund = 0;
         Context.setReturnData(std::vector<uint8_t>());
       }

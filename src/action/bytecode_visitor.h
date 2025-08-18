@@ -10,6 +10,7 @@
 #include "common/type.h"
 #include "runtime/module.h"
 #include "utils/wasm.h"
+#include "vm_eval_stack.h"
 #include <stack>
 #include <vector>
 
@@ -35,28 +36,6 @@ using utils::readFixedNumber;
 using utils::readSafeLEBNumber;
 using utils::skipCurrentBlock;
 
-template <typename Operand> class WASMEvalStack {
-public:
-  void push(Operand Op) { StackImpl.push(Op); }
-
-  Operand pop() {
-    ZEN_ASSERT(!StackImpl.empty());
-    Operand Top = StackImpl.top();
-    StackImpl.pop();
-    return Top;
-  }
-
-  Operand getTop() const {
-    ZEN_ASSERT(!StackImpl.empty());
-    return StackImpl.top();
-  }
-
-  uint32_t getSize() const { return StackImpl.size(); }
-
-private:
-  std::stack<Operand> StackImpl;
-};
-
 // ============================================================================
 // WASMByteCodeDecoder
 //
@@ -71,7 +50,7 @@ template <typename IRBuilder> class WASMByteCodeVisitor {
   typedef typename IRBuilder::BlockInfo CtrlBlockInfo;
   typedef typename IRBuilder::CompilerContext CompilerContext;
   typedef typename IRBuilder::Operand Operand; // operand to build ir
-  typedef WASMEvalStack<Operand> EvalStack;    // byte code evaluation stack
+  typedef VMEvalStack<Operand> EvalStack;      // byte code evaluation stack
 
 public:
   WASMByteCodeVisitor(IRBuilder &Builder, CompilerContext *Ctx)

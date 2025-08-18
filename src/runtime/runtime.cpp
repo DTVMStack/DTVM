@@ -655,6 +655,13 @@ void Runtime::callEVMInInterpMode(EVMInstance &Inst,
                                   std::vector<uint8_t> &Result) {
   evm::InterpreterExecContext Ctx(&Inst);
   evm::BaseInterpreter Interpreter(Ctx);
+  evmc_message Msg = {
+      .kind = EVMC_CALL,
+      .flags = 0,
+      .depth = 0,
+      .gas = static_cast<int64_t>(Inst.getGas() >> 1), // to avoid overflow
+  };
+  Ctx.allocFrame(&Msg); // TODO: use the correct message
   Interpreter.interpret();
   Result = Ctx.getReturnData();
 }

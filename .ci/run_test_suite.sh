@@ -79,6 +79,8 @@ export PATH=$PATH:$PWD/build
 CMAKE_OPTIONS_ORIGIN="$CMAKE_OPTIONS"
 
 ./tools/easm2bytecode.sh ./tests/evm_asm ./tests/evm_asm
+pip install solc-select
+./tools/solc_batch_compile.sh
 
 for STACK_TYPE in ${STACK_TYPES[@]}; do
     rm -rf build
@@ -112,7 +114,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 n=2
             fi
             for i in {1..$n}; do
-                ./cAPITests --gtest_filter=C_API.EVM
+                SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose -R "evmInterpTests"
             done
             cd ..
             ;;

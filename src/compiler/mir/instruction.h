@@ -22,6 +22,7 @@ public:
     CONSTANT,
     UNARY,
     BINARY,
+    ADC,
     CMP,
     CONVERSION,
     SELECT,

@@ -2,11 +2,11 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <mutex>
 #include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <yaml-cpp/yaml.h>
 
 #include "evm/interpreter.h"
 #include "evmc/mocked_host.hpp"
@@ -48,23 +48,93 @@ std::vector<std::string> getAllEvmBytecodeFiles() {
   return Files;
 }
 
-std::string readAnswerFile(const std::string &FilePath) {
+struct ExpectedResult {
+  std::string Status;
+  uint8_t ErrorCode = 0;
+  std::vector<std::string> Stack;
+  std::string Memory;
+  std::map<std::string, std::string> Storage;
+  std::map<std::string, std::string> TransientStorage;
+  std::string ReturnValue;
+  std::vector<std::string> Events;
+};
+
+ExpectedResult readExpectedResult(const std::string &FilePath) {
   std::filesystem::path InputFilePath(FilePath);
+  ExpectedResult Result;
 
-  // Use filesystem API instead of manual path parsing
-  std::filesystem::path AnswerPath =
+  std::filesystem::path ExpectedPath =
       InputFilePath.parent_path() /
-      (InputFilePath.stem().stem().string() + ".answer");
+      (InputFilePath.stem().stem().string() + ".expected");
 
-  // Read file content
-  std::ifstream Fin(AnswerPath);
+  std::ifstream Fin(ExpectedPath);
   if (!Fin) {
-    return "";
+    return Result;
   }
 
-  std::string Answer;
-  Fin >> Answer;
-  return Answer;
+  try {
+    YAML::Node Doc = YAML::Load(Fin);
+
+    if (Doc["status"]) {
+      Result.Status = Doc["status"].as<std::string>();
+    }
+
+    if (Doc["error_code"]) {
+      Result.ErrorCode = Doc["error_code"].as<uint8_t>();
+    }
+
+    if (Doc["stack"] && Doc["stack"].IsSequence()) {
+      for (const auto &item : Doc["stack"]) {
+        Result.Stack.push_back(item.as<std::string>());
+      }
+    }
+
+    if (Doc["memory"]) {
+      Result.Memory = Doc["memory"].as<std::string>();
+    }
+
+    if (Doc["storage"]) {
+      if (!Doc["storage"].IsMap()) {
+        throw std::runtime_error("Expected 'storage' to be a map type");
+      }
+      for (const auto &item : Doc["storage"]) {
+        Result.Storage[item.first.as<std::string>()] =
+            item.second.as<std::string>();
+      }
+    }
+
+    if (Doc["transient_storage"]) {
+      if (!Doc["transient_storage"].IsMap()) {
+        throw std::runtime_error(
+            "Expected 'transient_storage' to be a map type");
+      }
+      for (const auto &item : Doc["transient_storage"]) {
+        Result.TransientStorage[item.first.as<std::string>()] =
+            item.second.as<std::string>();
+      }
+    }
+
+    if (Doc["return"]) {
+      Result.ReturnValue = Doc["return"].as<std::string>();
+    }
+
+    if (Doc["events"]) {
+      if (!Doc["events"].IsSequence()) {
+        throw std::runtime_error("Expected 'events' to be a sequence type");
+      }
+      for (const auto &item : Doc["events"]) {
+        if (!item.IsScalar()) {
+          throw std::runtime_error("Expected each event to be a string type");
+        }
+        Result.Events.push_back(item.as<std::string>());
+      }
+    }
+  } catch (const YAML::Exception &E) {
+    std::cerr << "YAML parsing error: " << E.what() << std::endl;
+    return Result;
+  }
+
+  return Result;
 }
 
 } // namespace
@@ -111,20 +181,57 @@ TEST_P(EVMSampleTest, ExecuteSample) {
   InterpreterExecContext Ctx(Inst);
 
   BaseInterpreter Interpreter(Ctx);
+
+  evmc_message Msg = {
+      .kind = EVMC_CREATE,
+      .flags = 0,
+      .depth = 0,
+      .gas = (long)GasLimit,
+  };
+  Ctx.allocFrame(&Msg);
+
   EXPECT_NO_THROW({ Interpreter.interpret(); });
+
+  // Read expected result from .expected file
+  ExpectedResult Expected = readExpectedResult(FilePath);
+  if (Expected.ReturnValue.empty() && Expected.Status.empty()) {
+    ASSERT_TRUE(false) << "No expected file found for: " << FilePath;
+  }
+
+  evmc_status_code ActualStatus = Ctx.getStatus();
+  std::string ActualStatusStr =
+      (ActualStatus == EVMC_SUCCESS) ? "success" : "fail";
+
+  if (!Expected.Status.empty()) {
+    EXPECT_EQ(ActualStatusStr, Expected.Status)
+        << "Test: " << std::filesystem::path(FilePath).filename().string()
+        << "\nExpected status: " << Expected.Status
+        << "\nActual status: " << ActualStatusStr;
+  }
+
+  if (Expected.ErrorCode != 0) {
+    EXPECT_NE(ActualStatus, EVMC_SUCCESS)
+        << "Test: " << std::filesystem::path(FilePath).filename().string()
+        << "\nExpected error_code: " << Expected.ErrorCode
+        << "\nActual status: " << ActualStatus;
+  } else {
+    EXPECT_EQ(ActualStatus, EVMC_SUCCESS)
+        << "Test: " << std::filesystem::path(FilePath).filename().string()
+        << "\nExpected success but got status: " << ActualStatus;
+  }
 
   const auto &Ret = Ctx.getReturnData();
   std::string HexRet = zen::utils::toHex(Ret.data(), Ret.size());
 
-  // Read expected answer
-  std::string ExpectedAnswer = readAnswerFile(FilePath);
-  if (!ExpectedAnswer.empty()) {
-    EXPECT_EQ(HexRet, ExpectedAnswer)
+  if (!Expected.ReturnValue.empty()) {
+    EXPECT_EQ(HexRet, Expected.ReturnValue)
         << "Test: " << std::filesystem::path(FilePath).filename().string()
-        << "\nExpected: " << ExpectedAnswer << "\nActual:   " << HexRet;
-  } else {
-    ASSERT_TRUE(false) << "No answer file found for: " << FilePath;
+        << "\nExpected return: " << Expected.ReturnValue
+        << "\nActual return: " << HexRet;
   }
+
+  // TODO: frame has been freed and can't check stack and memory values
+  // TODO: storage, transient storage, and events check
 
   EXPECT_EQ(Ctx.getCurFrame(), nullptr)
       << "Frame should be deallocated after execution";

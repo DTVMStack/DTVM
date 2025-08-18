@@ -69,11 +69,11 @@ protected:
 public:
   void execute() {
     uint64_t GasCost = static_cast<Derived *>(this)->calculateGas();
-    if ((uint64_t)getFrame()->GasLeft < GasCost) {
+    if ((uint64_t)getFrame()->Msg->gas < GasCost) {
       getContext()->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
-    getFrame()->GasLeft -= GasCost;
+    getFrame()->Msg->gas -= GasCost;
     static_cast<Derived *>(this)->doExecute();
   };
 };
@@ -246,6 +246,8 @@ DEFINE_UNIMPLEMENT_HANDLER(PrevRanDao);
 DEFINE_UNIMPLEMENT_HANDLER(ChainId);
 DEFINE_UNIMPLEMENT_HANDLER(SelfBalance);
 DEFINE_UNIMPLEMENT_HANDLER(BaseFee);
+DEFINE_UNIMPLEMENT_HANDLER(BlobHash);
+DEFINE_UNIMPLEMENT_HANDLER(BlobBaseFee);
 // storage operations
 DEFINE_UNIMPLEMENT_HANDLER(SLoad);
 DEFINE_UNIMPLEMENT_HANDLER(SStore);
@@ -263,6 +265,11 @@ DEFINE_UNIMPLEMENT_HANDLER(MLoad);
 // Control flow operations
 DEFINE_UNIMPLEMENT_HANDLER(Jump);
 DEFINE_UNIMPLEMENT_HANDLER(JumpI);
+// Temporary Storage
+DEFINE_UNIMPLEMENT_HANDLER(TLoad);
+DEFINE_UNIMPLEMENT_HANDLER(TStore);
+
+DEFINE_UNIMPLEMENT_HANDLER(MCopy);
 
 // Environment operations
 DEFINE_UNIMPLEMENT_HANDLER(PC);
@@ -275,7 +282,9 @@ DEFINE_UNIMPLEMENT_HANDLER(Return);
 DEFINE_UNIMPLEMENT_HANDLER(Revert);
 
 // Stack operations
+DEFINE_UNIMPLEMENT_HANDLER(Pop);
 DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Push);
+DEFINE_UNIMPLEMENT_HANDLER(Push0);
 DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Dup);
 DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(Swap);
 
@@ -350,6 +359,8 @@ public:
   EVM_REGISTRY_GET(ChainId);
   EVM_REGISTRY_GET(SelfBalance);
   EVM_REGISTRY_GET(BaseFee);
+  EVM_REGISTRY_GET(BlobHash);
+  EVM_REGISTRY_GET(BlobBaseFee);
   // storage operations
   EVM_REGISTRY_GET(SLoad);
   EVM_REGISTRY_GET(SStore);
@@ -360,6 +371,10 @@ public:
   // Control flow operations
   EVM_REGISTRY_GET(Jump);
   EVM_REGISTRY_GET(JumpI);
+  // Temporary Storage
+  EVM_REGISTRY_GET(TLoad);
+  EVM_REGISTRY_GET(TStore);
+  EVM_REGISTRY_GET(MCopy);
   // Environment operations
   EVM_REGISTRY_GET(PC);
   EVM_REGISTRY_GET(MSize);
@@ -369,7 +384,9 @@ public:
   EVM_REGISTRY_GET(Return);
   EVM_REGISTRY_GET(Revert);
   // Stack operations
+  EVM_REGISTRY_GET(Pop);
   EVM_REGISTRY_GET_MULTIOPCODE(Push);
+  EVM_REGISTRY_GET(Push0);
   EVM_REGISTRY_GET_MULTIOPCODE(Dup);
   EVM_REGISTRY_GET_MULTIOPCODE(Swap);
   // Call operations

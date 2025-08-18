@@ -36,10 +36,10 @@ fn main() {
         DYNAMIC,
     }
     let mut link_libs: Vec<(&str, LibType)> = vec![
-        ("stdc++", LibType::STATIC),
         ("zetaengine", LibType::STATIC),
         ("utils_lib", LibType::STATIC),
         ("asmjit", LibType::STATIC),
+        ("stdc++", LibType::DYNAMIC),
     ];
     if cfg!(target_os = "macos") {
         link_libs.push(("gcc_s.1.1", LibType::DYNAMIC));
@@ -53,10 +53,12 @@ fn main() {
             LibType::DYNAMIC => format!("lib{lib_name}.dylib"),
         };
         let target_filepath = format!("{target_dir}/{lib_filename}");
-        println!("copying from {lib_filename} to {target_filepath}");
-        // copy or overwrite
-        std::fs::copy(&lib_filename, &target_filepath).unwrap();
-        println!("copying lib {lib_filename} to {target_filepath} done");
+        if lib_name != "stdc++" {
+            println!("copying from {lib_filename} to {target_filepath}");
+            // copy or overwrite
+            std::fs::copy(&lib_filename, &target_filepath).unwrap();
+            println!("copying lib {lib_filename} to {target_filepath} done");
+        }
         let link_method = match lib_ty {
             LibType::STATIC => "static",
             LibType::DYNAMIC => "dylib",

@@ -1,7 +1,5 @@
-// it is a spcial status that gasleft = gaslimit
+// We set gas to 1000000UL in the test, 0xF423E = 1000000-2 = 999998
 GAS
-GASLIMIT 
-SUB 
 PUSH1 0x00
 MSTORE
 PUSH1 0x20
