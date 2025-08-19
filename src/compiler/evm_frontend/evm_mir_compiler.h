@@ -422,8 +422,8 @@ private:
   Operand callRuntimeForU256(AddressFn RuntimeFunc);
   Operand callRuntimeForSize(SizeFn RuntimeFunc);
 
-  Operand convertSingleToU256(MInstruction *SingleInstr);
-  Operand convertU256InstrToU256Components(MInstruction *U256Instr);
+  Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
+  Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
 
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;

@@ -616,43 +616,7 @@ EVMMirBuilder::extractU256Components(Operand U256Op) {
 }
 
 typename EVMMirBuilder::Operand
-EVMMirBuilder::callRuntimeForU256(AddressFn RuntimeFunc) {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
-
-  // Get function address and instance pointer
-  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, U256Type, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-
-  // Convert U256 result to 4-component representation
-  return convertU256InstrToU256Components(CallInstr);
-}
-
-typename EVMMirBuilder::Operand
-EVMMirBuilder::callRuntimeForSize(SizeFn RuntimeFunc) {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
-  // Get function address and instance pointer
-  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, I64Type, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-
-  // Convert size to U256 format (size in low component, zeros in high)
-  return convertSingleToU256(CallInstr);
-}
-
-// Helper conversion functions
-typename EVMMirBuilder::Operand
-EVMMirBuilder::convertSingleToU256(MInstruction *SingleInstr) {
+EVMMirBuilder::convertSingleInstrToU256Operand(MInstruction *SingleInstr) {
   U256Inst Result = {};
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
@@ -670,7 +634,7 @@ EVMMirBuilder::convertSingleToU256(MInstruction *SingleInstr) {
 }
 
 typename EVMMirBuilder::Operand
-EVMMirBuilder::convertU256InstrToU256Components(MInstruction *U256Instr) {
+EVMMirBuilder::convertU256InstrToU256Operand(MInstruction *U256Instr) {
   // Convert single U256 instruction (intx::uint256 from host interface)
   // to EVM's 4-component U256 representation: [low, mid_low, mid_high, high]
   //
@@ -725,6 +689,41 @@ Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
 }
 
 // ==================== Interface Helper Methods ====================
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForU256(AddressFn RuntimeFunc) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
+
+  // Get function address and instance pointer
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, U256Type, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>(InstancePtr));
+
+  // Convert U256 result to 4-component representation
+  return convertU256InstrToU256Operand(CallInstr);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForSize(SizeFn RuntimeFunc) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  // Get function address and instance pointer
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, I64Type, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>(InstancePtr));
+
+  // Convert size to U256 format (size in low component, zeros in high)
+  return convertSingleInstrToU256Operand(CallInstr);
+}
 
 MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
   ZEN_ASSERT(InstanceAddr);
