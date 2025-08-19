@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
     return exitMain(EXIT_FAILURE);
   }
 
-  /// ================ EVM compiler ================
+  /// ================ EVM mode ================
 
   if (Format == InputFormat::EVM) {
     std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
