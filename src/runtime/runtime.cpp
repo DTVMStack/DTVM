@@ -666,6 +666,18 @@ void Runtime::callEVMInInterpMode(EVMInstance &Inst,
   Result = Ctx.getReturnData();
 }
 
+void Runtime::callEVMMain(EVMInstance &Inst, std::vector<uint8_t> &Result) {
+  if (getConfig().Mode == RunMode::InterpMode) {
+    callEVMInInterpMode(Inst, Result);
+  } else {
+#ifdef ZEN_ENABLE_JIT
+    callEVMInJITMode(Inst, Result);
+#else
+    ZEN_UNREACHABLE();
+#endif
+  }
+}
+
 #ifdef ZEN_ENABLE_JIT
 void Runtime::callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
                                         const std::vector<TypedValue> &Args,
@@ -772,6 +784,13 @@ void Runtime::callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
   };
   CallWasmFnWrapper();
 #endif // ZEN_ENABLE_CPU_EXCEPTION
+}
+
+void Runtime::callEVMInJITMode(EVMInstance &Inst,
+                               std::vector<uint8_t> &Result) {
+  // TODO: Implement EVM JIT compilation and execution
+  // For now, fallback to interpreter mode as placeholder
+  callEVMInInterpMode(Inst, Result);
 }
 #endif // ZEN_ENABLE_JIT
 
