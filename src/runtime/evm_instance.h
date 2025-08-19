@@ -57,7 +57,7 @@ public:
   // Note: These methods are necessary evil for JIT host interface functions
   // that need access to evmc_message without explicit parameter passing.
   // The message lifetime must be carefully managed by the caller.
-  
+
   void setCurrentMessage(const evmc_message *Msg) { CurrentMessage = Msg; }
   const evmc_message *getCurrentMessage() const { return CurrentMessage; }
 
