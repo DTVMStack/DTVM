@@ -617,6 +617,7 @@ EVMMirBuilder::extractU256Components(Operand U256Op) {
 
 typename EVMMirBuilder::Operand
 EVMMirBuilder::convertSingleInstrToU256Operand(MInstruction *SingleInstr) {
+  // Convert single instruction to U256 with little-endian storage
   U256Inst Result = {};
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
