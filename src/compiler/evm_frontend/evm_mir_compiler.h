@@ -124,11 +124,11 @@ public:
 
     // For EVMU256Type: 4 I64 components [0]=low, [1]=mid-low, [2]=mid-high,
     // [3]=high
-    bool IsU256MultiComponent = false;
     U256Inst U256Components = {};
     U256Var U256VarComponents = {};
     U256Value ConstValue = {};
     bool IsConstant = false;
+    bool IsU256MultiComponent = false;
   };
 
   bool compile(CompilerContext *Context);
@@ -350,7 +350,6 @@ private:
     ZEN_ASSERT(ResultType == &Ctx.I64Type);
     U256Inst LHS = extractU256Operand(LHSOp);
     U256Inst RHS = {};
-    U256Inst Result = {};
 
     if constexpr (Operator == CompareOperator::CO_EQZ) {
       return handleCompareEQZ(LHS, ResultType);
