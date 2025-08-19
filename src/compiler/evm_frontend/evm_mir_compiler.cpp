@@ -3,8 +3,6 @@
 
 #include "compiler/evm_frontend/evm_mir_compiler.h"
 #include "action/evm_bytecode_visitor.h"
-#include "common/defines.h"
-#include "common/errors.h"
 #include "compiler/mir/basic_block.h"
 #include "compiler/mir/constants.h"
 #include "compiler/mir/function.h"
