@@ -33,6 +33,8 @@ MType *EVMFrontendContext::getMIRTypeFromEVMType(EVMType Type) {
     // U256 is represented as I64 for MIR operations, but we use EVMU256Type
     // to track the semantic meaning and provide proper 256-bit operations
     return &I64Type; // Primary component for MIR operations
+  case EVMType::BYTES32:
+    return &I64Type; // 32-byte data pointer as 64-bit value
   case EVMType::ADDRESS:
     return &I64Type; // Address as 64-bit value for simplicity
   case EVMType::BYTES:
@@ -385,22 +387,22 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleGas() {
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
   const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
-  return callRuntimeForU256(RuntimeFunctions.GetAddress);
+  return callRuntimeForBytes32(RuntimeFunctions.GetAddress);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleOrigin() {
   const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
-  return callRuntimeForU256(RuntimeFunctions.GetOrigin);
+  return callRuntimeForBytes32(RuntimeFunctions.GetOrigin);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCaller() {
   const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
-  return callRuntimeForU256(RuntimeFunctions.GetCaller);
+  return callRuntimeForBytes32(RuntimeFunctions.GetCaller);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallValue() {
   const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
-  return callRuntimeForU256(RuntimeFunctions.GetCallValue);
+  return callRuntimeForBytes32(RuntimeFunctions.GetCallValue);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleGasPrice() {
@@ -536,6 +538,12 @@ EVMMirBuilder::U256Inst EVMMirBuilder::extractU256Operand(const Operand &Opnd) {
     }
   }
 
+  // Auto-convert BYTES32 operands to U256 when needed
+  if (Opnd.getType() == EVMType::BYTES32) {
+    Operand U256Op = convertBytes32ToU256Operand(Opnd);
+    return U256Op.getU256Components();
+  }
+
   return Result;
 }
 
@@ -667,6 +675,35 @@ EVMMirBuilder::convertU256InstrToU256Operand(MInstruction *U256Instr) {
   return Operand(Result, EVMType::UINT256);
 }
 
+typename EVMMirBuilder::Operand
+EVMMirBuilder::convertBytes32ToU256Operand(const Operand &Bytes32Op) {
+  // Convert BYTES32 pointer to 4-component U256 representation with
+  // little-endian storage
+  ZEN_ASSERT(Bytes32Op.getType() == EVMType::BYTES32);
+
+  U256Inst Result = {};
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Bytes32Ptr = Bytes32Op.getInstr();
+
+  // Load 32 bytes from memory pointer and convert to 4x64-bit components
+  // Each component loads 8 bytes (64 bits) with big-endian byte ordering (EVM
+  // standard)
+  for (int I = 0; I < 4; ++I) {
+    // Calculate offset for each 8-byte component (EVM uses big-endian: high
+    // bytes first) Component 0 gets bytes 24-31 (low 64 bits), Component 3 gets
+    // bytes 0-7 (high 64 bits)
+    MInstruction *Offset = createIntConstInstruction(I64Type, (3 - I) * 8);
+    MInstruction *ComponentPtr = createInstruction<BinaryInstruction>(
+        false, OP_add, Bytes32Ptr->getType(), Bytes32Ptr, Offset);
+
+    // Load 8 bytes as I64 (needs endianness handling for EVM big-endian format)
+    Result[I] =
+        createInstruction<LoadInstruction>(false, I64Type, ComponentPtr);
+  }
+
+  return Operand(Result, EVMType::UINT256);
+}
+
 // ==================== EVM to MIR Opcode Mapping ====================
 
 Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
@@ -692,7 +729,7 @@ Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
 // ==================== Interface Helper Methods ====================
 
 typename EVMMirBuilder::Operand
-EVMMirBuilder::callRuntimeForU256(AddressFn RuntimeFunc) {
+EVMMirBuilder::callRuntimeForU256(U256Fn RuntimeFunc) {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
 
@@ -726,6 +763,25 @@ EVMMirBuilder::callRuntimeForSize(SizeFn RuntimeFunc) {
   return convertSingleInstrToU256Operand(CallInstr);
 }
 
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForBytes32(Bytes32Fn RuntimeFunc) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *Bytes32Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
+
+  // Get function address and instance pointer
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, Bytes32Type, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>(InstancePtr));
+
+  // Return as BYTES32 operand (pointer to existing memory)
+  return Operand(CallInstr, EVMType::BYTES32);
+}
+
 MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
   ZEN_ASSERT(InstanceAddr);
   // Convert instance address back to pointer type
@@ -746,7 +802,7 @@ EVMMirBuilder::getRuntimeFunctionTable() {
   return Table;
 }
 
-intx::uint256
+const uint8_t *
 EVMMirBuilder::getAddressImpl(zen::runtime::EVMInstance *Instance) {
   ZEN_ASSERT(Instance);
   const zen::runtime::EVMModule *Module = Instance->getModule();
@@ -754,20 +810,25 @@ EVMMirBuilder::getAddressImpl(zen::runtime::EVMInstance *Instance) {
 
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-  return intx::be::load<intx::uint256>(Msg->recipient);
+  return Msg->recipient.bytes;
 }
 
-intx::uint256
+const uint8_t *
 EVMMirBuilder::getOriginImpl(zen::runtime::EVMInstance *Instance) {
   ZEN_ASSERT(Instance);
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
+  // Get tx_context and cache it in Instance for persistent access
   evmc_tx_context TxContext = Module->Host->get_tx_context();
-  return intx::be::load<intx::uint256>(TxContext.tx_origin);
+  // TODO: Need to store tx_context in EVMInstance for persistent access
+  // For now, use thread-local storage as workaround
+  static thread_local evmc_tx_context CachedTxContext;
+  CachedTxContext = TxContext;
+  return CachedTxContext.tx_origin.bytes;
 }
 
-intx::uint256
+const uint8_t *
 EVMMirBuilder::getCallerImpl(zen::runtime::EVMInstance *Instance) {
   ZEN_ASSERT(Instance);
   const zen::runtime::EVMModule *Module = Instance->getModule();
@@ -775,10 +836,10 @@ EVMMirBuilder::getCallerImpl(zen::runtime::EVMInstance *Instance) {
 
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-  return intx::be::load<intx::uint256>(Msg->sender);
+  return Msg->sender.bytes;
 }
 
-intx::uint256
+const uint8_t *
 EVMMirBuilder::getCallValueImpl(zen::runtime::EVMInstance *Instance) {
   ZEN_ASSERT(Instance);
   const zen::runtime::EVMModule *Module = Instance->getModule();
@@ -786,7 +847,7 @@ EVMMirBuilder::getCallValueImpl(zen::runtime::EVMInstance *Instance) {
 
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-  return intx::be::load<intx::uint256>(Msg->value);
+  return Msg->value.bytes;
 }
 
 intx::uint256

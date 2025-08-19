@@ -24,6 +24,7 @@ enum class EVMType : uint8_t {
   UINT64,  // Gas calculations
   UINT256, // Main EVM type (256-bit integers) - maps to EVMU256Type from
            // common/type.h
+  BYTES32, // 32-byte fixed arrays (address, origin, caller, callvalue)
   ADDRESS, // 20-byte Ethereum addresses
   BYTES,   // Dynamic byte arrays
 };
@@ -277,16 +278,17 @@ public:
 
   // ==================== Runtime Interface for JIT ====================
 
-  using AddressFn = intx::uint256 (*)(zen::runtime::EVMInstance *);
+  using U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *);
+  using Bytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *);
   using SizeFn = uint64_t (*)(zen::runtime::EVMInstance *);
 
   // Function dispatch table for JIT compilation
   struct RuntimeFunctions {
-    AddressFn GetAddress;
-    AddressFn GetOrigin;
-    AddressFn GetCaller;
-    AddressFn GetCallValue;
-    AddressFn GetGasPrice;
+    Bytes32Fn GetAddress;
+    Bytes32Fn GetOrigin;
+    Bytes32Fn GetCaller;
+    Bytes32Fn GetCallValue;
+    U256Fn GetGasPrice;
     SizeFn GetCallDataSize;
     SizeFn GetCodeSize;
   };
@@ -419,11 +421,13 @@ private:
   // ==================== Helper Methods ====================
 
   // Runtime calls for different return types
-  Operand callRuntimeForU256(AddressFn RuntimeFunc);
+  Operand callRuntimeForU256(U256Fn RuntimeFunc);
+  Operand callRuntimeForBytes32(Bytes32Fn RuntimeFunc);
   Operand callRuntimeForSize(SizeFn RuntimeFunc);
 
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
+  Operand convertBytes32ToU256Operand(const Operand &Bytes32Op);
 
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;
@@ -442,10 +446,10 @@ private:
   MInstruction *getCurrentInstancePointer();
 
   // Runtime interface implementation functions
-  static intx::uint256 getAddressImpl(zen::runtime::EVMInstance *Instance);
-  static intx::uint256 getOriginImpl(zen::runtime::EVMInstance *Instance);
-  static intx::uint256 getCallerImpl(zen::runtime::EVMInstance *Instance);
-  static intx::uint256 getCallValueImpl(zen::runtime::EVMInstance *Instance);
+  static const uint8_t *getAddressImpl(zen::runtime::EVMInstance *Instance);
+  static const uint8_t *getOriginImpl(zen::runtime::EVMInstance *Instance);
+  static const uint8_t *getCallerImpl(zen::runtime::EVMInstance *Instance);
+  static const uint8_t *getCallValueImpl(zen::runtime::EVMInstance *Instance);
   static intx::uint256 getGasPriceImpl(zen::runtime::EVMInstance *Instance);
   static uint64_t getCallDataSizeImpl(zen::runtime::EVMInstance *Instance);
   static uint64_t getCodeSizeImpl(zen::runtime::EVMInstance *Instance);
