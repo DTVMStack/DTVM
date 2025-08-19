@@ -792,91 +792,14 @@ MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
 const EVMMirBuilder::RuntimeFunctions &
 EVMMirBuilder::getRuntimeFunctionTable() {
   static const RuntimeFunctions Table = {
-      .GetAddress = &EVMMirBuilder::getAddressImpl,
-      .GetOrigin = &EVMMirBuilder::getOriginImpl,
-      .GetCaller = &EVMMirBuilder::getCallerImpl,
-      .GetCallValue = &EVMMirBuilder::getCallValueImpl,
-      .GetGasPrice = &EVMMirBuilder::getGasPriceImpl,
-      .GetCallDataSize = &EVMMirBuilder::getCallDataSizeImpl,
-      .GetCodeSize = &EVMMirBuilder::getCodeSizeImpl};
+      .GetAddress = &zen::runtime::evmGetAddress,
+      .GetOrigin = &zen::runtime::evmGetOrigin,
+      .GetCaller = &zen::runtime::evmGetCaller,
+      .GetCallValue = &zen::runtime::evmGetCallValue,
+      .GetGasPrice = &zen::runtime::evmGetGasPrice,
+      .GetCallDataSize = &zen::runtime::evmGetCallDataSize,
+      .GetCodeSize = &zen::runtime::evmGetCodeSize};
   return Table;
-}
-
-const uint8_t *
-EVMMirBuilder::getAddressImpl(zen::runtime::EVMInstance *Instance) {
-  ZEN_ASSERT(Instance);
-  const zen::runtime::EVMModule *Module = Instance->getModule();
-  ZEN_ASSERT(Module && Module->Host);
-
-  const evmc_message *Msg = Instance->getCurrentMessage();
-  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-  return Msg->recipient.bytes;
-}
-
-const uint8_t *
-EVMMirBuilder::getOriginImpl(zen::runtime::EVMInstance *Instance) {
-  ZEN_ASSERT(Instance);
-  const zen::runtime::EVMModule *Module = Instance->getModule();
-  ZEN_ASSERT(Module && Module->Host);
-
-  // Get tx_context and cache it in Instance for persistent access
-  evmc_tx_context TxContext = Module->Host->get_tx_context();
-  // TODO: Need to store tx_context in EVMInstance for persistent access
-  // For now, use thread-local storage as workaround
-  static thread_local evmc_tx_context CachedTxContext;
-  CachedTxContext = TxContext;
-  return CachedTxContext.tx_origin.bytes;
-}
-
-const uint8_t *
-EVMMirBuilder::getCallerImpl(zen::runtime::EVMInstance *Instance) {
-  ZEN_ASSERT(Instance);
-  const zen::runtime::EVMModule *Module = Instance->getModule();
-  ZEN_ASSERT(Module && Module->Host);
-
-  const evmc_message *Msg = Instance->getCurrentMessage();
-  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-  return Msg->sender.bytes;
-}
-
-const uint8_t *
-EVMMirBuilder::getCallValueImpl(zen::runtime::EVMInstance *Instance) {
-  ZEN_ASSERT(Instance);
-  const zen::runtime::EVMModule *Module = Instance->getModule();
-  ZEN_ASSERT(Module && Module->Host);
-
-  const evmc_message *Msg = Instance->getCurrentMessage();
-  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-  return Msg->value.bytes;
-}
-
-intx::uint256
-EVMMirBuilder::getGasPriceImpl(zen::runtime::EVMInstance *Instance) {
-  ZEN_ASSERT(Instance);
-  const zen::runtime::EVMModule *Module = Instance->getModule();
-  ZEN_ASSERT(Module && Module->Host);
-
-  evmc_tx_context TxContext = Module->Host->get_tx_context();
-  return intx::be::load<intx::uint256>(TxContext.tx_gas_price);
-}
-
-uint64_t
-EVMMirBuilder::getCallDataSizeImpl(zen::runtime::EVMInstance *Instance) {
-  ZEN_ASSERT(Instance);
-  const zen::runtime::EVMModule *Module = Instance->getModule();
-  ZEN_ASSERT(Module && Module->Host);
-
-  const evmc_message *Msg = Instance->getCurrentMessage();
-  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-  return Msg->input_size;
-}
-
-uint64_t EVMMirBuilder::getCodeSizeImpl(zen::runtime::EVMInstance *Instance) {
-  ZEN_ASSERT(Instance);
-  const zen::runtime::EVMModule *Module = Instance->getModule();
-  ZEN_ASSERT(Module);
-
-  return Module->CodeSize;
 }
 
 } // namespace COMPILER

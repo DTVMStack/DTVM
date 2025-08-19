@@ -444,15 +444,6 @@ private:
 
   // Helper method to get instance pointer as instruction
   MInstruction *getCurrentInstancePointer();
-
-  // Runtime interface implementation functions
-  static const uint8_t *getAddressImpl(zen::runtime::EVMInstance *Instance);
-  static const uint8_t *getOriginImpl(zen::runtime::EVMInstance *Instance);
-  static const uint8_t *getCallerImpl(zen::runtime::EVMInstance *Instance);
-  static const uint8_t *getCallValueImpl(zen::runtime::EVMInstance *Instance);
-  static intx::uint256 getGasPriceImpl(zen::runtime::EVMInstance *Instance);
-  static uint64_t getCallDataSizeImpl(zen::runtime::EVMInstance *Instance);
-  static uint64_t getCodeSizeImpl(zen::runtime::EVMInstance *Instance);
 };
 
 } // namespace COMPILER
