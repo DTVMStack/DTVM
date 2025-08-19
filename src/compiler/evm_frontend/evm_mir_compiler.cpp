@@ -384,121 +384,38 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleGas() {
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
-  // Get function address from dispatch table
   const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
-  uint64_t FuncAddr =
-      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetAddress);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-
-  MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, U256Type, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-
-  return convertU256InstrToU256Components(CallInstr);
+  return callRuntimeForU256(RuntimeFunctions.GetAddress);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleOrigin() {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
   const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
-  uint64_t FuncAddr =
-      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetOrigin);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-
-  MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, U256Type, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-
-  return convertU256InstrToU256Components(CallInstr);
+  return callRuntimeForU256(RuntimeFunctions.GetOrigin);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCaller() {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
   const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
-  uint64_t FuncAddr =
-      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetCaller);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-
-  MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, U256Type, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-
-  return convertU256InstrToU256Components(CallInstr);
+  return callRuntimeForU256(RuntimeFunctions.GetCaller);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallValue() {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
   const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
-  uint64_t FuncAddr =
-      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetCallValue);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-
-  MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, U256Type, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-
-  return convertU256InstrToU256Components(CallInstr);
+  return callRuntimeForU256(RuntimeFunctions.GetCallValue);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleGasPrice() {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
   const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
-  uint64_t FuncAddr =
-      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetGasPrice);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-
-  MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, U256Type, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-
-  return convertU256InstrToU256Components(CallInstr);
+  return callRuntimeForU256(RuntimeFunctions.GetGasPrice);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallDataSize() {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
   const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
-  uint64_t FuncAddr =
-      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetCallDataSize);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, I64Type, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-
-  return convertSingleToU256(CallInstr);
+  return callRuntimeForSize(RuntimeFunctions.GetCallDataSize);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCodeSize() {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
   const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
-  uint64_t FuncAddr =
-      EVMMirBuilder::getFunctionAddress(RuntimeFunctions.GetCodeSize);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, I64Type, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-
-  return convertSingleToU256(CallInstr);
+  return callRuntimeForSize(RuntimeFunctions.GetCodeSize);
 }
 
 // ==================== Private Helper Methods ====================
@@ -698,6 +615,42 @@ EVMMirBuilder::extractU256Components(Operand U256Op) {
   };
 }
 
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForU256(AddressFn RuntimeFunc) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
+
+  // Get function address and instance pointer
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, U256Type, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>(InstancePtr));
+
+  // Convert U256 result to 4-component representation
+  return convertU256InstrToU256Components(CallInstr);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForSize(SizeFn RuntimeFunc) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  // Get function address and instance pointer
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, I64Type, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>(InstancePtr));
+
+  // Convert size to U256 format (size in low component, zeros in high)
+  return convertSingleToU256(CallInstr);
+}
+
+// Helper conversion functions
 typename EVMMirBuilder::Operand
 EVMMirBuilder::convertSingleToU256(MInstruction *SingleInstr) {
   U256Inst Result = {};

@@ -418,9 +418,11 @@ private:
 
   // ==================== Helper Methods ====================
 
-  // Convert single instruction result to U256 format (for environment calls)
+  // Runtime calls for different return types
+  Operand callRuntimeForU256(AddressFn RuntimeFunc);
+  Operand callRuntimeForSize(SizeFn RuntimeFunc);
+
   Operand convertSingleToU256(MInstruction *SingleInstr);
-  // Convert single U256 instruction to EVM U256 components format
   Operand convertU256InstrToU256Components(MInstruction *U256Instr);
 
   CompilerContext &Ctx;
