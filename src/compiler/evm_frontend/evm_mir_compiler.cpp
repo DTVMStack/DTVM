@@ -698,28 +698,6 @@ EVMMirBuilder::extractU256Components(Operand U256Op) {
   };
 }
 
-// ==================== EVM to MIR Opcode Mapping ====================
-
-Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
-  switch (BinOpr) {
-  case BinaryOperator::BO_ADD:
-    return OP_add;
-  case BinaryOperator::BO_SUB:
-    return OP_sub;
-  case BinaryOperator::BO_MUL:
-    return OP_mul;
-  case BinaryOperator::BO_AND:
-    return OP_and;
-  case BinaryOperator::BO_OR:
-    return OP_or;
-  case BinaryOperator::BO_XOR:
-    return OP_xor;
-  default:
-    throw std::runtime_error("Unsupported EVM binary opcode: " +
-                             std::to_string(static_cast<int>(BinOpr)));
-  }
-}
-
 typename EVMMirBuilder::Operand
 EVMMirBuilder::convertSingleToU256(MInstruction *SingleInstr) {
   U256Inst Result = {};
@@ -769,6 +747,28 @@ EVMMirBuilder::convertU256InstrToU256Components(MInstruction *U256Instr) {
   }
 
   return Operand(Result, EVMType::UINT256);
+}
+
+// ==================== EVM to MIR Opcode Mapping ====================
+
+Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
+  switch (BinOpr) {
+  case BinaryOperator::BO_ADD:
+    return OP_add;
+  case BinaryOperator::BO_SUB:
+    return OP_sub;
+  case BinaryOperator::BO_MUL:
+    return OP_mul;
+  case BinaryOperator::BO_AND:
+    return OP_and;
+  case BinaryOperator::BO_OR:
+    return OP_or;
+  case BinaryOperator::BO_XOR:
+    return OP_xor;
+  default:
+    throw std::runtime_error("Unsupported EVM binary opcode: " +
+                             std::to_string(static_cast<int>(BinOpr)));
+  }
 }
 
 // ==================== Interface Helper Methods ====================
