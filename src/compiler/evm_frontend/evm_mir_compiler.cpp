@@ -3,6 +3,7 @@
 
 #include "compiler/evm_frontend/evm_mir_compiler.h"
 #include "action/evm_bytecode_visitor.h"
+#include "compiler/evm_frontend/evm_imported.h"
 #include "compiler/mir/basic_block.h"
 #include "compiler/mir/constants.h"
 #include "compiler/mir/function.h"
@@ -386,37 +387,37 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleGas() {
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
-  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeForBytes32(RuntimeFunctions.GetAddress);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleOrigin() {
-  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeForBytes32(RuntimeFunctions.GetOrigin);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCaller() {
-  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeForBytes32(RuntimeFunctions.GetCaller);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallValue() {
-  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeForBytes32(RuntimeFunctions.GetCallValue);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleGasPrice() {
-  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeForU256(RuntimeFunctions.GetGasPrice);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallDataSize() {
-  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeForSize(RuntimeFunctions.GetCallDataSize);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCodeSize() {
-  const auto &RuntimeFunctions = EVMMirBuilder::getRuntimeFunctionTable();
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeForSize(RuntimeFunctions.GetCodeSize);
 }
 
@@ -787,19 +788,6 @@ MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
   // Convert instance address back to pointer type
   return createInstruction<ConversionInstruction>(
       false, OP_inttoptr, createVoidPtrType(), InstanceAddr);
-}
-
-const EVMMirBuilder::RuntimeFunctions &
-EVMMirBuilder::getRuntimeFunctionTable() {
-  static const RuntimeFunctions Table = {
-      .GetAddress = &zen::runtime::evmGetAddress,
-      .GetOrigin = &zen::runtime::evmGetOrigin,
-      .GetCaller = &zen::runtime::evmGetCaller,
-      .GetCallValue = &zen::runtime::evmGetCallValue,
-      .GetGasPrice = &zen::runtime::evmGetGasPrice,
-      .GetCallDataSize = &zen::runtime::evmGetCallDataSize,
-      .GetCodeSize = &zen::runtime::evmGetCodeSize};
-  return Table;
 }
 
 } // namespace COMPILER

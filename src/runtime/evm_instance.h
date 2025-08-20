@@ -92,14 +92,6 @@ private:
   static constexpr size_t Alignment = 8;
 };
 
-const uint8_t *evmGetAddress(EVMInstance *Instance);
-const uint8_t *evmGetOrigin(EVMInstance *Instance);
-const uint8_t *evmGetCaller(EVMInstance *Instance);
-const uint8_t *evmGetCallValue(EVMInstance *Instance);
-intx::uint256 evmGetGasPrice(EVMInstance *Instance);
-uint64_t evmGetCallDataSize(EVMInstance *Instance);
-uint64_t evmGetCodeSize(EVMInstance *Instance);
-
 } // namespace runtime
 } // namespace zen
 

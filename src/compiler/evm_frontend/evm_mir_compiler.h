@@ -11,6 +11,14 @@
 #include "compiler/mir/pointer.h"
 #include "intx/intx.hpp"
 
+// Forward declaration to avoid circular dependency
+namespace COMPILER {
+struct RuntimeFunctions;
+using U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *);
+using Bytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *);
+using SizeFn = uint64_t (*)(zen::runtime::EVMInstance *);
+} // namespace COMPILER
+
 namespace zen::runtime {
 class EVMInstance;
 } // namespace zen::runtime
@@ -277,30 +285,6 @@ public:
   Operand handleCodeSize();
 
   // ==================== Runtime Interface for JIT ====================
-
-  using U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *);
-  using Bytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *);
-  using SizeFn = uint64_t (*)(zen::runtime::EVMInstance *);
-
-  // Function dispatch table for JIT compilation
-  struct RuntimeFunctions {
-    Bytes32Fn GetAddress;
-    Bytes32Fn GetOrigin;
-    Bytes32Fn GetCaller;
-    Bytes32Fn GetCallValue;
-    U256Fn GetGasPrice;
-    SizeFn GetCallDataSize;
-    SizeFn GetCodeSize;
-  };
-
-  // Get function addresses for JIT compilation
-  static const RuntimeFunctions &getRuntimeFunctionTable();
-
-  // Template-based function address getter
-  template <typename FuncType>
-  static uint64_t getFunctionAddress(FuncType Func) {
-    return reinterpret_cast<uint64_t>(Func);
-  }
 
 private:
   // ==================== Operand Methods ====================
