@@ -421,6 +421,65 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCodeSize() {
   return callRuntimeForSize(RuntimeFunctions.GetCodeSize);
 }
 
+typename EVMMirBuilder::Operand EVMMirBuilder::handleBlockHash() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  // Pop block number from stack
+  Operand BlockNumber = popOperand();
+  return callRuntimeForBlockHash(RuntimeFunctions.GetBlockHash, BlockNumber);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleCoinBase() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForBytes32(RuntimeFunctions.GetCoinBase);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleTimestamp() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForU256(RuntimeFunctions.GetTimestamp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleNumber() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForU256(RuntimeFunctions.GetNumber);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handlePrevRandao() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForBytes32(RuntimeFunctions.GetPrevRandao);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleGasLimit() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForU256(RuntimeFunctions.GetGasLimit);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleChainId() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForBytes32(RuntimeFunctions.GetChainId);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleSelfBalance() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForU256(RuntimeFunctions.GetSelfBalance);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleBaseFee() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForU256(RuntimeFunctions.GetBaseFee);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleBlobHash() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  // Pop index from stack
+  Operand Index = popOperand();
+  return callRuntimeForBlobHash(RuntimeFunctions.GetBlobHash, Index);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleBlobBaseFee() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForU256(RuntimeFunctions.GetBlobBaseFee);
+}
+
 // ==================== Private Helper Methods ====================
 
 MInstruction *EVMMirBuilder::extractOperand(const Operand &Opnd) {
@@ -781,6 +840,54 @@ EVMMirBuilder::callRuntimeForBytes32(Bytes32Fn RuntimeFunc) {
 
   // Return as BYTES32 operand (pointer to existing memory)
   return Operand(CallInstr, EVMType::BYTES32);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForBlockHash(BlockHashFn RuntimeFunc,
+                                       const Operand &BlockNumber) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *Bytes32Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
+
+  // Get function address and instance pointer
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  // Extract block number (convert from U256 to I64 - take low 64 bits)
+  U256Inst BlockNumberComponents = extractU256Operand(BlockNumber);
+  MInstruction *BlockNumberI64 = BlockNumberComponents[0]; // Low 64 bits
+
+  std::vector<MInstruction *> Args = {InstancePtr, BlockNumberI64};
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, Bytes32Type, FuncAddrInst, llvm::ArrayRef<MInstruction *>(Args));
+
+  // Convert Bytes32 result to U256 format
+  return convertBytes32ToU256Operand(Operand(CallInstr, EVMType::BYTES32));
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForBlobHash(BlobHashFn RuntimeFunc,
+                                      const Operand &Index) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *Bytes32Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
+
+  // Get function address and instance pointer
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  // Extract index (convert from U256 to U64 - take low 64 bits)
+  U256Inst IndexComponents = extractU256Operand(Index);
+  MInstruction *IndexU64 = IndexComponents[0]; // Low 64 bits
+
+  std::vector<MInstruction *> Args = {InstancePtr, IndexU64};
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, Bytes32Type, FuncAddrInst, llvm::ArrayRef<MInstruction *>(Args));
+
+  // Convert Bytes32 result to U256 format
+  return convertBytes32ToU256Operand(Operand(CallInstr, EVMType::BYTES32));
 }
 
 MInstruction *EVMMirBuilder::getCurrentInstancePointer() {

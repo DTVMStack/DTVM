@@ -283,6 +283,17 @@ public:
   Operand handleGasPrice();
   Operand handleCallDataSize();
   Operand handleCodeSize();
+  Operand handleBlockHash();
+  Operand handleCoinBase();
+  Operand handleTimestamp();
+  Operand handleNumber();
+  Operand handlePrevRandao();
+  Operand handleGasLimit();
+  Operand handleChainId();
+  Operand handleSelfBalance();
+  Operand handleBaseFee();
+  Operand handleBlobHash();
+  Operand handleBlobBaseFee();
 
   // ==================== Runtime Interface for JIT ====================
 
@@ -407,6 +418,9 @@ private:
   Operand callRuntimeForU256(U256Fn RuntimeFunc);
   Operand callRuntimeForBytes32(Bytes32Fn RuntimeFunc);
   Operand callRuntimeForSize(SizeFn RuntimeFunc);
+  Operand callRuntimeForBlockHash(BlockHashFn RuntimeFunc,
+                                  const Operand &BlockNumber);
+  Operand callRuntimeForBlobHash(BlobHashFn RuntimeFunc, const Operand &Index);
 
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);

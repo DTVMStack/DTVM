@@ -315,47 +315,69 @@ private:
       }
 
       case OP_BLOCKHASH: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleBlockHash();
+        push(Result);
+        break;
       }
 
       case OP_COINBASE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleCoinBase();
+        push(Result);
+        break;
       }
 
       case OP_TIMESTAMP: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleTimestamp();
+        push(Result);
+        break;
       }
 
       case OP_NUMBER: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleNumber();
+        push(Result);
+        break;
       }
 
       case OP_PREVRANDAO: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handlePrevRandao();
+        push(Result);
+        break;
       }
 
       case OP_GASLIMIT: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleGasLimit();
+        push(Result);
+        break;
       }
 
       case OP_CHAINID: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleChainId();
+        push(Result);
+        break;
       }
 
       case OP_SELFBALANCE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleSelfBalance();
+        push(Result);
+        break;
       }
 
       case OP_BASEFEE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleBaseFee();
+        push(Result);
+        break;
       }
 
       case zen::evm::OP_BLOBHASH: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleBlobHash();
+        push(Result);
+        break;
       }
 
       case zen::evm::OP_BLOBBASEFEE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleBlobBaseFee();
+        push(Result);
+        break;
       }
 
       case OP_MLOAD: {
