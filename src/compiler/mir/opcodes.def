@@ -4,6 +4,7 @@
 
 OPCODE(clz)                         // OP_UNARY_EXPR_START, OP_START
 OPCODE(ctz)
+OPCODE(not)
 OPCODE(popcnt)
 OPCODE(fpabs)
 OPCODE(fpneg)
@@ -54,7 +55,6 @@ OPCODE(wasm_fptoui)                 // OP_CONV_EXPR_END
 
 OPCODE(dread)                       // OP_OTHER_EXPR_START
 OPCODE(const)
-OPCODE(not)
 OPCODE(cmp)
 OPCODE(adc)
 OPCODE(select)
