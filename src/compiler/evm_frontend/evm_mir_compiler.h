@@ -17,6 +17,8 @@ struct RuntimeFunctions;
 using U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *);
 using Bytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *);
 using SizeFn = uint64_t (*)(zen::runtime::EVMInstance *);
+using BlockHashFn = const uint8_t *(*)(zen::runtime::EVMInstance *, int64_t);
+using BlobHashFn = const uint8_t *(*)(zen::runtime::EVMInstance *, uint64_t);
 } // namespace COMPILER
 
 namespace zen::runtime {
