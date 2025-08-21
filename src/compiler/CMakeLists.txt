@@ -31,10 +31,10 @@ set(COMPILER_SRCS
     compiler.cpp
     context.cpp
     common/llvm_workaround.cpp
+    evm_frontend/evm_mir_compiler.cpp
     frontend/parser.cpp
     frontend/lexer.cpp
     wasm_frontend/wasm_mir_compiler.cpp
-    evm_frontend/evm_mir_compiler.cpp
     mir/function.cpp
     mir/pointer.cpp
     mir/module.cpp

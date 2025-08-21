@@ -8,7 +8,20 @@
 #include "compiler/context.h"
 #include "compiler/mir/function.h"
 #include "compiler/mir/instructions.h"
+#include "compiler/mir/pointer.h"
 #include "intx/intx.hpp"
+
+// Forward declaration to avoid circular dependency
+namespace COMPILER {
+struct RuntimeFunctions;
+using U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *);
+using Bytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *);
+using SizeFn = uint64_t (*)(zen::runtime::EVMInstance *);
+} // namespace COMPILER
+
+namespace zen::runtime {
+class EVMInstance;
+} // namespace zen::runtime
 
 namespace COMPILER {
 
@@ -19,6 +32,7 @@ enum class EVMType : uint8_t {
   UINT64,  // Gas calculations
   UINT256, // Main EVM type (256-bit integers) - maps to EVMU256Type from
            // common/type.h
+  BYTES32, // 32-byte fixed arrays (address, origin, caller, callvalue)
   ADDRESS, // 20-byte Ethereum addresses
   BYTES,   // Dynamic byte arrays
 };
@@ -124,11 +138,11 @@ public:
 
     // For EVMU256Type: 4 I64 components [0]=low, [1]=mid-low, [2]=mid-high,
     // [3]=high
-    bool IsU256MultiComponent = false;
     U256Inst U256Components = {};
     U256Var U256VarComponents = {};
     U256Value ConstValue = {};
     bool IsConstant = false;
+    bool IsU256MultiComponent = false;
   };
 
   bool compile(CompilerContext *Context);
@@ -262,6 +276,15 @@ public:
 
   Operand handlePC();
   Operand handleGas();
+  Operand handleAddress();
+  Operand handleOrigin();
+  Operand handleCaller();
+  Operand handleCallValue();
+  Operand handleGasPrice();
+  Operand handleCallDataSize();
+  Operand handleCodeSize();
+
+  // ==================== Runtime Interface for JIT ====================
 
 private:
   // ==================== Operand Methods ====================
@@ -293,6 +316,10 @@ private:
   }
 
   // ==================== MIR Util Methods ====================
+
+  MPointerType *createVoidPtrType() const {
+    return MPointerType::create(Ctx, Ctx.VoidType);
+  }
 
   template <class T, typename... Arguments>
   T *createInstruction(bool IsStmt, Arguments &&...Args) {
@@ -350,7 +377,6 @@ private:
     ZEN_ASSERT(ResultType == &Ctx.I64Type);
     U256Inst LHS = extractU256Operand(LHSOp);
     U256Inst RHS = {};
-    U256Inst Result = {};
 
     if constexpr (Operator == CompareOperator::CO_EQZ) {
       return handleCompareEQZ(LHS, ResultType);
@@ -375,13 +401,32 @@ private:
 
   Opcode getMirOpcode(BinaryOperator BinOpr);
 
+  // ==================== Helper Methods ====================
+
+  // Runtime calls for different return types
+  Operand callRuntimeForU256(U256Fn RuntimeFunc);
+  Operand callRuntimeForBytes32(Bytes32Fn RuntimeFunc);
+  Operand callRuntimeForSize(SizeFn RuntimeFunc);
+
+  Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
+  Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
+  Operand convertBytes32ToU256Operand(const Operand &Bytes32Op);
+
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;
   MBasicBlock *CurBB = nullptr;
   std::stack<Operand> OperandStack;
 
+  // Instance address for JIT function calls
+  MInstruction *InstanceAddr = nullptr;
+
   // Program counter for current instruction
   uint64_t PC = 0;
+
+  // ==================== Interface Helper Methods ====================
+
+  // Helper method to get instance pointer as instruction
+  MInstruction *getCurrentInstancePointer();
 };
 
 } // namespace COMPILER

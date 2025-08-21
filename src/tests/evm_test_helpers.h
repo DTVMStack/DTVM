@@ -26,19 +26,11 @@ public:
     }
 
     auto TempDir = std::filesystem::temp_directory_path();
-    auto TempPath = TempDir / "dtvm_XXXXXX.hex";
-    FilePath = TempPath.string();
-
-    auto BaseStr = TempPath.stem().string();
-    auto Extension = TempPath.extension();
-    for (int I = 0; I < 1000; ++I) {
-      auto UniquePath =
-          TempDir / (BaseStr + std::to_string(I) + Extension.string());
-      if (!std::filesystem::exists(UniquePath)) {
-        FilePath = UniquePath.string();
-        break;
-      }
-    }
+    do {
+      int RandomNum = std::rand() % 1000000;
+      std::string FileName = "dtvm_" + std::to_string(RandomNum) + ".hex";
+      FilePath = TempDir / FileName;
+    } while (std::filesystem::exists(FilePath));
 
     std::string CleanHex = HexCode;
     if (CleanHex.size() >= 2 && CleanHex.substr(0, 2) == "0x") {

@@ -158,10 +158,9 @@ int main(int argc, char *argv[]) {
     return exitMain(EXIT_FAILURE);
   }
 
-  /// ================ Basic evm interpreter ================
+  /// ================ EVM mode ================
 
   if (Format == InputFormat::EVM) {
-
     std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
     std::unique_ptr<Runtime> RT = Runtime::newEVMRuntime(Config, Host.get());
     if (!RT) {
@@ -196,13 +195,18 @@ int main(int argc, char *argv[]) {
     EVMInstance *Inst = *InstRet;
 
     std::vector<uint8_t> Result;
-    RT->callEVMInInterpMode(*Inst, Result);
+    RT->callEVMMain(*Inst, Result);
 
     std::string output = zen::utils::toHex(Result.data(), Result.size());
     std::cout << "output: 0x" << output << std::endl;
 
     if (!RT->unloadEVMModule(Mod)) {
       ZEN_LOG_ERROR("failed to unload EVM module");
+      return exitMain(EXIT_FAILURE, RT.get());
+    }
+
+    if (!Iso->deleteEVMInstance(Inst)) {
+      ZEN_LOG_ERROR("failed to delete instance");
       return exitMain(EXIT_FAILURE, RT.get());
     }
 

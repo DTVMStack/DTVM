@@ -237,7 +237,9 @@ private:
       }
 
       case OP_ADDRESS: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleAddress();
+        push(Result);
+        break;
       }
 
       case OP_BALANCE: {
@@ -245,15 +247,21 @@ private:
       }
 
       case OP_ORIGIN: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleOrigin();
+        push(Result);
+        break;
       }
 
       case OP_CALLER: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleCaller();
+        push(Result);
+        break;
       }
 
       case OP_CALLVALUE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleCallValue();
+        push(Result);
+        break;
       }
 
       case OP_CALLDATALOAD: {
@@ -261,7 +269,9 @@ private:
       }
 
       case OP_CALLDATASIZE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleCallDataSize();
+        push(Result);
+        break;
       }
 
       case OP_CALLDATACOPY: {
@@ -269,7 +279,9 @@ private:
       }
 
       case OP_CODESIZE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleCodeSize();
+        push(Result);
+        break;
       }
 
       case OP_CODECOPY: {
@@ -277,7 +289,9 @@ private:
       }
 
       case OP_GASPRICE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleGasPrice();
+        push(Result);
+        break;
       }
 
       case OP_EXTCODESIZE: {

@@ -375,7 +375,7 @@ void CallDataLoadHandler::doExecute() {
   intx::uint256 OffsetVal = Frame->pop();
   uint64_t Offset = uint256ToUint64(OffsetVal);
 
-  if (Offset >= Frame->Msg->input_size) {
+  if (OffsetVal > intx::uint256(Frame->Msg->input_size)) {
     Frame->push(intx::uint256(0));
     return;
   }

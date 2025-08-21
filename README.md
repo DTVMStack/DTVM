@@ -139,13 +139,13 @@ The [DTVM Solidity SDK](https://github.com/DTVMStack/DTVM_SolSDK) enables develo
 ## Command-Line Execution
 Execute a `wasm` file using `dtvm` as follows:
 ```cpp
-dtvm -f add i32.wasm --fargs "2 3"
+dtvm -f add i32.wasm --args "2" "3"
 
 dtvm i32.wasm --repl
 webassembly>add 1 1
 0x2:i32
 
-dtvm --dir . -f add i32.wasm --fargs "3 1"
+dtvm --dir . -f add i32.wasm --args "3" "1"
 0x4:i32
 
 dtvm --mode interpreter i32.wasm

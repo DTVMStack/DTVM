@@ -3,12 +3,15 @@
 
 #include "compiler/evm_frontend/evm_mir_compiler.h"
 #include "action/evm_bytecode_visitor.h"
+#include "compiler/evm_frontend/evm_imported.h"
 #include "compiler/mir/basic_block.h"
 #include "compiler/mir/constants.h"
 #include "compiler/mir/function.h"
 #include "compiler/mir/instructions.h"
 #include "compiler/mir/type.h"
+#include "evmc/evmc.hpp"
 #include "evmc/instructions.h"
+#include "runtime/evm_instance.h"
 
 namespace COMPILER {
 
@@ -31,6 +34,8 @@ MType *EVMFrontendContext::getMIRTypeFromEVMType(EVMType Type) {
     // U256 is represented as I64 for MIR operations, but we use EVMU256Type
     // to track the semantic meaning and provide proper 256-bit operations
     return &I64Type; // Primary component for MIR operations
+  case EVMType::BYTES32:
+    return &I64Type; // 32-byte data pointer as 64-bit value
   case EVMType::ADDRESS:
     return &I64Type; // Address as 64-bit value for simplicity
   case EVMType::BYTES:
@@ -65,6 +70,13 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   // Create entry basic block
   MBasicBlock *EntryBB = createBasicBlock();
   setInsertBlock(EntryBB);
+
+  // Initialize instance address for JIT function calls
+  // Get EVM instance pointer from function parameter 0 (like WASM)
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  InstanceAddr = createInstruction<ConversionInstruction>(
+      false, OP_ptrtoint, I64Type,
+      createInstruction<DreadInstruction>(false, createVoidPtrType(), 0));
 
   // Initialize program counter
   PC = 0;
@@ -374,6 +386,41 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleGas() {
   return Operand(Result, EVMType::UINT64);
 }
 
+typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForBytes32(RuntimeFunctions.GetAddress);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleOrigin() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForBytes32(RuntimeFunctions.GetOrigin);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleCaller() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForBytes32(RuntimeFunctions.GetCaller);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleCallValue() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForBytes32(RuntimeFunctions.GetCallValue);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleGasPrice() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForU256(RuntimeFunctions.GetGasPrice);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleCallDataSize() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForSize(RuntimeFunctions.GetCallDataSize);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleCodeSize() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeForSize(RuntimeFunctions.GetCodeSize);
+}
+
 // ==================== Private Helper Methods ====================
 
 MInstruction *EVMMirBuilder::extractOperand(const Operand &Opnd) {
@@ -492,6 +539,12 @@ EVMMirBuilder::U256Inst EVMMirBuilder::extractU256Operand(const Operand &Opnd) {
     }
   }
 
+  // Auto-convert BYTES32 operands to U256 when needed
+  if (Opnd.getType() == EVMType::BYTES32) {
+    Operand U256Op = convertBytes32ToU256Operand(Opnd);
+    return U256Op.getU256Components();
+  }
+
   return Result;
 }
 
@@ -571,6 +624,87 @@ EVMMirBuilder::extractU256Components(Operand U256Op) {
   };
 }
 
+typename EVMMirBuilder::Operand
+EVMMirBuilder::convertSingleInstrToU256Operand(MInstruction *SingleInstr) {
+  // Convert single instruction to U256 with little-endian storage
+  U256Inst Result = {};
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  // Convert the single instruction result to I64 and place it in low component
+  Result[0] = createInstruction<ConversionInstruction>(false, OP_uext, I64Type,
+                                                       SingleInstr);
+
+  // Fill the remaining components with zeros
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    Result[I] = Zero;
+  }
+
+  return Operand(Result, EVMType::UINT256);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::convertU256InstrToU256Operand(MInstruction *U256Instr) {
+  // Convert single U256 instruction (intx::uint256 from host interface)
+  // to EVM's 4-component U256 representation: [low, mid_low, mid_high, high]
+  //
+  // EVM uses little-endian storage for U256:
+  // - Component 0: bits 0-63   (lowest 64 bits)
+  // - Component 1: bits 64-127
+  // - Component 2: bits 128-191
+  // - Component 3: bits 192-255 (highest 64 bits)
+
+  U256Inst Result = {};
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *U256Type = U256Instr->getType();
+
+  // Component 0: Direct truncation for low 64 bits
+  Result[0] = createInstruction<ConversionInstruction>(false, OP_trunc, I64Type,
+                                                       U256Instr);
+
+  // Components 1-3: Loop through bit shifts
+  const uint64_t ShiftAmounts[] = {64, 128, 192};
+  for (int I = 1; I < 4; ++I) {
+    MInstruction *ShiftAmount =
+        createIntConstInstruction(U256Type, ShiftAmounts[I - 1]);
+    MInstruction *Shifted = createInstruction<BinaryInstruction>(
+        false, OP_ushr, U256Type, U256Instr, ShiftAmount);
+    Result[I] = createInstruction<ConversionInstruction>(false, OP_trunc,
+                                                         I64Type, Shifted);
+  }
+
+  return Operand(Result, EVMType::UINT256);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::convertBytes32ToU256Operand(const Operand &Bytes32Op) {
+  // Convert BYTES32 pointer to 4-component U256 representation with
+  // little-endian storage
+  ZEN_ASSERT(Bytes32Op.getType() == EVMType::BYTES32);
+
+  U256Inst Result = {};
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Bytes32Ptr = Bytes32Op.getInstr();
+
+  // Load 32 bytes from memory pointer and convert to 4x64-bit components
+  // Each component loads 8 bytes (64 bits) with big-endian byte ordering (EVM
+  // standard)
+  for (int I = 0; I < 4; ++I) {
+    // Calculate offset for each 8-byte component (EVM uses big-endian: high
+    // bytes first) Component 0 gets bytes 24-31 (low 64 bits), Component 3 gets
+    // bytes 0-7 (high 64 bits)
+    MInstruction *Offset = createIntConstInstruction(I64Type, (3 - I) * 8);
+    MInstruction *ComponentPtr = createInstruction<BinaryInstruction>(
+        false, OP_add, Bytes32Ptr->getType(), Bytes32Ptr, Offset);
+
+    // Load 8 bytes as I64 (needs endianness handling for EVM big-endian format)
+    Result[I] =
+        createInstruction<LoadInstruction>(false, I64Type, ComponentPtr);
+  }
+
+  return Operand(Result, EVMType::UINT256);
+}
+
 // ==================== EVM to MIR Opcode Mapping ====================
 
 Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
@@ -591,6 +725,69 @@ Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
     throw std::runtime_error("Unsupported EVM binary opcode: " +
                              std::to_string(static_cast<int>(BinOpr)));
   }
+}
+
+// ==================== Interface Helper Methods ====================
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForU256(U256Fn RuntimeFunc) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
+
+  // Get function address and instance pointer
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, U256Type, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>(InstancePtr));
+
+  // Convert U256 result to 4-component representation
+  return convertU256InstrToU256Operand(CallInstr);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForSize(SizeFn RuntimeFunc) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  // Get function address and instance pointer
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, I64Type, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>(InstancePtr));
+
+  // Convert size to U256 format (size in low component, zeros in high)
+  return convertSingleInstrToU256Operand(CallInstr);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForBytes32(Bytes32Fn RuntimeFunc) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *Bytes32Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
+
+  // Get function address and instance pointer
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, Bytes32Type, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>(InstancePtr));
+
+  // Return as BYTES32 operand (pointer to existing memory)
+  return Operand(CallInstr, EVMType::BYTES32);
+}
+
+MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
+  ZEN_ASSERT(InstanceAddr);
+  // Convert instance address back to pointer type
+  return createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, createVoidPtrType(), InstanceAddr);
 }
 
 } // namespace COMPILER

@@ -6,8 +6,13 @@
 
 #include "common/errors.h"
 #include "common/traphandler.h"
+#include "intx/intx.hpp"
 #include "runtime/evm_module.h"
 #include "utils/backtrace.h"
+#include <vector>
+
+// Forward declaration for evmc_message
+struct evmc_message;
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
 #include "utils/virtual_stack.h"
 #include <queue>
@@ -50,6 +55,19 @@ public:
   uint64_t getGas() const { return Gas; }
   void setGas(uint64_t NewGas) { Gas = NewGas; }
 
+  // ==================== Evmc Message Stack Methods ====================
+  // Note: These methods manage the call stack for JIT host interface functions
+  // that need access to evmc_message context throughout the call hierarchy.
+
+  void pushMessage(const evmc_message *Msg) { MessageStack.push_back(Msg); }
+  void popMessage() {
+    if (!MessageStack.empty())
+      MessageStack.pop_back();
+  }
+  const evmc_message *getCurrentMessage() const {
+    return MessageStack.empty() ? nullptr : MessageStack.back();
+  }
+
 private:
   EVMInstance(const EVMModule &M, Runtime &RT)
       : RuntimeObject<EVMInstance>(RT), Mod(&M) {}
@@ -65,6 +83,9 @@ private:
   Error Err = ErrorCode::NoError;
 
   uint64_t Gas = 0;
+
+  // Message stack for call hierarchy tracking
+  std::vector<const evmc_message *> MessageStack;
 
   // exit code set by Instance.exit(ExitCode)
   int32_t InstanceExitCode = 0;
