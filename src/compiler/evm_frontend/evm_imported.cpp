@@ -39,10 +39,13 @@ const uint8_t *evmGetAddress(zen::runtime::EVMInstance *Instance) {
 const uint8_t *evmGetOrigin(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
-  evmc_tx_context TxContext = Module->Host->get_tx_context();
-  static thread_local evmc_tx_context CachedTxContext;
-  CachedTxContext = TxContext;
-  return CachedTxContext.tx_origin.bytes;
+
+  auto &cache = Instance->getMessageCache();
+  if (!cache.tx_context_cached) {
+    cache.tx_context = Module->Host->get_tx_context();
+    cache.tx_context_cached = true;
+  }
+  return cache.tx_context.tx_origin.bytes;
 }
 
 const uint8_t *evmGetCaller(zen::runtime::EVMInstance *Instance) {
@@ -85,20 +88,26 @@ const uint8_t *evmGetBlockHash(zen::runtime::EVMInstance *Instance,
   const auto UpperBound = TxContext.block_number;
   const auto LowerBound = std::max(UpperBound - 256, decltype(UpperBound){0});
 
-  static thread_local evmc::bytes32 CachedBlockHash;
-  CachedBlockHash = (BlockNumber < UpperBound && BlockNumber >= LowerBound)
-                        ? Module->Host->get_block_hash(BlockNumber)
-                        : evmc::bytes32{};
-  return CachedBlockHash.bytes;
+  auto &cache = Instance->getMessageCache();
+  if (!cache.block_hash_cached) {
+    cache.block_hash = (BlockNumber < UpperBound && BlockNumber >= LowerBound)
+                           ? Module->Host->get_block_hash(BlockNumber)
+                           : evmc::bytes32{};
+    cache.block_hash_cached = true;
+  }
+  return cache.block_hash.bytes;
 }
 
 const uint8_t *evmGetCoinBase(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
-  evmc_tx_context TxContext = Module->Host->get_tx_context();
-  static thread_local evmc_tx_context CachedTxContext;
-  CachedTxContext = TxContext;
-  return CachedTxContext.block_coinbase.bytes;
+
+  auto &cache = Instance->getMessageCache();
+  if (!cache.tx_context_cached) {
+    cache.tx_context = Module->Host->get_tx_context();
+    cache.tx_context_cached = true;
+  }
+  return cache.tx_context.block_coinbase.bytes;
 }
 
 intx::uint256 evmGetTimestamp(zen::runtime::EVMInstance *Instance) {
@@ -118,10 +127,13 @@ intx::uint256 evmGetNumber(zen::runtime::EVMInstance *Instance) {
 const uint8_t *evmGetPrevRandao(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
-  evmc_tx_context TxContext = Module->Host->get_tx_context();
-  static thread_local evmc_tx_context CachedTxContext;
-  CachedTxContext = TxContext;
-  return CachedTxContext.block_prev_randao.bytes;
+
+  auto &cache = Instance->getMessageCache();
+  if (!cache.tx_context_cached) {
+    cache.tx_context = Module->Host->get_tx_context();
+    cache.tx_context_cached = true;
+  }
+  return cache.tx_context.block_prev_randao.bytes;
 }
 
 intx::uint256 evmGetGasLimit(zen::runtime::EVMInstance *Instance) {
@@ -134,10 +146,13 @@ intx::uint256 evmGetGasLimit(zen::runtime::EVMInstance *Instance) {
 const uint8_t *evmGetChainId(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
-  evmc_tx_context TxContext = Module->Host->get_tx_context();
-  static thread_local evmc_tx_context CachedTxContext;
-  CachedTxContext = TxContext;
-  return CachedTxContext.chain_id.bytes;
+
+  auto &cache = Instance->getMessageCache();
+  if (!cache.tx_context_cached) {
+    cache.tx_context = Module->Host->get_tx_context();
+    cache.tx_context_cached = true;
+  }
+  return cache.tx_context.chain_id.bytes;
 }
 
 intx::uint256 evmGetSelfBalance(zen::runtime::EVMInstance *Instance) {
@@ -162,13 +177,16 @@ const uint8_t *evmGetBlobHash(zen::runtime::EVMInstance *Instance,
   ZEN_ASSERT(Module && Module->Host);
   evmc_tx_context TxContext = Module->Host->get_tx_context();
 
-  static thread_local evmc::bytes32 CachedBlobHash;
-  if (Index >= TxContext.blob_hashes_count) {
-    CachedBlobHash = evmc::bytes32{};
-  } else {
-    CachedBlobHash = Module->Host->get_blob_hash(Index);
+  auto &cache = Instance->getMessageCache();
+  if (!cache.blob_hash_cached) {
+    if (Index >= TxContext.blob_hashes_count) {
+      cache.blob_hash = evmc::bytes32{};
+    } else {
+      cache.blob_hash = Module->Host->get_blob_hash(Index);
+    }
+    cache.blob_hash_cached = true;
   }
-  return CachedBlobHash.bytes;
+  return cache.blob_hash.bytes;
 }
 
 intx::uint256 evmGetBlobBaseFee(zen::runtime::EVMInstance *Instance) {
