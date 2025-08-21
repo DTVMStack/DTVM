@@ -54,6 +54,7 @@ private:
       ptrdiff_t Diff = Ip - Bytecode;
       PC = static_cast<uint64_t>(Diff >= 0 ? Diff : 0);
       Ip++;
+      PC++;
 
       switch (Opcode) {
       case OP_STOP:
