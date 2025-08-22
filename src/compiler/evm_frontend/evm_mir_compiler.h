@@ -429,20 +429,15 @@ private:
 
   // ==================== Helper Methods ====================
 
-  // Runtime calls for different return types
-  Operand callRuntimeForU256(U256Fn RuntimeFunc);
-  Operand callRuntimeForBytes32(Bytes32Fn RuntimeFunc);
-  Operand callRuntimeForSize(SizeFn RuntimeFunc);
-  Operand callRuntimeForBytes32WithInt64(Bytes32WithInt64Fn RuntimeFunc,
-                                         const Operand &Param);
-  Operand callRuntimeForBytes32WithUint64(Bytes32WithUint64Fn RuntimeFunc,
-                                          const Operand &Param);
-  Operand callRuntimeForSizeWithBytes32(SizeWithBytes32Fn RuntimeFunc,
-                                        const Operand &Address);
-  Operand callRuntimeForBytes32WithBytes32(Bytes32WithBytes32Fn RuntimeFunc,
-                                           const Operand &Address);
-  Operand callRuntimeForU256WithBytes32(U256WithBytes32Fn RuntimeFunc,
-                                        const Operand &Address);
+  // Runtime calls using template functions
+
+  // Template versions of runtime calls
+  template <typename RetType>
+  Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *));
+  
+  template <typename RetType, typename ArgType>
+  Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *, ArgType), 
+                         const Operand &Param);
 
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
