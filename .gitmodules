@@ -3,4 +3,4 @@
 	url = https://github.com/WebAssembly/spec.git
 [submodule "evmc"]
 	path = evmc
-	url = https://github.com/ethereum/evmc.git
+	url = https://github.com/DTVMStack/evmc.git
