@@ -812,78 +812,75 @@ Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
 
 // ==================== Interface Helper Methods ====================
 
+// Helper template functions for runtime call type mapping
+template <typename RetType> MType *EVMMirBuilder::getMIRReturnType() {
+  if constexpr (std::is_same_v<RetType, intx::uint256>) {
+    return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
+  } else if constexpr (std::is_same_v<RetType, const uint8_t *>) {
+    return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
+  } else if constexpr (std::is_same_v<RetType, uint64_t>) {
+    return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  }
+}
 
-// Template function for no-argument runtime calls
 template <typename RetType>
 typename EVMMirBuilder::Operand
-EVMMirBuilder::callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *)) {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  
-  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-  
-  MType *ReturnType;
-  if constexpr (std::is_same_v<RetType, intx::uint256>) {
-    ReturnType = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
-  } else if constexpr (std::is_same_v<RetType, const uint8_t*>) {
-    ReturnType = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
-  } else if constexpr (std::is_same_v<RetType, uint64_t>) {
-    ReturnType = I64Type;
-  }
-  
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, ReturnType, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-  
+EVMMirBuilder::convertCallResult(MInstruction *CallInstr) {
   if constexpr (std::is_same_v<RetType, intx::uint256>) {
     return convertU256InstrToU256Operand(CallInstr);
-  } else if constexpr (std::is_same_v<RetType, const uint8_t*>) {
+  } else if constexpr (std::is_same_v<RetType, const uint8_t *>) {
     return Operand(CallInstr, EVMType::BYTES32);
   } else if constexpr (std::is_same_v<RetType, uint64_t>) {
     return convertSingleInstrToU256Operand(CallInstr);
   }
 }
 
-// Template function for single-argument runtime calls
-template <typename RetType, typename ArgType>
+// Template function for no-argument runtime calls
+template <typename RetType>
 typename EVMMirBuilder::Operand
-EVMMirBuilder::callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *, ArgType), 
-                              const Operand &Param) {
+EVMMirBuilder::callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *)) {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  
+
   uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
   MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
   MInstruction *InstancePtr = getCurrentInstancePointer();
-  
-  MType *ReturnType;
-  if constexpr (std::is_same_v<RetType, intx::uint256>) {
-    ReturnType = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
-  } else if constexpr (std::is_same_v<RetType, const uint8_t*>) {
-    ReturnType = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
-  } else if constexpr (std::is_same_v<RetType, uint64_t>) {
-    ReturnType = I64Type;
-  }
-  
+
+  MType *ReturnType = getMIRReturnType<RetType>();
+
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, ReturnType, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>(InstancePtr));
+
+  return convertCallResult<RetType>(CallInstr);
+}
+
+// Template function for single-argument runtime calls
+template <typename RetType, typename ArgType>
+typename EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
+    RetType (*RuntimeFunc)(runtime::EVMInstance *, ArgType),
+    const Operand &Param) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  MType *ReturnType = getMIRReturnType<RetType>();
+
   MInstruction *ParamInstr;
-  if constexpr (std::is_same_v<ArgType, int64_t> || std::is_same_v<ArgType, uint64_t>) {
+  if constexpr (std::is_same_v<ArgType, int64_t> ||
+                std::is_same_v<ArgType, uint64_t>) {
     U256Inst ParamComponents = extractU256Operand(Param);
     ParamInstr = ParamComponents[0]; // Low 64 bits
-  } else if constexpr (std::is_same_v<ArgType, const uint8_t*>) {
+  } else if constexpr (std::is_same_v<ArgType, const uint8_t *>) {
     ParamInstr = Param.getInstr();
   }
-  
+
   std::vector<MInstruction *> Args = {InstancePtr, ParamInstr};
   MInstruction *CallInstr = createInstruction<ICallInstruction>(
       false, ReturnType, FuncAddrInst, llvm::ArrayRef<MInstruction *>(Args));
-  
-  if constexpr (std::is_same_v<RetType, intx::uint256>) {
-    return convertU256InstrToU256Operand(CallInstr);
-  } else if constexpr (std::is_same_v<RetType, const uint8_t*>) {
-    return Operand(CallInstr, EVMType::BYTES32);
-  } else if constexpr (std::is_same_v<RetType, uint64_t>) {
-    return convertSingleInstrToU256Operand(CallInstr);
-  }
+
+  return convertCallResult<RetType>(CallInstr);
 }
 
 MInstruction *EVMMirBuilder::getCurrentInstancePointer() {

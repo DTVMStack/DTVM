@@ -434,10 +434,17 @@ private:
   // Template versions of runtime calls
   template <typename RetType>
   Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *));
-  
+
   template <typename RetType, typename ArgType>
-  Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *, ArgType), 
+  Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *,
+                                                ArgType),
                          const Operand &Param);
+
+  // Helper template functions for runtime call type mapping
+  template <typename RetType> static MType *getMIRReturnType();
+
+  template <typename RetType>
+  Operand convertCallResult(MInstruction *CallInstr);
 
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
