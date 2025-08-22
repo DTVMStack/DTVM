@@ -75,11 +75,9 @@ public:
 
   struct MessageCache {
     evmc_tx_context tx_context;
-    evmc::bytes32 block_hash;
-    evmc::bytes32 blob_hash;
+    std::unordered_map<int64_t, evmc::bytes32> block_hashes;
+    std::unordered_map<uint64_t, evmc::bytes32> blob_hashes;
     bool tx_context_cached = false;
-    bool block_hash_cached = false;
-    bool blob_hash_cached = false;
   };
 
   MessageCache &getMessageCache() {

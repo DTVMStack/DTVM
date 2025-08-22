@@ -89,13 +89,15 @@ const uint8_t *evmGetBlockHash(zen::runtime::EVMInstance *Instance,
   const auto LowerBound = std::max(UpperBound - 256, decltype(UpperBound){0});
 
   auto &cache = Instance->getMessageCache();
-  if (!cache.block_hash_cached) {
-    cache.block_hash = (BlockNumber < UpperBound && BlockNumber >= LowerBound)
-                           ? Module->Host->get_block_hash(BlockNumber)
-                           : evmc::bytes32{};
-    cache.block_hash_cached = true;
+  auto it = cache.block_hashes.find(BlockNumber);
+  if (it == cache.block_hashes.end()) {
+    evmc::bytes32 hash = (BlockNumber < UpperBound && BlockNumber >= LowerBound)
+                             ? Module->Host->get_block_hash(BlockNumber)
+                             : evmc::bytes32{};
+    cache.block_hashes[BlockNumber] = hash;
+    return hash.bytes;
   }
-  return cache.block_hash.bytes;
+  return it->second.bytes;
 }
 
 const uint8_t *evmGetCoinBase(zen::runtime::EVMInstance *Instance) {
@@ -178,15 +180,18 @@ const uint8_t *evmGetBlobHash(zen::runtime::EVMInstance *Instance,
   evmc_tx_context TxContext = Module->Host->get_tx_context();
 
   auto &cache = Instance->getMessageCache();
-  if (!cache.blob_hash_cached) {
+  auto it = cache.blob_hashes.find(Index);
+  if (it == cache.blob_hashes.end()) {
+    evmc::bytes32 hash;
     if (Index >= TxContext.blob_hashes_count) {
-      cache.blob_hash = evmc::bytes32{};
+      hash = evmc::bytes32{};
     } else {
-      cache.blob_hash = Module->Host->get_blob_hash(Index);
+      hash = Module->Host->get_blob_hash(Index);
     }
-    cache.blob_hash_cached = true;
+    cache.blob_hashes[Index] = hash;
+    return hash.bytes;
   }
-  return cache.blob_hash.bytes;
+  return it->second.bytes;
 }
 
 intx::uint256 evmGetBlobBaseFee(zen::runtime::EVMInstance *Instance) {
