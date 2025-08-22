@@ -64,26 +64,21 @@ public:
   void pushMessage(const evmc_message *Msg) { MessageStack.push_back(Msg); }
   void popMessage() {
     if (!MessageStack.empty()) {
-      const evmc_message *msg = MessageStack.back();
       MessageStack.pop_back();
-      MessageCaches.erase(msg);
     }
   }
   const evmc_message *getCurrentMessage() const {
     return MessageStack.empty() ? nullptr : MessageStack.back();
   }
 
-  struct MessageCache {
+  struct ExecutionCache {
     evmc_tx_context tx_context;
     std::unordered_map<int64_t, evmc::bytes32> block_hashes;
     std::unordered_map<uint64_t, evmc::bytes32> blob_hashes;
     bool tx_context_cached = false;
   };
 
-  MessageCache &getMessageCache() {
-    const evmc_message *msg = getCurrentMessage();
-    return MessageCaches[msg];
-  }
+  ExecutionCache &getMessageCache() { return execution_cache; }
 
 private:
   EVMInstance(const EVMModule &M, Runtime &RT)
@@ -104,8 +99,8 @@ private:
   // Message stack for call hierarchy tracking
   std::vector<const evmc_message *> MessageStack;
 
-  // Per-message cache storage
-  std::unordered_map<const evmc_message *, MessageCache> MessageCaches;
+  // Instance-level cache storage (shared across all messages in execution)
+  ExecutionCache execution_cache;
 
   // exit code set by Instance.exit(ExitCode)
   int32_t InstanceExitCode = 0;
