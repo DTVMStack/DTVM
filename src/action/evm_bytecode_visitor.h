@@ -244,7 +244,9 @@ private:
       }
 
       case OP_BALANCE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleBalance();
+        push(Result);
+        break;
       }
 
       case OP_ORIGIN: {
@@ -266,7 +268,9 @@ private:
       }
 
       case OP_CALLDATALOAD: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleCallDataLoad();
+        push(Result);
+        break;
       }
 
       case OP_CALLDATASIZE: {
@@ -296,7 +300,9 @@ private:
       }
 
       case OP_EXTCODESIZE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleExtCodeSize();
+        push(Result);
+        break;
       }
 
       case OP_EXTCODECOPY: {
@@ -312,7 +318,9 @@ private:
       }
 
       case OP_EXTCODEHASH: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleExtCodeHash();
+        push(Result);
+        break;
       }
 
       case OP_BLOCKHASH: {

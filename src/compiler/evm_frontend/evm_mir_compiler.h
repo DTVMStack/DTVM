@@ -17,8 +17,17 @@ struct RuntimeFunctions;
 using U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *);
 using Bytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *);
 using SizeFn = uint64_t (*)(zen::runtime::EVMInstance *);
-using BlockHashFn = const uint8_t *(*)(zen::runtime::EVMInstance *, int64_t);
-using BlobHashFn = const uint8_t *(*)(zen::runtime::EVMInstance *, uint64_t);
+using U256WithInt64Fn = intx::uint256 (*)(zen::runtime::EVMInstance *, int64_t);
+using Bytes32WithInt64Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
+                                              int64_t);
+using Bytes32WithUint64Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
+                                               uint64_t);
+using Bytes32WithBytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
+                                                const uint8_t *);
+using SizeWithBytes32Fn = uint64_t (*)(zen::runtime::EVMInstance *,
+                                       const uint8_t *);
+using U256WithBytes32Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
+                                            const uint8_t *);
 } // namespace COMPILER
 
 namespace zen::runtime {
@@ -279,12 +288,16 @@ public:
   Operand handlePC();
   Operand handleGas();
   Operand handleAddress();
+  Operand handleBalance();
   Operand handleOrigin();
   Operand handleCaller();
   Operand handleCallValue();
-  Operand handleGasPrice();
+  Operand handleCallDataLoad();
   Operand handleCallDataSize();
   Operand handleCodeSize();
+  Operand handleGasPrice();
+  Operand handleExtCodeSize();
+  Operand handleExtCodeHash();
   Operand handleBlockHash();
   Operand handleCoinBase();
   Operand handleTimestamp();
@@ -420,9 +433,16 @@ private:
   Operand callRuntimeForU256(U256Fn RuntimeFunc);
   Operand callRuntimeForBytes32(Bytes32Fn RuntimeFunc);
   Operand callRuntimeForSize(SizeFn RuntimeFunc);
-  Operand callRuntimeForBlockHash(BlockHashFn RuntimeFunc,
-                                  const Operand &BlockNumber);
-  Operand callRuntimeForBlobHash(BlobHashFn RuntimeFunc, const Operand &Index);
+  Operand callRuntimeForBytes32WithInt64(Bytes32WithInt64Fn RuntimeFunc,
+                                         const Operand &Param);
+  Operand callRuntimeForBytes32WithUint64(Bytes32WithUint64Fn RuntimeFunc,
+                                          const Operand &Param);
+  Operand callRuntimeForSizeWithBytes32(SizeWithBytes32Fn RuntimeFunc,
+                                        const Operand &Address);
+  Operand callRuntimeForBytes32WithBytes32(Bytes32WithBytes32Fn RuntimeFunc,
+                                           const Operand &Address);
+  Operand callRuntimeForU256WithBytes32(U256WithBytes32Fn RuntimeFunc,
+                                        const Operand &Address);
 
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);

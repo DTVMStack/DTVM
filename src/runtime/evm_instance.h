@@ -71,10 +71,21 @@ public:
     return MessageStack.empty() ? nullptr : MessageStack.back();
   }
 
+  struct PairHash {
+    template <class T1, class T2>
+    std::size_t operator()(const std::pair<T1, T2> &pair) const {
+      return std::hash<T1>{}(pair.first) ^ (std::hash<T2>{}(pair.second) << 1);
+    }
+  };
+
   struct ExecutionCache {
     evmc_tx_context tx_context;
     std::unordered_map<int64_t, evmc::bytes32> block_hashes;
     std::unordered_map<uint64_t, evmc::bytes32> blob_hashes;
+    std::unordered_map<std::pair<const evmc_message *, uint64_t>, evmc::bytes32,
+                       PairHash>
+        calldata_loads;
+    std::unordered_map<evmc::address, evmc::bytes32> extcode_hashes;
     bool tx_context_cached = false;
   };
 

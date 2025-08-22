@@ -391,6 +391,12 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
   return callRuntimeForBytes32(RuntimeFunctions.GetAddress);
 }
 
+typename EVMMirBuilder::Operand EVMMirBuilder::handleBalance() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  Operand Address = popOperand();
+  return callRuntimeForU256WithBytes32(RuntimeFunctions.GetBalance, Address);
+}
+
 typename EVMMirBuilder::Operand EVMMirBuilder::handleOrigin() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeForBytes32(RuntimeFunctions.GetOrigin);
@@ -404,6 +410,13 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCaller() {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallValue() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeForBytes32(RuntimeFunctions.GetCallValue);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleCallDataLoad() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  Operand Offset = popOperand();
+  return callRuntimeForBytes32WithUint64(RuntimeFunctions.GetCallDataLoad,
+                                         Offset);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleGasPrice() {
@@ -421,11 +434,26 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCodeSize() {
   return callRuntimeForSize(RuntimeFunctions.GetCodeSize);
 }
 
+typename EVMMirBuilder::Operand EVMMirBuilder::handleExtCodeSize() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  Operand Address = popOperand();
+  return callRuntimeForSizeWithBytes32(RuntimeFunctions.GetExtCodeSize,
+                                       Address);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleExtCodeHash() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  Operand Address = popOperand();
+  return callRuntimeForBytes32WithBytes32(RuntimeFunctions.GetExtCodeHash,
+                                          Address);
+}
+
 typename EVMMirBuilder::Operand EVMMirBuilder::handleBlockHash() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   // Pop block number from stack
   Operand BlockNumber = popOperand();
-  return callRuntimeForBlockHash(RuntimeFunctions.GetBlockHash, BlockNumber);
+  return callRuntimeForBytes32WithInt64(RuntimeFunctions.GetBlockHash,
+                                        BlockNumber);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCoinBase() {
@@ -472,7 +500,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleBlobHash() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   // Pop index from stack
   Operand Index = popOperand();
-  return callRuntimeForBlobHash(RuntimeFunctions.GetBlobHash, Index);
+  return callRuntimeForBytes32WithUint64(RuntimeFunctions.GetBlobHash, Index);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleBlobBaseFee() {
@@ -843,51 +871,111 @@ EVMMirBuilder::callRuntimeForBytes32(Bytes32Fn RuntimeFunc) {
 }
 
 typename EVMMirBuilder::Operand
-EVMMirBuilder::callRuntimeForBlockHash(BlockHashFn RuntimeFunc,
-                                       const Operand &BlockNumber) {
+EVMMirBuilder::callRuntimeForBytes32WithUint64(Bytes32WithUint64Fn RuntimeFunc,
+                                               const Operand &Param) {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MType *Bytes32Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
 
-  // Get function address and instance pointer
   uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
   MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
   MInstruction *InstancePtr = getCurrentInstancePointer();
 
-  // Extract block number (convert from U256 to I64 - take low 64 bits)
-  U256Inst BlockNumberComponents = extractU256Operand(BlockNumber);
-  MInstruction *BlockNumberI64 = BlockNumberComponents[0]; // Low 64 bits
+  // Extract parameter (convert from U256 to U64 - take low 64 bits)
+  U256Inst ParamComponents = extractU256Operand(Param);
+  MInstruction *ParamU64 = ParamComponents[0]; // Low 64 bits
 
-  std::vector<MInstruction *> Args = {InstancePtr, BlockNumberI64};
+  std::vector<MInstruction *> Args = {InstancePtr, ParamU64};
   MInstruction *CallInstr = createInstruction<ICallInstruction>(
       false, Bytes32Type, FuncAddrInst, llvm::ArrayRef<MInstruction *>(Args));
 
-  // Convert Bytes32 result to U256 format
-  return convertBytes32ToU256Operand(Operand(CallInstr, EVMType::BYTES32));
+  return Operand(CallInstr, EVMType::BYTES32);
 }
 
 typename EVMMirBuilder::Operand
-EVMMirBuilder::callRuntimeForBlobHash(BlobHashFn RuntimeFunc,
-                                      const Operand &Index) {
+EVMMirBuilder::callRuntimeForSizeWithBytes32(SizeWithBytes32Fn RuntimeFunc,
+                                             const Operand &Address) {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MType *Bytes32Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
 
-  // Get function address and instance pointer
   uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
   MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
   MInstruction *InstancePtr = getCurrentInstancePointer();
 
-  // Extract index (convert from U256 to U64 - take low 64 bits)
-  U256Inst IndexComponents = extractU256Operand(Index);
-  MInstruction *IndexU64 = IndexComponents[0]; // Low 64 bits
+  // Address is already BYTES32, pass directly
+  ZEN_ASSERT(Address.getType() == EVMType::BYTES32);
+  MInstruction *AddressPtr = Address.getInstr();
 
-  std::vector<MInstruction *> Args = {InstancePtr, IndexU64};
+  std::vector<MInstruction *> Args = {InstancePtr, AddressPtr};
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, I64Type, FuncAddrInst, llvm::ArrayRef<MInstruction *>(Args));
+
+  return convertSingleInstrToU256Operand(CallInstr);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::callRuntimeForBytes32WithBytes32(
+    Bytes32WithBytes32Fn RuntimeFunc, const Operand &Address) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *Bytes32Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
+
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  // Address is already BYTES32, pass directly
+  ZEN_ASSERT(Address.getType() == EVMType::BYTES32);
+  MInstruction *AddressPtr = Address.getInstr();
+
+  std::vector<MInstruction *> Args = {InstancePtr, AddressPtr};
   MInstruction *CallInstr = createInstruction<ICallInstruction>(
       false, Bytes32Type, FuncAddrInst, llvm::ArrayRef<MInstruction *>(Args));
 
-  // Convert Bytes32 result to U256 format
-  return convertBytes32ToU256Operand(Operand(CallInstr, EVMType::BYTES32));
+  return Operand(CallInstr, EVMType::BYTES32);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForU256WithBytes32(U256WithBytes32Fn RuntimeFunc,
+                                             const Operand &Address) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
+
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  // Address is already BYTES32, pass directly
+  ZEN_ASSERT(Address.getType() == EVMType::BYTES32);
+  MInstruction *AddressPtr = Address.getInstr();
+
+  std::vector<MInstruction *> Args = {InstancePtr, AddressPtr};
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, U256Type, FuncAddrInst, llvm::ArrayRef<MInstruction *>(Args));
+
+  return convertU256InstrToU256Operand(CallInstr);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeForBytes32WithInt64(Bytes32WithInt64Fn RuntimeFunc,
+                                              const Operand &Param) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *Bytes32Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
+
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  // Extract parameter (convert from U256 to I64 - take low 64 bits)
+  U256Inst ParamComponents = extractU256Operand(Param);
+  MInstruction *ParamI64 = ParamComponents[0]; // Low 64 bits
+
+  std::vector<MInstruction *> Args = {InstancePtr, ParamI64};
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      false, Bytes32Type, FuncAddrInst, llvm::ArrayRef<MInstruction *>(Args));
+
+  return Operand(CallInstr, EVMType::BYTES32);
 }
 
 MInstruction *EVMMirBuilder::getCurrentInstancePointer() {

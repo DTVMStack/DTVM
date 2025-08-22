@@ -10,12 +10,16 @@ namespace COMPILER {
 
 const RuntimeFunctions &getRuntimeFunctionTable() {
   static const RuntimeFunctions Table = {.GetAddress = &evmGetAddress,
+                                         .GetBalance = &evmGetBalance,
                                          .GetOrigin = &evmGetOrigin,
                                          .GetCaller = &evmGetCaller,
                                          .GetCallValue = &evmGetCallValue,
-                                         .GetGasPrice = &evmGetGasPrice,
+                                         .GetCallDataLoad = &evmGetCallDataLoad,
                                          .GetCallDataSize = &evmGetCallDataSize,
                                          .GetCodeSize = &evmGetCodeSize,
+                                         .GetGasPrice = &evmGetGasPrice,
+                                         .GetExtCodeSize = &evmGetExtCodeSize,
+                                         .GetExtCodeHash = &evmGetExtCodeHash,
                                          .GetBlockHash = &evmGetBlockHash,
                                          .GetCoinBase = &evmGetCoinBase,
                                          .GetTimestamp = &evmGetTimestamp,
@@ -34,6 +38,19 @@ const uint8_t *evmGetAddress(zen::runtime::EVMInstance *Instance) {
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
   return Msg->recipient.bytes;
+}
+
+intx::uint256 evmGetBalance(zen::runtime::EVMInstance *Instance,
+                            const uint8_t *Address) {
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module && Module->Host);
+
+  evmc::address Addr;
+  std::memcpy(Addr.bytes, Address, sizeof(Addr.bytes));
+
+  evmc::bytes32 BalanceBytes = Module->Host->get_balance(Addr);
+  intx::uint256 Balance = intx::be::load<intx::uint256>(BalanceBytes);
+  return Balance;
 }
 
 const uint8_t *evmGetOrigin(zen::runtime::EVMInstance *Instance) {
@@ -60,11 +77,61 @@ const uint8_t *evmGetCallValue(zen::runtime::EVMInstance *Instance) {
   return Msg->value.bytes;
 }
 
+const uint8_t *evmGetCallDataLoad(zen::runtime::EVMInstance *Instance,
+                                  uint64_t Offset) {
+  const evmc_message *Msg = Instance->getCurrentMessage();
+  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
+
+  auto &Cache = Instance->getMessageCache();
+  auto Key = std::make_pair(Msg, Offset);
+  auto It = Cache.calldata_loads.find(Key);
+  if (It == Cache.calldata_loads.end()) {
+    evmc::bytes32 Result{};
+    if (Offset < Msg->input_size) {
+      size_t CopySize = std::min<size_t>(32, Msg->input_size - Offset);
+      std::memcpy(Result.bytes, Msg->input_data + Offset, CopySize);
+    }
+    Cache.calldata_loads[Key] = Result;
+    return Cache.calldata_loads[Key].bytes;
+  }
+  return It->second.bytes;
+}
+
 intx::uint256 evmGetGasPrice(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   evmc_tx_context TxContext = Module->Host->get_tx_context();
   return intx::be::load<intx::uint256>(TxContext.tx_gas_price);
+}
+
+uint64_t evmGetExtCodeSize(zen::runtime::EVMInstance *Instance,
+                           const uint8_t *Address) {
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module && Module->Host);
+
+  evmc::address Addr;
+  std::memcpy(Addr.bytes, Address, sizeof(Addr.bytes));
+
+  uint64_t Size = Module->Host->get_code_size(Addr);
+  return Size;
+}
+
+const uint8_t *evmGetExtCodeHash(zen::runtime::EVMInstance *Instance,
+                                 const uint8_t *Address) {
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module && Module->Host);
+
+  evmc::address Addr;
+  std::memcpy(Addr.bytes, Address, sizeof(Addr.bytes));
+
+  auto &Cache = Instance->getMessageCache();
+  auto It = Cache.extcode_hashes.find(Addr);
+  if (It == Cache.extcode_hashes.end()) {
+    evmc::bytes32 Hash = Module->Host->get_code_hash(Addr);
+    Cache.extcode_hashes[Addr] = Hash;
+    return Cache.extcode_hashes[Addr].bytes;
+  }
+  return It->second.bytes;
 }
 
 uint64_t evmGetCallDataSize(zen::runtime::EVMInstance *Instance) {
