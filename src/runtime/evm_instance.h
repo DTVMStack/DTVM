@@ -85,7 +85,7 @@ public:
     std::unordered_map<std::pair<const evmc_message *, uint64_t>, evmc::bytes32,
                        PairHash>
         calldata_loads;
-    std::unordered_map<evmc::address, evmc::bytes32> extcode_hashes;
+    std::vector<evmc::bytes32> ExtcodeHashes;
     bool tx_context_cached = false;
   };
 

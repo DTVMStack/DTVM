@@ -125,13 +125,10 @@ const uint8_t *evmGetExtCodeHash(zen::runtime::EVMInstance *Instance,
   std::memcpy(Addr.bytes, Address, sizeof(Addr.bytes));
 
   auto &Cache = Instance->getMessageCache();
-  auto It = Cache.extcode_hashes.find(Addr);
-  if (It == Cache.extcode_hashes.end()) {
-    evmc::bytes32 Hash = Module->Host->get_code_hash(Addr);
-    Cache.extcode_hashes[Addr] = Hash;
-    return Cache.extcode_hashes[Addr].bytes;
-  }
-  return It->second.bytes;
+  evmc::bytes32 Hash = Module->Host->get_code_hash(Addr);
+  Cache.ExtcodeHashes.push_back(Hash);
+
+  return Cache.ExtcodeHashes.back().bytes;
 }
 
 uint64_t evmGetCallDataSize(zen::runtime::EVMInstance *Instance) {
