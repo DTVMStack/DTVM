@@ -20,7 +20,7 @@ EVMInstanceUniquePtr EVMInstance::newEVMInstance(Isolation &Iso,
                                                  uint64_t GasLimit) {
 
   Runtime *RT = Mod.getRuntime();
-  void *Buf = RT->allocate(sizeof(EVMInstance), Alignment);
+  void *Buf = RT->allocate(sizeof(EVMInstance), ALIGNMENT);
   ZEN_ASSERT(Buf);
 
   EVMInstanceUniquePtr Inst(new (Buf) EVMInstance(Mod, *RT));

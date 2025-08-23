@@ -18,6 +18,6 @@ struct StorageStoreCost {
 extern const std::array<
     std::array<StorageStoreCost, EVMC_STORAGE_MODIFIED_RESTORED + 1>,
     EVMC_MAX_REVISION + 1>
-    SstoreCosts;
+    SSTORE_COSTS;
 } // namespace evm
 } // namespace zen

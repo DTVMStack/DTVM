@@ -18,7 +18,7 @@ struct StorageCostSpec {
 /// TODO: This can be moved to instruction traits and be used in other places:
 /// e.g.
 ///       SLOAD cost, replacement for warm_storage_read_cost.
-const auto StorageCostSpecTable = []() noexcept {
+const auto STORAGE_COST_SPEC_TABLE = []() noexcept {
   std::array<StorageCostSpec, EVMC_MAX_REVISION + 1> Tbl{};
 
   // Legacy cost schedule.
@@ -46,7 +46,7 @@ const auto StorageCostSpecTable = []() noexcept {
 extern const std::array<
     std::array<StorageStoreCost, EVMC_STORAGE_MODIFIED_RESTORED + 1>,
     EVMC_MAX_REVISION + 1>
-    SstoreCosts = []() noexcept {
+    SSTORE_COSTS = []() noexcept {
       std::array<
           std::array<StorageStoreCost, EVMC_STORAGE_MODIFIED_RESTORED + 1>,
           EVMC_MAX_REVISION + 1>
@@ -54,7 +54,7 @@ extern const std::array<
 
       for (size_t Rev = EVMC_FRONTIER; Rev <= EVMC_MAX_REVISION; ++Rev) {
         auto &E = Tbl[Rev];
-        if (const auto C = StorageCostSpecTable[Rev]; !C.NetCost) // legacy
+        if (const auto C = STORAGE_COST_SPEC_TABLE[Rev]; !C.NetCost) // legacy
         {
           E[EVMC_STORAGE_ADDED] = {C.Set, 0};
           E[EVMC_STORAGE_DELETED] = {C.ReSet, C.Clear};

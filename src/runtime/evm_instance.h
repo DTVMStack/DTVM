@@ -73,23 +73,23 @@ public:
 
   struct PairHash {
     template <class T1, class T2>
-    std::size_t operator()(const std::pair<T1, T2> &pair) const {
-      return std::hash<T1>{}(pair.first) ^ (std::hash<T2>{}(pair.second) << 1);
+    std::size_t operator()(const std::pair<T1, T2> &Pair) const {
+      return std::hash<T1>{}(Pair.first) ^ (std::hash<T2>{}(Pair.second) << 1);
     }
   };
 
   struct ExecutionCache {
-    evmc_tx_context tx_context;
-    std::unordered_map<int64_t, evmc::bytes32> block_hashes;
-    std::unordered_map<uint64_t, evmc::bytes32> blob_hashes;
+    evmc_tx_context TxContext;
+    std::unordered_map<int64_t, evmc::bytes32> BlockHashes;
+    std::unordered_map<uint64_t, evmc::bytes32> BlobHashes;
     std::unordered_map<std::pair<const evmc_message *, uint64_t>, evmc::bytes32,
                        PairHash>
-        calldata_loads;
+        CalldataLoads;
     std::vector<evmc::bytes32> ExtcodeHashes;
-    bool tx_context_cached = false;
+    bool TxContextCached = false;
   };
 
-  ExecutionCache &getMessageCache() { return execution_cache; }
+  ExecutionCache &getMessageCache() { return InstanceExecutionCache; }
 
 private:
   EVMInstance(const EVMModule &M, Runtime &RT)
@@ -111,11 +111,11 @@ private:
   std::vector<const evmc_message *> MessageStack;
 
   // Instance-level cache storage (shared across all messages in execution)
-  ExecutionCache execution_cache;
+  ExecutionCache InstanceExecutionCache;
 
   // exit code set by Instance.exit(ExitCode)
   int32_t InstanceExitCode = 0;
-  static constexpr size_t Alignment = 8;
+  static constexpr size_t ALIGNMENT = 8;
 };
 
 } // namespace runtime

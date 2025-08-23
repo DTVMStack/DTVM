@@ -747,7 +747,7 @@ void SStoreHandler::doExecute() {
   const auto Status =
       Frame->Host->set_storage(Frame->Msg->recipient, Key, Value);
 
-  const auto [GasCostWarm, GasReFund] = SstoreCosts[Frame->Rev][Status];
+  const auto [GasCostWarm, GasReFund] = SSTORE_COSTS[Frame->Rev][Status];
 
   const auto GasCost = GasCostCold + GasCostWarm;
   if (Frame->Msg->gas < GasCost) {
