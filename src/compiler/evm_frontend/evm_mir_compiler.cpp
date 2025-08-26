@@ -534,6 +534,13 @@ void EVMMirBuilder::handleMCOPY(Operand DestAddrOp, Operand SrcAddrOp,
   callRuntimeFor(RuntimeFunctions.SetMCopy, DestAddrComponents,
                  SrcAddrComponents, LengthComponents);
 }
+void EVMMirBuilder::handleReturn(Operand MemOffsetOp, Operand LengthOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  U256Inst MemOffsetComponents = extractU256Operand(MemOffsetOp);
+  U256Inst LengthComponents = extractU256Operand(LengthOp);
+  callRuntimeFor(RuntimeFunctions.SetReturn, MemOffsetComponents,
+                 LengthComponents);
+}
 
 // ==================== Private Helper Methods ====================
 

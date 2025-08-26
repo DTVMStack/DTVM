@@ -35,7 +35,8 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
                                          .GetMLoad = &evmGetMLoad,
                                          .SetMStore = &evmSetMStore,
                                          .SetMStore8 = &evmSetMStore8,
-                                         .SetMCopy = &evmSetMCopy};
+                                         .SetMCopy = &evmSetMCopy,
+                                         .SetReturn = &evmSetReturn};
   return Table;
 }
 
@@ -327,6 +328,15 @@ void evmSetMCopy(zen::runtime::EVMInstance *Instance,
   if (Len > 0) {
     std::memmove(&Memory[Dest], &Memory[Src], Len);
   }
+}
+void evmSetReturn(zen::runtime::EVMInstance *Instance,
+                  const intx::uint256 &MemOffset, const intx::uint256 &Length) {
+  uint64_t Offset = static_cast<uint64_t>(MemOffset);
+  uint64_t Len = static_cast<uint64_t>(Length);
+  auto &Memory = Instance->getMemory();
+  std::vector<uint8_t> ReturnData(Memory.begin() + Offset,
+                                  Memory.begin() + Offset + Len);
+  Instance->setReturnData(std::move(ReturnData));
 }
 
 } // namespace COMPILER

@@ -65,6 +65,7 @@ struct RuntimeFunctions {
   VoidWithU256U256Fn SetMStore;
   VoidWithU256U256Fn SetMStore8;
   VoidWithU256U256U256Fn SetMCopy;
+  VoidWithU256U256Fn SetReturn;
 };
 
 const RuntimeFunctions &getRuntimeFunctionTable();
@@ -111,7 +112,8 @@ void evmSetMStore8(zen::runtime::EVMInstance *Instance,
 void evmSetMCopy(zen::runtime::EVMInstance *Instance,
                  const intx::uint256 &DestAddr, const intx::uint256 &SrcAddr,
                  const intx::uint256 &Length);
-
+void evmSetReturn(zen::runtime::EVMInstance *Instance,
+                  const intx::uint256 &MemOffset, const intx::uint256 &Length);
 } // namespace COMPILER
 
 #endif // EVM_FRONTEND_EVM_IMPORTED_H

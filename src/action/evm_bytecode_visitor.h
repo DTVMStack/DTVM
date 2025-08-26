@@ -510,7 +510,10 @@ private:
 
       // Halt operations
       case OP_RETURN: {
-        ZEN_ASSERT_TODO();
+        Operand MemOffset = pop();
+        Operand Length = pop();
+        Builder.handleReturn(MemOffset, Length);
+        return true;
       }
 
       case OP_REVERT:

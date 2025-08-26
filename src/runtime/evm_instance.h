@@ -93,6 +93,9 @@ public:
   };
 
   ExecutionCache &getMessageCache() { return InstanceExecutionCache; }
+  void setReturnData(std::vector<uint8_t> Data) {
+    ReturnData = std::move(Data);
+  }
 
 private:
   EVMInstance(const EVMModule &M, Runtime &RT)
@@ -111,6 +114,7 @@ private:
   uint64_t Gas = 0;
   // memory
   std::vector<uint8_t> Memory;
+  std::vector<uint8_t> ReturnData;
 
   // Message stack for call hierarchy tracking
   std::vector<const evmc_message *> MessageStack;

@@ -314,6 +314,7 @@ public:
   void handleMStore(Operand Addr, Operand Value);
   void handleMStore8(Operand Addr, Operand Value);
   void handleMCopy(Operand DestAddr, Operand SrcAddr, Operand Length);
+  void handleReturn(Operand MemOffset, Operand Length);
 
   // ==================== Runtime Interface for JIT ====================
 
