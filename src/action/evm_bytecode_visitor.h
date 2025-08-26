@@ -5,7 +5,6 @@
 #define ZEN_ACTION_EVM_BYTECODE_VISITOR_H
 
 #include "compiler/evm_frontend/evm_mir_compiler.h"
-#include "evm/evm.h"
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
 #include "runtime/evm_module.h"
@@ -377,13 +376,13 @@ private:
         break;
       }
 
-      case zen::evm::OP_BLOBHASH: {
+      case OP_BLOBHASH: {
         Operand Result = Builder.handleBlobHash();
         push(Result);
         break;
       }
 
-      case zen::evm::OP_BLOBBASEFEE: {
+      case OP_BLOBBASEFEE: {
         Operand Result = Builder.handleBlobBaseFee();
         push(Result);
         break;
@@ -413,15 +412,15 @@ private:
         ZEN_ASSERT_TODO();
       }
 
-      case zen::evm::OP_TLOAD: {
+      case OP_TLOAD: {
         ZEN_ASSERT_TODO();
       }
 
-      case zen::evm::OP_TSTORE: {
+      case OP_TSTORE: {
         ZEN_ASSERT_TODO();
       }
 
-      case zen::evm::OP_MCOPY: {
+      case OP_MCOPY: {
         ZEN_ASSERT_TODO();
       }
 
