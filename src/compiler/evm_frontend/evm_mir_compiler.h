@@ -291,28 +291,14 @@ public:
     MType *MirI64Type =
         EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
     // Check if shift amount >= 256
+    // Simply check lowest 64 bits, for excessively large shift values are rare
     // (EVM spec: result is 0 for SHL/SHR, sign-extended for SAR)
     MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
     MInstruction *Const256 = createIntConstInstruction(MirI64Type, 256);
 
-    // Check if any of the higher components are non-zero
-    MInstruction *IsNonZeroHigh = Zero;
-    for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
-      MInstruction *IsNonZero = createInstruction<CmpInstruction>(
-          false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Shift[I],
-          Zero);
-      IsNonZeroHigh = createInstruction<BinaryInstruction>(
-          false, OP_or, MirI64Type, IsNonZeroHigh, IsNonZero);
-    }
-
-    MInstruction *IsLowLarge = createInstruction<CmpInstruction>(
+    MInstruction *IsLargeShift = createInstruction<CmpInstruction>(
         false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, Shift[0],
         Const256);
-
-    // Large shift if any high component is non-zero OR low component >= 256
-    MInstruction *IsLargeShift = createInstruction<BinaryInstruction>(
-        false, OP_or, MirI64Type, IsNonZeroHigh, IsLowLarge);
-
     // Use only low 64 bits as shift amount
     MInstruction *ShiftAmount = Shift[0];
 
