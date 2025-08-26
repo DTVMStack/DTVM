@@ -504,6 +504,37 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleBlobBaseFee() {
   return callRuntimeFor(RuntimeFunctions.GetBlobBaseFee);
 }
 
+typename EVMMirBuilder::Operand EVMMirBuilder::handleMSize() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor(RuntimeFunctions.GetMSize);
+}
+typename EVMMirBuilder::Operand EVMMirBuilder::handleMLOAD(Operand AddrOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  U256Inst AddrComponents = extractU256Operand(AddrOp);
+  return callRuntimeFor(RuntimeFunctions.GetMLoad, AddrComponents);
+}
+void EVMMirBuilder::handleMSTORE(Operand AddrOp, Operand ValueOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  U256Inst AddrComponents = extractU256Operand(AddrOp);
+  U256Inst ValueComponents = extractU256Operand(ValueOp);
+  callRuntimeFor(RuntimeFunctions.SetMStore, AddrComponents, ValueComponents);
+}
+void EVMMirBuilder::handleMSTORE8(Operand AddrOp, Operand ValueOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  U256Inst AddrComponents = extractU256Operand(AddrOp);
+  U256Inst ValueComponents = extractU256Operand(ValueOp);
+  callRuntimeFor(RuntimeFunctions.SetMStore8, AddrComponents, ValueComponents);
+}
+void EVMMirBuilder::handleMCOPY(Operand DestAddrOp, Operand SrcAddrOp,
+                                Operand LengthOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  U256Inst DestAddrComponents = extractU256Operand(DestAddrOp);
+  U256Inst SrcAddrComponents = extractU256Operand(SrcAddrOp);
+  U256Inst LengthComponents = extractU256Operand(LengthOp);
+  callRuntimeFor(RuntimeFunctions.SetMCopy, DestAddrComponents,
+                 SrcAddrComponents, LengthComponents);
+}
+
 // ==================== Private Helper Methods ====================
 
 MInstruction *EVMMirBuilder::extractOperand(const Operand &Opnd) {

@@ -27,6 +27,15 @@ using SizeWithBytes32Fn = uint64_t (*)(zen::runtime::EVMInstance *,
                                        const uint8_t *);
 using U256WithBytes32Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
                                             const uint8_t *);
+using U256WithU256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
+                                         const intx::uint256 &);
+using VoidWithU256U256Fn = void (*)(zen::runtime::EVMInstance *,
+                                    const intx::uint256 &,
+                                    const intx::uint256 &);
+using VoidWithU256U256U256Fn = void (*)(zen::runtime::EVMInstance *,
+                                        const intx::uint256 &,
+                                        const intx::uint256 &,
+                                        const intx::uint256 &);
 
 struct RuntimeFunctions {
   Bytes32Fn GetAddress;
@@ -51,6 +60,11 @@ struct RuntimeFunctions {
   U256Fn GetBaseFee;
   Bytes32WithUint64Fn GetBlobHash;
   U256Fn GetBlobBaseFee;
+  SizeFn GetMSize;
+  U256WithU256Fn GetMLoad;
+  VoidWithU256U256Fn SetMStore;
+  VoidWithU256U256Fn SetMStore8;
+  VoidWithU256U256U256Fn SetMCopy;
 };
 
 const RuntimeFunctions &getRuntimeFunctionTable();
@@ -87,6 +101,16 @@ intx::uint256 evmGetBaseFee(zen::runtime::EVMInstance *Instance);
 const uint8_t *evmGetBlobHash(zen::runtime::EVMInstance *Instance,
                               uint64_t Index);
 intx::uint256 evmGetBlobBaseFee(zen::runtime::EVMInstance *Instance);
+uint64_t evmGetMSize(zen::runtime::EVMInstance *Instance);
+intx::uint256 evmGetMLoad(zen::runtime::EVMInstance *Instance,
+                          const intx::uint256 &Addr);
+void evmSetMStore(zen::runtime::EVMInstance *Instance,
+                  const intx::uint256 &Addr, const intx::uint256 &Value);
+void evmSetMStore8(zen::runtime::EVMInstance *Instance,
+                   const intx::uint256 &Addr, const intx::uint256 &Value);
+void evmSetMCopy(zen::runtime::EVMInstance *Instance,
+                 const intx::uint256 &DestAddr, const intx::uint256 &SrcAddr,
+                 const intx::uint256 &Length);
 
 } // namespace COMPILER
 

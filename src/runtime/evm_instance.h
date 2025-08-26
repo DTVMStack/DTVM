@@ -57,6 +57,9 @@ public:
   uint64_t getGas() const { return Gas; }
   void setGas(uint64_t NewGas) { Gas = NewGas; }
 
+  // ==================== Memory Methods ====================
+  size_t getMemorySize() const { return Memory.size(); }
+
   // ==================== Evmc Message Stack Methods ====================
   // Note: These methods manage the call stack for JIT host interface functions
   // that need access to evmc_message context throughout the call hierarchy.
@@ -106,6 +109,8 @@ private:
   Error Err = ErrorCode::NoError;
 
   uint64_t Gas = 0;
+  // memory
+  std::vector<uint8_t> Memory;
 
   // Message stack for call hierarchy tracking
   std::vector<const evmc_message *> MessageStack;

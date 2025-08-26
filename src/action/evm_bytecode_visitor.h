@@ -390,15 +390,24 @@ private:
       }
 
       case OP_MLOAD: {
-        ZEN_ASSERT_TODO();
+        Operand Addr = pop();
+        Operand Result = Builder.handleMLOAD(Addr);
+        push(Result);
+        break;
       }
 
       case OP_MSTORE: {
-        ZEN_ASSERT_TODO();
+        Operand Addr = pop();
+        Operand Value = pop();
+        Builder.handleMSTORE(Addr, Value);
+        break;
       }
 
       case OP_MSTORE8: {
-        ZEN_ASSERT_TODO();
+        Operand Addr = pop();
+        Operand Value = pop();
+        Builder.handleMSTORE8(Addr, Value);
+        break;
       }
 
       case OP_SLOAD: {
@@ -410,7 +419,9 @@ private:
       }
 
       case OP_MSIZE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleMSize();
+        push(Result);
+        break;
       }
 
       case zen::evm::OP_TLOAD: {
@@ -422,7 +433,11 @@ private:
       }
 
       case zen::evm::OP_MCOPY: {
-        ZEN_ASSERT_TODO();
+        Operand DestAddr = pop();
+        Operand SrcAddr = pop();
+        Operand Length = pop();
+        Builder.handleMCopy(DestAddr, SrcAddr, Length);
+        break;
       }
 
       case OP_LOG0:
@@ -501,6 +516,15 @@ private:
       case OP_REVERT:
         // End execution
         return true;
+
+      case OP_INVALID: {
+        throw getErrorWithExtraMessage(ErrorCode::EVMInvalidInstruction,
+                                       std::to_string(Opcode));
+      }
+
+      case OP_SELFDESTRUCT: {
+        ZEN_ASSERT_TODO();
+      }
 
       default:
         throw getErrorWithExtraMessage(ErrorCode::UnsupportedOpcode,

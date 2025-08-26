@@ -309,6 +309,11 @@ public:
   Operand handleBaseFee();
   Operand handleBlobHash();
   Operand handleBlobBaseFee();
+  Operand handleMSize();
+  Operand handleMSLoad(Operand Addr);
+  void handleMStore(Operand Addr, Operand Value);
+  void handleMStore8(Operand Addr, Operand Value);
+  void handleMCopy(Operand DestAddr, Operand SrcAddr, Operand Length);
 
   // ==================== Runtime Interface for JIT ====================
 

@@ -30,7 +30,12 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
                                          .GetSelfBalance = &evmGetSelfBalance,
                                          .GetBaseFee = &evmGetBaseFee,
                                          .GetBlobHash = &evmGetBlobHash,
-                                         .GetBlobBaseFee = &evmGetBlobBaseFee};
+                                         .GetBlobBaseFee = &evmGetBlobBaseFee,
+                                         .GetMSize = &evmGetMSize,
+                                         .GetMLoad = &evmGetMLoad,
+                                         .SetMStore = &evmSetMStore,
+                                         .SetMStore8 = &evmSetMStore8,
+                                         .SetMCopy = &evmSetMCopy};
   return Table;
 }
 
@@ -263,6 +268,65 @@ intx::uint256 evmGetBlobBaseFee(zen::runtime::EVMInstance *Instance) {
   ZEN_ASSERT(Module && Module->Host);
   evmc_tx_context TxContext = Module->Host->get_tx_context();
   return intx::be::load<intx::uint256>(TxContext.blob_base_fee);
+}
+
+uint64_t evmGetMSize(zen::runtime::EVMInstance *Instance) {
+  return Instance->getMemorySize();
+}
+intx::uint256 evmGetMLoad(zen::runtime::EVMInstance *Instance,
+                          const intx::uint256 &Addr) {
+  uint64_t EffectiveAddr = static_cast<uint64_t>(Addr);
+  uint64_t RequiredSize = EffectiveAddr + 32;
+  const auto &Memory = Instance->getMemory();
+  uint64_t CurrentSize = Memory.size();
+  if (RequiredSize > CurrentSize) {
+    Memory.resize(RequiredSize, 0);
+  }
+  intx::uint256 Result;
+  std::memcpy(Result.data(), &Memory[EffectiveAddr], 32);
+  return Result;
+}
+void evmSetMStore(zen::runtime::EVMInstance *Instance,
+                  const intx::uint256 &Addr, const intx::uint256 &Value) {
+  uint64_t EffectiveAddr = static_cast<uint64_t>(Addr);
+  uint64_t RequiredSize = EffectiveAddr + 32;
+  auto &Memory = Instance->getMemory();
+  uint64_t CurrentSize = Memory.size();
+  if (RequiredSize > CurrentSize) {
+    Memory.resize(RequiredSize, 0);
+  }
+  std::memcpy(&Memory[EffectiveAddr], Value.data(), 32);
+}
+void evmSetMStore8(zen::runtime::EVMInstance *Instance,
+                   const intx::uint256 &Addr, const intx::uint256 &Value) {
+  uint64_t EffectiveAddr = static_cast<uint64_t>(Addr);
+  uint64_t RequiredSize = EffectiveAddr + 1;
+  auto &Memory = Instance->getMemory();
+  uint64_t CurrentSize = Memory.size();
+  if (RequiredSize > CurrentSize) {
+    Memory.resize(RequiredSize, 0);
+  }
+  uint8_t ByteValue = static_cast<uint8_t>(Value & intx::uint256{0xFF});
+  Memory[EffectiveAddr] = ByteValue;
+}
+void evmSetMCopy(zen::runtime::EVMInstance *Instance,
+                 const intx::uint256 &DestAddr, const intx::uint256 &SrcAddr,
+                 const intx::uint256 &Length) {
+  uint64_t Dest = static_cast<uint64_t>(DestAddr);
+  uint64_t Src = static_cast<uint64_t>(SrcAddr);
+  uint64_t Len = static_cast<uint64_t>(Length);
+  if (Len == 0) {
+    return;
+  }
+  uint64_t RequiredSize = std::max(Dest + Len, Src + Len);
+  auto &Memory = Instance->getMemory();
+  uint64_t CurrentSize = Memory.size();
+  if (RequiredSize > CurrentSize) {
+    Memory.resize(RequiredSize, 0);
+  }
+  if (Len > 0) {
+    std::memmove(&Memory[Dest], &Memory[Src], Len);
+  }
 }
 
 } // namespace COMPILER
