@@ -310,11 +310,11 @@ public:
   Operand handleBlobHash();
   Operand handleBlobBaseFee();
   Operand handleMSize();
-  Operand handleMSLoad(Operand Addr);
-  void handleMStore(Operand Addr, Operand Value);
-  void handleMStore8(Operand Addr, Operand Value);
-  void handleMCopy(Operand DestAddr, Operand SrcAddr, Operand Length);
-  void handleReturn(Operand MemOffset, Operand Length);
+  Operand handleMLoad();
+  void handleMStore();
+  void handleMStore8();
+  void handleMCopy();
+  void handleReturn();
 
   // ==================== Runtime Interface for JIT ====================
 
@@ -445,6 +445,18 @@ private:
   Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *,
                                                 ArgType),
                          const Operand &Param);
+
+  template <typename RetType, typename Arg1Type, typename Arg2Type>
+  Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *,
+                                                Arg1Type, Arg2Type),
+                         const Operand &Param1, const Operand &Param2);
+
+  template <typename RetType, typename Arg1Type, typename Arg2Type,
+            typename Arg3Type>
+  Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *,
+                                                Arg1Type, Arg2Type, Arg3Type),
+                         const Operand &Param1, const Operand &Param2,
+                         const Operand &Param3);
 
   // Helper template functions for runtime call type mapping
   template <typename RetType> static MType *getMIRReturnType();

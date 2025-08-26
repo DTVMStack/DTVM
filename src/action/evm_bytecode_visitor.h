@@ -390,23 +390,18 @@ private:
       }
 
       case OP_MLOAD: {
-        Operand Addr = pop();
-        Operand Result = Builder.handleMLOAD(Addr);
+        Operand Result = Builder.handleMLoad();
         push(Result);
         break;
       }
 
       case OP_MSTORE: {
-        Operand Addr = pop();
-        Operand Value = pop();
-        Builder.handleMSTORE(Addr, Value);
+        Builder.handleMStore();
         break;
       }
 
       case OP_MSTORE8: {
-        Operand Addr = pop();
-        Operand Value = pop();
-        Builder.handleMSTORE8(Addr, Value);
+        Builder.handleMStore8();
         break;
       }
 
@@ -433,10 +428,7 @@ private:
       }
 
       case zen::evm::OP_MCOPY: {
-        Operand DestAddr = pop();
-        Operand SrcAddr = pop();
-        Operand Length = pop();
-        Builder.handleMCopy(DestAddr, SrcAddr, Length);
+        Builder.handleMCopy();
         break;
       }
 
@@ -510,9 +502,7 @@ private:
 
       // Halt operations
       case OP_RETURN: {
-        Operand MemOffset = pop();
-        Operand Length = pop();
-        Builder.handleReturn(MemOffset, Length);
+        Builder.handleReturn();
         return true;
       }
 
@@ -523,10 +513,6 @@ private:
       case OP_INVALID: {
         throw getErrorWithExtraMessage(ErrorCode::EVMInvalidInstruction,
                                        std::to_string(Opcode));
-      }
-
-      case OP_SELFDESTRUCT: {
-        ZEN_ASSERT_TODO();
       }
 
       default:
