@@ -283,6 +283,52 @@ public:
 
   Operand handleNot(const Operand &LHSOp);
 
+  template <BinaryOperator Operator>
+  Operand handleShift(Operand ShiftOp, Operand ValueOp) {
+    U256Inst Shift = extractU256Operand(ShiftOp);
+    U256Inst Value = extractU256Operand(ValueOp);
+
+    MType *MirI64Type =
+        EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+    // Check if shift amount >= 256
+    // (EVM spec: result is 0 for SHL/SHR, sign-extended for SAR)
+    MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+    MInstruction *Const256 = createIntConstInstruction(MirI64Type, 256);
+
+    // Check if any of the higher components are non-zero
+    MInstruction *IsNonZeroHigh = Zero;
+    for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+      MInstruction *IsNonZero = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Shift[I],
+          Zero);
+      IsNonZeroHigh = createInstruction<BinaryInstruction>(
+          false, OP_or, MirI64Type, IsNonZeroHigh, IsNonZero);
+    }
+
+    MInstruction *IsLowLarge = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, Shift[0],
+        Const256);
+
+    // Large shift if any high component is non-zero OR low component >= 256
+    MInstruction *IsLargeShift = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, IsNonZeroHigh, IsLowLarge);
+
+    // Use only low 64 bits as shift amount
+    MInstruction *ShiftAmount = Shift[0];
+
+    U256Inst Result = {};
+
+    if constexpr (Operator == BinaryOperator::BO_SHL) {
+      Result = handleLeftShift(Value, ShiftAmount, IsLargeShift);
+    } else if constexpr (Operator == BinaryOperator::BO_SHR_U) {
+      Result = handleLogicalRightShift(Value, ShiftAmount, IsLargeShift);
+    } else if constexpr (Operator == BinaryOperator::BO_SHR_S) {
+      Result = handleArithmeticRightShift(Value, ShiftAmount, IsLargeShift);
+    }
+
+    return Operand(Result, EVMType::UINT256);
+  }
+
   // ==================== Environment Instruction Handlers ====================
 
   Operand handlePC();
@@ -422,6 +468,17 @@ private:
 
   U256Inst handleCompareGT_LT(const U256Inst &LHS, const U256Inst &RHS,
                               MType *ResultType, CompareOperator Operator);
+
+  U256Inst handleLeftShift(const U256Inst &Value, MInstruction *ShiftAmount,
+                           MInstruction *IsLargeShift);
+
+  U256Inst handleLogicalRightShift(const U256Inst &Value,
+                                   MInstruction *ShiftAmount,
+                                   MInstruction *IsLargeShift);
+
+  U256Inst handleArithmeticRightShift(const U256Inst &Value,
+                                      MInstruction *ShiftAmount,
+                                      MInstruction *IsLargeShift);
 
   // ==================== EVM to MIR Opcode Mapping ====================
 

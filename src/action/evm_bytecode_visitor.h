@@ -95,6 +95,15 @@ private:
       case OP_NOT:
         handleNot();
         break;
+      case OP_SHL:
+        handleShift<BinaryOperator::BO_SHL>();
+        break;
+      case OP_SHR:
+        handleShift<BinaryOperator::BO_SHR_U>();
+        break;
+      case OP_SAR:
+        handleShift<BinaryOperator::BO_SHR_S>();
+        break;
       case OP_POP:
         Builder.handlePop();
         break;
@@ -217,18 +226,6 @@ private:
       }
 
       case OP_BYTE: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_SHL: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_SHR: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_SAR: {
         ZEN_ASSERT_TODO();
       }
 
@@ -536,6 +533,13 @@ private:
   void handleNot() {
     Operand Opnd = pop();
     Operand Result = Builder.handleNot(Opnd);
+    push(Result);
+  }
+
+  template <BinaryOperator Opr> void handleShift() {
+    Operand ShiftOp = pop();
+    Operand ValueOp = pop();
+    Operand Result = Builder.template handleShift<Opr>(ShiftOp, ValueOp);
     push(Result);
   }
 

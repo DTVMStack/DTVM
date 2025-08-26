@@ -360,6 +360,303 @@ EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
   return Operand(Result, EVMType::UINT256);
 }
 
+EVMMirBuilder::U256Inst
+EVMMirBuilder::handleLeftShift(const U256Inst &Value, MInstruction *ShiftAmount,
+                               MInstruction *IsLargeShift) {
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  U256Inst Result = {};
+
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
+
+  MInstruction *ShiftMod64 = createInstruction<BinaryInstruction>(
+      false, OP_urem, MirI64Type, ShiftAmount, Const64);
+  MInstruction *ComponentShift = createInstruction<BinaryInstruction>(
+      false, OP_udiv, MirI64Type, ShiftAmount, Const64);
+  MInstruction *RemainingBits = createInstruction<BinaryInstruction>(
+      false, OP_sub, MirI64Type, Const64, ShiftMod64);
+
+  MInstruction *MaxIndex =
+      createIntConstInstruction(MirI64Type, EVM_ELEMENTS_COUNT);
+
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *CurrentIdx = createIntConstInstruction(MirI64Type, I);
+
+    MInstruction *SrcIdx = createInstruction<BinaryInstruction>(
+        false, OP_sub, MirI64Type, CurrentIdx, ComponentShift);
+
+    // valid SrcIdx: [0, EVM_ELEMENTS_COUNT)
+    MInstruction *IsValidLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, SrcIdx, Zero);
+    MInstruction *IsValidHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, SrcIdx,
+        MaxIndex);
+    MInstruction *IsInBounds = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidLow, IsValidHigh);
+
+    MInstruction *SrcValue = Zero;
+    for (size_t J = 0; J < EVM_ELEMENTS_COUNT; ++J) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, J);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, SrcIdx,
+          TargetIdx);
+      SrcValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[J], SrcValue);
+    }
+    SrcValue = createInstruction<SelectInstruction>(false, MirI64Type,
+                                                    IsInBounds, SrcValue, Zero);
+
+    MInstruction *PrevIdx = createInstruction<BinaryInstruction>(
+        false, OP_sub, MirI64Type, SrcIdx, One);
+
+    MInstruction *IsValidPrevLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, PrevIdx,
+        Zero);
+    MInstruction *IsValidPrevHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, PrevIdx,
+        MaxIndex);
+    MInstruction *IsPrevValid = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidPrevLow, IsValidPrevHigh);
+
+    MInstruction *CarryValue = Zero;
+    for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, K);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, PrevIdx,
+          TargetIdx);
+      MInstruction *PrevValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[K], Zero);
+      PrevValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsPrevValid, PrevValue, Zero);
+
+      MInstruction *CarryBits = createInstruction<BinaryInstruction>(
+          false, OP_ushr, MirI64Type, PrevValue, RemainingBits);
+      CarryValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, CarryBits, CarryValue);
+    }
+
+    MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
+        false, OP_shl, MirI64Type, SrcValue, ShiftMod64);
+    MInstruction *CombinedValue = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, ShiftedValue, CarryValue);
+
+    Result[I] = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsLargeShift, Zero,
+        createInstruction<SelectInstruction>(false, MirI64Type, IsInBounds,
+                                             CombinedValue, Zero));
+  }
+
+  return Result;
+}
+
+EVMMirBuilder::U256Inst
+EVMMirBuilder::handleLogicalRightShift(const U256Inst &Value,
+                                       MInstruction *ShiftAmount,
+                                       MInstruction *IsLargeShift) {
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  U256Inst Result = {};
+
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
+
+  MInstruction *ShiftMod64 = createInstruction<BinaryInstruction>(
+      false, OP_urem, MirI64Type, ShiftAmount, Const64);
+  MInstruction *ComponentShift = createInstruction<BinaryInstruction>(
+      false, OP_udiv, MirI64Type, ShiftAmount, Const64);
+
+  MInstruction *MaxIndex =
+      createIntConstInstruction(MirI64Type, EVM_ELEMENTS_COUNT);
+
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *CurrentIdx = createIntConstInstruction(MirI64Type, I);
+
+    MInstruction *SrcIdx = createInstruction<BinaryInstruction>(
+        false, OP_add, MirI64Type, CurrentIdx, ComponentShift);
+
+    // valid SrcIdx: [0, EVM_ELEMENTS_COUNT)
+    MInstruction *IsValidLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, SrcIdx, Zero);
+    MInstruction *IsValidHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, SrcIdx,
+        MaxIndex);
+    MInstruction *IsInBounds = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidLow, IsValidHigh);
+
+    MInstruction *SrcValue = Zero;
+    for (size_t J = 0; J < EVM_ELEMENTS_COUNT; ++J) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, J);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, SrcIdx,
+          TargetIdx);
+      SrcValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[J], SrcValue);
+    }
+    SrcValue = createInstruction<SelectInstruction>(false, MirI64Type,
+                                                    IsInBounds, SrcValue, Zero);
+
+    MInstruction *NextIdx = createInstruction<BinaryInstruction>(
+        false, OP_add, MirI64Type, SrcIdx, One);
+
+    MInstruction *IsValidNextLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, NextIdx,
+        Zero);
+    MInstruction *IsValidNextHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, NextIdx,
+        MaxIndex);
+    MInstruction *IsNextValid = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidNextLow, IsValidNextHigh);
+
+    MInstruction *CarryValue = Zero;
+    for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, K);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, NextIdx,
+          TargetIdx);
+      MInstruction *NextValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[K], Zero);
+      NextValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsNextValid, NextValue, Zero);
+
+      MInstruction *CarryBits = createInstruction<BinaryInstruction>(
+          false, OP_shl, MirI64Type, NextValue,
+          createInstruction<BinaryInstruction>(
+              false, OP_sub, MirI64Type,
+              createIntConstInstruction(MirI64Type, 64), ShiftMod64));
+      CarryValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, CarryBits, CarryValue);
+    }
+
+    MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
+        false, OP_ushr, MirI64Type, SrcValue, ShiftMod64);
+    MInstruction *CombinedValue = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, ShiftedValue, CarryValue);
+
+    Result[I] = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsLargeShift, Zero,
+        createInstruction<SelectInstruction>(false, MirI64Type, IsInBounds,
+                                             CombinedValue, Zero));
+  }
+
+  return Result;
+}
+
+EVMMirBuilder::U256Inst
+EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
+                                          MInstruction *ShiftAmount,
+                                          MInstruction *IsLargeShift) {
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  U256Inst Result = {};
+
+  // Arithmetic right shift: sign-extend when shift >= 256
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  MInstruction *AllOnes = createIntConstInstruction(MirI64Type, ~0ULL);
+
+  // Check sign bit (bit 63 of highest component)
+  MInstruction *HighComponent = Value[EVM_ELEMENTS_COUNT - 1];
+  MInstruction *Const63 = createIntConstInstruction(MirI64Type, 63);
+  MInstruction *SignBit = createInstruction<BinaryInstruction>(
+      false, OP_ushr, MirI64Type, HighComponent, Const63);
+
+  // Sign bit is 1 if negative
+  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+  MInstruction *IsNegative = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, SignBit, One);
+
+  // Large shift result: all 1s if negative, all 0s if positive
+  MInstruction *LargeShiftResult = createInstruction<SelectInstruction>(
+      false, MirI64Type, IsNegative, AllOnes, Zero);
+
+  // Calculate shift amount modulo 64 for intra-component shifts
+  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
+  MInstruction *ShiftMod64 = createInstruction<BinaryInstruction>(
+      false, OP_urem, MirI64Type, ShiftAmount, Const64);
+
+  // Calculate how many 64-bit components to shift (shift / 64)
+  MInstruction *ComponentShift = createInstruction<BinaryInstruction>(
+      false, OP_udiv, MirI64Type, ShiftAmount, Const64);
+
+  MInstruction *MaxIndex =
+      createIntConstInstruction(MirI64Type, EVM_ELEMENTS_COUNT);
+
+  // Process each component from high to low (left to right)
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *CurrentIdx = createIntConstInstruction(MirI64Type, I);
+
+    MInstruction *SrcIdx = createInstruction<BinaryInstruction>(
+        false, OP_add, MirI64Type, CurrentIdx, ComponentShift);
+
+    // valid SrcIdx: [0, EVM_ELEMENTS_COUNT)
+    MInstruction *IsValidLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, SrcIdx, Zero);
+    MInstruction *IsValidHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, SrcIdx,
+        MaxIndex);
+    MInstruction *IsInBounds = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidLow, IsValidHigh);
+
+    MInstruction *SrcValue = LargeShiftResult;
+    for (size_t J = 0; J < EVM_ELEMENTS_COUNT; ++J) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, J);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, SrcIdx,
+          TargetIdx);
+      SrcValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[J], SrcValue);
+    }
+    SrcValue = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsInBounds, SrcValue, LargeShiftResult);
+
+    MInstruction *PrevIdx = createInstruction<BinaryInstruction>(
+        false, OP_sub, MirI64Type, SrcIdx, One);
+
+    MInstruction *IsValidPrevLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, PrevIdx,
+        Zero);
+    MInstruction *IsValidPrevHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, PrevIdx,
+        MaxIndex);
+    MInstruction *IsPrevValid = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidPrevLow, IsValidPrevHigh);
+
+    MInstruction *CarryValue = Zero;
+    for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, K);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, PrevIdx,
+          TargetIdx);
+      MInstruction *PrevValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[K], Zero);
+      PrevValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsPrevValid, PrevValue, Zero);
+
+      MInstruction *CarryBits = createInstruction<BinaryInstruction>(
+          false, OP_ushr, MirI64Type, PrevValue,
+          createInstruction<BinaryInstruction>(
+              false, OP_sub, MirI64Type,
+              createIntConstInstruction(MirI64Type, 64), ShiftMod64));
+      CarryValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, CarryBits, CarryValue);
+    }
+
+    MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
+        false, OP_sshr, MirI64Type, SrcValue, ShiftMod64);
+    MInstruction *CombinedValue = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, ShiftedValue, CarryValue);
+
+    Result[I] = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsLargeShift, LargeShiftResult,
+        createInstruction<SelectInstruction>(false, MirI64Type, IsInBounds,
+                                             CombinedValue, LargeShiftResult));
+  }
+
+  return Result;
+}
+
 // ==================== Environment Instruction Handlers ====================
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handlePC() {
