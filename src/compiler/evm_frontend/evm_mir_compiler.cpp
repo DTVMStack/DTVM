@@ -847,21 +847,6 @@ MInstruction *EVMMirBuilder::extractOperand(const Operand &Opnd) {
   ZEN_UNREACHABLE();
 }
 
-ConstantInstruction *
-EVMMirBuilder::createUInt256ConstInstruction(const intx::uint256 &V) {
-  // This method now returns just the low component instruction
-  // For full U256 creation, use handlePush or createU256FromComponents
-
-  // Get EVMU256Type for semantic awareness
-  zen::common::EVMU256Type *U256Type = EVMFrontendContext::getEVMU256Type();
-
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  // Use lower 64 bits as the primary component
-  uint64_t Value = static_cast<uint64_t>(V & 0xFFFFFFFFFFFFFFFFULL);
-  MConstant *Constant = MConstantInt::get(Ctx, *I64Type, Value);
-  return createInstruction<ConstantInstruction>(false, I64Type, *Constant);
-}
-
 typename EVMMirBuilder::Operand
 EVMMirBuilder::createU256ConstOperand(const intx::uint256 &V) {
   // Get EVMU256Type to guide proper component creation

@@ -404,8 +404,6 @@ private:
         false, Type, *MConstantInt::get(Ctx, *Type, V));
   }
 
-  ConstantInstruction *createUInt256ConstInstruction(const intx::uint256 &V);
-
   // Create a full U256 operand from intx::uint256 value
   Operand createU256ConstOperand(const intx::uint256 &V);
 
