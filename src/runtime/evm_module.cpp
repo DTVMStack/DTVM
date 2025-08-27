@@ -86,14 +86,4 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
   return Mod;
 }
 
-// ==================== JIT Methods ====================
-#ifdef ZEN_ENABLE_JIT
-#ifdef ZEN_ENABLE_MULTIPASS_JIT
-COMPILER::LazyEVMJITCompiler *EVMModule::newLazyEVMJITCompiler() {
-  LazyEVMCompiler = std::make_unique<COMPILER::LazyEVMJITCompiler>(this);
-  return LazyEVMCompiler.get();
-}
-#endif // ZEN_ENABLE_MULTIPASS_JIT
-#endif // ZEN_ENABLE_JIT
-
 } // namespace zen::runtime

@@ -127,7 +127,7 @@ jobs:
           export ENABLE_ASAN=true
           export RUN_MODE=multipass
           export INPUT_FORMAT=evm
-          export ENABLE_LAZY=true
+          export ENABLE_LAZY=false
           export ENABLE_MULTITHREAD=true
           export TestSuite=evmrealsuite
           export CPU_EXCEPTION_TYPE='check'

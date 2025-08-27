@@ -157,7 +157,7 @@ public:
     T *Inst = T::create(Ctx.MemPool, std::forward<Arguments>(Args)...);
     Instructions.emplace_back(Inst);
 
-    // TODO: print all instructions temporally
+    // TODO: move to dmir->cgir pass
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     llvm::outs() << "Created instruction: ";
     Inst->print(llvm::outs());

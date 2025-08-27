@@ -41,18 +41,10 @@ void performJITCompile(runtime::Module &Mod) {
 
 void performEVMJITCompile(runtime::EVMModule &Mod) {
   switch (Mod.getRuntime()->getConfig().Mode) {
-#ifdef ZEN_ENABLE_SINGLEPASS_JIT
-  case common::RunMode::SinglepassMode: {
-    // TODO: Implement singlepass JIT for EVM
-    ZEN_ASSERT_TODO();
-    break;
-  }
-#endif
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
   case common::RunMode::MultipassMode: {
     if (Mod.getRuntime()->getConfig().EnableMultipassLazy) {
-      auto *LCompiler = Mod.newLazyEVMJITCompiler();
-      LCompiler->precompile();
+      ZEN_LOG_WARN("EVMJIT does not support lazy compilation now");
     } else {
       COMPILER::EagerEVMJITCompiler ECompiler(&Mod);
       ECompiler.compile();
@@ -61,6 +53,7 @@ void performEVMJITCompile(runtime::EVMModule &Mod) {
   }
 #endif
   default:
+    ZEN_LOG_WARN("EVMJIT does not support singlepass mode");
     break;
   }
 }

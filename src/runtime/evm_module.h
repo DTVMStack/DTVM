@@ -9,7 +9,6 @@
 #ifdef ZEN_ENABLE_JIT
 namespace COMPILER {
 class EVMJITCompiler;
-class LazyEVMJITCompiler;
 }; // namespace COMPILER
 #endif
 
@@ -43,16 +42,6 @@ public:
     JITCode = Code;
     JITCodeSize = Size;
   }
-
-#ifdef ZEN_ENABLE_MULTIPASS_JIT
-  COMPILER::LazyEVMJITCompiler *newLazyEVMJITCompiler();
-
-  COMPILER::LazyEVMJITCompiler *getLazyEVMJITCompiler() const {
-    ZEN_ASSERT(LazyEVMCompiler);
-    return LazyEVMCompiler.get();
-  }
-#endif // ZEN_ENABLE_MULTIPASS_JIT
-
 #endif // ZEN_ENABLE_JIT
 
 private:
@@ -67,10 +56,6 @@ private:
   common::CodeMemPool JITCodeMemPool;
   void *JITCode = nullptr;
   size_t JITCodeSize = 0;
-
-#ifdef ZEN_ENABLE_MULTIPASS_JIT
-  std::unique_ptr<COMPILER::LazyEVMJITCompiler> LazyEVMCompiler;
-#endif // ZEN_ENABLE_MULTIPASS_JIT
 #endif // ZEN_ENABLE_JIT
 };
 
