@@ -394,7 +394,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleBalance() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   Operand Address = popOperand();
-  return callRuntimeFor(RuntimeFunctions.GetBalance, Address);
+  return callRuntimeFor<intx::uint256, const uint8_t *>(
+      RuntimeFunctions.GetBalance, Address);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleOrigin() {
@@ -415,7 +416,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCallValue() {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallDataLoad() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   Operand Offset = popOperand();
-  return callRuntimeFor(RuntimeFunctions.GetCallDataLoad, Offset);
+  return callRuntimeFor<const uint8_t *, uint64_t>(
+      RuntimeFunctions.GetCallDataLoad, Offset);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleGasPrice() {
@@ -436,20 +438,23 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCodeSize() {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleExtCodeSize() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   Operand Address = popOperand();
-  return callRuntimeFor(RuntimeFunctions.GetExtCodeSize, Address);
+  return callRuntimeFor<uint64_t, const uint8_t *>(
+      RuntimeFunctions.GetExtCodeSize, Address);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleExtCodeHash() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   Operand Address = popOperand();
-  return callRuntimeFor(RuntimeFunctions.GetExtCodeHash, Address);
+  return callRuntimeFor<const uint8_t *, const uint8_t *>(
+      RuntimeFunctions.GetExtCodeHash, Address);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleBlockHash() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   // Pop block number from stack
   Operand BlockNumber = popOperand();
-  return callRuntimeFor(RuntimeFunctions.GetBlockHash, BlockNumber);
+  return callRuntimeFor<const uint8_t *, int64_t>(RuntimeFunctions.GetBlockHash,
+                                                  BlockNumber);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCoinBase() {
@@ -496,7 +501,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleBlobHash() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   // Pop index from stack
   Operand Index = popOperand();
-  return callRuntimeFor(RuntimeFunctions.GetBlobHash, Index);
+  return callRuntimeFor<const uint8_t *, uint64_t>(RuntimeFunctions.GetBlobHash,
+                                                   Index);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleBlobBaseFee() {
@@ -511,34 +517,38 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMSize() {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleMLoad() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   Operand AddrComponents = popOperand();
-  return callRuntimeFor(RuntimeFunctions.GetMLoad, AddrComponents);
+  return callRuntimeFor<intx::uint256, uint64_t>(RuntimeFunctions.GetMLoad,
+                                                 AddrComponents);
 }
 void EVMMirBuilder::handleMStore() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   Operand AddrComponents = popOperand();
   Operand ValueComponents = popOperand();
-  callRuntimeFor(RuntimeFunctions.SetMStore, AddrComponents, ValueComponents);
+  callRuntimeFor<void, uint64_t, intx::uint256>(
+      RuntimeFunctions.SetMStore, AddrComponents, ValueComponents);
 }
 void EVMMirBuilder::handleMStore8() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   Operand AddrComponents = popOperand();
   Operand ValueComponents = popOperand();
-  callRuntimeFor(RuntimeFunctions.SetMStore8, AddrComponents, ValueComponents);
+  callRuntimeFor<void, uint64_t, intx::uint256>(
+      RuntimeFunctions.SetMStore8, AddrComponents, ValueComponents);
 }
 void EVMMirBuilder::handleMCopy() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   Operand DestAddrComponents = popOperand();
   Operand SrcAddrComponents = popOperand();
   Operand LengthComponents = popOperand();
-  callRuntimeFor(RuntimeFunctions.SetMCopy, DestAddrComponents,
-                 SrcAddrComponents, LengthComponents);
+  callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.SetMCopy, DestAddrComponents, SrcAddrComponents,
+      LengthComponents);
 }
 void EVMMirBuilder::handleReturn() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   Operand MemOffsetComponents = popOperand();
   Operand LengthComponents = popOperand();
-  callRuntimeFor(RuntimeFunctions.SetReturn, MemOffsetComponents,
-                 LengthComponents);
+  callRuntimeFor<void, uint64_t, uint64_t>(
+      RuntimeFunctions.SetReturn, MemOffsetComponents, LengthComponents);
 }
 
 // ==================== Private Helper Methods ====================
@@ -892,116 +902,81 @@ EVMMirBuilder::callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *)) {
 }
 
 // Template function for single-argument runtime calls
-template <typename RetType, typename ArgType>
-typename EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
-    RetType (*RuntimeFunc)(runtime::EVMInstance *, ArgType),
-    const Operand &Param) {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+template <typename ArgType>
+EVMMirBuilder::U256Inst
+EVMMirBuilder::convertOperandToInstruction(const Operand &Param) {
+  EVMMirBuilder::U256Inst result = {};
 
-  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-
-  MType *ReturnType = getMIRReturnType<RetType>();
-
-  MInstruction *ParamInstr;
   if constexpr (std::is_same_v<ArgType, int64_t> ||
                 std::is_same_v<ArgType, uint64_t>) {
-    U256Inst ParamComponents = extractU256Operand(Param);
-    ParamInstr = ParamComponents[0]; // Low 64 bits
+    EVMMirBuilder::U256Inst components = extractU256Operand(Param);
+    result[0] = components[0];
   } else if constexpr (std::is_same_v<ArgType, const uint8_t *>) {
-    ParamInstr = Param.getInstr();
+    result[0] = Param.getInstr();
+  } else if constexpr (std::is_same_v<ArgType, const intx::uint256>) {
+    const U256Value &u256Value = Param.getConstValue();
+    MType *i64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+    for (size_t i = 0; i < EVM_ELEMENTS_COUNT; ++i) {
+      result[i] = createIntConstInstruction(i64Type, u256Value[i]);
+    }
+  } else {
+    ZEN_ASSERT(false &&
+               "Unsupported argument type in convertOperandToInstruction");
   }
 
-  std::vector<MInstruction *> Args = {InstancePtr, ParamInstr};
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, ReturnType, FuncAddrInst, llvm::ArrayRef<MInstruction *>(Args));
-
-  return convertCallResult<RetType>(CallInstr);
-}
-template <typename RetType, typename Arg1Type, typename Arg2Type>
-typename EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
-    RetType (*RuntimeFunc)(runtime::EVMInstance *, Arg1Type, Arg2Type),
-    const Operand &Param1, const Operand &Param2) {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-
-  MType *ReturnType = getMIRReturnType<RetType>();
-
-  MInstruction *Param1Instr;
-  if constexpr (std::is_same_v<Arg1Type, int64_t> ||
-                std::is_same_v<Arg1Type, uint64_t>) {
-    U256Inst Param1Components = extractU256Operand(Param1);
-    Param1Instr = Param1Components[0];
-  } else if constexpr (std::is_same_v<Arg1Type, const uint8_t *>) {
-    Param1Instr = Param1.getInstr();
-  }
-
-  MInstruction *Param2Instr;
-  if constexpr (std::is_same_v<Arg2Type, int64_t> ||
-                std::is_same_v<Arg2Type, uint64_t>) {
-    U256Inst Param2Components = extractU256Operand(Param2);
-    Param2Instr = Param2Components[0];
-  } else if constexpr (std::is_same_v<Arg2Type, const uint8_t *>) {
-    Param2Instr = Param2.getInstr();
-  }
-
-  std::vector<MInstruction *> Args = {InstancePtr, Param1Instr, Param2Instr};
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, ReturnType, FuncAddrInst, llvm::ArrayRef<MInstruction *>(Args));
-
-  return convertCallResult<RetType>(CallInstr);
+  return result;
 }
 
-template <typename RetType, typename Arg1Type, typename Arg2Type,
-          typename Arg3Type>
-typename EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
-    RetType (*RuntimeFunc)(runtime::EVMInstance *, Arg1Type, Arg2Type,
-                           Arg3Type),
-    const Operand &Param1, const Operand &Param2, const Operand &Param3) {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+template <typename RetType, typename... ArgTypes, typename... ParamTypes>
+EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
+    RetType (*RuntimeFunc)(runtime::EVMInstance *, ArgTypes...),
+    const ParamTypes &...params) {
+  MType *i64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  uint64_t funcAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *funcAddrInst = createIntConstInstruction(i64Type, funcAddr);
+  MInstruction *instancePtr = getCurrentInstancePointer();
 
-  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
+  std::vector<MInstruction *> args = {instancePtr};
 
-  MType *ReturnType = getMIRReturnType<RetType>();
+  auto paramsTuple = std::forward_as_tuple(params...);
 
-  MInstruction *Param1Instr;
-  if constexpr (std::is_same_v<Arg1Type, int64_t> ||
-                std::is_same_v<Arg1Type, uint64_t>) {
-    U256Inst Param1Components = extractU256Operand(Param1);
-    Param1Instr = Param1Components[0];
-  } else if constexpr (std::is_same_v<Arg1Type, const uint8_t *>) {
-    Param1Instr = Param1.getInstr();
+  auto pushOne = [this, &args, &paramsTuple]<std::size_t I>() {
+    using ArgT = typename std::tuple_element<I, std::tuple<ArgTypes...>>::type;
+    const Operand &op = std::get<I>(paramsTuple);
+
+    if (op.getType() == EVMType::UINT256 && op.isU256MultiComponent()) {
+      if constexpr (std::is_same_v<ArgT, const intx::uint256> ||
+                    std::is_same_v<ArgT, intx::uint256>) {
+        const auto &components = op.getU256Components();
+        for (size_t i = 0; i < EVM_ELEMENTS_COUNT; ++i) {
+          args.push_back(components[i]);
+        }
+      } else {
+        auto insts = convertOperandToInstruction<ArgT>(op);
+        for (auto *inst : insts)
+          if (inst)
+            args.push_back(inst);
+      }
+    } else {
+      auto insts = convertOperandToInstruction<ArgT>(op);
+      for (auto *inst : insts)
+        if (inst)
+          args.push_back(inst);
+    }
+  };
+
+  constexpr std::size_t N = sizeof...(ArgTypes);
+  [&]<std::size_t... I>(std::index_sequence<I...>) {
+    (pushOne.template operator()<I>(), ...);
   }
+  (std::make_index_sequence<N>{});
 
-  MInstruction *Param2Instr;
-  if constexpr (std::is_same_v<Arg2Type, int64_t> ||
-                std::is_same_v<Arg2Type, uint64_t>) {
-    U256Inst Param2Components = extractU256Operand(Param2);
-    Param2Instr = Param2Components[0];
-  } else if constexpr (std::is_same_v<Arg2Type, const uint8_t *>) {
-    Param2Instr = Param2.getInstr();
-  }
+  MType *returnType = getMIRReturnType<RetType>();
+  MInstruction *callInstr = createInstruction<ICallInstruction>(
+      /*isTail*/ false, returnType, funcAddrInst,
+      llvm::ArrayRef<MInstruction *>{args});
 
-  MInstruction *Param3Instr;
-  if constexpr (std::is_same_v<Arg3Type, int64_t> ||
-                std::is_same_v<Arg3Type, uint64_t>) {
-    U256Inst Param3Components = extractU256Operand(Param3);
-    Param3Instr = Param3Components[0];
-  } else if constexpr (std::is_same_v<Arg3Type, const uint8_t *>) {
-    Param3Instr = Param3.getInstr();
-  }
-
-  std::vector<MInstruction *> Args = {InstancePtr, Param1Instr, Param2Instr,
-                                      Param3Instr};
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, ReturnType, FuncAddrInst, llvm::ArrayRef<MInstruction *>(Args));
-
-  return convertCallResult<RetType>(CallInstr);
+  return convertCallResult<RetType>(callInstr);
 }
 
 MInstruction *EVMMirBuilder::getCurrentInstancePointer() {

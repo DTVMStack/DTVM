@@ -27,15 +27,14 @@ using SizeWithBytes32Fn = uint64_t (*)(zen::runtime::EVMInstance *,
                                        const uint8_t *);
 using U256WithBytes32Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
                                             const uint8_t *);
-using U256WithU256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
-                                         const intx::uint256 &);
-using VoidWithU256U256Fn = void (*)(zen::runtime::EVMInstance *,
-                                    const intx::uint256 &,
-                                    const intx::uint256 &);
-using VoidWithU256U256U256Fn = void (*)(zen::runtime::EVMInstance *,
-                                        const intx::uint256 &,
-                                        const intx::uint256 &,
-                                        const intx::uint256 &);
+using U256WithUInt64Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
+                                           uint64_t);
+using VoidWithUInt64U256Fn = void (*)(zen::runtime::EVMInstance *, uint64_t,
+                                      intx::uint256);
+using VoidWithUInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *, uint64_t,
+                                        uint64_t);
+using VoidWithUInt64UInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *,
+                                              uint64_t, uint64_t, uint64_t);
 
 struct RuntimeFunctions {
   Bytes32Fn GetAddress;
@@ -61,11 +60,11 @@ struct RuntimeFunctions {
   Bytes32WithUint64Fn GetBlobHash;
   U256Fn GetBlobBaseFee;
   SizeFn GetMSize;
-  U256WithU256Fn GetMLoad;
-  VoidWithU256U256Fn SetMStore;
-  VoidWithU256U256Fn SetMStore8;
-  VoidWithU256U256U256Fn SetMCopy;
-  VoidWithU256U256Fn SetReturn;
+  U256WithUInt64Fn GetMLoad;
+  VoidWithUInt64U256Fn SetMStore;
+  VoidWithUInt64U256Fn SetMStore8;
+  VoidWithUInt64UInt64UInt64Fn SetMCopy;
+  VoidWithUInt64UInt64Fn SetReturn;
 };
 
 const RuntimeFunctions &getRuntimeFunctionTable();
@@ -103,17 +102,15 @@ const uint8_t *evmGetBlobHash(zen::runtime::EVMInstance *Instance,
                               uint64_t Index);
 intx::uint256 evmGetBlobBaseFee(zen::runtime::EVMInstance *Instance);
 uint64_t evmGetMSize(zen::runtime::EVMInstance *Instance);
-intx::uint256 evmGetMLoad(zen::runtime::EVMInstance *Instance,
-                          const intx::uint256 &Addr);
-void evmSetMStore(zen::runtime::EVMInstance *Instance,
-                  const intx::uint256 &Addr, const intx::uint256 &Value);
-void evmSetMStore8(zen::runtime::EVMInstance *Instance,
-                   const intx::uint256 &Addr, const intx::uint256 &Value);
-void evmSetMCopy(zen::runtime::EVMInstance *Instance,
-                 const intx::uint256 &DestAddr, const intx::uint256 &SrcAddr,
-                 const intx::uint256 &Length);
-void evmSetReturn(zen::runtime::EVMInstance *Instance,
-                  const intx::uint256 &MemOffset, const intx::uint256 &Length);
+intx::uint256 evmGetMLoad(zen::runtime::EVMInstance *Instance, uint64_t Addr);
+void evmSetMStore(zen::runtime::EVMInstance *Instance, uint64_t Addr,
+                  intx::uint256 Value);
+void evmSetMStore8(zen::runtime::EVMInstance *Instance, uint64_t Addr,
+                   intx::uint256 Value);
+void evmSetMCopy(zen::runtime::EVMInstance *Instance, uint64_t DestAddr,
+                 uint64_t SrcAddr, uint64_t Length);
+void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t MemOffset,
+                  uint64_t Length);
 } // namespace COMPILER
 
 #endif // EVM_FRONTEND_EVM_IMPORTED_H

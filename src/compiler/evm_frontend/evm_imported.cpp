@@ -275,47 +275,40 @@ uint64_t evmGetMSize(zen::runtime::EVMInstance *Instance) {
   return Instance->getMemorySize();
 }
 intx::uint256 evmGetMLoad(zen::runtime::EVMInstance *Instance,
-                          const intx::uint256 &Addr) {
-  uint64_t EffectiveAddr = static_cast<uint64_t>(Addr);
-  uint64_t RequiredSize = EffectiveAddr + 32;
+                          uint64_t Offset) {
+  uint64_t RequiredSize = Offset + 32;
   const auto &Memory = Instance->getMemory();
   uint64_t CurrentSize = Memory.size();
   if (RequiredSize > CurrentSize) {
     Memory.resize(RequiredSize, 0);
   }
   intx::uint256 Result;
-  std::memcpy(Result.data(), &Memory[EffectiveAddr], 32);
+  std::memcpy(Result.data(), &Memory[Offset], 32);
   return Result;
 }
-void evmSetMStore(zen::runtime::EVMInstance *Instance,
-                  const intx::uint256 &Addr, const intx::uint256 &Value) {
-  uint64_t EffectiveAddr = static_cast<uint64_t>(Addr);
-  uint64_t RequiredSize = EffectiveAddr + 32;
+void evmSetMStore(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                  intx::uint256 Value) {
+  uint64_t RequiredSize = Offset + 32;
   auto &Memory = Instance->getMemory();
   uint64_t CurrentSize = Memory.size();
   if (RequiredSize > CurrentSize) {
     Memory.resize(RequiredSize, 0);
   }
-  std::memcpy(&Memory[EffectiveAddr], Value.data(), 32);
+  std::memcpy(&Memory[Offset], Value.data(), 32);
 }
-void evmSetMStore8(zen::runtime::EVMInstance *Instance,
-                   const intx::uint256 &Addr, const intx::uint256 &Value) {
-  uint64_t EffectiveAddr = static_cast<uint64_t>(Addr);
-  uint64_t RequiredSize = EffectiveAddr + 1;
+void evmSetMStore8(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                   intx::uint256 Value) {
+  uint64_t RequiredSize = Offset + 1;
   auto &Memory = Instance->getMemory();
   uint64_t CurrentSize = Memory.size();
   if (RequiredSize > CurrentSize) {
     Memory.resize(RequiredSize, 0);
   }
   uint8_t ByteValue = static_cast<uint8_t>(Value & intx::uint256{0xFF});
-  Memory[EffectiveAddr] = ByteValue;
+  Memory[Offset] = ByteValue;
 }
-void evmSetMCopy(zen::runtime::EVMInstance *Instance,
-                 const intx::uint256 &DestAddr, const intx::uint256 &SrcAddr,
-                 const intx::uint256 &Length) {
-  uint64_t Dest = static_cast<uint64_t>(DestAddr);
-  uint64_t Src = static_cast<uint64_t>(SrcAddr);
-  uint64_t Len = static_cast<uint64_t>(Length);
+void evmSetMCopy(zen::runtime::EVMInstance *Instance, uint64_t Dest,
+                 uint64_t Src, uint64_t Len) {
   if (Len == 0) {
     return;
   }
@@ -329,14 +322,12 @@ void evmSetMCopy(zen::runtime::EVMInstance *Instance,
     std::memmove(&Memory[Dest], &Memory[Src], Len);
   }
 }
-void evmSetReturn(zen::runtime::EVMInstance *Instance,
-                  const intx::uint256 &MemOffset, const intx::uint256 &Length) {
-  uint64_t Offset = static_cast<uint64_t>(MemOffset);
-  uint64_t Len = static_cast<uint64_t>(Length);
+void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                  uint64_t Len) {
   auto &Memory = Instance->getMemory();
   std::vector<uint8_t> ReturnData(Memory.begin() + Offset,
                                   Memory.begin() + Offset + Len);
-  Instance->setReturnData(std::move(ReturnData));
+  Instance->(std::move(ReturnData));
 }
 
 } // namespace COMPILER
