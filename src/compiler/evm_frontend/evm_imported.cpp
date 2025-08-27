@@ -250,7 +250,8 @@ const uint8_t *evmGetBlobHash(zen::runtime::EVMInstance *Instance,
     if (Index >= TxContext.blob_hashes_count) {
       Hash = evmc::bytes32{};
     } else {
-      Hash = Module->Host->get_blob_hash(Index);
+      // TODO: havn't implemented in evmc
+      // Hash = Module->Host->get_blob_hash(Index);
     }
     Cache.BlobHashes[Index] = Hash;
     return Hash.bytes;

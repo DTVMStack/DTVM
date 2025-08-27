@@ -31,6 +31,8 @@ set(COMPILER_SRCS
     compiler.cpp
     context.cpp
     common/llvm_workaround.cpp
+    evm_compiler.cpp
+    evm_frontend/evm_imported.cpp
     evm_frontend/evm_mir_compiler.cpp
     frontend/parser.cpp
     frontend/lexer.cpp

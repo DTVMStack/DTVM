@@ -6,6 +6,13 @@
 #include "evmc/evmc.hpp"
 #include "runtime/module.h"
 
+#ifdef ZEN_ENABLE_JIT
+namespace COMPILER {
+class EVMJITCompiler;
+class LazyEVMJITCompiler;
+}; // namespace COMPILER
+#endif
+
 namespace zen {
 
 namespace runtime {
@@ -25,6 +32,29 @@ public:
   size_t CodeSize;
   evmc::Host *Host;
 
+#ifdef ZEN_ENABLE_JIT
+  common::CodeMemPool &getJITCodeMemPool() { return JITCodeMemPool; }
+
+  void *getJITCode() const { return JITCode; }
+
+  size_t getJITCodeSize() const { return JITCodeSize; }
+
+  void setJITCodeAndSize(void *Code, size_t Size) {
+    JITCode = Code;
+    JITCodeSize = Size;
+  }
+
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+  COMPILER::LazyEVMJITCompiler *newLazyEVMJITCompiler();
+
+  COMPILER::LazyEVMJITCompiler *getLazyEVMJITCompiler() const {
+    ZEN_ASSERT(LazyEVMCompiler);
+    return LazyEVMCompiler.get();
+  }
+#endif // ZEN_ENABLE_MULTIPASS_JIT
+
+#endif // ZEN_ENABLE_JIT
+
 private:
   EVMModule(Runtime *RT);
   EVMModule(const EVMModule &Other) = delete;
@@ -32,6 +62,16 @@ private:
   CodeHolderUniquePtr CodeHolder;
 
   Byte *initCode(size_t Size) { return (Byte *)allocateZeros(Size); }
+
+#ifdef ZEN_ENABLE_JIT
+  common::CodeMemPool JITCodeMemPool;
+  void *JITCode = nullptr;
+  size_t JITCodeSize = 0;
+
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+  std::unique_ptr<COMPILER::LazyEVMJITCompiler> LazyEVMCompiler;
+#endif // ZEN_ENABLE_MULTIPASS_JIT
+#endif // ZEN_ENABLE_JIT
 };
 
 } // namespace runtime

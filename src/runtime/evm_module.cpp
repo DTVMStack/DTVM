@@ -15,6 +15,10 @@
 #include <memory>
 #include <string>
 
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+#include "compiler/evm_compiler.h"
+#endif
+
 namespace zen::runtime {
 
 EVMModule::EVMModule(Runtime *RT)
@@ -77,7 +81,19 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
   ZEN_ASSERT(RT.getEVMHost());
   Mod->Host = RT.getEVMHost();
 
+  action::performEVMJITCompile(*Mod);
+
   return Mod;
 }
+
+// ==================== JIT Methods ====================
+#ifdef ZEN_ENABLE_JIT
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+COMPILER::LazyEVMJITCompiler *EVMModule::newLazyEVMJITCompiler() {
+  LazyEVMCompiler = std::make_unique<COMPILER::LazyEVMJITCompiler>(this);
+  return LazyEVMCompiler.get();
+}
+#endif // ZEN_ENABLE_MULTIPASS_JIT
+#endif // ZEN_ENABLE_JIT
 
 } // namespace zen::runtime

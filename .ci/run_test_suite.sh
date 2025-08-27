@@ -6,11 +6,13 @@
 # pushd tests/wast/spec
 # git apply ../spec.patch
 # popd
-# Debug, Release
+# # Debug, Release
 # CMAKE_BUILD_TARGET=Debug
 # ENABLE_ASAN=true
-# interpreter, singlepass, multipass
+# # interpreter, singlepass, multipass
 # RUN_MODE=multipass
+# # evm, wasm
+# INPUT_FORMAT=wasm
 # ENABLE_LAZY=true
 # ENABLE_MULTITHREAD=true
 # TestSuite=microsuite
@@ -21,11 +23,15 @@ set -e
 
 CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TARGET"
 
+if [[ ${CMAKE_BUILD_TARGET} != "Release" && ${RUN_MODE} != "interpreter" && ${INPUT_FORMAT} == "evm" ]]; then
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_SPDLOG=ON -DZEN_ENABLE_JIT_LOGGING=ON"
+fi
+
 if [ ${ENABLE_ASAN} = true ]; then
     CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_ASAN=ON"
 fi
 
-EXTRA_EXE_OPTIONS="-m $RUN_MODE"
+EXTRA_EXE_OPTIONS="-m $RUN_MODE --format $INPUT_FORMAT"
 
 echo "testing in run mode: $RUN_MODE"
 
@@ -119,7 +125,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             cd ..
             ;;
         "evmrealsuite")
-            ./build/dtvm --format evm -m interpreter tests/evm_asm/add.evm.hex
+            ./build/dtvm $EXTRA_EXE_OPTIONS tests/evm_asm/push_insufficient_at_end_origin.evm.hex
             ;;
     esac
 done
