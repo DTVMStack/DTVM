@@ -374,12 +374,12 @@ void BaseInterpreter::interpret() {
       break;
     }
 
-    case OP_BLOBHASH: {
+    case evmc_opcode::OP_BLOBHASH: {
       EVMOpcodeHandlerRegistry::getBlobHashHandler().execute();
       break;
     }
 
-    case OP_BLOBBASEFEE: {
+    case evmc_opcode::OP_BLOBBASEFEE: {
       EVMOpcodeHandlerRegistry::getBlobBaseFeeHandler().execute();
       break;
     }
@@ -450,17 +450,17 @@ void BaseInterpreter::interpret() {
       break;
     }
 
-    case OP_TLOAD: {
+    case evmc_opcode::OP_TLOAD: {
       EVMOpcodeHandlerRegistry::getTLoadHandler().execute();
       break;
     }
 
-    case OP_TSTORE: {
+    case evmc_opcode::OP_TSTORE: {
       EVMOpcodeHandlerRegistry::getTStoreHandler().execute();
       break;
     }
 
-    case OP_MCOPY: {
+    case evmc_opcode::OP_MCOPY: {
       EVMOpcodeHandlerRegistry::getMCopyHandler().execute();
       break;
     }

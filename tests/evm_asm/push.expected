@@ -1,0 +1,10 @@
+status: success
+error_code: 0
+stack:
+  - '0C'
+  - '0F'
+memory: ''
+storage: {}
+transient_storage: {}
+return: ''
+events: []
