@@ -36,7 +36,8 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
                                          .SetMStore = &evmSetMStore,
                                          .SetMStore8 = &evmSetMStore8,
                                          .SetMCopy = &evmSetMCopy,
-                                         .SetReturn = &evmSetReturn};
+                                         .SetReturn = &evmSetReturn,
+                                         .HandleInvalid = &evmhandleInvalid};
   return Table;
 }
 
@@ -328,6 +329,9 @@ void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t Offset,
   std::vector<uint8_t> ReturnData(Memory.begin() + Offset,
                                   Memory.begin() + Offset + Len);
   Instance->(std::move(ReturnData));
+}
+void evmhandleInvalid(zen::runtime::EVMInstance *Instance) {
+  throw common::getError(common::ErrorCode::EVMInvalidInstruction);
 }
 
 } // namespace COMPILER

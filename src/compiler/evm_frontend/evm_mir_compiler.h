@@ -315,6 +315,7 @@ public:
   void handleMStore8();
   void handleMCopy();
   void handleReturn();
+  void handleInvalid();
 
   // ==================== Runtime Interface for JIT ====================
 

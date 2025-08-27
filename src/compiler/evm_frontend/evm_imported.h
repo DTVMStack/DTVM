@@ -35,6 +35,7 @@ using VoidWithUInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *, uint64_t,
                                         uint64_t);
 using VoidWithUInt64UInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *,
                                               uint64_t, uint64_t, uint64_t);
+using VoidFn = void (*)(zen::runtime::EVMInstance *);
 
 struct RuntimeFunctions {
   Bytes32Fn GetAddress;
@@ -65,6 +66,7 @@ struct RuntimeFunctions {
   VoidWithUInt64U256Fn SetMStore8;
   VoidWithUInt64UInt64UInt64Fn SetMCopy;
   VoidWithUInt64UInt64Fn SetReturn;
+  VoidFn HandleInvalid;
 };
 
 const RuntimeFunctions &getRuntimeFunctionTable();
@@ -111,6 +113,7 @@ void evmSetMCopy(zen::runtime::EVMInstance *Instance, uint64_t DestAddr,
                  uint64_t SrcAddr, uint64_t Length);
 void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t MemOffset,
                   uint64_t Length);
+void evmhandleInvalid(zen::runtime::EVMInstance *Instance);
 } // namespace COMPILER
 
 #endif // EVM_FRONTEND_EVM_IMPORTED_H

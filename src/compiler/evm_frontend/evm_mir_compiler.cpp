@@ -550,6 +550,10 @@ void EVMMirBuilder::handleReturn() {
   callRuntimeFor<void, uint64_t, uint64_t>(
       RuntimeFunctions.SetReturn, MemOffsetComponents, LengthComponents);
 }
+void EVMMirBuilder::handleInvalid() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  callRuntimeFor(RuntimeFunctions.HandleInvalid);
+}
 
 // ==================== Private Helper Methods ====================
 

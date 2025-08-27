@@ -510,8 +510,8 @@ private:
         return true;
 
       case OP_INVALID: {
-        throw getErrorWithExtraMessage(ErrorCode::EVMInvalidInstruction,
-                                       std::to_string(Opcode));
+        Builder.handleInvalid();
+        break;
       }
 
       default:
