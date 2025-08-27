@@ -443,7 +443,7 @@ void CodeCopyHandler::doExecute() {
   auto *Context = getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
-  const uint8_t *Code = Mod->Code;
+  const Byte *Code = Mod->Code;
   size_t CodeSize = Mod->CodeSize;
 
   intx::uint256 DestOffsetVal = Frame->pop();
@@ -846,7 +846,7 @@ void JumpHandler::doExecute() {
   auto *Context = getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
-  const uint8_t *Code = Mod->Code;
+  const Byte *Code = Mod->Code;
   size_t CodeSize = Mod->CodeSize;
   EVM_STACK_CHECK(Frame, 1);
   // We can assume that valid destination can't greater than uint64_t
@@ -866,7 +866,7 @@ void JumpIHandler::doExecute() {
   auto *Context = getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
-  const uint8_t *Code = Mod->Code;
+  const Byte *Code = Mod->Code;
   size_t CodeSize = Mod->CodeSize;
   EVM_STACK_CHECK(Frame, 2);
   // We can assume that valid destination can't greater than uint64_t

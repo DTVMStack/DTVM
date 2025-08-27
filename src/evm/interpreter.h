@@ -118,6 +118,7 @@ private:
   InterpreterExecContext &Context;
 
 public:
+  using Byte = common::Byte;
   explicit BaseInterpreter(InterpreterExecContext &Ctx) : Context(Ctx) {}
   void interpret();
 };

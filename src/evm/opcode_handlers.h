@@ -67,6 +67,7 @@ protected:
   }
 
 public:
+  using Byte = common::Byte;
   void execute() {
     uint64_t GasCost = static_cast<Derived *>(this)->calculateGas();
     if ((uint64_t)getFrame()->Msg->gas < GasCost) {

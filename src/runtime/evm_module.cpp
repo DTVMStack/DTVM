@@ -61,7 +61,9 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
 
   std::vector<uint8_t> PaddedCode = padCode(Data, CodeSize);
 
-  action::EVMModuleLoader Loader(*Mod, PaddedCode);
+  action::EVMModuleLoader Loader(
+      *Mod, reinterpret_cast<const Byte *>(PaddedCode.data()),
+      PaddedCode.size());
 
   auto &Stats = RT.getStatistics();
   auto Timer = Stats.startRecord(utils::StatisticPhase::Load);

@@ -99,14 +99,14 @@ void BaseInterpreter::interpret() {
   EVMResource::setExecutionContext(Frame, &Context);
 
   size_t CodeSize = Mod->CodeSize;
-  uint8_t *Code = Mod->Code;
+  Byte *Code = Mod->Code;
 
   if (!Frame->Host) {
     Frame->Host = Context.getInstance()->getRuntime()->getEVMHost();
   }
 
   while (Frame->Pc < CodeSize) {
-    uint8_t OpcodeByte = Code[Frame->Pc];
+    Byte OpcodeByte = Code[Frame->Pc];
     evmc_opcode Op = static_cast<evmc_opcode>(OpcodeByte);
     bool IsJumpSuccess = false;
 
@@ -513,37 +513,38 @@ void BaseInterpreter::interpret() {
     }
 
     default:
-      if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_PUSH1) &&
-          OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_PUSH32)) {
+      if (OpcodeByte >= static_cast<Byte>(evmc_opcode::OP_PUSH1) &&
+          OpcodeByte <= static_cast<Byte>(evmc_opcode::OP_PUSH32)) {
         // PUSH1 ~ PUSH32
         EVMOpcodeHandlerRegistry::getPushHandler(
             static_cast<evmc_opcode>(OpcodeByte))
             .execute();
         break;
-      } else if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_DUP1) &&
-                 OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_DUP16)) {
+      } else if (OpcodeByte >= static_cast<Byte>(evmc_opcode::OP_DUP1) &&
+                 OpcodeByte <= static_cast<Byte>(evmc_opcode::OP_DUP16)) {
         // DUP1 ~ DUP16
         EVMOpcodeHandlerRegistry::getDupHandler(
             static_cast<evmc_opcode>(OpcodeByte))
             .execute();
         break;
-      } else if (OpcodeByte >= static_cast<uint8_t>(evmc_opcode::OP_SWAP1) &&
-                 OpcodeByte <= static_cast<uint8_t>(evmc_opcode::OP_SWAP16)) {
+      } else if (OpcodeByte >= static_cast<Byte>(evmc_opcode::OP_SWAP1) &&
+                 OpcodeByte <= static_cast<Byte>(evmc_opcode::OP_SWAP16)) {
         // SWAP1 ~ SWAP16
         EVMOpcodeHandlerRegistry::getSwapHandler(
             static_cast<evmc_opcode>(OpcodeByte))
             .execute();
         break;
-      } else if (OpcodeByte == evmc_opcode::OP_CREATE or
-                 OpcodeByte == evmc_opcode::OP_CREATE2) {
+      } else if (OpcodeByte == static_cast<Byte>(evmc_opcode::OP_CREATE) ||
+                 OpcodeByte == static_cast<Byte>(evmc_opcode::OP_CREATE2)) {
         EVMOpcodeHandlerRegistry::getCreateHandler(
             static_cast<evmc_opcode>(OpcodeByte))
             .execute();
         break;
-      } else if (OpcodeByte == evmc_opcode::OP_CALL or
-                 OpcodeByte == evmc_opcode::OP_CALLCODE or
-                 OpcodeByte == evmc_opcode::OP_DELEGATECALL or
-                 OpcodeByte == evmc_opcode::OP_STATICCALL) {
+      } else if (OpcodeByte == static_cast<Byte>(evmc_opcode::OP_CALL) ||
+                 OpcodeByte == static_cast<Byte>(evmc_opcode::OP_CALLCODE) ||
+                 OpcodeByte ==
+                     static_cast<Byte>(evmc_opcode::OP_DELEGATECALL) ||
+                 OpcodeByte == static_cast<Byte>(evmc_opcode::OP_STATICCALL)) {
         EVMOpcodeHandlerRegistry::getCallHandler(
             static_cast<evmc_opcode>(OpcodeByte))
             .execute();

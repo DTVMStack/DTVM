@@ -549,9 +549,8 @@ private:
     if (PC + Count > Ctx->getBytecodeSize()) {
       throw getError(common::ErrorCode::UnexpectedEnd);
     }
-    const uint8_t *Bytecode =
-        reinterpret_cast<const uint8_t *>(Ctx->getBytecode());
-    Bytes Result(reinterpret_cast<const std::byte *>(Bytecode + PC), Count);
+    const Byte *Bytecode = Ctx->getBytecode();
+    Bytes Result(Bytecode + PC, Count);
     PC += Count;
     return Result;
   }

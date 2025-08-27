@@ -15,12 +15,13 @@ class EVMModule final : public BaseModule<EVMModule> {
   friend class action::EVMModuleLoader;
 
 public:
+  using Byte = zen::common::Byte;
   static EVMModuleUniquePtr newEVMModule(Runtime &RT,
                                          CodeHolderUniquePtr CodeHolder);
 
   virtual ~EVMModule();
 
-  uint8_t *Code;
+  Byte *Code;
   size_t CodeSize;
   evmc::Host *Host;
 
@@ -30,7 +31,7 @@ private:
   EVMModule &operator=(const EVMModule &Other) = delete;
   CodeHolderUniquePtr CodeHolder;
 
-  uint8_t *initCode(size_t Size) { return (uint8_t *)allocateZeros(Size); }
+  Byte *initCode(size_t Size) { return (Byte *)allocateZeros(Size); }
 };
 
 } // namespace runtime
