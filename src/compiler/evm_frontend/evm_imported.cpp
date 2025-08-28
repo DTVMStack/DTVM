@@ -281,7 +281,7 @@ intx::uint256 evmGetMLoad(zen::runtime::EVMInstance *Instance,
   Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
 
-  intx::uint256 Result{};
+  intx::uint256 Result;
   std::memcpy(Result.data(), &Instance->getMemory()[Offset], 32);
   return Result;
 }
