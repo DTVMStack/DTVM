@@ -1213,7 +1213,10 @@ template <typename RetType> MType *EVMMirBuilder::getMIRReturnType() {
     return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
   } else if constexpr (std::is_same_v<RetType, uint64_t>) {
     return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  } else if constexpr (std::is_same_v<RetType, void>) {
+    return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::VOID);
   }
+  return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::VOID);
 }
 
 template <typename RetType>
@@ -1225,7 +1228,10 @@ EVMMirBuilder::convertCallResult(MInstruction *CallInstr) {
     return Operand(CallInstr, EVMType::BYTES32);
   } else if constexpr (std::is_same_v<RetType, uint64_t>) {
     return convertSingleInstrToU256Operand(CallInstr);
+  } else if constexpr (std::is_same_v<RetType, void>) {
+    return Operand();
   }
+  return Operand();
 }
 
 // Template function for no-argument runtime calls
@@ -1259,7 +1265,8 @@ EVMMirBuilder::convertOperandToInstruction(const Operand &Param) {
     result[0] = components[0];
   } else if constexpr (std::is_same_v<ArgType, const uint8_t *>) {
     result[0] = Param.getInstr();
-  } else if constexpr (std::is_same_v<ArgType, const intx::uint256>) {
+  } else if constexpr (std::is_same_v<ArgType, const intx::uint256> ||
+                       std::is_same_v<ArgType, intx::uint256>) {
     const U256Value &u256Value = Param.getConstValue();
     MType *i64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
     for (size_t i = 0; i < EVM_ELEMENTS_COUNT; ++i) {
