@@ -357,6 +357,10 @@ public:
   void handleMStore();
   void handleMStore8();
   void handleMCopy();
+  void handleCallDataCopy();
+  void handleExtCodeCopy();
+  void handleReturnDataCopy();
+  Operand handleReturnDataSize();
   void handleReturn();
   void handleInvalid();
 

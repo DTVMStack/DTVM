@@ -101,6 +101,7 @@ public:
   void setReturnData(std::vector<uint8_t> Data) {
     ReturnData = std::move(Data);
   }
+  const std::vector<uint8_t> &getReturnData() const { return ReturnData; }
   void exit(int32_t exitCode) { InstanceExitCode = exitCode; }
 
 private:

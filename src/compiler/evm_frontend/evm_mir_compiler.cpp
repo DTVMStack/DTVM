@@ -1332,4 +1332,42 @@ MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
       false, OP_inttoptr, createVoidPtrType(), InstanceAddr);
 }
 
+// ==================== Copy Instruction Handlers ====================
+
+void EVMMirBuilder::handleCallDataCopy() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  Operand DestOffsetComponents = popOperand();
+  Operand OffsetComponents = popOperand();
+  Operand SizeComponents = popOperand();
+  callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.SetCallDataCopy, DestOffsetComponents, 
+      OffsetComponents, SizeComponents);
+}
+
+void EVMMirBuilder::handleExtCodeCopy() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  Operand AddressComponents = popOperand();
+  Operand DestOffsetComponents = popOperand();
+  Operand OffsetComponents = popOperand();
+  Operand SizeComponents = popOperand();
+  callRuntimeFor<void, const uint8_t *, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.SetExtCodeCopy, AddressComponents, 
+      DestOffsetComponents, OffsetComponents, SizeComponents);
+}
+
+void EVMMirBuilder::handleReturnDataCopy() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  Operand DestOffsetComponents = popOperand();
+  Operand OffsetComponents = popOperand();
+  Operand SizeComponents = popOperand();
+  callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.SetReturnDataCopy, DestOffsetComponents, 
+      OffsetComponents, SizeComponents);
+}
+
+EVMMirBuilder::Operand EVMMirBuilder::handleReturnDataSize() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<uint64_t>(RuntimeFunctions.GetReturnDataSize);
+}
+
 } // namespace COMPILER
