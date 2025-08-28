@@ -1340,8 +1340,8 @@ void EVMMirBuilder::handleCallDataCopy() {
   Operand OffsetComponents = popOperand();
   Operand SizeComponents = popOperand();
   callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
-      RuntimeFunctions.SetCallDataCopy, DestOffsetComponents, 
-      OffsetComponents, SizeComponents);
+      RuntimeFunctions.SetCallDataCopy, DestOffsetComponents, OffsetComponents,
+      SizeComponents);
 }
 
 void EVMMirBuilder::handleExtCodeCopy() {
@@ -1351,8 +1351,8 @@ void EVMMirBuilder::handleExtCodeCopy() {
   Operand OffsetComponents = popOperand();
   Operand SizeComponents = popOperand();
   callRuntimeFor<void, const uint8_t *, uint64_t, uint64_t, uint64_t>(
-      RuntimeFunctions.SetExtCodeCopy, AddressComponents, 
-      DestOffsetComponents, OffsetComponents, SizeComponents);
+      RuntimeFunctions.SetExtCodeCopy, AddressComponents, DestOffsetComponents,
+      OffsetComponents, SizeComponents);
 }
 
 void EVMMirBuilder::handleReturnDataCopy() {
@@ -1361,11 +1361,11 @@ void EVMMirBuilder::handleReturnDataCopy() {
   Operand OffsetComponents = popOperand();
   Operand SizeComponents = popOperand();
   callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
-      RuntimeFunctions.SetReturnDataCopy, DestOffsetComponents, 
+      RuntimeFunctions.SetReturnDataCopy, DestOffsetComponents,
       OffsetComponents, SizeComponents);
 }
 
-EVMMirBuilder::Operand EVMMirBuilder::handleReturnDataSize() {
+typename EVMMirBuilder::Operand EVMMirBuilder::handleReturnDataSize() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeFor<uint64_t>(RuntimeFunctions.GetReturnDataSize);
 }

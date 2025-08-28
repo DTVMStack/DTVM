@@ -36,9 +36,10 @@ using VoidWithUInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *, uint64_t,
 using VoidWithUInt64UInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *,
                                               uint64_t, uint64_t, uint64_t);
 using VoidWithUInt64UInt64UInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *,
-                                                    uint64_t, uint64_t, uint64_t, uint64_t);
-using VoidWithBytes32UInt64UInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *,
-                                                     const uint8_t *, uint64_t, uint64_t, uint64_t);
+                                                    uint64_t, uint64_t,
+                                                    uint64_t, uint64_t);
+using VoidWithBytes32UInt64UInt64UInt64Fn = void (*)(
+    zen::runtime::EVMInstance *, const uint8_t *, uint64_t, uint64_t, uint64_t);
 using VoidFn = void (*)(zen::runtime::EVMInstance *);
 
 struct RuntimeFunctions {
@@ -119,12 +120,13 @@ void evmSetMStore8(zen::runtime::EVMInstance *Instance, uint64_t Addr,
                    intx::uint256 Value);
 void evmSetMCopy(zen::runtime::EVMInstance *Instance, uint64_t DestAddr,
                  uint64_t SrcAddr, uint64_t Length);
-void evmSetCallDataCopy(zen::runtime::EVMInstance *Instance, uint64_t DestOffset,
-                        uint64_t Offset, uint64_t Size);
-void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance, const uint8_t *Address,
-                       uint64_t DestOffset, uint64_t Offset, uint64_t Size);
-void evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance, uint64_t DestOffset,
-                          uint64_t Offset, uint64_t Size);
+void evmSetCallDataCopy(zen::runtime::EVMInstance *Instance,
+                        uint64_t DestOffset, uint64_t Offset, uint64_t Size);
+void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
+                       const uint8_t *Address, uint64_t DestOffset,
+                       uint64_t Offset, uint64_t Size);
+void evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance,
+                          uint64_t DestOffset, uint64_t Offset, uint64_t Size);
 uint64_t evmGetReturnDataSize(zen::runtime::EVMInstance *Instance);
 void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t MemOffset,
                   uint64_t Length);
