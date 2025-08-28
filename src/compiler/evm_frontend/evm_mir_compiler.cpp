@@ -1332,8 +1332,6 @@ MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
       false, OP_inttoptr, createVoidPtrType(), InstanceAddr);
 }
 
-// ==================== Copy Instruction Handlers ====================
-
 void EVMMirBuilder::handleCallDataCopy() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   Operand DestOffsetComponents = popOperand();

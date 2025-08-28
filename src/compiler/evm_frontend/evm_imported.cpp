@@ -342,7 +342,6 @@ void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t Offset,
 }
 void evmSetCallDataCopy(zen::runtime::EVMInstance *Instance,
                         uint64_t DestOffset, uint64_t Offset, uint64_t Size) {
-  // Expand memory if needed and consume gas for memory expansion
   uint64_t RequiredSize = DestOffset + Size;
   Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
@@ -361,7 +360,6 @@ void evmSetCallDataCopy(zen::runtime::EVMInstance *Instance,
                                          ActualOffset)
           : 0;
 
-  // Copy call data to memory
   if (CopySize > 0) {
     std::memcpy(Memory.data() + DestOffset, Msg->input_data + ActualOffset,
                 CopySize);
@@ -376,7 +374,6 @@ void evmSetCallDataCopy(zen::runtime::EVMInstance *Instance,
 void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
                        const uint8_t *Address, uint64_t DestOffset,
                        uint64_t Offset, uint64_t Size) {
-  // Expand memory if needed and consume gas for memory expansion
   uint64_t RequiredSize = DestOffset + Size;
   Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
@@ -393,7 +390,6 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
     // If offset is beyond code size, fill with zeros
     std::memset(Memory.data() + DestOffset, 0, Size);
   } else {
-    // Copy external code to memory
     uint64_t CopySize =
         std::min<uint64_t>(Size, static_cast<uint64_t>(CodeSize) - Offset);
     size_t CopiedSize = Module->Host->copy_code(
@@ -409,11 +405,6 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
 
 void evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance,
                           uint64_t DestOffset, uint64_t Offset, uint64_t Size) {
-  if (Size == 0) {
-    return;
-  }
-
-  // Expand memory if needed and consume gas for memory expansion
   uint64_t RequiredSize = DestOffset + Size;
   Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
@@ -422,16 +413,14 @@ void evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance,
   auto &Memory = Instance->getMemory();
 
   if (Offset >= ReturnData.size()) {
-    // If offset is beyond return data size, fill with zeros
     std::memset(Memory.data() + DestOffset, 0, Size);
   } else {
-    // Copy return data to memory
     uint64_t CopySize = std::min<uint64_t>(
         Size, static_cast<uint64_t>(ReturnData.size()) - Offset);
     std::memcpy(Memory.data() + DestOffset, ReturnData.data() + Offset,
                 CopySize);
 
-    // Fill remaining bytes with zeros if needed
+    // Fill remaining bytes with zeros
     if (Size > CopySize) {
       std::memset(Memory.data() + DestOffset + CopySize, 0, Size - CopySize);
     }
