@@ -19,6 +19,7 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
       .GetCallDataLoad = &evmGetCallDataLoad,
       .GetCallDataSize = &evmGetCallDataSize,
       .GetCodeSize = &evmGetCodeSize,
+      .SetCodeCopy = &evmSetCodeCopy,
       .GetGasPrice = &evmGetGasPrice,
       .GetExtCodeSize = &evmGetExtCodeSize,
       .GetExtCodeHash = &evmGetExtCodeHash,
@@ -436,6 +437,32 @@ uint64_t evmGetReturnDataSize(zen::runtime::EVMInstance *Instance) {
 
 void evmhandleInvalid(zen::runtime::EVMInstance *Instance) {
   throw zen::common::getError(zen::common::ErrorCode::EVMInvalidInstruction);
+}
+
+void evmSetCodeCopy(zen::runtime::EVMInstance *Instance, uint64_t DestOffset,
+                    uint64_t Offset, uint64_t Size) {
+  uint64_t RequiredSize = DestOffset + Size;
+  Instance->consumeMemoryExpansionGas(RequiredSize);
+  Instance->expandMemory(RequiredSize);
+
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module);
+  const zen::common::Byte *Code = Module->Code;
+  size_t CodeSize = Module->CodeSize;
+
+  auto &Memory = Instance->getMemory();
+
+  if (Offset < CodeSize) {
+    auto CopySize = std::min(Size, CodeSize - Offset);
+    std::memcpy(Memory.data() + DestOffset, Code + Offset, CopySize);
+    if (Size > CopySize) {
+      std::memset(Memory.data() + DestOffset + CopySize, 0, Size - CopySize);
+    }
+  } else {
+    if (Size > 0) {
+      std::memset(Memory.data() + DestOffset, 0, Size);
+    }
+  }
 }
 
 const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,

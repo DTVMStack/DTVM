@@ -338,6 +338,7 @@ public:
   Operand handleCallDataLoad();
   Operand handleCallDataSize();
   Operand handleCodeSize();
+  void handleCodeCopy();
   Operand handleGasPrice();
   Operand handleExtCodeSize();
   Operand handleExtCodeHash();

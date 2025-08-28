@@ -792,6 +792,16 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCodeSize() {
   return callRuntimeFor(RuntimeFunctions.GetCodeSize);
 }
 
+void EVMMirBuilder::handleCodeCopy() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  Operand DestOffsetComponents = popOperand();
+  Operand OffsetComponents = popOperand();
+  Operand SizeComponents = popOperand();
+  callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.SetCodeCopy, DestOffsetComponents, OffsetComponents,
+      SizeComponents);
+}
+
 typename EVMMirBuilder::Operand EVMMirBuilder::handleExtCodeSize() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   Operand Address = popOperand();

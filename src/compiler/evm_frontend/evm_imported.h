@@ -50,6 +50,7 @@ struct RuntimeFunctions {
   Bytes32WithUint64Fn GetCallDataLoad;
   SizeFn GetCallDataSize;
   SizeFn GetCodeSize;
+  VoidWithUInt64UInt64UInt64Fn SetCodeCopy;
   U256Fn GetGasPrice;
   SizeWithBytes32Fn GetExtCodeSize;
   Bytes32WithBytes32Fn GetExtCodeHash;
@@ -94,6 +95,8 @@ const uint8_t *evmGetCallDataLoad(zen::runtime::EVMInstance *Instance,
                                   uint64_t Offset);
 uint64_t evmGetCallDataSize(zen::runtime::EVMInstance *Instance);
 uint64_t evmGetCodeSize(zen::runtime::EVMInstance *Instance);
+void evmSetCodeCopy(zen::runtime::EVMInstance *Instance, uint64_t DestOffset,
+                    uint64_t Offset, uint64_t Size);
 intx::uint256 evmGetGasPrice(zen::runtime::EVMInstance *Instance);
 uint64_t evmGetExtCodeSize(zen::runtime::EVMInstance *Instance,
                            const uint8_t *Address);

@@ -289,7 +289,8 @@ private:
       }
 
       case OP_CODECOPY: {
-        ZEN_ASSERT_TODO();
+        Builder.handleCodeCopy();
+        break;
       }
 
       case OP_GASPRICE: {
