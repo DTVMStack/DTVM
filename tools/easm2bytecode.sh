@@ -24,21 +24,45 @@ if [ ! -d "$OUTPUT_PATH" ]; then
     mkdir -p "$OUTPUT_PATH"
 fi
 
+# Initialize counters
+success_count=0
+failure_count=0
+failed_files=()
+
 for input_file in $INPUT_PATH/*.easm; do
     filename=$(basename "$input_file")
     output_file="$OUTPUT_PATH/${filename%.*}.evm.hex"
+
+    # Always process the file, even if output exists - remove old output first
+    [ -f "$output_file" ] && rm "$output_file"
 
     output=$(python3 $EVMCONVERTER "$input_file" "$output_file" 2>&1)
     ret=$?
 
     if [ $ret -eq 0 ] && [ -f "$output_file" ] && [ -s "$output_file" ]; then
         echo " ✅: $input_file -> $output_file"
+        ((success_count++))
     else
         echo " ❌: $input_file"
         echo " ❌: $output"
+        ((failure_count++))
+        failed_files+=("$input_file")
         # remove the output file if it exists and is empty
         [ -f "$output_file" ] && rm "$output_file"
     fi
 done
 
-echo "All files processed!"
+echo "========================================"
+echo "Processing complete!"
+echo "Success: $success_count files"
+echo "Failure: $failure_count files"
+echo "Total: $((success_count + failure_count)) files"
+
+# Print failed files if any
+if [ ${#failed_files[@]} -gt 0 ]; then
+    echo ""
+    echo "Failed files:"
+    for failed_file in "${failed_files[@]}"; do
+        echo "  - $failed_file"
+    done
+fi
