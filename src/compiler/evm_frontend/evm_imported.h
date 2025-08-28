@@ -35,9 +35,6 @@ using VoidWithUInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *, uint64_t,
                                         uint64_t);
 using VoidWithUInt64UInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *,
                                               uint64_t, uint64_t, uint64_t);
-using VoidWithUInt64UInt64UInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *,
-                                                    uint64_t, uint64_t,
-                                                    uint64_t, uint64_t);
 using VoidWithBytes32UInt64UInt64UInt64Fn = void (*)(
     zen::runtime::EVMInstance *, const uint8_t *, uint64_t, uint64_t, uint64_t);
 using Bytes32WithUInt64UInt64Fn =
