@@ -912,6 +912,14 @@ void EVMMirBuilder::handleInvalid() {
   callRuntimeFor(RuntimeFunctions.HandleInvalid);
 }
 
+typename EVMMirBuilder::Operand EVMMirBuilder::handleKeccak256() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  Operand OffsetComponents = popOperand();
+  Operand LengthComponents = popOperand();
+  return callRuntimeFor<const uint8_t *, uint64_t, uint64_t>(
+      RuntimeFunctions.GetKeccak256, OffsetComponents, LengthComponents);
+}
+
 // ==================== Private Helper Methods ====================
 
 MInstruction *EVMMirBuilder::extractOperand(const Operand &Opnd) {

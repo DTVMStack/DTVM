@@ -363,6 +363,7 @@ public:
   Operand handleReturnDataSize();
   void handleReturn();
   void handleInvalid();
+  Operand handleKeccak256();
 
   // ==================== Runtime Interface for JIT ====================
 

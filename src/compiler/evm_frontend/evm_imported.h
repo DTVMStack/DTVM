@@ -40,6 +40,8 @@ using VoidWithUInt64UInt64UInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *,
                                                     uint64_t, uint64_t);
 using VoidWithBytes32UInt64UInt64UInt64Fn = void (*)(
     zen::runtime::EVMInstance *, const uint8_t *, uint64_t, uint64_t, uint64_t);
+using Bytes32WithUInt64UInt64Fn =
+    const uint8_t *(*)(zen::runtime::EVMInstance *, uint64_t, uint64_t);
 using VoidFn = void (*)(zen::runtime::EVMInstance *);
 
 struct RuntimeFunctions {
@@ -76,6 +78,7 @@ struct RuntimeFunctions {
   SizeFn GetReturnDataSize;
   VoidWithUInt64UInt64Fn SetReturn;
   VoidFn HandleInvalid;
+  Bytes32WithUInt64UInt64Fn GetKeccak256;
 };
 
 const RuntimeFunctions &getRuntimeFunctionTable();
@@ -131,6 +134,8 @@ uint64_t evmGetReturnDataSize(zen::runtime::EVMInstance *Instance);
 void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t MemOffset,
                   uint64_t Length);
 void evmhandleInvalid(zen::runtime::EVMInstance *Instance);
+const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,
+                               uint64_t Offset, uint64_t Length);
 } // namespace COMPILER
 
 #endif // EVM_FRONTEND_EVM_IMPORTED_H

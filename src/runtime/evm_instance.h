@@ -94,6 +94,7 @@ public:
                        PairHash>
         CalldataLoads;
     std::vector<evmc::bytes32> ExtcodeHashes;
+    std::vector<evmc::bytes32> Keccak256Results;
     bool TxContextCached = false;
   };
 

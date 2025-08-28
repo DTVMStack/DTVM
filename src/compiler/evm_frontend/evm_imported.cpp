@@ -3,6 +3,7 @@
 
 #include "compiler/evm_frontend/evm_imported.h"
 #include "common/errors.h"
+#include "host/evm/crypto.h"
 #include "runtime/evm_instance.h"
 #include "runtime/evm_module.h"
 
@@ -42,7 +43,8 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
       .SetReturnDataCopy = &evmSetReturnDataCopy,
       .GetReturnDataSize = &evmGetReturnDataSize,
       .SetReturn = &evmSetReturn,
-      .HandleInvalid = &evmhandleInvalid};
+      .HandleInvalid = &evmhandleInvalid,
+      .GetKeccak256 = &evmGetKeccak256};
   return Table;
 }
 
@@ -434,6 +436,23 @@ uint64_t evmGetReturnDataSize(zen::runtime::EVMInstance *Instance) {
 
 void evmhandleInvalid(zen::runtime::EVMInstance *Instance) {
   throw zen::common::getError(zen::common::ErrorCode::EVMInvalidInstruction);
+}
+
+const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,
+                               uint64_t Offset, uint64_t Length) {
+  uint64_t RequiredSize = Offset + Length;
+  Instance->consumeMemoryExpansionGas(RequiredSize);
+  Instance->expandMemory(RequiredSize);
+
+  auto &Memory = Instance->getMemory();
+  const uint8_t *InputData = Memory.data() + Offset;
+
+  auto &Cache = Instance->getMessageCache();
+  evmc::bytes32 HashResult;
+  zen::host::evm::crypto::keccak256(InputData, Length, HashResult.bytes);
+  Cache.Keccak256Results.push_back(HashResult);
+
+  return Cache.Keccak256Results.back().bytes;
 }
 
 } // namespace COMPILER

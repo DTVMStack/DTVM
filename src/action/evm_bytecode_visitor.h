@@ -230,7 +230,9 @@ private:
       }
 
       case OP_KECCAK256: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleKeccak256();
+        push(Result);
+        break;
       }
 
       case OP_ADDRESS: {
