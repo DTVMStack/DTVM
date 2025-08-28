@@ -63,6 +63,7 @@ public:
 
   // ==================== Memory Methods ====================
   size_t getMemorySize() const { return Memory.size(); }
+  std::vector<uint8_t>& getMemory() { return Memory; }
 
   // ==================== Evmc Message Stack Methods ====================
   // Note: These methods manage the call stack for JIT host interface functions

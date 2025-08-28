@@ -280,9 +280,11 @@ intx::uint256 evmGetMLoad(zen::runtime::EVMInstance *Instance,
   uint64_t RequiredSize = Offset + 32;
   Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
+  
+  uint8_t ValueBytes[32];
+  std::memcpy(ValueBytes, Frame->Memory.data() + Offset, 32);
 
-  intx::uint256 Result;
-  std::memcpy(Result.data(), &Instance->getMemory()[Offset], 32);
+  intx::uint256 Result = intx::be::load<intx::uint256>(ValueBytes);
   return Result;
 }
 void evmSetMStore(zen::runtime::EVMInstance *Instance, uint64_t Offset,
@@ -292,7 +294,9 @@ void evmSetMStore(zen::runtime::EVMInstance *Instance, uint64_t Offset,
   Instance->expandMemory(RequiredSize);
 
   auto &Memory = Instance->getMemory();
-  std::memcpy(&Memory[Offset], Value.data(), 32);
+  uint8_t ValueBytes[32];
+  intx::be::store(ValueBytes, Value);
+  std::memcpy(&Memory[Offset], ValueBytes, 32);
 }
 
 void evmSetMStore8(zen::runtime::EVMInstance *Instance, uint64_t Offset,
@@ -325,12 +329,12 @@ void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t Offset,
   auto &Memory = Instance->getMemory();
   std::vector<uint8_t> ReturnData(Memory.begin() + Offset,
                                   Memory.begin() + Offset + Len);
-  Instance->(std::move(ReturnData));
+  Instance->setReturnData(std::move(ReturnData));
   // Immediately terminate the execution and return the success code (0)
   Instance->exit(0);
 }
 void evmhandleInvalid(zen::runtime::EVMInstance *Instance) {
-  throw common::getError(common::ErrorCode::EVMInvalidInstruction);
+  throw zen::common::getError(zen::common::ErrorCode::EVMInvalidInstruction);
 }
 
 } // namespace COMPILER
