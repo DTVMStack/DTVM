@@ -278,50 +278,47 @@ uint64_t evmGetMSize(zen::runtime::EVMInstance *Instance) {
 intx::uint256 evmGetMLoad(zen::runtime::EVMInstance *Instance,
                           uint64_t Offset) {
   uint64_t RequiredSize = Offset + 32;
-  const auto &Memory = Instance->getMemory();
-  uint64_t CurrentSize = Memory.size();
-  if (RequiredSize > CurrentSize) {
-    Memory.resize(RequiredSize, 0);
-  }
-  intx::uint256 Result;
-  std::memcpy(Result.data(), &Memory[Offset], 32);
+  Instance->consumeMemoryExpansionGas(RequiredSize);
+  Instance->expandMemory(RequiredSize);
+
+  intx::uint256 Result{};
+  std::memcpy(Result.data(), &Instance->getMemory()[Offset], 32);
   return Result;
 }
 void evmSetMStore(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                   intx::uint256 Value) {
   uint64_t RequiredSize = Offset + 32;
+  Instance->consumeMemoryExpansionGas(RequiredSize);
+  Instance->expandMemory(RequiredSize);
+
   auto &Memory = Instance->getMemory();
-  uint64_t CurrentSize = Memory.size();
-  if (RequiredSize > CurrentSize) {
-    Memory.resize(RequiredSize, 0);
-  }
   std::memcpy(&Memory[Offset], Value.data(), 32);
 }
+
 void evmSetMStore8(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                    intx::uint256 Value) {
   uint64_t RequiredSize = Offset + 1;
+
+  Instance->consumeMemoryExpansionGas(RequiredSize);
+  Instance->expandMemory(RequiredSize);
+
   auto &Memory = Instance->getMemory();
-  uint64_t CurrentSize = Memory.size();
-  if (RequiredSize > CurrentSize) {
-    Memory.resize(RequiredSize, 0);
-  }
   uint8_t ByteValue = static_cast<uint8_t>(Value & intx::uint256{0xFF});
   Memory[Offset] = ByteValue;
 }
+
 void evmSetMCopy(zen::runtime::EVMInstance *Instance, uint64_t Dest,
                  uint64_t Src, uint64_t Len) {
   if (Len == 0) {
     return;
   }
   uint64_t RequiredSize = std::max(Dest + Len, Src + Len);
+
+  Instance->consumeMemoryExpansionGas(RequiredSize);
+  Instance->expandMemory(RequiredSize);
+
   auto &Memory = Instance->getMemory();
-  uint64_t CurrentSize = Memory.size();
-  if (RequiredSize > CurrentSize) {
-    Memory.resize(RequiredSize, 0);
-  }
-  if (Len > 0) {
-    std::memmove(&Memory[Dest], &Memory[Src], Len);
-  }
+  std::memmove(&Memory[Dest], &Memory[Src], Len);
 }
 void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                   uint64_t Len) {
@@ -329,6 +326,8 @@ void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t Offset,
   std::vector<uint8_t> ReturnData(Memory.begin() + Offset,
                                   Memory.begin() + Offset + Len);
   Instance->(std::move(ReturnData));
+  // Immediately terminate the execution and return the success code (0)
+  Instance->exit(0);
 }
 void evmhandleInvalid(zen::runtime::EVMInstance *Instance) {
   throw common::getError(common::ErrorCode::EVMInvalidInstruction);

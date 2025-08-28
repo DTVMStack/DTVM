@@ -34,4 +34,35 @@ EVMInstanceUniquePtr EVMInstance::newEVMInstance(Isolation &Iso,
 
 EVMInstance::~EVMInstance() {}
 
+uint64_t EVMInstance::calculateMemoryExpansionCost(uint64_t CurrentSize,
+                                                   uint64_t NewSize) {
+  if (NewSize <= CurrentSize) {
+    return 0; // No expansion needed
+  }
+  uint64_t CurrentWords = (CurrentSize + 31) / 32;
+  uint64_t NewWords = (NewSize + 31) / 32;
+  auto MemoryCost = [](uint64_t Words) -> uint64_t {
+    __int128 W = Words;
+    return static_cast<uint64_t>(W * W / 512 + 3 * W);
+  };
+  uint64_t CurrentCost = MemoryCost(CurrentWords);
+  uint64_t NewCost = MemoryCost(NewWords);
+  return NewCost - CurrentCost;
+}
+
+void EVMInstance::consumeMemoryExpansionGas(uint64_t RequiredSize) {
+  uint64_t ExpansionCost =
+      calculateMemoryExpansionCost(Memory.size(), RequiredSize);
+  uint64_t GasLeft = getGas();
+  if (ExpansionCost > GasLeft) {
+    throw common::getError(common::ErrorCode::EVMOutOfGas);
+  }
+  setGas(GasLeft - ExpansionCost);
+}
+void EVMInstance::expandMemory(uint64_t RequiredSize) {
+  if (RequiredSize > Memory.size()) {
+    Memory.resize(RequiredSize, 0);
+  }
+}
+
 } // namespace zen::runtime

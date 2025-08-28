@@ -56,6 +56,10 @@ public:
 
   uint64_t getGas() const { return Gas; }
   void setGas(uint64_t NewGas) { Gas = NewGas; }
+  static uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize,
+                                               uint64_t NewSize);
+  void consumeMemoryExpansionGas(uint64_t RequiredSize);
+  void expandMemory(uint64_t RequiredSize);
 
   // ==================== Memory Methods ====================
   size_t getMemorySize() const { return Memory.size(); }
@@ -96,6 +100,7 @@ public:
   void setReturnData(std::vector<uint8_t> Data) {
     ReturnData = std::move(Data);
   }
+  void exit(int32_t exitCode) { InstanceExitCode = exitCode; }
 
 private:
   EVMInstance(const EVMModule &M, Runtime &RT)
