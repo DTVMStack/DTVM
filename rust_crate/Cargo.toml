@@ -19,9 +19,18 @@ cc = "1.0"
 [dependencies]
 cty = "0.2.2"
 libc = { version = "0.2.121" }
+# gas metering
 wat = "1.0"
 parity-wasm = { version = "0.45", default-features = false }
 thiserror = "2.0.16"
+# evm
+hex = { version = "0.4", features = ["std"] }
+log = { version = "0.4", optional = true }
+env_logger = { version = "0.10", optional = true }
+num-bigint = "0.4"
+num-traits = "0.2"
+sha2 = "0.10"
+sha3 = "0.10"
 
 [dev-dependencies]
 binaryen = "0.12"
