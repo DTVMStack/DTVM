@@ -516,7 +516,8 @@ private:
 
   // Detect and normalize a UINT256 operand when used as UINT64.
   // For constants, follow EVM semantics (no hard throw; clamp appropriately).
-  // For non-constants, generate SelectInstruction to produce UINT64_MAX on overflow.
+  // For non-constants, generate SelectInstruction to produce UINT64_MAX on
+  // overflow.
   void checkOperandU64(Operand &Param);
 
   // Split checks for const and non-const U256.
