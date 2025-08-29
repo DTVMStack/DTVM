@@ -1261,21 +1261,60 @@ EVMMirBuilder::convertCallResult(MInstruction *CallInstr) {
   }
 }
 
-void EVMMirBuilder::checkOperandU64(const Operand &Param) {
+void EVMMirBuilder::checkOperandU64(Operand &Param) {
   if (Param.getType() != EVMType::UINT256) {
     return;
   }
-  // Only perform compile-time validation for constant U256 to avoid runtime
-  // overhead in hot paths.
-  if (!Param.isConstant()) {
-    return;
+  if (Param.isConstant()) {
+    checkOperandU64Const(Param);
+  } else {
+    checkOperandU64NonConst(Param);
   }
+}
+
+void EVMMirBuilder::checkOperandU64Const(Operand &Param) {
   const auto &C = Param.getConstValue();
-  if (C[1] != 0 || C[2] != 0 || C[3] != 0) {
-    throw getErrorWithPhase(zen::common::ErrorCode::InvalidConversionToInteger,
-                            zen::common::ErrorPhase::Compilation,
-                            zen::common::ErrorSubphase::MIREmission);
-  }
+  bool FitsU64 = (C[1] == 0 && C[2] == 0 && C[3] == 0);
+
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  uint64_t Selected = FitsU64 ? C[0] : UINT64_MAX; // sentinel for overflow
+
+  // Rebuild Param as a normalized U256 with low64=Selected, others=0
+  MInstruction *Low = createIntConstInstruction(I64Type, Selected);
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+  U256Inst NewVal = {Low, Zero, Zero, Zero};
+  Param = Operand(NewVal, EVMType::UINT256);
+}
+
+void EVMMirBuilder::checkOperandU64NonConst(Operand &Param) {
+  // Extract four 64-bit parts [low, mid-low, mid-high, high]
+  U256Inst Parts = extractU256Operand(Param);
+
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+
+  // IsU64 = (part[1] == 0) && (part[2] == 0) && (part[3] == 0)
+  MInstruction *IsZero1 = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Parts[1], Zero);
+  MInstruction *IsZero2 = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Parts[2], Zero);
+  MInstruction *IsZero3 = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Parts[3], Zero);
+
+  // Combine to a single condition using 64-bit ANDs
+  MInstruction *Cond12 = createInstruction<BinaryInstruction>(
+      false, OP_and, I64Type, IsZero1, IsZero2);
+  MInstruction *IsU64 = createInstruction<BinaryInstruction>(
+      false, OP_and, I64Type, Cond12, IsZero3);
+
+  // Select: valid -> low part; invalid -> UINT64_MAX (sentinel)
+  MInstruction *AllOnes = createIntConstInstruction(I64Type, UINT64_MAX);
+  MInstruction *Selected = createInstruction<SelectInstruction>(
+      false, I64Type, IsU64, Parts[0], AllOnes);
+
+  // Normalize Param to U256: [Selected, 0, 0, 0]
+  U256Inst NewVal = {Selected, Zero, Zero, Zero};
+  Param = Operand(NewVal, EVMType::UINT256);
 }
 
 // Template function for no-argument runtime calls

@@ -514,8 +514,14 @@ private:
   template <typename RetType>
   Operand convertCallResult(MInstruction *CallInstr);
 
-  // Detect if a UINT256 operand used as UINT64 has non-zero high limbs.
-  void checkOperandU64(const Operand &Param);
+  // Detect and normalize a UINT256 operand when used as UINT64.
+  // For constants, follow EVM semantics (no hard throw; clamp appropriately).
+  // For non-constants, generate SelectInstruction to produce UINT64_MAX on overflow.
+  void checkOperandU64(Operand &Param);
+
+  // Split checks for const and non-const U256.
+  void checkOperandU64Const(Operand &Param);
+  void checkOperandU64NonConst(Operand &Param);
 
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
