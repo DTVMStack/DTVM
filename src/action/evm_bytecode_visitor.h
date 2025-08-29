@@ -222,11 +222,13 @@ private:
       }
 
       case OP_SIGNEXTEND: {
-        ZEN_ASSERT_TODO();
+        handleSignextend();
+        break;
       }
 
       case OP_BYTE: {
-        ZEN_ASSERT_TODO();
+        handleByte();
+        break;
       }
 
       case OP_KECCAK256: {
@@ -554,6 +556,20 @@ private:
   void handleNot() {
     Operand Opnd = pop();
     Operand Result = Builder.handleNot(Opnd);
+    push(Result);
+  }
+
+  void handleSignextend() {
+    Operand IndexOp = pop();
+    Operand ValueOp = pop();
+    Operand Result = Builder.handleSignextend(IndexOp, ValueOp);
+    push(Result);
+  }
+
+  void handleByte() {
+    Operand IndexOp = pop();
+    Operand ValueOp = pop();
+    Operand Result = Builder.handleByte(IndexOp, ValueOp);
     push(Result);
   }
 

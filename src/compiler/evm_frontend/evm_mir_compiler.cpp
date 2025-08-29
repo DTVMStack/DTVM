@@ -717,6 +717,154 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
   return Result;
 }
 
+// EVM BYTE opcode: extracts the byte at position 'index' from a 256-bit value
+// BYTE(index, value) = 0 if index ≥ 32, otherwise the byte at position index
+// (value >> (8 × (31 - index))) & 0xFF
+EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
+                                                 Operand ValueOp) {
+  U256Inst IndexComponents = extractU256Operand(IndexOp);
+  U256Inst ValueComponents = extractU256Operand(ValueOp);
+
+  // Check if index >= 32 (out of bounds)
+  MInstruction *IsOutOfBounds = isU256GreaterOrEqual(IndexComponents, 32);
+
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  // Calculate bit shift: (31 - index) * 8
+  MInstruction *Const31 = createIntConstInstruction(MirI64Type, 31);
+  MInstruction *ByteIndex = createInstruction<BinaryInstruction>(
+      false, OP_sub, MirI64Type, Const31, IndexComponents[0]);
+  MInstruction *Const8 = createIntConstInstruction(MirI64Type, 8);
+  MInstruction *BitShift = createInstruction<BinaryInstruction>(
+      false, OP_mul, MirI64Type, ByteIndex, Const8);
+
+  // Determine which 64-bit component contains the byte
+  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
+  MInstruction *ComponentIndex = createInstruction<BinaryInstruction>(
+      false, OP_udiv, MirI64Type, BitShift, Const64);
+
+  // Calculate the bit offset within the selected 64-bit component
+  MInstruction *BitOffset = createInstruction<BinaryInstruction>(
+      false, OP_urem, MirI64Type, BitShift, Const64);
+
+  // Select the appropriate 64-bit component based on component_index
+  // Example: bit_shift=248 → component_index=3 (248/64=3), bit_offset=56
+  // This means target byte is in the highest component (comp3) at bit offset 56
+  MInstruction *SelectedComponent = ValueComponents[0];
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *IsThisComponent = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, ComponentIndex,
+        createIntConstInstruction(MirI64Type, I));
+    SelectedComponent = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsThisComponent, ValueComponents[I],
+        SelectedComponent);
+  }
+
+  // Extract the byte by shifting right and masking
+  // Shift the selected component right by bit_offset to move target byte to LSB
+  // Then mask with 0xFF to extract the lowest 8 bits
+  MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
+      false, OP_ushr, MirI64Type, SelectedComponent, BitOffset);
+  MInstruction *ConstFF = createIntConstInstruction(MirI64Type, 0xFF);
+  MInstruction *ByteValue = createInstruction<BinaryInstruction>(
+      false, OP_and, MirI64Type, ShiftedValue, ConstFF);
+
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  // Return 0 if out of bounds, otherwise return the extracted byte value
+  MInstruction *Result = createInstruction<SelectInstruction>(
+      false, MirI64Type, IsOutOfBounds, Zero, ByteValue);
+
+  // Create U256 result with only the low component set
+  // High components are zeroed out as per EVM specification
+  U256Inst ResultComponents = {};
+  ResultComponents[0] = Result;
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    ResultComponents[I] = Zero;
+  }
+
+  return Operand(ResultComponents, EVMType::UINT256);
+}
+
+// EVM SIGNEXTEND opcode: sign-extends a signed integer from (index+1) bytes to
+// 256 bits SIGNEXTEND(index, value) = value if index >= 31, otherwise
+// sign-extended value The sign bit is at position (index * 8 + 7), and all
+// higher bits are set to the sign bit value.
+// Examples:
+//   SIGNEXTEND(0, 0x80) = 0xFF...FF80 (sign-extends 0x80 from 1 byte)
+//   SIGNEXTEND(1, 0x7FFF) = 0x00...007FFF (sign-extends 0x7FFF from 2 bytes)
+//   SIGNEXTEND(31, 0x1234) = 0x1234 (no extension when index >= 31)
+EVMMirBuilder::Operand EVMMirBuilder::handleSignextend(Operand IndexOp,
+                                                       Operand ValueOp) {
+  U256Inst IndexComponents = extractU256Operand(IndexOp);
+  U256Inst ValueComponents = extractU256Operand(ValueOp);
+
+  // Check if index >= 31 (no sign extension needed)
+  MInstruction *NoExtension = isU256GreaterOrEqual(IndexComponents, 31);
+
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  // Calculate sign bit position: index * 8 + 7
+  MInstruction *Const8 = createIntConstInstruction(MirI64Type, 8);
+  MInstruction *ByteBitPos = createInstruction<BinaryInstruction>(
+      false, OP_mul, MirI64Type, IndexComponents[0], Const8);
+  MInstruction *Const7 = createIntConstInstruction(MirI64Type, 7);
+  MInstruction *SignBitPos = createInstruction<BinaryInstruction>(
+      false, OP_add, MirI64Type, ByteBitPos, Const7);
+
+  // Extract sign bit
+  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
+  MInstruction *ComponentIndex = createInstruction<BinaryInstruction>(
+      false, OP_udiv, MirI64Type, SignBitPos, Const64);
+  MInstruction *BitOffset = createInstruction<BinaryInstruction>(
+      false, OP_urem, MirI64Type, SignBitPos, Const64);
+
+  // Select appropriate component for sign bit
+  MInstruction *SignComponent = ValueComponents[0];
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *IsThisComponent = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, ComponentIndex,
+        createIntConstInstruction(MirI64Type, I));
+    SignComponent = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsThisComponent, ValueComponents[I], SignComponent);
+  }
+
+  // Extract sign bit
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+  MInstruction *SignMask = createInstruction<BinaryInstruction>(
+      false, OP_shl, MirI64Type, One, BitOffset);
+  MInstruction *SignBitValue = createInstruction<BinaryInstruction>(
+      false, OP_and, MirI64Type, SignComponent, SignMask);
+  MInstruction *IsNegative = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, SignBitValue,
+      Zero);
+
+  // Create mask for sign extension
+  MInstruction *LowMask = createInstruction<BinaryInstruction>(
+      false, OP_sub, MirI64Type, SignMask, One);
+  MInstruction *HighMask =
+      createInstruction<NotInstruction>(false, MirI64Type, LowMask);
+
+  U256Inst ResultComponents = {};
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    // Apply sign extension mask if negative
+    MInstruction *ExtendedValue = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, ValueComponents[I], HighMask);
+
+    // Select between original and extended value
+    MInstruction *ComponentResult = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsNegative, ExtendedValue, ValueComponents[I]);
+
+    // Select between result and original based on NoExtension flag
+    ResultComponents[I] = createInstruction<SelectInstruction>(
+        false, MirI64Type, NoExtension, ValueComponents[I], ComponentResult);
+  }
+
+  return Operand(ResultComponents, EVMType::UINT256);
+}
+
 // ==================== Environment Instruction Handlers ====================
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handlePC() {
@@ -1212,6 +1360,34 @@ EVMMirBuilder::convertBytes32ToU256Operand(const Operand &Bytes32Op) {
   }
 
   return Operand(Result, EVMType::UINT256);
+}
+
+MInstruction *EVMMirBuilder::isU256GreaterOrEqual(const U256Inst &Value,
+                                                  uint64_t Threshold) {
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+
+  // Check if any of the higher components are non-zero
+  MInstruction *IsNonZeroHigh = Zero;
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *IsNonZero = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Value[I],
+        Zero);
+    IsNonZeroHigh = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, IsNonZeroHigh, IsNonZero);
+  }
+
+  // Check if low component >= threshold
+  MInstruction *ThresholdConst =
+      createIntConstInstruction(MirI64Type, Threshold);
+  MInstruction *IsLowLarge = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, Value[0],
+      ThresholdConst);
+
+  // Combine result: any high component non-zero OR low component >= threshold
+  return createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                              IsNonZeroHigh, IsLowLarge);
 }
 
 // ==================== EVM to MIR Opcode Mapping ====================

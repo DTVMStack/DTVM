@@ -283,32 +283,18 @@ public:
 
   Operand handleNot(const Operand &LHSOp);
 
+  Operand handleByte(Operand IndexOp, Operand ValueOp);
+
+  Operand handleSignextend(Operand IndexOp, Operand ValueOp);
+
   template <BinaryOperator Operator>
   Operand handleShift(Operand ShiftOp, Operand ValueOp) {
     U256Inst Shift = extractU256Operand(ShiftOp);
     U256Inst Value = extractU256Operand(ValueOp);
 
-    MType *MirI64Type =
-        EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
     // Check if shift amount >= 256
     // (EVM spec: result is 0 for SHL/SHR, sign-extended for SAR)
-    MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
-    // Check if any of the higher components are non-zero
-    MInstruction *IsNonZeroHigh = Zero;
-    for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
-      MInstruction *IsNonZero = createInstruction<CmpInstruction>(
-          false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Shift[I],
-          Zero);
-      IsNonZeroHigh = createInstruction<BinaryInstruction>(
-          false, OP_or, MirI64Type, IsNonZeroHigh, IsNonZero);
-    }
-    MInstruction *Const256 = createIntConstInstruction(MirI64Type, 256);
-    MInstruction *IsLowLarge = createInstruction<CmpInstruction>(
-        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, Shift[0],
-        Const256);
-    // Large shift if any high component is non-zero OR low component >= 256
-    MInstruction *IsLargeShift = createInstruction<BinaryInstruction>(
-        false, OP_or, MirI64Type, IsNonZeroHigh, IsLowLarge);
+    MInstruction *IsLargeShift = isU256GreaterOrEqual(Shift, 256);
 
     // Use only low 64 bits as shift amount
     MInstruction *ShiftAmount = Shift[0];
@@ -444,6 +430,9 @@ private:
           static_cast<uint64_t>((Value >> (I * 64)) & 0xFFFFFFFFFFFFFFFFULL);
     }
   }
+
+  // Check if 256-bit value is greater than or equal to threshold
+  MInstruction *isU256GreaterOrEqual(const U256Inst &Value, uint64_t Threshold);
 
   U256ConstInt createU256Constants(const U256Value &Value);
   /// Create u256 value from bytes with big-endian conversion
