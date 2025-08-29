@@ -514,6 +514,9 @@ private:
   template <typename RetType>
   Operand convertCallResult(MInstruction *CallInstr);
 
+  // Detect if a UINT256 operand used as UINT64 has non-zero high limbs.
+  void checkOperandU64(const Operand &Param);
+
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
   Operand convertBytes32ToU256Operand(const Operand &Bytes32Op);
