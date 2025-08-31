@@ -518,11 +518,11 @@ private:
   // For constants, follow EVM semantics (no hard throw; clamp appropriately).
   // For non-constants, generate SelectInstruction to produce UINT64_MAX on
   // overflow.
-  void checkOperandU64(Operand &Param);
+  void normalizeOperandU64(Operand &Param);
 
-  // Split checks for const and non-const U256.
-  void checkOperandU64Const(Operand &Param);
-  void checkOperandU64NonConst(Operand &Param);
+  // Split normalization for const and non-const U256.
+  void normalizeOperandU64Const(Operand &Param);
+  void normalizeOperandU64NonConst(Operand &Param);
 
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
