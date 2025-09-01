@@ -357,12 +357,8 @@ pub trait EvmHost {
             // If modulus is 1, result is always 0
             BigUint::zero()
         } else if exponent.is_zero() {
-            // If exponent is 0, result is 1 (unless base is 0 and modulus > 1)
-            if base.is_zero() && modulus > BigUint::one() {
-                BigUint::zero()
-            } else {
-                BigUint::one()
-            }
+            // If exponent is 0, result is always 1 (including 0^0 = 1)
+            BigUint::one()
         } else if base.is_zero() {
             // If base is 0 and exponent > 0, result is 0
             BigUint::zero()
@@ -606,29 +602,22 @@ mod tests {
         assert_eq!(transfer_result, expected_transfer);
     }
 
+    fn u256_from_u8(value: u8) -> [u8; 32] {
+        let mut bytes = [0u8; 32];
+        bytes[31] = value;
+        bytes
+    }
+
     #[test]
     fn test_addmod_default_implementation() {
         let host = MockEvmHost;
 
         // Test basic addition: (5 + 3) % 7 = 1
-        let a = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 5;
-            bytes
-        };
-        let b = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 3;
-            bytes
-        };
-        let n = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 7;
-            bytes
-        };
+        let a = u256_from_u8(5);
+        let b = u256_from_u8(3);
+        let n = u256_from_u8(7);
         let result = host.addmod(a, b, n);
-        let mut expected = [0u8; 32];
-        expected[31] = 1;
+        let expected = u256_from_u8(1);
         assert_eq!(result, expected);
 
         // Test with zero modulus (should return zero)
@@ -638,18 +627,31 @@ mod tests {
 
         // Test overflow case: (MAX + 1) % 2 = 0
         let max_val = [0xFFu8; 32];
-        let one = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 1;
-            bytes
-        };
-        let two = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 2;
-            bytes
-        };
+        let one = u256_from_u8(1);
+        let two = u256_from_u8(2);
         let overflow_result = host.addmod(max_val, one, two);
         assert_eq!(overflow_result, [0u8; 32]);
+
+        // More rigorous test: (MAX + MAX/2) % 1 = 0
+        let max_half = {
+            let mut bytes = [0x7Fu8; 32];
+            bytes[0] = 0x7F; // MAX/2 approximately
+            bytes
+        };
+        let one_mod = u256_from_u8(1);
+        let rigorous_result1 = host.addmod(max_val, max_half, one_mod);
+        assert_eq!(rigorous_result1, [0u8; 32]);
+
+        // More rigorous test: (MAX + 100) % 7 = specific non-zero result
+        let hundred = u256_from_u8(100);
+        let seven = u256_from_u8(7);
+        let rigorous_result2 = host.addmod(max_val, hundred, seven);
+        // (2^256 - 1 + 100) % 7 = (2^256 + 99) % 7
+        // Since 2^256 % 7 = (2^3)^85 * 2^1 % 7 = 1^85 * 2 % 7 = 2
+        // and 99 % 7 = 1
+        // The result should be (2 + 1) % 7 = 3.
+        let expected_rigorous = u256_from_u8(3);
+        assert_eq!(rigorous_result2, expected_rigorous);
     }
 
     #[test]
@@ -657,24 +659,11 @@ mod tests {
         let host = MockEvmHost;
 
         // Test basic multiplication: (5 * 3) % 7 = 1
-        let a = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 5;
-            bytes
-        };
-        let b = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 3;
-            bytes
-        };
-        let n = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 7;
-            bytes
-        };
+        let a = u256_from_u8(5);
+        let b = u256_from_u8(3);
+        let n = u256_from_u8(7);
         let result = host.mulmod(a, b, n);
-        let mut expected = [0u8; 32];
-        expected[31] = 1;
+        let expected = u256_from_u8(1);
         assert_eq!(result, expected);
 
         // Test with zero modulus (should return zero)
@@ -686,6 +675,23 @@ mod tests {
         let zero = [0u8; 32];
         let zero_mul_result = host.mulmod(zero, b, n);
         assert_eq!(zero_mul_result, [0u8; 32]);
+
+        // More rigorous test: (MAX * 2) % 7 = specific result
+        let max_val = [0xFFu8; 32];
+        let two = u256_from_u8(2);
+        let seven = u256_from_u8(7);
+        let rigorous_mul_result = host.mulmod(max_val, two, seven);
+        // MAX = 2^256 - 1 ≡ 1 (mod 7), so (MAX * 2) ≡ 2 (mod 7)
+        let expected_mul_rigorous = u256_from_u8(2);
+        assert_eq!(rigorous_mul_result, expected_mul_rigorous);
+
+        // Test large multiplication: (MAX * MAX) % 13
+        let thirteen = u256_from_u8(13);
+        let large_mul_result = host.mulmod(max_val, max_val, thirteen);
+        // So 2^256 ≡ 3 (mod 13), and MAX = 2^256 - 1 ≡ 2 (mod 13)
+        // Therefore (MAX * MAX) ≡ 2 * 2 ≡ 4 (mod 13)
+        let expected_large_mul = u256_from_u8(4);
+        assert_eq!(large_mul_result, expected_large_mul);
     }
 
     #[test]
@@ -693,24 +699,11 @@ mod tests {
         let host = MockEvmHost;
 
         // Test basic exponentiation: 2^3 % 5 = 3
-        let base = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 2;
-            bytes
-        };
-        let exp = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 3;
-            bytes
-        };
-        let modulus = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 5;
-            bytes
-        };
+        let base = u256_from_u8(2);
+        let exp = u256_from_u8(3);
+        let modulus = u256_from_u8(5);
         let result = host.expmod(base, exp, modulus);
-        let mut expected = [0u8; 32];
-        expected[31] = 3;
+        let expected = u256_from_u8(3);
         assert_eq!(result, expected);
 
         // Test with zero modulus (should return zero)
@@ -719,19 +712,14 @@ mod tests {
         assert_eq!(zero_result, [0u8; 32]);
 
         // Test with modulus = 1 (should return zero)
-        let one_mod = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 1;
-            bytes
-        };
+        let one_mod = u256_from_u8(1);
         let one_mod_result = host.expmod(base, exp, one_mod);
         assert_eq!(one_mod_result, [0u8; 32]);
 
         // Test with zero exponent (should return 1, unless base is 0)
         let zero_exp = [0u8; 32];
         let zero_exp_result = host.expmod(base, zero_exp, modulus);
-        let mut expected_one = [0u8; 32];
-        expected_one[31] = 1;
+        let expected_one = u256_from_u8(1);
         assert_eq!(zero_exp_result, expected_one);
 
         // Test with zero base and positive exponent (should return 0)
@@ -741,26 +729,17 @@ mod tests {
 
         // Test edge case: 0^0 % n (where n > 1) should return 1 (mathematical convention)
         let zero_zero_result = host.expmod(zero_base, zero_exp, modulus);
-        let mut expected_one = [0u8; 32];
-        expected_one[31] = 1;
+        let expected_one = u256_from_u8(1);
         assert_eq!(zero_zero_result, expected_one);
 
         // Additional test: any_number^0 % n should return 1 (except when n = 1)
-        let any_base = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 42;
-            bytes
-        };
+        let any_base = u256_from_u8(42);
         let any_zero_exp_result = host.expmod(any_base, zero_exp, modulus);
         assert_eq!(any_zero_exp_result, expected_one);
 
         // Test large numbers to ensure no overflow issues
         let large_base = [0xFFu8; 32];
-        let small_exp = {
-            let mut bytes = [0u8; 32];
-            bytes[31] = 2;
-            bytes
-        };
+        let small_exp = u256_from_u8(2);
         let large_mod = {
             let mut bytes = [0u8; 32];
             bytes[30] = 0x01; // 256
@@ -768,8 +747,7 @@ mod tests {
         };
         let large_result = host.expmod(large_base, small_exp, large_mod);
         // MAX^2 % 256 should be 1 (since MAX = 255 mod 256 = -1, and (-1)^2 = 1)
-        let mut expected_large = [0u8; 32];
-        expected_large[31] = 1;
+        let expected_large = u256_from_u8(1);
         assert_eq!(large_result, expected_large);
     }
 }
