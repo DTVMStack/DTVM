@@ -15,4 +15,4 @@ pub mod utils;
 pub use error::{HostFunctionError, HostFunctionResult};
 pub use host_functions::*;
 pub use traits::*;
-pub use utils::{format_hex, init_logging, MemoryAccessor};
+pub use utils::MemoryAccessor;

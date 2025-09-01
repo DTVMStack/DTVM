@@ -379,6 +379,139 @@ pub trait EvmHost {
 mod tests {
     use super::*;
 
+    // Mock implementation for testing default methods
+    struct MockEvmHost;
+
+    impl EvmHost for MockEvmHost {
+        fn get_address(&self) -> &[u8; 20] {
+            &[0u8; 20]
+        }
+        fn get_block_hash(&self, _block_number: i64) -> Option<[u8; 32]> {
+            None
+        }
+        fn call_data_copy(&self) -> &[u8] {
+            &[]
+        }
+        fn get_caller(&self) -> &[u8; 20] {
+            &[0u8; 20]
+        }
+        fn get_call_value(&self) -> &[u8; 32] {
+            &[0u8; 32]
+        }
+        fn get_chain_id(&self) -> &[u8; 32] {
+            &[0u8; 32]
+        }
+        fn get_gas_left(&self, gas_left: i64) -> i64 {
+            gas_left
+        }
+        fn get_block_gas_limit(&self) -> i64 {
+            0
+        }
+        fn get_block_number(&self) -> i64 {
+            0
+        }
+        fn get_tx_origin(&self) -> &[u8; 20] {
+            &[0u8; 20]
+        }
+        fn get_block_timestamp(&self) -> i64 {
+            0
+        }
+        fn storage_store(&self, _key: &[u8; 32], _value: &[u8; 32]) {}
+        fn storage_load(&self, _key: &[u8; 32]) -> [u8; 32] {
+            [0u8; 32]
+        }
+        fn emit_log_event(&self, _event: LogEvent) {}
+        fn code_copy(&self) -> &[u8] {
+            &[]
+        }
+        fn get_base_fee(&self) -> &[u8; 32] {
+            &[0u8; 32]
+        }
+        fn get_blob_base_fee(&self) -> &[u8; 32] {
+            &[0u8; 32]
+        }
+        fn get_block_coinbase(&self) -> &[u8; 20] {
+            &[0u8; 20]
+        }
+        fn get_tx_gas_price(&self) -> &[u8; 32] {
+            &[0u8; 32]
+        }
+        fn get_external_balance(&self, _address: &[u8; 20]) -> [u8; 32] {
+            [0u8; 32]
+        }
+        fn get_external_code_size(&self, _address: &[u8; 20]) -> Option<i32> {
+            None
+        }
+        fn get_external_code_hash(&self, _address: &[u8; 20]) -> Option<[u8; 32]> {
+            None
+        }
+        fn external_code_copy(&self, _address: &[u8; 20]) -> Option<Vec<u8>> {
+            None
+        }
+        fn get_block_prev_randao(&self) -> &[u8; 32] {
+            &[0u8; 32]
+        }
+        fn self_destruct(&self, _recipient: &[u8; 20]) -> [u8; 32] {
+            [0u8; 32]
+        }
+        fn call_contract(
+            &self,
+            _target: &[u8; 20],
+            _caller: &[u8; 20],
+            _value: &[u8; 32],
+            _data: &[u8],
+            _gas: i64,
+        ) -> ContractCallResult {
+            ContractCallResult::simple_success()
+        }
+        fn call_code(
+            &self,
+            _target: &[u8; 20],
+            _caller: &[u8; 20],
+            _value: &[u8; 32],
+            _data: &[u8],
+            _gas: i64,
+        ) -> ContractCallResult {
+            ContractCallResult::simple_success()
+        }
+        fn call_delegate(
+            &self,
+            _target: &[u8; 20],
+            _caller: &[u8; 20],
+            _data: &[u8],
+            _gas: i64,
+        ) -> ContractCallResult {
+            ContractCallResult::simple_success()
+        }
+        fn call_static(
+            &self,
+            _target: &[u8; 20],
+            _caller: &[u8; 20],
+            _data: &[u8],
+            _gas: i64,
+        ) -> ContractCallResult {
+            ContractCallResult::simple_success()
+        }
+        fn create_contract(
+            &self,
+            _creator: &[u8; 20],
+            _value: &[u8; 32],
+            _code: &[u8],
+            _data: &[u8],
+            _gas: i64,
+            _salt: Option<[u8; 32]>,
+            _is_create2: bool,
+        ) -> ContractCreateResult {
+            ContractCreateResult::simple_failure()
+        }
+        fn finish(&self, _data: Vec<u8>) {}
+        fn return_data_copy(&self) -> Vec<u8> {
+            vec![]
+        }
+        fn revert(&self, _revert_data: Vec<u8>) {}
+        fn invalid(&self) {}
+    }
+
     #[test]
     fn test_bigint_to_bytes32() {
         // Test zero
@@ -406,5 +539,237 @@ mod tests {
         expected_small[30] = 0x12;
         expected_small[31] = 0x34;
         assert_eq!(small_bytes, expected_small);
+    }
+
+    #[test]
+    fn test_sha256_default_implementation() {
+        let host = MockEvmHost;
+
+        // Test empty input
+        let empty_result = host.sha256(vec![]);
+        let expected_empty = [
+            0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f,
+            0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b,
+            0x78, 0x52, 0xb8, 0x55,
+        ];
+        assert_eq!(empty_result, expected_empty);
+
+        // Test "abc"
+        let abc_result = host.sha256(b"abc".to_vec());
+        let expected_abc = [
+            0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae,
+            0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61,
+            0xf2, 0x00, 0x15, 0xad,
+        ];
+        assert_eq!(abc_result, expected_abc);
+
+        // Test longer input
+        let long_result =
+            host.sha256(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".to_vec());
+        let expected_long = [
+            0x24, 0x8d, 0x6a, 0x61, 0xd2, 0x06, 0x38, 0xb8, 0xe5, 0xc0, 0x26, 0x93, 0x0c, 0x3e,
+            0x60, 0x39, 0xa3, 0x3c, 0xe4, 0x59, 0x64, 0xff, 0x21, 0x67, 0xf6, 0xec, 0xed, 0xd4,
+            0x19, 0xdb, 0x06, 0xc1,
+        ];
+        assert_eq!(long_result, expected_long);
+    }
+
+    #[test]
+    fn test_keccak256_default_implementation() {
+        let host = MockEvmHost;
+
+        // Test empty input
+        let empty_result = host.keccak256(vec![]);
+        let expected_empty = [
+            0xc5, 0xd2, 0x46, 0x01, 0x86, 0xf7, 0x23, 0x3c, 0x92, 0x7e, 0x7d, 0xb2, 0xdc, 0xc7,
+            0x03, 0xc0, 0xe5, 0x00, 0xb6, 0x53, 0xca, 0x82, 0x27, 0x3b, 0x7b, 0xfa, 0xd8, 0x04,
+            0x5d, 0x85, 0xa4, 0x70,
+        ];
+        assert_eq!(empty_result, expected_empty);
+
+        // Test "abc"
+        let abc_result = host.keccak256(b"abc".to_vec());
+        let expected_abc = [
+            0x4e, 0x03, 0x65, 0x7a, 0xea, 0x45, 0xa9, 0x4f, 0xc7, 0xd4, 0x7b, 0xa8, 0x26, 0xc8,
+            0xd6, 0x67, 0xc0, 0xd1, 0xe6, 0xe3, 0x3a, 0x64, 0xa0, 0x36, 0xec, 0x44, 0xf5, 0x8f,
+            0xa1, 0x2d, 0x6c, 0x45,
+        ];
+        assert_eq!(abc_result, expected_abc);
+
+        // Test Ethereum function signature "transfer(address,uint256)"
+        let transfer_result = host.keccak256(b"transfer(address,uint256)".to_vec());
+        let expected_transfer = [
+            0xa9, 0x05, 0x9c, 0xbb, 0x2a, 0xb0, 0x9e, 0xb2, 0x19, 0x58, 0x3f, 0x4a, 0x59, 0xa5,
+            0xd0, 0x62, 0x3a, 0xde, 0x34, 0x6d, 0x96, 0x2b, 0xcd, 0x4e, 0x46, 0xb1, 0x1d, 0xa0,
+            0x47, 0xc9, 0x04, 0x9b,
+        ];
+        assert_eq!(transfer_result, expected_transfer);
+    }
+
+    #[test]
+    fn test_addmod_default_implementation() {
+        let host = MockEvmHost;
+
+        // Test basic addition: (5 + 3) % 7 = 1
+        let a = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 5;
+            bytes
+        };
+        let b = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 3;
+            bytes
+        };
+        let n = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 7;
+            bytes
+        };
+        let result = host.addmod(a, b, n);
+        let mut expected = [0u8; 32];
+        expected[31] = 1;
+        assert_eq!(result, expected);
+
+        // Test with zero modulus (should return zero)
+        let zero_mod = [0u8; 32];
+        let zero_result = host.addmod(a, b, zero_mod);
+        assert_eq!(zero_result, [0u8; 32]);
+
+        // Test overflow case: (MAX + 1) % 2 = 0
+        let max_val = [0xFFu8; 32];
+        let one = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 1;
+            bytes
+        };
+        let two = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 2;
+            bytes
+        };
+        let overflow_result = host.addmod(max_val, one, two);
+        assert_eq!(overflow_result, [0u8; 32]);
+    }
+
+    #[test]
+    fn test_mulmod_default_implementation() {
+        let host = MockEvmHost;
+
+        // Test basic multiplication: (5 * 3) % 7 = 1
+        let a = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 5;
+            bytes
+        };
+        let b = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 3;
+            bytes
+        };
+        let n = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 7;
+            bytes
+        };
+        let result = host.mulmod(a, b, n);
+        let mut expected = [0u8; 32];
+        expected[31] = 1;
+        assert_eq!(result, expected);
+
+        // Test with zero modulus (should return zero)
+        let zero_mod = [0u8; 32];
+        let zero_result = host.mulmod(a, b, zero_mod);
+        assert_eq!(zero_result, [0u8; 32]);
+
+        // Test with zero operand
+        let zero = [0u8; 32];
+        let zero_mul_result = host.mulmod(zero, b, n);
+        assert_eq!(zero_mul_result, [0u8; 32]);
+    }
+
+    #[test]
+    fn test_expmod_default_implementation() {
+        let host = MockEvmHost;
+
+        // Test basic exponentiation: 2^3 % 5 = 3
+        let base = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 2;
+            bytes
+        };
+        let exp = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 3;
+            bytes
+        };
+        let modulus = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 5;
+            bytes
+        };
+        let result = host.expmod(base, exp, modulus);
+        let mut expected = [0u8; 32];
+        expected[31] = 3;
+        assert_eq!(result, expected);
+
+        // Test with zero modulus (should return zero)
+        let zero_mod = [0u8; 32];
+        let zero_result = host.expmod(base, exp, zero_mod);
+        assert_eq!(zero_result, [0u8; 32]);
+
+        // Test with modulus = 1 (should return zero)
+        let one_mod = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 1;
+            bytes
+        };
+        let one_mod_result = host.expmod(base, exp, one_mod);
+        assert_eq!(one_mod_result, [0u8; 32]);
+
+        // Test with zero exponent (should return 1, unless base is 0)
+        let zero_exp = [0u8; 32];
+        let zero_exp_result = host.expmod(base, zero_exp, modulus);
+        let mut expected_one = [0u8; 32];
+        expected_one[31] = 1;
+        assert_eq!(zero_exp_result, expected_one);
+
+        // Test with zero base and positive exponent (should return 0)
+        let zero_base = [0u8; 32];
+        let zero_base_result = host.expmod(zero_base, exp, modulus);
+        assert_eq!(zero_base_result, [0u8; 32]);
+
+        // Test edge case: 0^0 % n (where n > 1) should return 1 (mathematical convention)
+        let zero_zero_result = host.expmod(zero_base, zero_exp, modulus);
+        let mut expected_one = [0u8; 32];
+        expected_one[31] = 1;
+        assert_eq!(zero_zero_result, expected_one);
+
+        // Additional test: any_number^0 % n should return 1 (except when n = 1)
+        let any_base = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 42;
+            bytes
+        };
+        let any_zero_exp_result = host.expmod(any_base, zero_exp, modulus);
+        assert_eq!(any_zero_exp_result, expected_one);
+
+        // Test large numbers to ensure no overflow issues
+        let large_base = [0xFFu8; 32];
+        let small_exp = {
+            let mut bytes = [0u8; 32];
+            bytes[31] = 2;
+            bytes
+        };
+        let large_mod = {
+            let mut bytes = [0u8; 32];
+            bytes[30] = 0x01; // 256
+            bytes
+        };
+        let large_result = host.expmod(large_base, small_exp, large_mod);
+        // MAX^2 % 256 should be 1 (since MAX = 255 mod 256 = -1, and (-1)^2 = 1)
+        let mut expected_large = [0u8; 32];
+        expected_large[31] = 1;
+        assert_eq!(large_result, expected_large);
     }
 }

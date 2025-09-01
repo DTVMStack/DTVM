@@ -14,11 +14,6 @@
 //! - **Error Handling** - Detailed error reporting for memory access failures
 //! - **Performance** - Optimized for frequent memory operations
 //!
-//! ## Debug and Logging
-//! - **Structured Logging** - Multi-level logging with context information
-//! - **Memory Debugging** - Hex formatting utilities for memory data
-//! - **Function Tracing** - Parameter logging and execution flow tracking
-//! - **Error Context** - Rich error information with debug details
 //!
 //! # Usage
 //!
@@ -40,97 +35,6 @@
 
 use crate::core::instance::ZenInstance;
 use crate::evm::error::{out_of_bounds_error, HostFunctionResult};
-use crate::host_debug;
-
-// ============================================================================
-// Debug and Logging Macros
-// ============================================================================
-
-/// Debug macro for host function calls
-/// Only prints in debug builds to avoid performance impact in release
-#[macro_export]
-macro_rules! host_debug {
-    ($($arg:tt)*) => {
-        #[cfg(debug_assertions)]
-        {
-            println!("[HOST] {}", format!($($arg)*));
-        }
-    };
-}
-
-/// Info macro for important host function events
-#[cfg(feature = "logging")]
-#[macro_export]
-macro_rules! host_info {
-    ($($arg:tt)*) => {
-        log::info!("[HOST] {}", format!($($arg)*));
-    };
-}
-
-/// Info macro for important host function events (no-op when logging disabled)
-#[cfg(not(feature = "logging"))]
-#[macro_export]
-macro_rules! host_info {
-    ($($arg:tt)*) => {};
-}
-
-/// Warning macro for host function warnings
-#[cfg(feature = "logging")]
-#[macro_export]
-macro_rules! host_warn {
-    ($($arg:tt)*) => {
-        log::warn!("[HOST] {}", format!($($arg)*));
-    };
-}
-
-/// Warning macro for host function warnings (no-op when logging disabled)
-#[cfg(not(feature = "logging"))]
-#[macro_export]
-macro_rules! host_warn {
-    ($($arg:tt)*) => {};
-}
-
-/// Error macro for host function errors
-#[cfg(feature = "logging")]
-#[macro_export]
-macro_rules! host_error {
-    ($($arg:tt)*) => {
-        log::error!("[HOST] {}", format!($($arg)*));
-    };
-}
-
-/// Error macro for host function errors (no-op when logging disabled)
-#[cfg(not(feature = "logging"))]
-#[macro_export]
-macro_rules! host_error {
-    ($($arg:tt)*) => {};
-}
-
-// ============================================================================
-// Debug Utility Functions
-// ============================================================================
-
-/// Initialize logging for the EVM host functions
-/// Should be called once at the start of the application
-#[cfg(feature = "logging")]
-#[allow(dead_code)]
-pub fn init_logging() {
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Debug)
-        .init();
-}
-
-/// Initialize logging for the EVM host functions (no-op when logging disabled)
-#[cfg(not(feature = "logging"))]
-#[allow(dead_code)]
-pub fn init_logging() {
-    // No-op when logging is disabled
-}
-
-/// Format bytes as hex string for debugging
-pub fn format_hex(bytes: &[u8]) -> String {
-    hex::encode(bytes)
-}
 
 // ============================================================================
 // Memory Access Utilities
@@ -176,8 +80,6 @@ impl<'a, T> MemoryAccessor<'a, T> {
             let ptr = self.instance.get_host_memory(offset) as *mut u8;
             std::ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len());
         }
-
-        host_debug!("Wrote {} bytes to offset 0x{:x}", data.len(), offset);
         Ok(())
     }
 
@@ -369,16 +271,4 @@ pub fn validate_data_param<T>(
     }
 
     Ok((offset_u32, length_u32))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_format_hex() {
-        let data = vec![0x48, 0x65, 0x6c, 0x6c, 0x6f];
-        let hex_str = format_hex(&data);
-        assert_eq!(hex_str, "48656c6c6f");
-    }
 }
