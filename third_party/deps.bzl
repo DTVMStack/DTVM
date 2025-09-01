@@ -10,4 +10,3 @@ def _third_party_deps(_ctx):
 third_party_deps = module_extension(
     implementation = _third_party_deps,
 )
-

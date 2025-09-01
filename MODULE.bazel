@@ -1,0 +1,40 @@
+###############################################################################
+# Bazel now uses Bzlmod by default to manage external dependencies.
+# Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
+#
+# For more details, please check https://github.com/bazelbuild/bazel/issues/18958
+###############################################################################
+module(name = "zetaengine", version = "1.0")
+
+# mychain_cpp_thirdparty serves as a local bazel registry
+# llvm-project 15.0.7 is introduced through the local bazel registry
+# Build process (already integrated in build.sh):
+# 1. Clone cpp_thirdparty to .local_bazel_registry directory and checkout to the specified tag
+# 2. bazel build specifies the local registry via these parameters: --registry=file://$(pwd)/.local_bazel_registry --registry=https://bcr.bazel.build
+bazel_dep(name = "llvm-project", version = "15.0.7")
+bazel_dep(name = "protobuf", version = "29.3", repo_name = "com_google_protobuf")
+bazel_dep(name = "platforms", version = "0.0.11")
+bazel_dep(name = "mychain_cpp_thirdparty")
+git_override(
+    module_name = "mychain_cpp_thirdparty",
+    # branch = "refs/heads/audit-chain_platform_v1.0.0-rc26",
+    commit = "ce3c8ac",
+    remote = "https://github.com/jovaynetwork/jovay-thirdparty.git",
+)
+
+third_party_deps = use_extension("//third_party:deps.bzl", "third_party_deps")
+use_repo(third_party_deps, "zen_deps_asmjit")
+use_repo(third_party_deps, "zen_deps_CLI11")
+use_repo(third_party_deps, "mychain_cpp_thirdparty_spdlog_1_7_0")
+
+# for build compile_commands.json
+bazel_dep(name = "com_grail_bazel_compdb")
+archive_override(
+    module_name = "com_grail_bazel_compdb",
+    urls = [
+        "http://127.0.0.1:8080/bazel_compilation_db/master.tar.gz",
+    ],
+    strip_prefix = "bazel-compilation-database-master",
+    sha256 = "df63430df795293fe49d2b71a731278038da1d95f00e3c2b9efd141126c1f3d9",
+    patches = ["//third_party:rules_compdb.patch"],
+)

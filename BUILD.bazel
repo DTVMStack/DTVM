@@ -1,4 +1,7 @@
+# Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
+
+load("@com_grail_bazel_compdb//:aspects.bzl", "compilation_database")
 
 # ======================== [Begin] Project Config ========================
 config_setting(
@@ -45,6 +48,12 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
+config_setting(
+    name = "enable_occlum",
+    values = {"define": "ZEN_ENABLE_OCCLUM=ON"},
+    visibility = ["//visibility:public"],
+)
+
 # ======================== [End] Project Config ========================
 
 # ======================== [Begin] Compilation and Link Options ========================
@@ -71,7 +80,12 @@ PROJECT_DEFINES = select({
     "ZEN_ENABLE_DWASM",
     "ZEN_ENABLE_VIRTUAL_STACK",
     "ZEN_ENABLE_CHECKED_ARITHMETIC",
-]
+] + select({
+    ":enable_occlum": [
+        "ZEN_ENABLE_OCCLUM",
+    ],
+    "//conditions:default": [],
+})
 
 PROJECT_COPTS = [
     "-Wall",
@@ -83,7 +97,9 @@ PROJECT_COPTS = [
     "//conditions:default": [],
 })
 
-PROJECT_LINKOPTS = select({
+PROJECT_LINKOPTS = [
+        "-lpthread",
+] + select({
     ":enable_asan": [
         "-fsanitize=address",
         "-static-libasan",
@@ -119,6 +135,7 @@ cc_library(
     }) + select({
         ":enable_sgx": glob([
             "src/common/libcxx/*.h",
+            "src/platform/sgx/*.h",
         ]),
         "//conditions:default": [
             "src/common/libcxx/type_traits.h",
@@ -150,23 +167,24 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":zetaengine_headers",
-        "@zen_deps_spdlog//:spdlog",
+        "@mychain_cpp_thirdparty_spdlog_1_7_0//:spdlog",
     ],
 )
 
 cc_library(
     name = "zetaengine",
-    srcs = glob(
-        [
-            "src/action/*.cpp",
-            "src/common/*.cpp",
-            "src/entrypoint/*.cpp",
-            "src/runtime/*.cpp",
-            "src/singlepass/*.cpp",
-            "src/log/*.cpp",
-            "src/zetaengine-c.cpp",
-        ],
-    ) + select({
+    srcs = glob([
+        "src/action/*.cpp",
+        "src/common/*.cpp",
+        "src/entrypoint/*.cpp",
+        "src/runtime/*.cpp",
+        "src/singlepass/*.cpp",
+        "src/log/*.cpp",
+        "src/zetaengine-c.cpp",
+        "src/utils/*.cpp",
+    ], exclude = [
+        "src/utils/perf.cpp"
+    ]) + select({
         ":linux": glob(["src/platform/posix/*.cpp"]),
         ":macos": glob(["src/platform/posix/*.cpp"]),
     }) + select({
@@ -178,25 +196,49 @@ cc_library(
             "src/entrypoint/arch/callNative_aarch64.S",
             "src/singlepass/a64/asm/register.cpp",
         ],
+    }) + select({
+        ":enable_sgx": glob([
+            "src/platform/sgx/*.cpp",
+        ]),
+        "//conditions:default": [],
     }),
-    hdrs = [
+    hdrs = glob([
         "src/wni/boilerplate.cpp",
         "src/zetaengine.h",
-        "src/zetaengine-c.h",
-    ],
-    copts = PROJECT_COPTS,
-    defines = PROJECT_DEFINES,
-    include_prefix = "zetaengine",
-    linkopts = PROJECT_LINKOPTS + ["-lpthread"],
-    linkstatic = True,
-    strip_include_prefix = "src",
-    visibility = ["//visibility:public"],
+        "src/action/*.h",
+        "src/common/**/*.def",
+        "src/common/*.h",
+        "src/entrypoint/*.h",
+        "src/platform/*.h",
+        "src/runtime/*.h",
+        "src/singlepass/common/*.h",
+        "src/singlepass/*.h",
+        "src/wni/*.h",
+        "src/utils/*.h",
+    ], exclude = [
+        "src/utils/perf.h"
+    ]) + select({
+        ":x86_64": glob([
+            "src/singlepass/x64/**/*.h",
+        ]),
+        ":aarch64": glob([
+            "src/singlepass/a64/**/*.h",
+        ]),
+    }),
     deps = [
         ":utils_lib",
         ":zetaengine_headers",
         "@zen_deps_asmjit//:asmjit",
-        "@zen_deps_spdlog//:spdlog",
+        "@mychain_cpp_thirdparty_spdlog_1_7_0//:spdlog",
     ],
+    includes = ["src"],
+    include_prefix = "zetaengine",
+    strip_include_prefix = "src",
+    copts = PROJECT_COPTS,
+    defines = PROJECT_DEFINES,
+    linkopts = PROJECT_LINKOPTS,
+    linkstatic = True,
+    visibility = ["//visibility:public"],
 )
 
 cc_binary(
@@ -213,6 +255,26 @@ cc_binary(
         ":zetaengine",
         "@zen_deps_CLI11//:CLI11",
     ],
+)
+
+filegroup(
+    name = "bin",
+    srcs = [
+        ":dtvm",
+    ],
+)
+
+compilation_database(
+    name = "compile_db",
+    targets = [
+        ":dtvm",
+    ],
+    # [optional]
+    # if your exec root (value returned by `bazel info execution_root`)
+    # is constant across your users, then you can supply the value here.
+    # otherwise, the default is `__exec_root__` which you can replace in
+    # the output file using `sed` or similar tool (see below).
+    exec_root = "__EXEC_ROOT__",
 )
 
 # ======================== [End] Targets Control ========================

@@ -29,10 +29,6 @@ if(ZEN_ENABLE_SINGLEPASS_JIT)
       SHA256=4845eb9d9e6e8da34694c451a00bc3a4c02fe1f60e12dbde9f09ae5ecb690528
     PATCH_COMMAND ${PATCH_CMD}
   )
-  # FetchContent_Declare( asmjit GIT_REPOSITORY
-  # https://github.com/asmjit/asmjit.git GIT_COMMIT
-  # 3577608cab0bc509f856ebf6e41b2f9d9f71acc4 GIT_SHALLOW TRUE PATCH_COMMAND
-  # ${PATCH_CMD} )
   FetchContent_MakeAvailable(asmjit)
 endif()
 
