@@ -169,15 +169,6 @@ public:
   // PUSH1-PUSH32: Push N bytes onto stack
   Operand handlePush(const Bytes &Data);
 
-  // DUP1-DUP16: Duplicate Nth stack item
-  Operand handleDup(uint8_t Index);
-
-  // SWAP1-SWAP16: Swap top with Nth+1 stack item
-  void handleSwap(uint8_t Index);
-
-  // POP: Remove top stack item
-  void handlePop();
-
   // ==================== Control Flow Instruction Handlers ====================
 
   void handleStop() {
@@ -368,31 +359,8 @@ public:
 private:
   // ==================== Operand Methods ====================
 
-  void pushOperand(const Operand &Op) { OperandStack.push(Op); }
-  Operand popOperand();
-  Operand peekOperand(size_t Index = 0) const;
-  size_t getStackSize() const { return OperandStack.size(); }
-
   MInstruction *extractOperand(const Operand &Opnd);
   U256Inst extractU256Operand(const Operand &Opnd);
-
-  Operand createTempStackOperand(EVMType Type) {
-    if (Type == EVMType::UINT256) {
-      // For U256, create 4 I64 variables to represent the full 256-bit value
-      MType *I64Type =
-          EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-      U256Var VarComponents;
-      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-        VarComponents[I] = CurFunc->createVariable(I64Type);
-      }
-      return Operand(VarComponents, Type);
-    } else {
-      // For other types, use single variable
-      MType *Mtype = EVMFrontendContext::getMIRTypeFromEVMType(Type);
-      Variable *TempVar = CurFunc->createVariable(Mtype);
-      return Operand(TempVar, Type);
-    }
-  }
 
   // ==================== MIR Util Methods ====================
 

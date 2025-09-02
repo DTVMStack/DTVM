@@ -21,6 +21,15 @@ public:
     return Top;
   }
 
+  Operand peek(uint8_t Index) {
+    ZEN_ASSERT(Index < StackImpl.size());
+    std::stack<Operand> TempStack = StackImpl;
+    for (uint8_t I = 0; I < Index; ++I) {
+      TempStack.pop();
+    }
+    return TempStack.top();
+  }
+
   Operand getTop() const {
     ZEN_ASSERT(!StackImpl.empty());
     return StackImpl.top();
