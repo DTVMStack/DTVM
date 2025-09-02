@@ -48,8 +48,9 @@ where
     let evmhost = &instance.extra_ctx;
     let memory = MemoryAccessor::new(instance);
 
-    // Validate parameters
-    let (result_offset_u32, length_u32) = validate_data_param(instance, result_offset, length)?;
+    // Validate parameters with buffer size check
+    let (result_offset_u32, length_u32) =
+        validate_data_param(instance, result_offset, length, Some("code_copy"))?;
 
     if code_offset < 0 {
         return Err(crate::evm::error::out_of_bounds_error(
@@ -203,9 +204,10 @@ where
     let evmhost = &instance.extra_ctx;
     let memory = MemoryAccessor::new(instance);
 
-    // Validate parameters
+    // Validate parameters with buffer size check
     let addr_offset_u32 = validate_address_param(instance, addr_offset)?;
-    let (result_offset_u32, length_u32) = validate_data_param(instance, result_offset, length)?;
+    let (result_offset_u32, length_u32) =
+        validate_data_param(instance, result_offset, length, Some("external_code_copy"))?;
 
     if code_offset < 0 {
         return Err(crate::evm::error::out_of_bounds_error(

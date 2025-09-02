@@ -72,7 +72,7 @@ where
 
     // Validate parameters
     let (input_offset_u32, input_length_u32) =
-        validate_data_param(instance, input_offset, input_length)?;
+        validate_data_param(instance, input_offset, input_length, Some("sha256"))?;
     let result_offset_u32 = validate_bytes32_param(instance, result_offset)?;
 
     // Read input data
@@ -112,7 +112,7 @@ where
 
     // Validate parameters
     let (input_offset_u32, input_length_u32) =
-        validate_data_param(instance, input_offset, input_length)?;
+        validate_data_param(instance, input_offset, input_length, Some("keccak256"))?;
     let result_offset_u32 = validate_bytes32_param(instance, result_offset)?;
 
     // Read input data

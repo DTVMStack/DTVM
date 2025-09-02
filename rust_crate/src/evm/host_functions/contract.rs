@@ -44,7 +44,7 @@ where
     let addr_offset_u32 = validate_address_param(instance, addr_offset)?;
     let value_offset_u32 = validate_bytes32_param(instance, value_offset)?;
     let (data_offset_u32, data_length_u32) =
-        validate_data_param(instance, data_offset, data_length)?;
+        validate_data_param(instance, data_offset, data_length, Some("call_contract"))?;
 
     // Read the target address
     let target_address = memory.read_address(addr_offset_u32)?;
@@ -106,7 +106,7 @@ where
     let addr_offset_u32 = validate_address_param(instance, addr_offset)?;
     let value_offset_u32 = validate_bytes32_param(instance, value_offset)?;
     let (data_offset_u32, data_length_u32) =
-        validate_data_param(instance, data_offset, data_length)?;
+        validate_data_param(instance, data_offset, data_length, Some("call_code"))?;
 
     // Read parameters
     let target_address = memory.read_address(addr_offset_u32)?;
@@ -163,7 +163,7 @@ where
     // Validate parameters
     let addr_offset_u32 = validate_address_param(instance, addr_offset)?;
     let (data_offset_u32, data_length_u32) =
-        validate_data_param(instance, data_offset, data_length)?;
+        validate_data_param(instance, data_offset, data_length, Some("call_delegate"))?;
 
     // Read parameters
     let target_address = memory.read_address(addr_offset_u32)?;
@@ -212,7 +212,7 @@ where
     // Validate parameters
     let addr_offset_u32 = validate_address_param(instance, addr_offset)?;
     let (data_offset_u32, data_length_u32) =
-        validate_data_param(instance, data_offset, data_length)?;
+        validate_data_param(instance, data_offset, data_length, Some("call_static"))?;
 
     // Read parameters
     let target_address = memory.read_address(addr_offset_u32)?;
@@ -266,10 +266,18 @@ where
 
     // Validate parameters
     let value_offset_u32 = validate_bytes32_param(instance, value_offset)?;
-    let (code_offset_u32, code_length_u32) =
-        validate_data_param(instance, code_offset, code_length)?;
-    let (data_offset_u32, data_length_u32) =
-        validate_data_param(instance, data_offset, data_length)?;
+    let (code_offset_u32, code_length_u32) = validate_data_param(
+        instance,
+        code_offset,
+        code_length,
+        Some("create_contract_code"),
+    )?;
+    let (data_offset_u32, data_length_u32) = validate_data_param(
+        instance,
+        data_offset,
+        data_length,
+        Some("create_contract_data"),
+    )?;
     let salt_offset_u32 = if is_create2 != 0 {
         Some(validate_bytes32_param(instance, salt_offset)?)
     } else {

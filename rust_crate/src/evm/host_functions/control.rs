@@ -24,7 +24,8 @@ where
     let memory = MemoryAccessor::new(instance);
 
     // Validate parameters
-    let (data_offset_u32, length_u32) = validate_data_param(instance, data_offset, length)?;
+    let (data_offset_u32, length_u32) =
+        validate_data_param(instance, data_offset, length, Some("finish"))?;
 
     // Read the return data
     let return_data = memory.read_bytes_vec(data_offset_u32, length_u32)?;
@@ -56,7 +57,8 @@ where
     let memory = MemoryAccessor::new(instance);
 
     // Validate parameters
-    let (data_offset_u32, length_u32) = validate_data_param(instance, data_offset, length)?;
+    let (data_offset_u32, length_u32) =
+        validate_data_param(instance, data_offset, length, Some("revert"))?;
 
     // Read the revert data
     let revert_data = memory.read_bytes_vec(data_offset_u32, length_u32)?;
@@ -168,8 +170,9 @@ where
     let evmhost = &instance.extra_ctx;
     let memory = MemoryAccessor::new(instance);
 
-    // Validate parameters
-    let (result_offset_u32, length_u32) = validate_data_param(instance, result_offset, length)?;
+    // Validate parameters with buffer size check
+    let (result_offset_u32, length_u32) =
+        validate_data_param(instance, result_offset, length, Some("return_data_copy"))?;
 
     if data_offset < 0 {
         return Err(crate::evm::error::out_of_bounds_error(
