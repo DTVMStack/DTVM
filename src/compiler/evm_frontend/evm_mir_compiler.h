@@ -499,7 +499,6 @@ private:
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;
   MBasicBlock *CurBB = nullptr;
-  std::stack<Operand> OperandStack;
 
   // Instance address for JIT function calls
   MInstruction *InstanceAddr = nullptr;

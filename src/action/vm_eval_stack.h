@@ -40,6 +40,7 @@ public:
   bool empty() const { return StackImpl.empty(); }
 
 private:
+  // TODO: [Performance] Replace stack with vector in EVM
   std::stack<Operand> StackImpl;
 };
 
