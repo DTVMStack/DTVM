@@ -506,7 +506,7 @@ private:
   template <typename RetType, typename... ArgTypes, typename... ParamTypes>
   Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *,
                                                 ArgTypes...),
-                         const ParamTypes &...params);
+                         const ParamTypes &...Params);
 
   // Helper template functions for runtime call type mapping
   template <typename RetType> static MType *getMIRReturnType();

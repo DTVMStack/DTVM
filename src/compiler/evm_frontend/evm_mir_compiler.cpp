@@ -1540,79 +1540,79 @@ EVMMirBuilder::callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *)) {
 template <typename ArgType>
 EVMMirBuilder::U256Inst
 EVMMirBuilder::convertOperandToInstruction(const Operand &Param) {
-  EVMMirBuilder::U256Inst result = {};
+  EVMMirBuilder::U256Inst Result = {};
 
   if constexpr (std::is_same_v<ArgType, int64_t> ||
                 std::is_same_v<ArgType, uint64_t>) {
-    EVMMirBuilder::U256Inst components = extractU256Operand(Param);
-    result[0] = components[0];
+    EVMMirBuilder::U256Inst Components = extractU256Operand(Param);
+    Result[0] = Components[0];
   } else if constexpr (std::is_same_v<ArgType, const uint8_t *>) {
-    result[0] = Param.getInstr();
+    Result[0] = Param.getInstr();
   } else if constexpr (std::is_same_v<ArgType, const intx::uint256> ||
                        std::is_same_v<ArgType, intx::uint256>) {
-    const U256Value &u256Value = Param.getConstValue();
-    MType *i64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-    for (size_t i = 0; i < EVM_ELEMENTS_COUNT; ++i) {
-      result[i] = createIntConstInstruction(i64Type, u256Value[i]);
+    const U256Value &U256Value = Param.getConstValue();
+    MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      Result[I] = createIntConstInstruction(I64Type, U256Value[I]);
     }
   } else {
     ZEN_ASSERT(false &&
                "Unsupported argument type in convertOperandToInstruction");
   }
 
-  return result;
+  return Result;
 }
 
 template <typename RetType, typename... ArgTypes, typename... ParamTypes>
 EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
     RetType (*RuntimeFunc)(runtime::EVMInstance *, ArgTypes...),
-    const ParamTypes &...params) {
-  MType *i64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  uint64_t funcAddr = getFunctionAddress(RuntimeFunc);
-  MInstruction *funcAddrInst = createIntConstInstruction(i64Type, funcAddr);
-  MInstruction *instancePtr = getCurrentInstancePointer();
+    const ParamTypes &...Params) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
 
-  std::vector<MInstruction *> args = {instancePtr};
+  std::vector<MInstruction *> Args = {InstancePtr};
 
-  auto paramsTuple = std::forward_as_tuple(params...);
+  auto ParamsTuple = std::forward_as_tuple(Params...);
 
-  auto pushOne = [this, &args, &paramsTuple]<std::size_t I>() {
+  auto PushOne = [this, &Args, &ParamsTuple]<std::size_t I>() {
     using ArgT = typename std::tuple_element<I, std::tuple<ArgTypes...>>::type;
-    const Operand &op = std::get<I>(paramsTuple);
+    const Operand &Op = std::get<I>(ParamsTuple);
 
-    if (op.getType() == EVMType::UINT256 && op.isU256MultiComponent()) {
+    if (Op.getType() == EVMType::UINT256 && Op.isU256MultiComponent()) {
       if constexpr (std::is_same_v<ArgT, const intx::uint256> ||
                     std::is_same_v<ArgT, intx::uint256>) {
-        const auto &components = op.getU256Components();
-        for (size_t i = 0; i < EVM_ELEMENTS_COUNT; ++i) {
-          args.push_back(components[i]);
+        const auto &Components = Op.getU256Components();
+        for (size_t Pos = 0; Pos < EVM_ELEMENTS_COUNT; ++Pos) {
+          Args.push_back(Components[Pos]);
         }
       } else {
-        auto insts = convertOperandToInstruction<ArgT>(op);
-        for (auto *inst : insts)
-          if (inst)
-            args.push_back(inst);
+        auto Insts = convertOperandToInstruction<ArgT>(Op);
+        for (auto *Inst : Insts)
+          if (Inst)
+            Args.push_back(Inst);
       }
     } else {
-      auto insts = convertOperandToInstruction<ArgT>(op);
-      for (auto *inst : insts)
-        if (inst)
-          args.push_back(inst);
+      auto Insts = convertOperandToInstruction<ArgT>(Op);
+      for (auto *Inst : Insts)
+        if (Inst)
+          Args.push_back(Inst);
     }
   };
 
   constexpr std::size_t N = sizeof...(ArgTypes);
   [&]<std::size_t... I>(std::index_sequence<I...>) {
-    (pushOne.template operator()<I>(), ...);
+    (PushOne.template operator()<I>(), ...);
   }
   (std::make_index_sequence<N>{});
 
-  MType *returnType = getMIRReturnType<RetType>();
-  MInstruction *callInstr = createInstruction<ICallInstruction>(
-      /*isTail*/ false, returnType, funcAddrInst,
-      llvm::ArrayRef<MInstruction *>{args});
+  MType *ReturnType = getMIRReturnType<RetType>();
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      /*isTail*/ false, ReturnType, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>{Args});
 
-  return convertCallResult<RetType>(callInstr);
+  return convertCallResult<RetType>(CallInstr);
 }
 
 MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
