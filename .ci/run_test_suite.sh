@@ -125,9 +125,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             cd ..
             ;;
         "evmrealsuite")
-            ./build/dtvm $EXTRA_EXE_OPTIONS tests/evm_asm/push_insufficient_at_end_origin.evm.hex
-            ./build/dtvm $EXTRA_EXE_OPTIONS tests/evm_asm/byte_1.evm.hex
-            ./build/dtvm $EXTRA_EXE_OPTIONS tests/evm_asm/signextend_1.evm.hex
+            python3 tools/run_evm_tests.py -r build/dtvm $EXTRA_EXE_OPTIONS
             ;;
     esac
 done
