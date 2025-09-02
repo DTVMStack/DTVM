@@ -179,7 +179,7 @@ const uint8_t *evmGetBlockHash(zen::runtime::EVMInstance *Instance,
                              ? Module->Host->get_block_hash(BlockNumber)
                              : evmc::bytes32{};
     Cache.BlockHashes[BlockNumber] = Hash;
-    return Hash.bytes;
+    return Cache.BlockHashes[BlockNumber].bytes;
   }
   return It->second.bytes;
 }
@@ -274,7 +274,7 @@ const uint8_t *evmGetBlobHash(zen::runtime::EVMInstance *Instance,
       // Hash = Module->Host->get_blob_hash(Index);
     }
     Cache.BlobHashes[Index] = Hash;
-    return Hash.bytes;
+    return Cache.BlobHashes[Index].bytes;
   }
   return It->second.bytes;
 }
