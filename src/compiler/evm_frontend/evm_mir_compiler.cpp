@@ -133,50 +133,6 @@ EVMMirBuilder::Operand EVMMirBuilder::handlePush(const Bytes &Data) {
   return Operand(Value);
 }
 
-EVMMirBuilder::Operand EVMMirBuilder::handleDup(uint8_t Index) {
-  return peekOperand(Index - 1);
-}
-
-void EVMMirBuilder::handleSwap(uint8_t Index) {
-  if (OperandStack.size() < Index + 1) {
-    throw getError(common::ErrorCode::EVMStackUnderflow);
-  }
-
-  std::vector<Operand> Temp;
-  for (uint8_t I = 0; I <= Index; ++I) {
-    Temp.push_back(popOperand());
-  }
-  std::swap(Temp[0], Temp[Index]);
-
-  for (int I = Index; I >= 0; --I) {
-    pushOperand(Temp[I]);
-  }
-}
-
-void EVMMirBuilder::handlePop() { popOperand(); }
-
-EVMMirBuilder::Operand EVMMirBuilder::popOperand() {
-  if (OperandStack.empty()) {
-    throw getError(common::ErrorCode::EVMStackUnderflow);
-  }
-  Operand Result = OperandStack.top();
-  OperandStack.pop();
-  return Result;
-}
-
-EVMMirBuilder::Operand EVMMirBuilder::peekOperand(size_t Index) const {
-  if (OperandStack.size() <= Index) {
-    throw getError(common::ErrorCode::EVMStackUnderflow);
-  }
-
-  std::stack<Operand> StackCopy = OperandStack;
-  size_t Depth = StackCopy.size() - Index - 1;
-  while (Depth--) {
-    StackCopy.pop();
-  }
-  return StackCopy.top();
-}
-
 // ==================== Control Flow Instruction Handlers ====================
 
 void EVMMirBuilder::handleJump(Operand Dest) {

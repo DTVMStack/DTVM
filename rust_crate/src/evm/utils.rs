@@ -40,6 +40,10 @@ use crate::evm::error::{out_of_bounds_error, HostFunctionResult};
 // Memory Access Utilities
 // ============================================================================
 
+/// Maximum allowed buffer size for memory operations (16MB)
+/// This prevents excessive memory allocation that could cause DoS attacks
+pub const MAX_BUFFER_SIZE: u32 = 16 * 1024 * 1024; // 16MB
+
 /// Memory accessor for safe WASM memory operations
 pub struct MemoryAccessor<'a, T> {
     instance: &'a ZenInstance<T>,
@@ -236,17 +240,48 @@ pub fn validate_bytes32_param<T>(
     validate_offset_for_type(instance, offset, 32, "bytes32")
 }
 
-/// Validate variable length data parameter
+/// Validate buffer size to prevent excessive memory allocation
+pub fn validate_buffer_size(length: u32, operation_name: &str) -> HostFunctionResult<()> {
+    if length > MAX_BUFFER_SIZE {
+        return Err(out_of_bounds_error(
+            0,
+            length,
+            &format!(
+                "{}: buffer size {} exceeds maximum allowed size {}",
+                operation_name, length, MAX_BUFFER_SIZE
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// Validate variable length data parameter with buffer size check
+///
+/// This function validates data parameters for memory operations, including:
+/// - Negative offset/length validation
+/// - Buffer size limits to prevent DoS attacks
+/// - Memory range validation
+///
+/// Parameters:
+/// - instance: WASM instance pointer
+/// - offset: Memory offset (i32)
+/// - length: Data length (i32)
+/// - operation_name: Optional operation name for detailed error messages
+///
+/// Returns: (offset_u32, length_u32) tuple if validation passes
 pub fn validate_data_param<T>(
     instance: &ZenInstance<T>,
     offset: i32,
     length: i32,
+    operation_name: Option<&str>,
 ) -> HostFunctionResult<(u32, u32)> {
+    let op_name = operation_name.unwrap_or("data parameter validation");
+
     if offset < 0 {
         return Err(out_of_bounds_error(
             offset as u32,
             length as u32,
-            "negative data offset",
+            &format!("{}: negative data offset", op_name),
         ));
     }
 
@@ -254,19 +289,23 @@ pub fn validate_data_param<T>(
         return Err(out_of_bounds_error(
             offset as u32,
             length as u32,
-            "negative data length",
+            &format!("{}: negative data length", op_name),
         ));
     }
 
     let offset_u32 = offset as u32;
     let length_u32 = length as u32;
+
+    // Validate buffer size to prevent excessive memory allocation
+    validate_buffer_size(length_u32, op_name)?;
+
     let accessor = MemoryAccessor::new(instance);
 
     if !accessor.validate_range(offset_u32, length_u32) {
         return Err(out_of_bounds_error(
             offset_u32,
             length_u32,
-            "invalid memory access for data",
+            &format!("{}: invalid memory access for data", op_name),
         ));
     }
 

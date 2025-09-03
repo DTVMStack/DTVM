@@ -32,10 +32,19 @@ public:
   }
 
 private:
-  void push(const Operand &Opnd) { Stack.push(Opnd); }
+  static constexpr size_t EVM_MAX_STACK_SIZE = 1024;
+
+  void push(const Operand &Opnd) {
+    if (Stack.getSize() >= EVM_MAX_STACK_SIZE) {
+      throw getError(common::ErrorCode::EVMStackOverflow);
+    }
+    Stack.push(Opnd);
+  }
 
   Operand pop() {
-    ZEN_ASSERT(!Stack.empty());
+    if (Stack.empty()) {
+      throw getError(common::ErrorCode::EVMStackUnderflow);
+    }
     Operand Opnd = Stack.pop();
     Builder.releaseOperand(Opnd);
     return Opnd;
@@ -105,7 +114,7 @@ private:
         handleShift<BinaryOperator::BO_SHR_S>();
         break;
       case OP_POP:
-        Builder.handlePop();
+        handlePop();
         break;
 
       case OP_PUSH0:
@@ -641,12 +650,40 @@ private:
     return Result;
   }
 
+  // DUP1-DUP16: Duplicate Nth stack item
   void handleDup(uint8_t Index) {
-    Operand Result = Builder.handleDup(Index);
+    Operand Result = Stack.peek(Index - 1);
     push(Result);
   }
 
-  void handleSwap(uint8_t Index) { Builder.handleSwap(Index); }
+  // POP: Remove top stack item
+  Operand handlePop() {
+    if (Stack.empty()) {
+      throw getError(common::ErrorCode::EVMStackUnderflow);
+    }
+    Operand Result = Stack.getTop();
+    pop();
+    return Result;
+  }
+
+  // SWAP1-SWAP16: Swap top with Nth+1 stack item
+  void handleSwap(uint8_t Index) {
+    if (Stack.getSize() < Index + 1) {
+      throw getError(common::ErrorCode::EVMStackUnderflow);
+    }
+
+    std::vector<Operand> Temp;
+    for (uint8_t I = 0; I <= Index; ++I) {
+      Temp.push_back(pop());
+    }
+    std::swap(Temp[0], Temp[Index]);
+
+    for (int I = Index; I >= 0; --I) {
+      push(Temp[I]);
+    }
+  }
+
+  // ==================== Environment Instruction Handlers ====================
 
   IRBuilder &Builder;
   CompilerContext *Ctx;
