@@ -620,13 +620,6 @@ private:
     push(Result);
   }
 
-  void handleExp() {
-    Operand BaseOp = pop();
-    Operand ExponentOp = pop();
-    Operand Result = Builder.handleExp(BaseOp, ExponentOp);
-    push(Result);
-  }
-
   void handleAddMod() {
     Operand AugendOp = pop();
     Operand AddendOp = pop();
@@ -641,6 +634,13 @@ private:
     Operand ModulusOp = pop();
     Operand Result =
         Builder.handleMulMod(MultiplicandOp, MultiplierOp, ModulusOp);
+    push(Result);
+  }
+
+  void handleExp() {
+    Operand BaseOp = pop();
+    Operand ExponentOp = pop();
+    Operand Result = Builder.handleExp(BaseOp, ExponentOp);
     push(Result);
   }
 

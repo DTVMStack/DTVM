@@ -16,9 +16,9 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
       .GetSDiv = &evmGetSDiv,
       .GetMod = &evmGetMod,
       .GetSMod = &evmGetSMod,
-      .GetExp = &evmGetExp,
       .GetAddMod = &evmGetAddMod,
       .GetMulMod = &evmGetMulMod,
+      .GetExp = &evmGetExp,
       .GetAddress = &evmGetAddress,
       .GetBalance = &evmGetBalance,
       .GetOrigin = &evmGetOrigin,
@@ -64,6 +64,7 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
 
 intx::uint256 evmGetMul(zen::runtime::EVMInstance *Instance,
                         intx::uint256 Multiplicand, intx::uint256 Multiplier) {
+  // EVM: Multiplicand * Multiplier % (2^256)
   return Multiplicand * Multiplier;
 }
 
@@ -81,7 +82,6 @@ intx::uint256 evmGetSDiv(zen::runtime::EVMInstance *Instance,
     return intx::uint256{0};
   }
 
-  // Perform signed division using uint256 with proper sign handling
   // Check if dividend is negative (MSB set)
   bool isDividendNegative = (Dividend >> 255) != 0;
   bool isDivisorNegative = (Divisor >> 255) != 0;
@@ -113,7 +113,6 @@ intx::uint256 evmGetSMod(zen::runtime::EVMInstance *Instance,
     return intx::uint256{0};
   }
 
-  // Perform signed modulo using uint256 with proper sign handling
   // Check if dividend is negative (MSB set)
   bool isDividendNegative = (Dividend >> 255) != 0;
 
@@ -126,6 +125,37 @@ intx::uint256 evmGetSMod(zen::runtime::EVMInstance *Instance,
 
   // Apply sign: result has same sign as dividend
   return isDividendNegative ? (~absResult + 1) : absResult;
+}
+
+intx::uint256 evmGetAddMod(zen::runtime::EVMInstance *Instance,
+                           intx::uint256 Augend, intx::uint256 Addend,
+                           intx::uint256 Modulus) {
+  // Handle edge case: modulo 0
+  if (Modulus == 0) {
+    return intx::uint256{0};
+  }
+
+  // (Augend + Addend) % Modulus
+  // Use 512-bit intermediate to prevent overflow
+  intx::uint512 Sum = intx::uint512(Augend) + intx::uint512(Addend);
+  intx::uint256 Result = intx::uint256(Sum % Modulus);
+  return Result;
+}
+
+intx::uint256 evmGetMulMod(zen::runtime::EVMInstance *Instance,
+                           intx::uint256 Multiplicand, intx::uint256 Multiplier,
+                           intx::uint256 Modulus) {
+  // Handle edge case: modulo 0
+  if (Modulus == 0) {
+    return intx::uint256{0};
+  }
+
+  // (Multiplicand * Multiplier) % Modulus
+  // Use 512-bit intermediate to prevent overflow
+  intx::uint512 Product =
+      intx::uint512(Multiplicand) * intx::uint512(Multiplier);
+  intx::uint256 Result = intx::uint256(Product % Modulus);
+  return Result;
 }
 
 intx::uint256 evmGetExp(zen::runtime::EVMInstance *Instance, intx::uint256 Base,
@@ -141,13 +171,10 @@ intx::uint256 evmGetExp(zen::runtime::EVMInstance *Instance, intx::uint256 Base,
     return Base;
   }
 
-  // Use efficient modular exponentiation
-  // Note: In EVM, EXP operation is not modular, it's regular exponentiation
-  // but we need to handle 256-bit overflow by taking modulo 2^256
+  // EVM: (Base ^ Exponent) % (2^256)
   intx::uint256 Result = 1;
   intx::uint256 CurrentBase = Base;
 
-  // Binary exponentiation algorithm
   while (Exponent > 0) {
     if (Exponent & 1) {
       Result *= CurrentBase;
@@ -156,37 +183,6 @@ intx::uint256 evmGetExp(zen::runtime::EVMInstance *Instance, intx::uint256 Base,
     Exponent >>= 1;
   }
 
-  return Result;
-}
-
-intx::uint256 evmGetAddMod(zen::runtime::EVMInstance *Instance,
-                           intx::uint256 Augend, intx::uint256 Addend,
-                           intx::uint256 Modulus) {
-  // Handle edge case: modulo 0
-  if (Modulus == 0) {
-    return intx::uint256{0};
-  }
-
-  // Perform (Augend + Addend) mod Modulus
-  // Use 512-bit intermediate to prevent overflow
-  intx::uint512 Sum = intx::uint512(Augend) + intx::uint512(Addend);
-  intx::uint256 Result = intx::uint256(Sum % Modulus);
-  return Result;
-}
-
-intx::uint256 evmGetMulMod(zen::runtime::EVMInstance *Instance,
-                           intx::uint256 Multiplicand, intx::uint256 Multiplier,
-                           intx::uint256 Modulus) {
-  // Handle edge case: modulo 0
-  if (Modulus == 0) {
-    return intx::uint256{0};
-  }
-
-  // Perform (Multiplicand * Multiplier) mod Modulus
-  // Use 512-bit intermediate to prevent overflow
-  intx::uint512 Product =
-      intx::uint512(Multiplicand) * intx::uint512(Multiplier);
-  intx::uint256 Result = intx::uint256(Product % Modulus);
   return Result;
 }
 

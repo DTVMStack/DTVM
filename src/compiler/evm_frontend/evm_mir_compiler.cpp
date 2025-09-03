@@ -205,13 +205,6 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleSMod(Operand DividendOp,
       RuntimeFunctions.GetSMod, DividendOp, DivisorOp);
 }
 
-typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
-                                                         Operand ExponentOp) {
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
-      RuntimeFunctions.GetExp, BaseOp, ExponentOp);
-}
-
 typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
                                                             Operand AddendOp,
                                                             Operand ModulusOp) {
@@ -228,6 +221,13 @@ EVMMirBuilder::handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
   return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256,
                         intx::uint256>(RuntimeFunctions.GetMulMod,
                                        MultiplicandOp, MultiplierOp, ModulusOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
+                                                         Operand ExponentOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetExp, BaseOp, ExponentOp);
 }
 
 EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQZ(const U256Inst &LHS,
