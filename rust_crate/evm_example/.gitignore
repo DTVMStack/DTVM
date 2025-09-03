@@ -1,0 +1,6 @@
+/*.a
+/.idea
+/*.iml
+/target
+/logs
+/*.wasm
