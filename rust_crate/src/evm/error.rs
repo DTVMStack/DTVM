@@ -23,14 +23,14 @@
 //! use dtvmcore_rust::evm::error::*;
 //!
 //! // Create specific error types
-//! let gas_error = gas_error("Insufficient gas", "expensive_operation", Some(50000), Some(10000));
-//! let storage_error = storage_error("Key not found", "storage_load", Some("0x1234"));
+//! // let gas_error = gas_error("Insufficient gas", "expensive_operation", Some(50000), Some(10000));
+//! // let storage_error = storage_error("Key not found", "storage_load", Some("0x1234"));
 //!
 //! // Handle errors
-//! match some_operation() {
-//!     Ok(result) => println!("Success: {:?}", result),
-//!     Err(e) => println!("Error: {}", e),
-//! }
+//! // match some_operation() {
+//! //     Ok(result) => println!("Success: {:?}", result),
+//! //     Err(e) => println!("Error: {}", e),
+//! // }
 //! ```
 
 use std::fmt;

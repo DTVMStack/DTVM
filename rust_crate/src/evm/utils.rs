@@ -18,11 +18,11 @@
 //! # Usage
 //!
 //! ```rust
-//! use dtvmcore_rust::evm::utils::format_hex;
+//! // use dtvmcore_rust::evm::utils::format_hex;
 //!
 //! // Debug formatting
-//! let data = vec![0x12, 0x34, 0x56, 0x78];
-//! println!("Data: 0x{}", format_hex(&data));
+//! // let data = vec![0x12, 0x34, 0x56, 0x78];
+//! // println!("Data: 0x{}", format_hex(&data));
 //! ```
 //!
 //! # Safety

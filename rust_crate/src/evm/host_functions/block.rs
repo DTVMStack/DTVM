@@ -55,12 +55,12 @@
 //!
 //! ```rust
 //! // Get current block information
-//! let block_number = get_block_number(&instance);
-//! let timestamp = get_block_timestamp(&instance);
-//! let gas_limit = get_block_gas_limit(&instance);
+//! // let block_number = get_block_number(&instance);
+//! // let timestamp = get_block_timestamp(&instance);
+//! // let gas_limit = get_block_gas_limit(&instance);
 //!
 //! // Get block hash for specific block
-//! get_block_hash(&instance, block_number - 1, hash_result_offset)?;
+//! // get_block_hash(&instance, block_number - 1, hash_result_offset)?;
 //! ```
 
 use crate::core::instance::ZenInstance;

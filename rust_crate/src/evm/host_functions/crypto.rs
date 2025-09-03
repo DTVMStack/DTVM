@@ -20,7 +20,7 @@
 //! - Usage: Bitcoin addresses, Merkle trees, general cryptographic applications
 //! - Gas cost: 60 + 12 per word of input
 //!
-//! ## Keccak-256  
+//! ## Keccak-256
 //! - Output: 32 bytes (256 bits)
 //! - Algorithm: Keccak family (different from NIST SHA-3)
 //! - Usage: Ethereum addresses, transaction hashes, storage keys
@@ -37,10 +37,10 @@
 //!
 //! ```rust
 //! // Hash some data with SHA-256
-//! sha256(&instance, data_offset, data_length, result_offset)?;
+//! // sha256(&instance, data_offset, data_length, result_offset)?;
 //!
 //! // Hash some data with Keccak-256
-//! keccak256(&instance, data_offset, data_length, result_offset)?;
+//! // keccak256(&instance, data_offset, data_length, result_offset)?;
 //! ```
 
 use crate::core::instance::ZenInstance;

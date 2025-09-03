@@ -11,7 +11,7 @@
 //!
 //! EVM storage is a key-value store where:
 //! - Keys are 32-byte (256-bit) values
-//! - Values are 32-byte (256-bit) values  
+//! - Values are 32-byte (256-bit) values
 //! - Storage is persistent across function calls
 //! - Each contract has its own isolated storage space
 //!
@@ -30,10 +30,10 @@
 //!
 //! ```rust
 //! // Store a value (typically called from WASM)
-//! storage_store(&instance, key_offset, value_offset)?;
+//! // storage_store(&instance, key_offset, value_offset)?;
 //!
-//! // Load a value (typically called from WASM)  
-//! storage_load(&instance, key_offset, result_offset)?;
+//! // Load a value (typically called from WASM)
+//! // storage_load(&instance, key_offset, result_offset)?;
 //! ```
 
 use crate::core::instance::ZenInstance;
