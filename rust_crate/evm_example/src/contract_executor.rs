@@ -5,8 +5,8 @@
 //!
 //! Provides reusable contract execution functionality, supporting smart contract deployment and invocation
 
-use crate::evm_bridge::create_complete_evm_host_functions;
 use crate::mock_context::MockContext;
+use crate::mock_evm_bridge::create_complete_evm_host_functions;
 use dtvmcore_rust::core::runtime::ZenRuntime;
 use dtvmcore_rust::evm::EvmHost;
 use std::rc::Rc;

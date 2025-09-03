@@ -2,5 +2,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod contract_executor;
-pub mod evm_bridge;
 pub mod mock_context;
+pub mod mock_evm_bridge;
