@@ -46,8 +46,21 @@ using VoidWithU256U256Fn = void (*)(zen::runtime::EVMInstance *, intx::uint256,
                                     intx::uint256);
 using VoidWithBytes32Fn = void (*)(zen::runtime::EVMInstance *,
                                    const uint8_t *);
+using U256WithU256U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
+                                             intx::uint256, intx::uint256);
+using U256WithU256U256U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
+                                                 intx::uint256, intx::uint256,
+                                                 intx::uint256);
 
 struct RuntimeFunctions {
+  U256WithU256U256Fn GetMul;
+  U256WithU256U256Fn GetDiv;
+  U256WithU256U256Fn GetSDiv;
+  U256WithU256U256Fn GetMod;
+  U256WithU256U256Fn GetSMod;
+  U256WithU256U256Fn GetExp;
+  U256WithU256U256U256Fn GetAddMod;
+  U256WithU256U256U256Fn GetMulMod;
   Bytes32Fn GetAddress;
   U256WithBytes32Fn GetBalance;
   Bytes32Fn GetOrigin;
@@ -96,6 +109,24 @@ template <typename FuncType> uint64_t getFunctionAddress(FuncType Func) {
   return reinterpret_cast<uint64_t>(Func);
 }
 
+intx::uint256 evmGetMul(zen::runtime::EVMInstance *Instance,
+                        intx::uint256 Multiplicand, intx::uint256 Multiplier);
+intx::uint256 evmGetDiv(zen::runtime::EVMInstance *Instance,
+                        intx::uint256 Dividend, intx::uint256 Divisor);
+intx::uint256 evmGetSDiv(zen::runtime::EVMInstance *Instance,
+                         intx::uint256 Dividend, intx::uint256 Divisor);
+intx::uint256 evmGetMod(zen::runtime::EVMInstance *Instance,
+                        intx::uint256 Dividend, intx::uint256 Divisor);
+intx::uint256 evmGetSMod(zen::runtime::EVMInstance *Instance,
+                         intx::uint256 Dividend, intx::uint256 Divisor);
+intx::uint256 evmGetExp(zen::runtime::EVMInstance *Instance, intx::uint256 Base,
+                        intx::uint256 Exponent);
+intx::uint256 evmGetAddMod(zen::runtime::EVMInstance *Instance,
+                           intx::uint256 Augend, intx::uint256 Addend,
+                           intx::uint256 Modulus);
+intx::uint256 evmGetMulMod(zen::runtime::EVMInstance *Instance,
+                           intx::uint256 Multiplicand, intx::uint256 Multiplier,
+                           intx::uint256 Modulus);
 const uint8_t *evmGetAddress(zen::runtime::EVMInstance *Instance);
 intx::uint256 evmGetBalance(zen::runtime::EVMInstance *Instance,
                             const uint8_t *Address);

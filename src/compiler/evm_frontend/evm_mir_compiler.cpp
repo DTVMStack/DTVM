@@ -128,7 +128,7 @@ EVMMirBuilder::createU256Constants(const U256Value &Value) {
   return Result;
 }
 
-EVMMirBuilder::Operand EVMMirBuilder::handlePush(const Bytes &Data) {
+typename EVMMirBuilder::Operand EVMMirBuilder::handlePush(const Bytes &Data) {
   U256Value Value = bytesToU256(Data);
   return Operand(Value);
 }
@@ -169,6 +169,66 @@ void EVMMirBuilder::handleJumpDest() {
 }
 
 // ==================== Arithmetic Instruction Handlers ====================
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
+                                                         Operand MultiplierOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetMul, MultiplicandOp, MultiplierOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
+                                                         Operand DivisorOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetDiv, DividendOp, DivisorOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleSDiv(Operand DividendOp,
+                                                          Operand DivisorOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetSDiv, DividendOp, DivisorOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
+                                                         Operand DivisorOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetMod, DividendOp, DivisorOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleSMod(Operand DividendOp,
+                                                          Operand DivisorOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetSMod, DividendOp, DivisorOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
+                                                         Operand ExponentOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetExp, BaseOp, ExponentOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
+                                                            Operand AddendOp,
+                                                            Operand ModulusOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256,
+                        intx::uint256>(RuntimeFunctions.GetAddMod, AugendOp,
+                                       AddendOp, ModulusOp);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
+                            Operand ModulusOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256,
+                        intx::uint256>(RuntimeFunctions.GetMulMod,
+                                       MultiplicandOp, MultiplierOp, ModulusOp);
+}
 
 EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQZ(const U256Inst &LHS,
                                                         MType *ResultType) {
@@ -302,7 +362,7 @@ EVMMirBuilder::handleCompareGT_LT(const U256Inst &LHS, const U256Inst &RHS,
   return Result;
 }
 
-EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
+typename EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
   U256Inst Result = {};
   U256Inst LHS = extractU256Operand(LHSOp);
 
@@ -676,8 +736,8 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
 // EVM BYTE opcode: extracts the byte at position 'index' from a 256-bit value
 // BYTE(index, value) = 0 if index ≥ 32, otherwise the byte at position index
 // (value >> (8 × (31 - index))) & 0xFF
-EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
-                                                 Operand ValueOp) {
+typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
+                                                          Operand ValueOp) {
   U256Inst IndexComponents = extractU256Operand(IndexOp);
   U256Inst ValueComponents = extractU256Operand(ValueOp);
 
@@ -750,8 +810,8 @@ EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
 //   SIGNEXTEND(0, 0x80) = 0xFF...FF80 (sign-extends 0x80 from 1 byte)
 //   SIGNEXTEND(1, 0x7FFF) = 0x00...007FFF (sign-extends 0x7FFF from 2 bytes)
 //   SIGNEXTEND(31, 0x1234) = 0x1234 (no extension when index >= 31)
-EVMMirBuilder::Operand EVMMirBuilder::handleSignextend(Operand IndexOp,
-                                                       Operand ValueOp) {
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleSignextend(Operand IndexOp, Operand ValueOp) {
   U256Inst IndexComponents = extractU256Operand(IndexOp);
   U256Inst ValueComponents = extractU256Operand(ValueOp);
 

@@ -11,6 +11,14 @@ namespace COMPILER {
 
 const RuntimeFunctions &getRuntimeFunctionTable() {
   static const RuntimeFunctions Table = {
+      .GetMul = &evmGetMul,
+      .GetDiv = &evmGetDiv,
+      .GetSDiv = &evmGetSDiv,
+      .GetMod = &evmGetMod,
+      .GetSMod = &evmGetSMod,
+      .GetExp = &evmGetExp,
+      .GetAddMod = &evmGetAddMod,
+      .GetMulMod = &evmGetMulMod,
       .GetAddress = &evmGetAddress,
       .GetBalance = &evmGetBalance,
       .GetOrigin = &evmGetOrigin,
@@ -52,6 +60,134 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
       .HandleSelfDestruct = &evmHandleSelfDestruct,
       .GetKeccak256 = &evmGetKeccak256};
   return Table;
+}
+
+intx::uint256 evmGetMul(zen::runtime::EVMInstance *Instance,
+                        intx::uint256 Multiplicand, intx::uint256 Multiplier) {
+  return Multiplicand * Multiplier;
+}
+
+intx::uint256 evmGetDiv(zen::runtime::EVMInstance *Instance,
+                        intx::uint256 Dividend, intx::uint256 Divisor) {
+  if (Divisor == 0) {
+    return intx::uint256{0};
+  }
+  return Dividend / Divisor;
+}
+
+intx::uint256 evmGetSDiv(zen::runtime::EVMInstance *Instance,
+                         intx::uint256 Dividend, intx::uint256 Divisor) {
+  if (Divisor == 0) {
+    return intx::uint256{0};
+  }
+
+  // Perform signed division using uint256 with proper sign handling
+  // Check if dividend is negative (MSB set)
+  bool isDividendNegative = (Dividend >> 255) != 0;
+  bool isDivisorNegative = (Divisor >> 255) != 0;
+
+  // Convert to absolute values
+  intx::uint256 absDividend = isDividendNegative ? (~Dividend + 1) : Dividend;
+  intx::uint256 absDivisor = isDivisorNegative ? (~Divisor + 1) : Divisor;
+
+  // Perform unsigned division
+  intx::uint256 absResult = absDividend / absDivisor;
+
+  // Apply sign: result is negative if signs differ
+  bool isResultNegative = isDividendNegative != isDivisorNegative;
+
+  return isResultNegative ? (~absResult + 1) : absResult;
+}
+
+intx::uint256 evmGetMod(zen::runtime::EVMInstance *Instance,
+                        intx::uint256 Dividend, intx::uint256 Divisor) {
+  if (Divisor == 0) {
+    return intx::uint256{0};
+  }
+  return Dividend % Divisor;
+}
+
+intx::uint256 evmGetSMod(zen::runtime::EVMInstance *Instance,
+                         intx::uint256 Dividend, intx::uint256 Divisor) {
+  if (Divisor == 0) {
+    return intx::uint256{0};
+  }
+
+  // Perform signed modulo using uint256 with proper sign handling
+  // Check if dividend is negative (MSB set)
+  bool isDividendNegative = (Dividend >> 255) != 0;
+
+  // Convert to absolute values
+  intx::uint256 absDividend = isDividendNegative ? (~Dividend + 1) : Dividend;
+  intx::uint256 absDivisor = Divisor; // Divisor sign doesn't affect modulo
+
+  // Perform unsigned modulo
+  intx::uint256 absResult = absDividend % absDivisor;
+
+  // Apply sign: result has same sign as dividend
+  return isDividendNegative ? (~absResult + 1) : absResult;
+}
+
+intx::uint256 evmGetExp(zen::runtime::EVMInstance *Instance, intx::uint256 Base,
+                        intx::uint256 Exponent) {
+  // Handle edge cases
+  if (Exponent == 0) {
+    return intx::uint256{1};
+  }
+  if (Base == 0) {
+    return intx::uint256{0};
+  }
+  if (Exponent == 1) {
+    return Base;
+  }
+
+  // Use efficient modular exponentiation
+  // Note: In EVM, EXP operation is not modular, it's regular exponentiation
+  // but we need to handle 256-bit overflow by taking modulo 2^256
+  intx::uint256 Result = 1;
+  intx::uint256 CurrentBase = Base;
+
+  // Binary exponentiation algorithm
+  while (Exponent > 0) {
+    if (Exponent & 1) {
+      Result *= CurrentBase;
+    }
+    CurrentBase *= CurrentBase;
+    Exponent >>= 1;
+  }
+
+  return Result;
+}
+
+intx::uint256 evmGetAddMod(zen::runtime::EVMInstance *Instance,
+                           intx::uint256 Augend, intx::uint256 Addend,
+                           intx::uint256 Modulus) {
+  // Handle edge case: modulo 0
+  if (Modulus == 0) {
+    return intx::uint256{0};
+  }
+
+  // Perform (Augend + Addend) mod Modulus
+  // Use 512-bit intermediate to prevent overflow
+  intx::uint512 Sum = intx::uint512(Augend) + intx::uint512(Addend);
+  intx::uint256 Result = intx::uint256(Sum % Modulus);
+  return Result;
+}
+
+intx::uint256 evmGetMulMod(zen::runtime::EVMInstance *Instance,
+                           intx::uint256 Multiplicand, intx::uint256 Multiplier,
+                           intx::uint256 Modulus) {
+  // Handle edge case: modulo 0
+  if (Modulus == 0) {
+    return intx::uint256{0};
+  }
+
+  // Perform (Multiplicand * Multiplier) mod Modulus
+  // Use 512-bit intermediate to prevent overflow
+  intx::uint512 Product =
+      intx::uint512(Multiplicand) * intx::uint512(Multiplier);
+  intx::uint256 Result = intx::uint256(Product % Modulus);
+  return Result;
 }
 
 const uint8_t *evmGetAddress(zen::runtime::EVMInstance *Instance) {

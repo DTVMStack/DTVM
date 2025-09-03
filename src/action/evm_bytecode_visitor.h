@@ -71,8 +71,32 @@ private:
       case OP_ADD:
         handleBinaryArithmetic<BinaryOperator::BO_ADD>();
         break;
+      case OP_MUL:
+        handleMul();
+        break;
       case OP_SUB:
         handleBinaryArithmetic<BinaryOperator::BO_SUB>();
+        break;
+      case OP_DIV:
+        handleDiv();
+        break;
+      case OP_SDIV:
+        handleSDiv();
+        break;
+      case OP_MOD:
+        handleMod();
+        break;
+      case OP_SMOD:
+        handleSMod();
+        break;
+      case OP_ADDMOD:
+        handleAddMod();
+        break;
+      case OP_MULMOD:
+        handleMulMod();
+        break;
+      case OP_EXP:
+        handleExp();
         break;
       case OP_LT:
         handleCompare<CompareOperator::CO_LT>();
@@ -196,38 +220,6 @@ private:
         uint8_t SwapIndex = Opcode - OP_SWAP1 + 1;
         handleSwap(SwapIndex);
         break;
-      }
-
-      case OP_MUL: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_DIV: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_SDIV: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_MOD: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_SMOD: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_ADDMOD: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_MULMOD: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_EXP: {
-        ZEN_ASSERT_TODO();
       }
 
       case OP_SIGNEXTEND: {
@@ -587,22 +579,81 @@ private:
   void handleStop() { Builder.handleStop(); }
 
   template <BinaryOperator Opr> void handleBinaryArithmetic() {
-    Operand RHS = pop();
     Operand LHS = pop();
+    Operand RHS = pop();
     Operand Result = Builder.template handleBinaryArithmetic<Opr>(LHS, RHS);
     push(Result);
   }
 
+  void handleMul() {
+    Operand MultiplicandOp = pop();
+    Operand MultiplierOp = pop();
+    Operand Result = Builder.handleMul(MultiplicandOp, MultiplierOp);
+    push(Result);
+  }
+
+  void handleDiv() {
+    Operand DividendOp = pop();
+    Operand DivisorOp = pop();
+    Operand Result = Builder.handleDiv(DividendOp, DivisorOp);
+    push(Result);
+  }
+
+  void handleSDiv() {
+    Operand DividendOp = pop();
+    Operand DivisorOp = pop();
+    Operand Result = Builder.handleSDiv(DividendOp, DivisorOp);
+    push(Result);
+  }
+
+  void handleMod() {
+    Operand DividendOp = pop();
+    Operand DivisorOp = pop();
+    Operand Result = Builder.handleMod(DividendOp, DivisorOp);
+    push(Result);
+  }
+
+  void handleSMod() {
+    Operand DividendOp = pop();
+    Operand DivisorOp = pop();
+    Operand Result = Builder.handleSMod(DividendOp, DivisorOp);
+    push(Result);
+  }
+
+  void handleExp() {
+    Operand BaseOp = pop();
+    Operand ExponentOp = pop();
+    Operand Result = Builder.handleExp(BaseOp, ExponentOp);
+    push(Result);
+  }
+
+  void handleAddMod() {
+    Operand AugendOp = pop();
+    Operand AddendOp = pop();
+    Operand ModulusOp = pop();
+    Operand Result = Builder.handleAddMod(AugendOp, AddendOp, ModulusOp);
+    push(Result);
+  }
+
+  void handleMulMod() {
+    Operand MultiplicandOp = pop();
+    Operand MultiplierOp = pop();
+    Operand ModulusOp = pop();
+    Operand Result =
+        Builder.handleMulMod(MultiplicandOp, MultiplierOp, ModulusOp);
+    push(Result);
+  }
+
   template <CompareOperator Opr> void handleCompare() {
-    Operand CmpRHS = (Opr != CompareOperator::CO_EQZ) ? pop() : Operand();
     Operand CmpLHS = pop();
+    Operand CmpRHS = (Opr != CompareOperator::CO_EQZ) ? pop() : Operand();
     Operand Result = Builder.template handleCompareOp<Opr>(CmpLHS, CmpRHS);
     push(Result);
   }
 
   template <BinaryOperator Opr> void handleBitwiseOp() {
-    Operand RHS = pop();
     Operand LHS = pop();
+    Operand RHS = pop();
     Operand Result = Builder.template handleBitwiseOp<Opr>(LHS, RHS);
     push(Result);
   }

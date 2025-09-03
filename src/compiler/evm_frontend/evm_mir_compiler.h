@@ -251,6 +251,15 @@ public:
     return Operand(Result, EVMType::UINT256);
   }
 
+  Operand handleMul(Operand MultiplicandOp, Operand MultiplierOp);
+  Operand handleDiv(Operand DividendOp, Operand DivisorOp);
+  Operand handleSDiv(Operand DividendOp, Operand DivisorOp);
+  Operand handleMod(Operand DividendOp, Operand DivisorOp);
+  Operand handleSMod(Operand DividendOp, Operand DivisorOp);
+  Operand handleExp(Operand BaseOp, Operand ExponentOp);
+  Operand handleAddMod(Operand AugendOp, Operand AddendOp, Operand ModulusOp);
+  Operand handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
+                       Operand ModulusOp);
   template <CompareOperator Operator>
   Operand handleCompareOp(Operand LHSOp, Operand RHSOp) {
     U256Inst Result = handleCompareImpl<Operator>(LHSOp, RHSOp, &Ctx.I64Type);

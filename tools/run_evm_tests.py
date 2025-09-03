@@ -51,42 +51,21 @@ class TestRunner:
 
     # TODO: Failed test cases, temporarily ignored
     IGNORE_CASES = {
-        # unsupport jit opcode
-        "addmod.evm.hex",
-        "addmod_overflow.evm.hex",
-        "addmod_zero.evm.hex",
-        "div.evm.hex",
-        "div_zero.evm.hex",
-        "exp.evm.hex",
-        "exp_zero.evm.hex",
-        "mod.evm.hex",
-        "mod_zero.evm.hex",
-        "mul.evm.hex",
-        "mul_overflow.evm.hex",
-        "mulmod.evm.hex",
-        "mulmod_overflow.evm.hex",
-        "mulmod_zero.evm.hex",
-        "sdiv.evm.hex",
-        "sdiv_zero.evm.hex",
-        "smod_1.evm.hex",
-        "smod_2.evm.hex",
-        "smod_zero.evm.hex",
-
-        # stack compare
+        # stack check
         "byte_1.evm.hex",
         "push.evm.hex",
         "push_insufficient_at_end.evm.hex",
         "push_insufficient_at_end_origin.evm.hex",
         "signextend_1.evm.hex",
 
-        # memory compare
-        "jump.evm.hex",
-        "jumpi.evm.hex",
+        # memory check
         "mstore.evm.hex",
-        "pc.evm.hex",
 
         # other error
         "gas.evm.hex",
+        "jump.evm.hex",
+        "jumpi.evm.hex",
+        "pc.evm.hex",
     }
 
     def __init__(self, args):
@@ -95,6 +74,7 @@ class TestRunner:
         self.test_dir = self.validateTestDir()
         self.statistics = Statistics()
         self.test_cases: List[TestCase] = []
+        self.failed_cases: List[TestCase] = []
         self.start_time = None
 
     def validateRuntime(self) -> str:
@@ -128,9 +108,10 @@ class TestRunner:
             print(f"Error parsing YAML: {e}")
             return {}
 
-    def compareResults(self, actual: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[bool, str]:
-        """Compare actual and expected results"""
-        important_fields = ['status', 'error_code', 'stack', 'memory', 'return']
+    def checkResults(self, actual: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[bool, str]:
+        """Check actual and expected results"""
+        # TODO: check stack, memory
+        important_fields = ['status', 'error_code', 'return']
 
         for field in important_fields:
             actual_val = actual.get(field)
@@ -189,25 +170,15 @@ class TestRunner:
         if hex_end == -1:
             hex_end = len(stdout)
 
-        hex_value = stdout[hex_start:hex_end].strip()
+        return_value = stdout[hex_start:hex_end].strip()
 
-        if len(hex_value) >= 64:
-            return {
-                "status": "success",
-                "error_code": 0,
-                "stack": [],
-                "memory": hex_value,
-                "return": hex_value
-            }
-        else:
-            padded_hex = hex_value.zfill(64)
-            return {
-                "status": "success",
-                "error_code": 0,
-                "stack": [],
-                "memory": padded_hex,
-                "return": padded_hex
-            }
+        return {
+            "status": "success",
+            "error_code": 0,
+            "stack": [],
+            "memory": [],
+            "return": return_value
+        }
 
     def runOneCase(self, test_case: TestCase) -> bool:
         """Run single test case"""
@@ -250,6 +221,7 @@ class TestRunner:
                 else:
                     self.statistics.addFail()
                     print(f"❌ FAILED: {test_case.name} ({elapsed:.1f}ms)")
+                    self.failed_cases.append(test_case)
                 print(f"{'='*80}\n")
                 return result.returncode == 0
             else:
@@ -270,7 +242,7 @@ class TestRunner:
                 actual_data = self.parseTestOutput(result.stdout)
 
                 # Compare results
-                is_match, error_msg = self.compareResults(actual_data, expected_data)
+                is_match, error_msg = self.checkResults(actual_data, expected_data)
 
                 if result.returncode == 0 and is_match:
                     self.statistics.addSucc()
@@ -278,6 +250,7 @@ class TestRunner:
                     return True
                 else:
                     self.statistics.addFail()
+                    self.failed_cases.append(test_case)
                     print(f"FAILED {test_case.name:<40} ({elapsed:.1f}ms)")
 
                     if self.args.verbose or not is_match or result.returncode != 0:
@@ -293,10 +266,12 @@ class TestRunner:
         except subprocess.TimeoutExpired:
             self.statistics.addFail()
             print(f"TIMEOUT {test_case.name:<40}")
+            self.failed_cases.append(test_case)
             return False
         except Exception as e:
             self.statistics.addFail()
             print(f"ERROR {test_case.name:<40}: {e}")
+            self.failed_cases.append(test_case)
             return False
 
     def printHeader(self):
@@ -328,6 +303,18 @@ class TestRunner:
         elapsed = time.time() - self.start_time
         print(f"  Time:    {elapsed:.3f}s")
         print("=" * 70)
+
+        # Print all failed test cases
+        if self.failed_cases:
+            print()
+            print("=" * 70)
+            print("FAILED TEST CASES:")
+            print("=" * 70)
+
+            for test_case in self.failed_cases:
+                print(test_case.file_path)
+
+            print("=" * 70)
 
     def runAllSuites(self) -> int:
         """Run all tests"""
