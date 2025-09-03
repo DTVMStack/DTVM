@@ -153,6 +153,15 @@ class TestRunner:
             "-m", self.args.mode
         ]
 
+        if self.args.enable_multipass_lazy:
+            cmd.append("--enable-multipass-lazy")
+
+        if self.args.num_multipass_threads is not None:
+            cmd.extend(["--num-multipass-threads", str(self.args.num_multipass_threads)])
+
+        if self.args.disable_multipass_multithread:
+            cmd.append("--disable-multipass-multithread")
+
         if self.args.zen_options:
             cmd.extend(self.args.zen_options.split())
 
@@ -285,6 +294,12 @@ class TestRunner:
         print(f"Test files: {len(self.test_cases)}")
         if self.args.zen_options:
             print(f"Extra options: {self.args.zen_options}")
+        if self.args.enable_multipass_lazy:
+            print("Multipass lazy: enabled")
+        if self.args.num_multipass_threads is not None:
+            print(f"Multipass threads: {self.args.num_multipass_threads}")
+        if self.args.disable_multipass_multithread:
+            print("Multipass multithread: disabled")
         if self.IGNORE_CASES:
             print(f"Ignored tests: {len(self.IGNORE_CASES)}")
         print()
@@ -359,6 +374,12 @@ def main():
                         help="Filter test files by pattern")
     parser.add_argument("--dmirlog", action="store_true",
                         help="Show detailed MIR compilation logs")
+    parser.add_argument("--enable-multipass-lazy", action="store_true",
+                        help="Enable multipass lazy compilation")
+    parser.add_argument("--num-multipass-threads", type=int, default=None,
+                        help="Number of multipass threads (default: system default)")
+    parser.add_argument("--disable-multipass-multithread", action="store_true",
+                        help="Disable multipass multithreading")
 
     args = parser.parse_args()
 
