@@ -48,7 +48,7 @@ fn test_simple_token_contract() {
         .build();
 
     // Create test addresses
-    let owner_address = create_test_address(1);
+    let owner_address = random_test_address(1);
 
     // Deploy contract
     // Set constructor parameter: initial supply = 1000000 tokens (1M * 10^18 wei)
@@ -73,7 +73,8 @@ fn test_simple_token_contract() {
 }
 
 fn test_total_supply(executor: &ContractExecutor, context: &mut MockContext) {
-    set_function_call_data(context, &TOTAL_SUPPLY_SELECTOR);
+    // Use new simplified API with no parameters
+    set_call_data_with_params(context, &TOTAL_SUPPLY_SELECTOR, vec![]);
 
     let result = executor
         .call_contract_function("simple_token", context)
@@ -90,7 +91,7 @@ fn test_total_supply(executor: &ContractExecutor, context: &mut MockContext) {
 }
 
 fn test_token_name(executor: &ContractExecutor, context: &mut MockContext) {
-    set_function_call_data(context, &NAME_SELECTOR);
+    set_call_data_with_params(context, &NAME_SELECTOR, vec![]);
 
     let result = executor
         .call_contract_function("simple_token", context)
@@ -108,8 +109,9 @@ fn test_token_name(executor: &ContractExecutor, context: &mut MockContext) {
 }
 
 fn test_balance_of(executor: &ContractExecutor, context: &mut MockContext) {
-    let owner_address = create_test_address(1);
-    set_function_call_data_with_address(context, &BALANCE_OF_SELECTOR, &owner_address);
+    let owner_address = random_test_address(1);
+    let params = ParamBuilder::new().address(&owner_address).build();
+    set_call_data_with_params(context, &BALANCE_OF_SELECTOR, params);
 
     let result = executor
         .call_contract_function("simple_token", context)
@@ -126,21 +128,20 @@ fn test_balance_of(executor: &ContractExecutor, context: &mut MockContext) {
 }
 
 fn test_mint(executor: &ContractExecutor, context: &mut MockContext) {
-    let recipient_address = create_test_address(2);
-    set_function_call_data_with_address_and_amount(
-        context,
-        &MINT_SELECTOR,
-        &recipient_address,
-        5000u64,
-    );
+    let recipient_address = random_test_address(2);
+    let params = ParamBuilder::new()
+        .address(&recipient_address)
+        .uint256(5000u64)
+        .build();
+    set_call_data_with_params(context, &MINT_SELECTOR, params);
 
     let result = executor
         .call_contract_function("simple_token", context)
         .expect("Failed to call mint()");
 
     assert!(result.success, "mint() should succeed");
-
-    set_function_call_data_with_address(context, &BALANCE_OF_SELECTOR, &recipient_address);
+    let params = ParamBuilder::new().address(&recipient_address).build();
+    set_call_data_with_params(context, &BALANCE_OF_SELECTOR, params);
 
     let result = executor
         .call_contract_function("simple_token", context)
@@ -157,20 +158,19 @@ fn test_mint(executor: &ContractExecutor, context: &mut MockContext) {
 }
 
 fn test_transfer(executor: &ContractExecutor, context: &mut MockContext) {
-    let spender_address = create_test_address(3);
-    set_function_call_data_with_address_and_amount(
-        context,
-        &TRANSFER_SELECTOR,
-        &spender_address,
-        1000u64,
-    );
+    let spender_address = random_test_address(3);
+    let params = ParamBuilder::new()
+        .address(&spender_address)
+        .uint256(1000u64)
+        .build();
+    set_call_data_with_params(context, &TRANSFER_SELECTOR, params);
 
     let result = executor
         .call_contract_function("simple_token", context)
         .expect("Failed to call transfer()");
     assert!(result.success, "transfer() should succeed");
-
-    set_function_call_data_with_address(context, &BALANCE_OF_SELECTOR, &spender_address);
+    let params = ParamBuilder::new().address(&spender_address).build();
+    set_call_data_with_params(context, &BALANCE_OF_SELECTOR, params);
 
     let result = executor
         .call_contract_function("simple_token", context)

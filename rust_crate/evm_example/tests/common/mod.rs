@@ -29,7 +29,7 @@ pub fn calculate_selector(signature: &str) -> [u8; 4] {
 }
 
 /// Helper function to create a test address
-pub fn create_test_address(byte: u8) -> [u8; 20] {
+pub fn random_test_address(byte: u8) -> [u8; 20] {
     let mut addr = [0u8; 20];
     addr[19] = byte; // Set the last byte to distinguish addresses
     addr

@@ -10,3 +10,4 @@ dtvmcore_rust = { path = "../" }
 cty = "0.2.2"
 hex = "0.4"
 sha3 = "0.10"
+ethabi = "18.0"
