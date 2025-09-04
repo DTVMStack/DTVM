@@ -659,9 +659,9 @@ void Runtime::callEVMInInterpMode(EVMInstance &Inst,
       .kind = EVMC_CALL,
       .flags = 0,
       .depth = 0,
-      .gas = static_cast<int64_t>(Inst.getGas() >> 1), // to avoid overflow
+      .gas = Inst.getGas(),
   };
-  Ctx.allocFrame(&Msg); // TODO: use the correct message
+  Ctx.allocFrame(&Msg);
   Interpreter.interpret();
   Result = Ctx.getReturnData();
 }

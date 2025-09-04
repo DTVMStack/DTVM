@@ -48,6 +48,7 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
       .SetMStore8 = &evmSetMStore8,
       .GetSLoad = &evmGetSLoad,
       .SetSStore = &evmSetSStore,
+      .GetGas = &evmGetGas,
       .GetTLoad = &evmGetTLoad,
       .SetTStore = &evmSetTStore,
       .SetMCopy = &evmSetMCopy,
@@ -658,6 +659,13 @@ void evmSetSStore(zen::runtime::EVMInstance *Instance, intx::uint256 Index,
   Instance->chargeGas(GasCost);
   Instance->addGasRefund(GasReFund);
 }
+
+int64_t evmGetGas(zen::runtime::EVMInstance *Instance) {
+  const evmc_message *Msg = Instance->getCurrentMessage();
+  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
+  return Msg->gas;
+}
+
 intx::uint256 evmGetTLoad(zen::runtime::EVMInstance *Instance,
                           intx::uint256 Index) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
@@ -704,7 +712,7 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
   }
 
   Module->Host->selfdestruct(Msg->recipient, BenefAddr);
-  uint64_t RemainingGas = Msg->gas;
+  int64_t RemainingGas = Msg->gas;
   Instance->popMessage();
 
   if (const evmc_message *Parent = Instance->getCurrentMessage()) {

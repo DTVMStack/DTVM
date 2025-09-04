@@ -17,7 +17,6 @@ struct RuntimeFunctions;
 using U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *);
 using Bytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *);
 using SizeFn = uint64_t (*)(zen::runtime::EVMInstance *);
-using U256WithInt64Fn = intx::uint256 (*)(zen::runtime::EVMInstance *, int64_t);
 using Bytes32WithInt64Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
                                               int64_t);
 using Bytes32WithUint64Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
@@ -369,7 +368,6 @@ public:
 private:
   // ==================== Operand Methods ====================
 
-  MInstruction *extractOperand(const Operand &Opnd);
   U256Inst extractU256Operand(const Operand &Opnd);
 
   // ==================== MIR Util Methods ====================
@@ -402,14 +400,6 @@ private:
   void addSuccessor(MBasicBlock *Succ) { CurBB->addSuccessor(Succ); }
 
   // ==================== EVMU256 Helper Methods ====================
-
-  // Create a 256-bit value from 4 x I64 components
-  Operand createU256FromComponents(Operand Low, Operand MidLow, Operand MidHigh,
-                                   Operand High);
-
-  // Extract I64 components from U256 operand (for operations that need
-  // component access)
-  std::array<Operand, EVM_ELEMENTS_COUNT> extractU256Components(Operand U256Op);
 
   void extractU256ComponentsExplicit(uint64_t *Components,
                                      const intx::uint256 &Value,

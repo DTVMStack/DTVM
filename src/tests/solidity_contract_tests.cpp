@@ -516,7 +516,9 @@ TEST_P(SolidityContractTest, ExecuteContractSequence) {
   DeployerAccount.nonce = 0;
   DeployerAccount.set_balance(100000000UL);
 
-  uint64_t GasLimit = 100000000UL;
+  // same as evm.codes: 0xFFFF'FFFF'FFFF (281,474,976,710,655)
+  uint64_t GasLimit = 0xFFFF'FFFF'FFFF;
+
   std::map<std::string, ContractInstance> DeployedContracts;
 
   // Step 1: Deploy all specified contracts

@@ -56,15 +56,15 @@ public:
 
   // ==================== Platform Feature Methods ====================
 
-  uint64_t getGas() const { return Gas; }
-  void setGas(uint64_t NewGas) { Gas = NewGas; }
+  int64_t getGas() const { return Gas; }
+  void setGas(int64_t NewGas) { Gas = NewGas; }
   static uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize,
                                                uint64_t NewSize);
   void consumeMemoryExpansionGas(uint64_t RequiredSize);
   void expandMemory(uint64_t RequiredSize);
   void chargeGas(uint64_t GasCost);
 
-  void addGasRefund(uint64_t amount) { GasRefund += amount; }
+  void addGasRefund(int64_t amount) { GasRefund += amount; }
 
   // ==================== Memory Methods ====================
   size_t getMemorySize() const { return Memory.size(); }
@@ -122,15 +122,15 @@ private:
   virtual ~EVMInstance();
 
   static EVMInstanceUniquePtr
-  newEVMInstance(Isolation &Iso, const EVMModule &Mod, uint64_t GasLimit = 0);
+  newEVMInstance(Isolation &Iso, const EVMModule &Mod, int64_t GasLimit = 0);
 
   Isolation *Iso = nullptr;
   const EVMModule *Mod = nullptr;
 
   Error Err = ErrorCode::NoError;
 
-  uint64_t Gas = 0;
-  uint64_t GasRefund = 0;
+  int64_t Gas = 0;
+  int64_t GasRefund = 0;
   // memory
   std::vector<uint8_t> Memory;
   std::vector<uint8_t> ReturnData;

@@ -83,12 +83,7 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
 }
 
 void EVMMirBuilder::finalizeEVMBase() {
-  // Ensure all basic blocks are properly terminated
-  // TODO: invalid interface: MBasicBlock::isTerminated()
-  // if (CurBB && !CurBB->isTerminated()) {
-  //   // Add implicit return if not terminated
-  //   createInstruction<ReturnInstruction>(true, &Ctx.VoidType);
-  // }
+  // Note: After padding 33 bytes 0x00, normal termination is sufficient
 }
 
 // ==================== Stack Instruction Handlers ====================
@@ -136,7 +131,10 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handlePush(const Bytes &Data) {
 // ==================== Control Flow Instruction Handlers ====================
 
 void EVMMirBuilder::handleJump(Operand Dest) {
-  MInstruction *DestInstr = extractOperand(Dest);
+  U256Inst DestComponents = extractU256Operand(Dest);
+  // Note: Extracted lowest 64 bits as jump destination,
+  // but not used in MIR - address resolution handled by backend
+  MInstruction *DestAddr = DestComponents[0];
 
   // Create jump destination basic block
   MBasicBlock *JumpBB = createBasicBlock();
@@ -149,14 +147,19 @@ void EVMMirBuilder::handleJump(Operand Dest) {
 }
 
 void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
-  MInstruction *DestInstr = extractOperand(Dest);
-  MInstruction *CondInstr = extractOperand(Cond);
+  U256Inst DestComponents = extractU256Operand(Dest);
+  // Note: Extracted lowest 64 bits as jump destination,
+  // but not used in MIR - address resolution handled by backend
+  MInstruction *DestAddr = DestComponents[0];
+
+  U256Inst CondComponents = extractU256Operand(Cond);
+  MInstruction *CondNonZero = isU256GreaterOrEqual(CondComponents, 1);
 
   // Create conditional branch
   MBasicBlock *ThenBB = createBasicBlock();
   MBasicBlock *ElseBB = createBasicBlock();
 
-  createInstruction<BrIfInstruction>(true, Ctx, CondInstr, ThenBB, ElseBB);
+  createInstruction<BrIfInstruction>(true, Ctx, CondNonZero, ThenBB, ElseBB);
   addSuccessor(ThenBB);
   addSuccessor(ElseBB);
 
@@ -895,16 +898,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handlePC() {
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleGas() {
-  // For now, return a placeholder gas value
-  // In a full implementation, this would access the execution context
-  MType *UInt64Type =
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MConstant *GasConstant = MConstantInt::get(Ctx, *UInt64Type, 1000000);
-
-  MInstruction *Result =
-      createInstruction<ConstantInstruction>(false, UInt64Type, *GasConstant);
-
-  return Operand(Result, EVMType::UINT64);
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<int64_t>(RuntimeFunctions.GetGas);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
@@ -1129,50 +1124,6 @@ EVMMirBuilder::handleKeccak256(Operand OffsetComponents,
 
 // ==================== Private Helper Methods ====================
 
-MInstruction *EVMMirBuilder::extractOperand(const Operand &Opnd) {
-  if (Opnd.getInstr()) {
-    return Opnd.getInstr();
-  }
-
-  if (Opnd.isU256MultiComponent()) {
-    // For multi-component U256, we need to return a representative instruction
-    // For now, return the low component as the primary representative
-    // In a full implementation, this might need to be handled differently
-    // depending on the context where extractOperand is called
-    const auto &Components = Opnd.getU256Components();
-    return Components[0]; // Return low component as primary
-  }
-
-  if (Opnd.getVar()) {
-    // Read from variable with appropriate type handling
-    Variable *Var = Opnd.getVar();
-    MType *Type = EVMFrontendContext::getMIRTypeFromEVMType(Opnd.getType());
-
-    // For UINT256, use EVMU256Type semantic awareness
-    if (Opnd.getType() == EVMType::UINT256) {
-      zen::common::EVMU256Type *U256Type = EVMFrontendContext::getEVMU256Type();
-      // Note: U256Type provides semantic context for 256-bit operations
-
-      // Check if this is a multi-component variable (should be handled
-      // differently) For now, treat as single variable read
-    }
-
-    return createInstruction<DreadInstruction>(false, Type, Var->getVarIdx());
-  }
-
-  // Handle multi-component variable reads for U256
-  if (Opnd.isU256MultiComponent() && Opnd.getType() == EVMType::UINT256) {
-    // For multi-component variables, return the low component's read
-    // instruction The full handling should be done by extractU256Components
-    const auto &VarComponents = Opnd.getU256VarComponents();
-    MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-    return createInstruction<DreadInstruction>(false, I64Type,
-                                               VarComponents[0]->getVarIdx());
-  }
-
-  ZEN_UNREACHABLE();
-}
-
 typename EVMMirBuilder::Operand
 EVMMirBuilder::createU256ConstOperand(const intx::uint256 &V) {
   // Get EVMU256Type to guide proper component creation
@@ -1236,83 +1187,19 @@ EVMMirBuilder::U256Inst EVMMirBuilder::extractU256Operand(const Operand &Opnd) {
     return U256Op.getU256Components();
   }
 
+  // Auto-convert UINT64 operands to U256 when needed
+  if (Opnd.getType() == EVMType::UINT64) {
+    Operand U256Op = convertSingleInstrToU256Operand(Opnd.getInstr());
+    return U256Op.getU256Components();
+  }
+
   return Result;
 }
 
 // ==================== EVMU256 Helper Methods ====================
 
-typename EVMMirBuilder::Operand
-EVMMirBuilder::createU256FromComponents(Operand Low, Operand MidLow,
-                                        Operand MidHigh, Operand High) {
-  // Extract MInstructions from the component operands
-  U256Inst ComponentInstrs;
-  ComponentInstrs[0] = extractOperand(Low);     // Low (bits 0-63)
-  ComponentInstrs[1] = extractOperand(MidLow);  // Mid-low (bits 64-127)
-  ComponentInstrs[2] = extractOperand(MidHigh); // Mid-high (bits 128-191)
-  ComponentInstrs[3] = extractOperand(High);    // High (bits 192-255)
-
-  return Operand(ComponentInstrs, EVMType::UINT256);
-}
-
 EVMMirBuilder::U256Value EVMMirBuilder::bytesToU256(const Bytes &Data) {
   return createU256FromBytes(Data.data(), Data.size());
-}
-
-///
-/// The U256 value is decomposed into four 64-bit components arranged in
-/// **little-endian** order. That is:
-/// - Index 0: Low (least significant) 64 bits
-/// - Index 1: Mid-low 64 bits
-/// - Index 2: Mid-high 64 bits
-/// - Index 3: High (most significant) 64 bits
-///
-/// For example, if the U256 value is represented as:
-///   [High][Mid-high][Mid-low][Low]
-/// then this function returns them in the order: [Low, Mid-low, Mid-high,
-/// High].
-///
-/// If the input operand is a legacy single-component U256, only the low part
-/// will be set; the other parts are initialized to zero.
-///
-std::array<typename EVMMirBuilder::Operand, 4>
-EVMMirBuilder::extractU256Components(Operand U256Op) {
-  if (U256Op.isU256MultiComponent()) {
-    try {
-      // Try to get instruction components first
-      const auto &Components = U256Op.getU256Components();
-      return {
-          Operand(Components[0], EVMType::UINT64), // Low
-          Operand(Components[1], EVMType::UINT64), // Mid-low
-          Operand(Components[2], EVMType::UINT64), // Mid-high
-          Operand(Components[3], EVMType::UINT64)  // High
-      };
-    } catch (...) {
-      // Multi-component variable operand
-      const auto &VarComponents = U256Op.getU256VarComponents();
-      return {
-          Operand(VarComponents[0], EVMType::UINT64), // Low
-          Operand(VarComponents[1], EVMType::UINT64), // Mid-low
-          Operand(VarComponents[2], EVMType::UINT64), // Mid-high
-          Operand(VarComponents[3], EVMType::UINT64)  // High
-      };
-    }
-  }
-
-  // Legacy single-component U256, create 4 components where only low is set
-  MInstruction *SingleInstr = extractOperand(U256Op);
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
-  // Create zero constants for the higher components
-  MConstant *ZeroConstant = MConstantInt::get(Ctx, *I64Type, 0);
-  MInstruction *ZeroInstr =
-      createInstruction<ConstantInstruction>(false, I64Type, *ZeroConstant);
-
-  return {
-      Operand(SingleInstr, EVMType::UINT64), // Low component
-      Operand(ZeroInstr, EVMType::UINT64),   // Mid-low = 0
-      Operand(ZeroInstr, EVMType::UINT64),   // Mid-high = 0
-      Operand(ZeroInstr, EVMType::UINT64)    // High = 0
-  };
 }
 
 typename EVMMirBuilder::Operand
@@ -1454,7 +1341,8 @@ template <typename RetType> MType *EVMMirBuilder::getMIRReturnType() {
     return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
   } else if constexpr (std::is_same_v<RetType, const uint8_t *>) {
     return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
-  } else if constexpr (std::is_same_v<RetType, uint64_t>) {
+  } else if constexpr (std::is_same_v<RetType, int64_t> ||
+                       std::is_same_v<RetType, uint64_t>) {
     return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   } else if constexpr (std::is_same_v<RetType, void>) {
     return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::VOID);
@@ -1469,7 +1357,8 @@ EVMMirBuilder::convertCallResult(MInstruction *CallInstr) {
     return convertU256InstrToU256Operand(CallInstr);
   } else if constexpr (std::is_same_v<RetType, const uint8_t *>) {
     return Operand(CallInstr, EVMType::BYTES32);
-  } else if constexpr (std::is_same_v<RetType, uint64_t>) {
+  } else if constexpr (std::is_same_v<RetType, int64_t> ||
+                       std::is_same_v<RetType, uint64_t>) {
     return convertSingleInstrToU256Operand(CallInstr);
   } else if constexpr (std::is_same_v<RetType, void>) {
     return Operand();

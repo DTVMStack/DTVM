@@ -51,21 +51,8 @@ class TestRunner:
 
     # TODO: Failed test cases, temporarily ignored
     IGNORE_CASES = {
-        # stack check
-        "byte_1.evm.hex",
-        "push.evm.hex",
-        "push_insufficient_at_end.evm.hex",
-        "push_insufficient_at_end_origin.evm.hex",
-        "signextend_1.evm.hex",
-
-        # memory check
-        "mstore.evm.hex",
-
         # other error
-        "gas.evm.hex",
-        "jump.evm.hex",
         "jumpi.evm.hex",
-        "pc.evm.hex",
     }
 
     def __init__(self, args):
@@ -161,6 +148,9 @@ class TestRunner:
 
         if self.args.disable_multipass_multithread:
             cmd.append("--disable-multipass-multithread")
+
+        if self.args.gas_limit:
+            cmd.extend(["--gas-limit", str(self.args.gas_limit)])
 
         if self.args.zen_options:
             cmd.extend(self.args.zen_options.split())
@@ -380,6 +370,8 @@ def main():
                         help="Number of multipass threads (default: system default)")
     parser.add_argument("--disable-multipass-multithread", action="store_true",
                         help="Disable multipass multithreading")
+    parser.add_argument("--gas-limit", type=lambda x: int(x, 0), default=0xFFFFFFFFFFFF,
+                        help="Gas limit for EVM execution (default: 0xFFFFFFFFFFFF)")
 
     args = parser.parse_args()
 

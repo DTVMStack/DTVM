@@ -34,7 +34,7 @@ struct EVMFrame {
   evmc_tx_context MTx = {};
 
   size_t Sp = 0;
-  uint64_t GasRefund = 0;
+  int64_t GasRefund = 0;
   uint64_t Pc = 0;
   intx::uint256 Value = 0;
 
@@ -75,7 +75,7 @@ private:
   std::vector<EVMFrame> FrameStack;
   evmc_status_code Status = EVMC_SUCCESS;
   std::vector<uint8_t> ReturnData;
-  uint64_t GasUsed = 0;
+  int64_t GasUsed = 0;
 
 public:
   bool IsJump = false;
