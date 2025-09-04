@@ -661,9 +661,7 @@ void evmSetSStore(zen::runtime::EVMInstance *Instance, intx::uint256 Index,
 }
 
 int64_t evmGetGas(zen::runtime::EVMInstance *Instance) {
-  const evmc_message *Msg = Instance->getCurrentMessage();
-  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-  return Msg->gas;
+  return Instance->getGas();
 }
 
 intx::uint256 evmGetTLoad(zen::runtime::EVMInstance *Instance,
