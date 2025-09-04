@@ -1281,6 +1281,75 @@ void EVMMirBuilder::handleMCopy(Operand DestAddrComponents,
       RuntimeFunctions.SetMCopy, DestAddrComponents, SrcAddrComponents,
       LengthComponents);
 }
+
+void EVMMirBuilder::handleLog(Operand OffsetOp, Operand SizeOp, Operand Topic1,
+                              Operand Topic2, Operand Topic3, Operand Topic4,
+                              uint8_t NumTopics) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(OffsetOp);
+  normalizeOperandU64(SizeOp);
+
+  // Create null operands for unused topics
+  MType *Bytes32Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
+  MInstruction *NullBytes32 = createInstruction<ConstantInstruction>(
+      false, Bytes32Type, *MConstantInt::get(Ctx, *Bytes32Type, 0));
+  Operand NullTopic(NullBytes32, EVMType::BYTES32);
+
+  // Use provided topics or null topics based on NumTopics
+  Operand T1 = (NumTopics >= 1) ? Topic1 : NullTopic;
+  Operand T2 = (NumTopics >= 2) ? Topic2 : NullTopic;
+  Operand T3 = (NumTopics >= 3) ? Topic3 : NullTopic;
+  Operand T4 = (NumTopics >= 4) ? Topic4 : NullTopic;
+
+  callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *, const uint8_t *,
+                 const uint8_t *, const uint8_t *>(
+      RuntimeFunctions.EmitLog, OffsetOp, SizeOp, T1, T2, T3, T4);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleCreate(Operand ValueOp, Operand OffsetOp, Operand SizeOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(OffsetOp);
+  normalizeOperandU64(SizeOp);
+  return callRuntimeFor<const uint8_t *, intx::uint256, uint64_t, uint64_t>(
+      RuntimeFunctions.HandleCreate, ValueOp, OffsetOp, SizeOp);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleCall(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
+                          Operand ArgsOffsetOp, Operand ArgsSizeOp,
+                          Operand RetOffsetOp, Operand RetSizeOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(GasOp);
+  normalizeOperandU64(ArgsOffsetOp);
+  normalizeOperandU64(ArgsSizeOp);
+  normalizeOperandU64(RetOffsetOp);
+  normalizeOperandU64(RetSizeOp);
+
+  return callRuntimeFor<uint64_t, uint64_t, const uint8_t *, intx::uint256,
+                        uint64_t, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.HandleCall, GasOp, ToAddrOp, ValueOp, ArgsOffsetOp,
+      ArgsSizeOp, RetOffsetOp, RetSizeOp);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleCallCode(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
+                              Operand ArgsOffsetOp, Operand ArgsSizeOp,
+                              Operand RetOffsetOp, Operand RetSizeOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(GasOp);
+  normalizeOperandU64(ArgsOffsetOp);
+  normalizeOperandU64(ArgsSizeOp);
+  normalizeOperandU64(RetOffsetOp);
+  normalizeOperandU64(RetSizeOp);
+
+  return callRuntimeFor<uint64_t, uint64_t, const uint8_t *, intx::uint256,
+                        uint64_t, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.HandleCallCode, GasOp, ToAddrOp, ValueOp, ArgsOffsetOp,
+      ArgsSizeOp, RetOffsetOp, RetSizeOp);
+}
+
 void EVMMirBuilder::handleReturn(Operand MemOffsetComponents,
                                  Operand LengthComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
@@ -1289,6 +1358,53 @@ void EVMMirBuilder::handleReturn(Operand MemOffsetComponents,
   callRuntimeFor<void, uint64_t, uint64_t>(
       RuntimeFunctions.SetReturn, MemOffsetComponents, LengthComponents);
 }
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleDelegateCall(Operand GasOp, Operand ToAddrOp,
+                                  Operand ArgsOffsetOp, Operand ArgsSizeOp,
+                                  Operand RetOffsetOp, Operand RetSizeOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(GasOp);
+  normalizeOperandU64(ArgsOffsetOp);
+  normalizeOperandU64(ArgsSizeOp);
+  normalizeOperandU64(RetOffsetOp);
+  normalizeOperandU64(RetSizeOp);
+
+  return callRuntimeFor<uint64_t, uint64_t, const uint8_t *, uint64_t, uint64_t,
+                        uint64_t, uint64_t>(RuntimeFunctions.HandleDelegateCall,
+                                            GasOp, ToAddrOp, ArgsOffsetOp,
+                                            ArgsSizeOp, RetOffsetOp, RetSizeOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleCreate2(Operand ValueOp,
+                                                             Operand OffsetOp,
+                                                             Operand SizeOp,
+                                                             Operand SaltOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(OffsetOp);
+  normalizeOperandU64(SizeOp);
+  return callRuntimeFor<const uint8_t *, intx::uint256, uint64_t, uint64_t,
+                        intx::uint256>(RuntimeFunctions.HandleCreate2, ValueOp,
+                                       OffsetOp, SizeOp, SaltOp);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleStaticCall(Operand GasOp, Operand ToAddrOp,
+                                Operand ArgsOffsetOp, Operand ArgsSizeOp,
+                                Operand RetOffsetOp, Operand RetSizeOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(GasOp);
+  normalizeOperandU64(ArgsOffsetOp);
+  normalizeOperandU64(ArgsSizeOp);
+  normalizeOperandU64(RetOffsetOp);
+  normalizeOperandU64(RetSizeOp);
+
+  return callRuntimeFor<uint64_t, uint64_t, const uint8_t *, uint64_t, uint64_t,
+                        uint64_t, uint64_t>(RuntimeFunctions.HandleStaticCall,
+                                            GasOp, ToAddrOp, ArgsOffsetOp,
+                                            ArgsSizeOp, RetOffsetOp, RetSizeOp);
+}
+
 void EVMMirBuilder::handleInvalid() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   callRuntimeFor(RuntimeFunctions.HandleInvalid);

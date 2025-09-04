@@ -50,6 +50,25 @@ using U256WithU256U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
 using U256WithU256U256U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
                                                  intx::uint256, intx::uint256,
                                                  intx::uint256);
+using VoidWith2U64And4Bytes32Fn = void (*)(zen::runtime::EVMInstance *,
+                                           uint64_t, uint64_t, const uint8_t *,
+                                           const uint8_t *, const uint8_t *,
+                                           const uint8_t *);
+using Bytes32WithU256UInt64UInt64Fn =
+    const uint8_t *(*)(zen::runtime::EVMInstance *, intx::uint256, uint64_t,
+                       uint64_t);
+using Bytes32WithU256UInt64UInt64U256Fn =
+    const uint8_t *(*)(zen::runtime::EVMInstance *, intx::uint256, uint64_t,
+                       uint64_t, intx::uint256);
+
+// Call function types for different call operations
+using CallFn = uint64_t (*)(zen::runtime::EVMInstance *, uint64_t,
+                            const uint8_t *, intx::uint256, uint64_t, uint64_t,
+                            uint64_t, uint64_t); // CALL, CALLCODE
+using DelegateCallFn = uint64_t (*)(zen::runtime::EVMInstance *, uint64_t,
+                                    const uint8_t *, uint64_t, uint64_t,
+                                    uint64_t,
+                                    uint64_t); // DELEGATECALL, STATICCALL
 
 struct RuntimeFunctions {
   U256WithU256U256Fn GetMul;
@@ -97,7 +116,14 @@ struct RuntimeFunctions {
   VoidWithBytes32UInt64UInt64UInt64Fn SetExtCodeCopy;
   VoidWithUInt64UInt64UInt64Fn SetReturnDataCopy;
   SizeFn GetReturnDataSize;
+  VoidWith2U64And4Bytes32Fn EmitLog;
+  Bytes32WithU256UInt64UInt64Fn HandleCreate;
+  CallFn HandleCall;
+  CallFn HandleCallCode;
   VoidWithUInt64UInt64Fn SetReturn;
+  DelegateCallFn HandleDelegateCall;
+  Bytes32WithU256UInt64UInt64U256Fn HandleCreate2;
+  DelegateCallFn HandleStaticCall;
   VoidFn HandleInvalid;
   VoidWithBytes32Fn HandleSelfDestruct;
   Bytes32WithUInt64UInt64Fn GetKeccak256;
@@ -173,8 +199,33 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
 void evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance,
                           uint64_t DestOffset, uint64_t Offset, uint64_t Size);
 uint64_t evmGetReturnDataSize(zen::runtime::EVMInstance *Instance);
+void evmEmitLog(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                uint64_t Size, const uint8_t *Topic1, const uint8_t *Topic2,
+                const uint8_t *Topic3, const uint8_t *Topic4);
+const uint8_t *evmHandleCreate(zen::runtime::EVMInstance *Instance,
+                               intx::uint256 Value, uint64_t Offset,
+                               uint64_t Size);
+uint64_t evmHandleCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
+                       const uint8_t *ToAddr, intx::uint256 Value,
+                       uint64_t ArgsOffset, uint64_t ArgsSize,
+                       uint64_t RetOffset, uint64_t RetSize);
+uint64_t evmHandleCallCode(zen::runtime::EVMInstance *Instance, uint64_t Gas,
+                           const uint8_t *ToAddr, intx::uint256 Value,
+                           uint64_t ArgsOffset, uint64_t ArgsSize,
+                           uint64_t RetOffset, uint64_t RetSize);
 void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t MemOffset,
                   uint64_t Length);
+uint64_t evmHandleDelegateCall(zen::runtime::EVMInstance *Instance,
+                               uint64_t Gas, const uint8_t *ToAddr,
+                               uint64_t ArgsOffset, uint64_t ArgsSize,
+                               uint64_t RetOffset, uint64_t RetSize);
+const uint8_t *evmHandleCreate2(zen::runtime::EVMInstance *Instance,
+                                intx::uint256 Value, uint64_t Offset,
+                                uint64_t Size, intx::uint256 Salt);
+uint64_t evmHandleStaticCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
+                             const uint8_t *ToAddr, uint64_t ArgsOffset,
+                             uint64_t ArgsSize, uint64_t RetOffset,
+                             uint64_t RetSize);
 void evmHandleInvalid(zen::runtime::EVMInstance *Instance);
 const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,
                                uint64_t Offset, uint64_t Length);

@@ -372,7 +372,25 @@ public:
   void handleReturnDataCopy(Operand DestOffsetComponents,
                             Operand OffsetComponents, Operand SizeComponents);
   Operand handleReturnDataSize();
+  void handleLog(Operand OffsetOp, Operand SizeOp, Operand Topic1,
+                 Operand Topic2, Operand Topic3, Operand Topic4,
+                 uint8_t NumTopics);
+  Operand handleCreate(Operand ValueOp, Operand OffsetOp, Operand SizeOp);
+  Operand handleCall(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
+                     Operand ArgsOffsetOp, Operand ArgsSizeOp,
+                     Operand RetOffsetOp, Operand RetSizeOp);
+  Operand handleCallCode(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
+                         Operand ArgsOffsetOp, Operand ArgsSizeOp,
+                         Operand RetOffsetOp, Operand RetSizeOp);
   void handleReturn(Operand MemOffsetComponents, Operand LengthComponents);
+  Operand handleDelegateCall(Operand GasOp, Operand ToAddrOp,
+                             Operand ArgsOffsetOp, Operand ArgsSizeOp,
+                             Operand RetOffsetOp, Operand RetSizeOp);
+  Operand handleCreate2(Operand ValueOp, Operand OffsetOp, Operand SizeOp,
+                        Operand SaltOp);
+  Operand handleStaticCall(Operand GasOp, Operand ToAddrOp,
+                           Operand ArgsOffsetOp, Operand ArgsSizeOp,
+                           Operand RetOffsetOp, Operand RetSizeOp);
   void handleInvalid();
   Operand handleKeccak256(Operand OffsetComponents, Operand LengthComponents);
   Operand handleSLoad(Operand KeyComponents);

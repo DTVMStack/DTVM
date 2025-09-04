@@ -98,6 +98,9 @@ private:
       case OP_EXP:
         handleExp();
         break;
+      case OP_SIGNEXTEND:
+        handleSignextend();
+        break;
       case OP_LT:
         handleCompare<CompareOperator::CO_LT>();
         break;
@@ -127,6 +130,9 @@ private:
         break;
       case OP_NOT:
         handleNot();
+        break;
+      case OP_BYTE:
+        handleByte();
         break;
       case OP_SHL:
         handleShift<BinaryOperator::BO_SHL>();
@@ -225,13 +231,13 @@ private:
         break;
       }
 
-      case OP_SIGNEXTEND: {
-        handleSignextend();
-        break;
-      }
-
-      case OP_BYTE: {
-        handleByte();
+      case OP_LOG0:
+      case OP_LOG1:
+      case OP_LOG2:
+      case OP_LOG3:
+      case OP_LOG4: {
+        uint8_t NumTopics = Opcode - OP_LOG0;
+        handleLog(NumTopics);
         break;
       }
 
@@ -483,36 +489,34 @@ private:
         break;
       }
 
-      case OP_LOG0:
-      case OP_LOG1:
-      case OP_LOG2:
-      case OP_LOG3:
-      case OP_LOG4: {
-        ZEN_ASSERT_TODO();
-      }
-
       case OP_CREATE: {
-        ZEN_ASSERT_TODO();
+        handleCreate();
+        break;
       }
 
       case OP_CALL: {
-        ZEN_ASSERT_TODO();
+        handleCall();
+        break;
       }
 
       case OP_CALLCODE: {
-        ZEN_ASSERT_TODO();
+        handleCallCode();
+        break;
       }
 
       case OP_DELEGATECALL: {
-        ZEN_ASSERT_TODO();
+        handleDelegateCall();
+        break;
       }
 
       case OP_CREATE2: {
-        ZEN_ASSERT_TODO();
+        handleCreate2();
+        break;
       }
 
       case OP_STATICCALL: {
-        ZEN_ASSERT_TODO();
+        handleStaticCall();
+        break;
       }
 
       case OP_SELFDESTRUCT: {
@@ -744,6 +748,90 @@ private:
   }
 
   // ==================== Environment Instruction Handlers ====================
+
+  // LOG0-LOG4: Emit log with 0-4 topics
+  void handleLog(uint8_t NumTopics) {
+    Operand OffsetOp = pop();
+    Operand SizeOp = pop();
+    std::array<Operand, 4> Topics{};
+
+    for (int i = 0; i < NumTopics && i < 4; ++i) {
+      Topics[i] = pop();
+    }
+
+    Builder.handleLog(OffsetOp, SizeOp, Topics[0], Topics[1], Topics[2],
+                      Topics[3], NumTopics);
+  }
+
+  void handleCreate() {
+    Operand ValueOp = pop();
+    Operand OffsetOp = pop();
+    Operand SizeOp = pop();
+    Operand RetAddrOp = Builder.handleCreate(ValueOp, OffsetOp, SizeOp);
+    push(RetAddrOp);
+  }
+
+  void handleCall() {
+    Operand GasOp = pop();
+    Operand ToAddrOp = pop();
+    Operand ValueOp = pop();
+    Operand ArgsOffsetOp = pop();
+    Operand ArgsSizeOp = pop();
+    Operand RetOffsetOp = pop();
+    Operand RetSizeOp = pop();
+    Operand StatusOp =
+        Builder.handleCall(GasOp, ToAddrOp, ValueOp, ArgsOffsetOp, ArgsSizeOp,
+                           RetOffsetOp, RetSizeOp);
+    push(StatusOp);
+  }
+
+  void handleCallCode() {
+    Operand GasOp = pop();
+    Operand ToAddrOp = pop();
+    Operand ValueOp = pop();
+    Operand ArgsOffsetOp = pop();
+    Operand ArgsSizeOp = pop();
+    Operand RetOffsetOp = pop();
+    Operand RetSizeOp = pop();
+    Operand StatusOp =
+        Builder.handleCallCode(GasOp, ToAddrOp, ValueOp, ArgsOffsetOp,
+                               ArgsSizeOp, RetOffsetOp, RetSizeOp);
+    push(StatusOp);
+  }
+
+  void handleDelegateCall() {
+    Operand GasOp = pop();
+    Operand ToAddrOp = pop();
+    Operand ArgsOffsetOp = pop();
+    Operand ArgsSizeOp = pop();
+    Operand RetOffsetOp = pop();
+    Operand RetSizeOp = pop();
+    Operand StatusOp = Builder.handleDelegateCall(
+        GasOp, ToAddrOp, ArgsOffsetOp, ArgsSizeOp, RetOffsetOp, RetSizeOp);
+    push(StatusOp);
+  }
+
+  void handleCreate2() {
+    Operand ValueOp = pop();
+    Operand OffsetOp = pop();
+    Operand SizeOp = pop();
+    Operand SaltOp = pop();
+    Operand RetAddrOp =
+        Builder.handleCreate2(ValueOp, OffsetOp, SizeOp, SaltOp);
+    push(RetAddrOp);
+  }
+
+  void handleStaticCall() {
+    Operand GasOp = pop();
+    Operand ToAddrOp = pop();
+    Operand ArgsOffsetOp = pop();
+    Operand ArgsSizeOp = pop();
+    Operand RetOffsetOp = pop();
+    Operand RetSizeOp = pop();
+    Operand StatusOp = Builder.handleStaticCall(
+        GasOp, ToAddrOp, ArgsOffsetOp, ArgsSizeOp, RetOffsetOp, RetSizeOp);
+    push(StatusOp);
+  }
 
   IRBuilder &Builder;
   CompilerContext *Ctx;
