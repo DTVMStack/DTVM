@@ -17,7 +17,7 @@ using namespace common;
 
 EVMInstanceUniquePtr EVMInstance::newEVMInstance(Isolation &Iso,
                                                  const EVMModule &Mod,
-                                                 int64_t GasLimit) {
+                                                 uint64_t GasLimit) {
 
   Runtime *RT = Mod.getRuntime();
   void *Buf = RT->allocate(sizeof(EVMInstance), ALIGNMENT);

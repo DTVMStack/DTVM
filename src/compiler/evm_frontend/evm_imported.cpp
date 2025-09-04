@@ -660,7 +660,7 @@ void evmSetSStore(zen::runtime::EVMInstance *Instance, intx::uint256 Index,
   Instance->addGasRefund(GasReFund);
 }
 
-int64_t evmGetGas(zen::runtime::EVMInstance *Instance) {
+uint64_t evmGetGas(zen::runtime::EVMInstance *Instance) {
   return Instance->getGas();
 }
 
@@ -710,7 +710,7 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
   }
 
   Module->Host->selfdestruct(Msg->recipient, BenefAddr);
-  int64_t RemainingGas = Msg->gas;
+  uint64_t RemainingGas = Msg->gas;
   Instance->popMessage();
 
   if (const evmc_message *Parent = Instance->getCurrentMessage()) {

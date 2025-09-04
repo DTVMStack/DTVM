@@ -899,7 +899,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handlePC() {
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleGas() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<int64_t>(RuntimeFunctions.GetGas);
+  return callRuntimeFor<uint64_t>(RuntimeFunctions.GetGas);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
@@ -1341,8 +1341,7 @@ template <typename RetType> MType *EVMMirBuilder::getMIRReturnType() {
     return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
   } else if constexpr (std::is_same_v<RetType, const uint8_t *>) {
     return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
-  } else if constexpr (std::is_same_v<RetType, int64_t> ||
-                       std::is_same_v<RetType, uint64_t>) {
+  } else if constexpr (std::is_same_v<RetType, uint64_t>) {
     return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   } else if constexpr (std::is_same_v<RetType, void>) {
     return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::VOID);
@@ -1357,8 +1356,7 @@ EVMMirBuilder::convertCallResult(MInstruction *CallInstr) {
     return convertU256InstrToU256Operand(CallInstr);
   } else if constexpr (std::is_same_v<RetType, const uint8_t *>) {
     return Operand(CallInstr, EVMType::BYTES32);
-  } else if constexpr (std::is_same_v<RetType, int64_t> ||
-                       std::is_same_v<RetType, uint64_t>) {
+  } else if constexpr (std::is_same_v<RetType, uint64_t>) {
     return convertSingleInstrToU256Operand(CallInstr);
   } else if constexpr (std::is_same_v<RetType, void>) {
     return Operand();
