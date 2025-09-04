@@ -17,6 +17,17 @@ struct RuntimeFunctions;
 using U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *);
 using Bytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *);
 using SizeFn = uint64_t (*)(zen::runtime::EVMInstance *);
+using U256WithInt64Fn = intx::uint256 (*)(zen::runtime::EVMInstance *, int64_t);
+using Bytes32WithInt64Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
+                                              int64_t);
+using Bytes32WithUint64Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
+                                               uint64_t);
+using Bytes32WithBytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
+                                                const uint8_t *);
+using SizeWithBytes32Fn = uint64_t (*)(zen::runtime::EVMInstance *,
+                                       const uint8_t *);
+using U256WithBytes32Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
+                                            const uint8_t *);
 } // namespace COMPILER
 
 namespace zen::runtime {
@@ -158,15 +169,6 @@ public:
   // PUSH1-PUSH32: Push N bytes onto stack
   Operand handlePush(const Bytes &Data);
 
-  // DUP1-DUP16: Duplicate Nth stack item
-  Operand handleDup(uint8_t Index);
-
-  // SWAP1-SWAP16: Swap top with Nth+1 stack item
-  void handleSwap(uint8_t Index);
-
-  // POP: Remove top stack item
-  void handlePop();
-
   // ==================== Control Flow Instruction Handlers ====================
 
   void handleStop() {
@@ -233,11 +235,12 @@ public:
               false, LTPredicate, &Ctx.I64Type, LHS[I], RHS[I]);
           MInstruction *Borrow2 = createInstruction<CmpInstruction>(
               false, LTPredicate, &Ctx.I64Type, Diff1, Borrow);
-
+          // NOLINTBEGIN(readability-identifier-naming)
           MInstruction *Borrow1_64 = createInstruction<ConversionInstruction>(
               false, OP_uext, MirI64Type, Borrow1);
           MInstruction *Borrow2_64 = createInstruction<ConversionInstruction>(
               false, OP_uext, MirI64Type, Borrow2);
+          // NOLINTEND(readability-identifier-naming)
 
           Borrow = createInstruction<BinaryInstruction>(
               false, OP_or, MirI64Type, Borrow1_64, Borrow2_64);
@@ -249,6 +252,15 @@ public:
     return Operand(Result, EVMType::UINT256);
   }
 
+  Operand handleMul(Operand MultiplicandOp, Operand MultiplierOp);
+  Operand handleDiv(Operand DividendOp, Operand DivisorOp);
+  Operand handleSDiv(Operand DividendOp, Operand DivisorOp);
+  Operand handleMod(Operand DividendOp, Operand DivisorOp);
+  Operand handleSMod(Operand DividendOp, Operand DivisorOp);
+  Operand handleAddMod(Operand AugendOp, Operand AddendOp, Operand ModulusOp);
+  Operand handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
+                       Operand ModulusOp);
+  Operand handleExp(Operand BaseOp, Operand ExponentOp);
   template <CompareOperator Operator>
   Operand handleCompareOp(Operand LHSOp, Operand RHSOp) {
     U256Inst Result = handleCompareImpl<Operator>(LHSOp, RHSOp, &Ctx.I64Type);
@@ -272,48 +284,93 @@ public:
 
   Operand handleNot(const Operand &LHSOp);
 
+  Operand handleByte(Operand IndexOp, Operand ValueOp);
+
+  Operand handleSignextend(Operand IndexOp, Operand ValueOp);
+
+  template <BinaryOperator Operator>
+  Operand handleShift(Operand ShiftOp, Operand ValueOp) {
+    U256Inst Shift = extractU256Operand(ShiftOp);
+    U256Inst Value = extractU256Operand(ValueOp);
+
+    // Check if shift amount >= 256
+    // (EVM spec: result is 0 for SHL/SHR, sign-extended for SAR)
+    MInstruction *IsLargeShift = isU256GreaterOrEqual(Shift, 256);
+
+    // Use only low 64 bits as shift amount
+    MInstruction *ShiftAmount = Shift[0];
+
+    U256Inst Result = {};
+
+    if constexpr (Operator == BinaryOperator::BO_SHL) {
+      Result = handleLeftShift(Value, ShiftAmount, IsLargeShift);
+    } else if constexpr (Operator == BinaryOperator::BO_SHR_U) {
+      Result = handleLogicalRightShift(Value, ShiftAmount, IsLargeShift);
+    } else if constexpr (Operator == BinaryOperator::BO_SHR_S) {
+      Result = handleArithmeticRightShift(Value, ShiftAmount, IsLargeShift);
+    }
+
+    return Operand(Result, EVMType::UINT256);
+  }
+
   // ==================== Environment Instruction Handlers ====================
 
   Operand handlePC();
   Operand handleGas();
   Operand handleAddress();
+  Operand handleBalance(Operand Address);
   Operand handleOrigin();
   Operand handleCaller();
   Operand handleCallValue();
-  Operand handleGasPrice();
+  Operand handleCallDataLoad(Operand Offset);
   Operand handleCallDataSize();
   Operand handleCodeSize();
+  void handleCodeCopy(Operand DestOffsetComponents, Operand OffsetComponents,
+                      Operand SizeComponents);
+  Operand handleGasPrice();
+  Operand handleExtCodeSize(Operand Address);
+  Operand handleExtCodeHash(Operand Address);
+  Operand handleBlockHash(Operand BlockNumber);
+  Operand handleCoinBase();
+  Operand handleTimestamp();
+  Operand handleNumber();
+  Operand handlePrevRandao();
+  Operand handleGasLimit();
+  Operand handleChainId();
+  Operand handleSelfBalance();
+  Operand handleBaseFee();
+  Operand handleBlobHash(Operand Index);
+  Operand handleBlobBaseFee();
+  Operand handleMSize();
+  Operand handleMLoad(Operand AddrComponents);
+  void handleMStore(Operand AddrComponents, Operand ValueComponents);
+  void handleMStore8(Operand AddrComponents, Operand ValueComponents);
+  void handleMCopy(Operand DestAddrComponents, Operand SrcAddrComponents,
+                   Operand LengthComponents);
+  void handleCallDataCopy(Operand DestOffsetComponents,
+                          Operand OffsetComponents, Operand SizeComponents);
+  void handleExtCodeCopy(Operand AddressComponents,
+                         Operand DestOffsetComponents, Operand OffsetComponents,
+                         Operand SizeComponents);
+  void handleReturnDataCopy(Operand DestOffsetComponents,
+                            Operand OffsetComponents, Operand SizeComponents);
+  Operand handleReturnDataSize();
+  void handleReturn(Operand MemOffsetComponents, Operand LengthComponents);
+  void handleInvalid();
+  Operand handleKeccak256(Operand OffsetComponents, Operand LengthComponents);
+  Operand handleSLoad(Operand KeyComponents);
+  void handleSStore(Operand KeyComponents, Operand ValueComponents);
+  Operand handleTLoad(Operand Index);
+  void handleTStore(Operand Index, Operand ValueComponents);
+  void handleSelfDestruct(Operand Beneficiary);
 
   // ==================== Runtime Interface for JIT ====================
 
 private:
   // ==================== Operand Methods ====================
 
-  void pushOperand(const Operand &Op) { OperandStack.push(Op); }
-  Operand popOperand();
-  Operand peekOperand(size_t Index = 0) const;
-  size_t getStackSize() const { return OperandStack.size(); }
-
   MInstruction *extractOperand(const Operand &Opnd);
   U256Inst extractU256Operand(const Operand &Opnd);
-
-  Operand createTempStackOperand(EVMType Type) {
-    if (Type == EVMType::UINT256) {
-      // For U256, create 4 I64 variables to represent the full 256-bit value
-      MType *I64Type =
-          EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-      U256Var VarComponents;
-      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-        VarComponents[I] = CurFunc->createVariable(I64Type);
-      }
-      return Operand(VarComponents, Type);
-    } else {
-      // For other types, use single variable
-      MType *Mtype = EVMFrontendContext::getMIRTypeFromEVMType(Type);
-      Variable *TempVar = CurFunc->createVariable(Mtype);
-      return Operand(TempVar, Type);
-    }
-  }
 
   // ==================== MIR Util Methods ====================
 
@@ -331,8 +388,6 @@ private:
     return createInstruction<ConstantInstruction>(
         false, Type, *MConstantInt::get(Ctx, *Type, V));
   }
-
-  ConstantInstruction *createUInt256ConstInstruction(const intx::uint256 &V);
 
   // Create a full U256 operand from intx::uint256 value
   Operand createU256ConstOperand(const intx::uint256 &V);
@@ -365,6 +420,9 @@ private:
     }
   }
 
+  // Check if 256-bit value is greater than or equal to threshold
+  MInstruction *isU256GreaterOrEqual(const U256Inst &Value, uint64_t Threshold);
+
   U256ConstInt createU256Constants(const U256Value &Value);
   /// Create u256 value from bytes with big-endian conversion
   U256Value createU256FromBytes(const Byte *Data, size_t Length);
@@ -394,8 +452,20 @@ private:
   U256Inst handleCompareEQ(const U256Inst &LHS, const U256Inst &RHS,
                            MType *ResultType);
 
-  U256Inst handleCompareGT_LT(const U256Inst &LHS, const U256Inst &RHS,
-                              MType *ResultType, CompareOperator Operator);
+  U256Inst handleCompareGT_LT( // NOLINT(readability-identifier-naming)
+      const U256Inst &LHS, const U256Inst &RHS, MType *ResultType,
+      CompareOperator Operator);
+
+  U256Inst handleLeftShift(const U256Inst &Value, MInstruction *ShiftAmount,
+                           MInstruction *IsLargeShift);
+
+  U256Inst handleLogicalRightShift(const U256Inst &Value,
+                                   MInstruction *ShiftAmount,
+                                   MInstruction *IsLargeShift);
+
+  U256Inst handleArithmeticRightShift(const U256Inst &Value,
+                                      MInstruction *ShiftAmount,
+                                      MInstruction *IsLargeShift);
 
   // ==================== EVM to MIR Opcode Mapping ====================
 
@@ -403,10 +473,35 @@ private:
 
   // ==================== Helper Methods ====================
 
-  // Runtime calls for different return types
-  Operand callRuntimeForU256(U256Fn RuntimeFunc);
-  Operand callRuntimeForBytes32(Bytes32Fn RuntimeFunc);
-  Operand callRuntimeForSize(SizeFn RuntimeFunc);
+  // Runtime calls using template functions
+
+  // Template versions of runtime calls
+  template <typename RetType>
+  Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *));
+
+  template <typename ArgType>
+  U256Inst convertOperandToInstruction(const Operand &Param);
+
+  template <typename RetType, typename... ArgTypes, typename... ParamTypes>
+  Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *,
+                                                ArgTypes...),
+                         const ParamTypes &...Params);
+
+  // Helper template functions for runtime call type mapping
+  template <typename RetType> static MType *getMIRReturnType();
+
+  template <typename RetType>
+  Operand convertCallResult(MInstruction *CallInstr);
+
+  // Detect and normalize a UINT256 operand when used as UINT64.
+  // For constants, follow EVM semantics (no hard throw; clamp appropriately).
+  // For non-constants, generate SelectInstruction to produce UINT64_MAX on
+  // overflow.
+  void normalizeOperandU64(Operand &Param);
+
+  // Split normalization for const and non-const U256.
+  void normalizeOperandU64Const(Operand &Param);
+  void normalizeOperandU64NonConst(Operand &Param);
 
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
@@ -415,7 +510,6 @@ private:
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;
   MBasicBlock *CurBB = nullptr;
-  std::stack<Operand> OperandStack;
 
   // Instance address for JIT function calls
   MInstruction *InstanceAddr = nullptr;

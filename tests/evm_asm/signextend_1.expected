@@ -1,0 +1,9 @@
+status: success
+error_code: 0
+stack:
+  - 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
+memory: ''
+storage: {}
+transient_storage: {}
+return: ''
+events: []

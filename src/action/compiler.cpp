@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #include "action/compiler.h"
@@ -9,6 +9,7 @@
 #endif
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
 #include "compiler/compiler.h"
+#include "compiler/evm_compiler.h"
 #endif
 
 namespace zen::action {
@@ -34,6 +35,25 @@ void performJITCompile(runtime::Module &Mod) {
   }
 #endif
   default:
+    break;
+  }
+}
+
+void performEVMJITCompile(runtime::EVMModule &Mod) {
+  switch (Mod.getRuntime()->getConfig().Mode) {
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+  case common::RunMode::MultipassMode: {
+    if (Mod.getRuntime()->getConfig().EnableMultipassLazy) {
+      ZEN_LOG_WARN("EVMJIT does not support lazy compilation now");
+    } else {
+      COMPILER::EagerEVMJITCompiler ECompiler(&Mod);
+      ECompiler.compile();
+    }
+    break;
+  }
+#endif
+  default:
+    ZEN_LOG_WARN("EVMJIT does not support singlepass mode");
     break;
   }
 }

@@ -128,53 +128,9 @@ EVMMirBuilder::createU256Constants(const U256Value &Value) {
   return Result;
 }
 
-EVMMirBuilder::Operand EVMMirBuilder::handlePush(const Bytes &Data) {
+typename EVMMirBuilder::Operand EVMMirBuilder::handlePush(const Bytes &Data) {
   U256Value Value = bytesToU256(Data);
   return Operand(Value);
-}
-
-EVMMirBuilder::Operand EVMMirBuilder::handleDup(uint8_t Index) {
-  return peekOperand(Index - 1);
-}
-
-void EVMMirBuilder::handleSwap(uint8_t Index) {
-  if (OperandStack.size() < Index + 1) {
-    throw getError(common::ErrorCode::EVMStackUnderflow);
-  }
-
-  std::vector<Operand> Temp;
-  for (uint8_t I = 0; I <= Index; ++I) {
-    Temp.push_back(popOperand());
-  }
-  std::swap(Temp[0], Temp[Index]);
-
-  for (int I = Index; I >= 0; --I) {
-    pushOperand(Temp[I]);
-  }
-}
-
-void EVMMirBuilder::handlePop() { popOperand(); }
-
-EVMMirBuilder::Operand EVMMirBuilder::popOperand() {
-  if (OperandStack.empty()) {
-    throw getError(common::ErrorCode::EVMStackUnderflow);
-  }
-  Operand Result = OperandStack.top();
-  OperandStack.pop();
-  return Result;
-}
-
-EVMMirBuilder::Operand EVMMirBuilder::peekOperand(size_t Index) const {
-  if (OperandStack.size() <= Index) {
-    throw getError(common::ErrorCode::EVMStackUnderflow);
-  }
-
-  std::stack<Operand> StackCopy = OperandStack;
-  size_t Depth = StackCopy.size() - Index - 1;
-  while (Depth--) {
-    StackCopy.pop();
-  }
-  return StackCopy.top();
 }
 
 // ==================== Control Flow Instruction Handlers ====================
@@ -213,6 +169,66 @@ void EVMMirBuilder::handleJumpDest() {
 }
 
 // ==================== Arithmetic Instruction Handlers ====================
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
+                                                         Operand MultiplierOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetMul, MultiplicandOp, MultiplierOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
+                                                         Operand DivisorOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetDiv, DividendOp, DivisorOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleSDiv(Operand DividendOp,
+                                                          Operand DivisorOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetSDiv, DividendOp, DivisorOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
+                                                         Operand DivisorOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetMod, DividendOp, DivisorOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleSMod(Operand DividendOp,
+                                                          Operand DivisorOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetSMod, DividendOp, DivisorOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
+                                                            Operand AddendOp,
+                                                            Operand ModulusOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256,
+                        intx::uint256>(RuntimeFunctions.GetAddMod, AugendOp,
+                                       AddendOp, ModulusOp);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
+                            Operand ModulusOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256,
+                        intx::uint256>(RuntimeFunctions.GetMulMod,
+                                       MultiplicandOp, MultiplierOp, ModulusOp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
+                                                         Operand ExponentOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+      RuntimeFunctions.GetExp, BaseOp, ExponentOp);
+}
 
 EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQZ(const U256Inst &LHS,
                                                         MType *ResultType) {
@@ -346,7 +362,7 @@ EVMMirBuilder::handleCompareGT_LT(const U256Inst &LHS, const U256Inst &RHS,
   return Result;
 }
 
-EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
+typename EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
   U256Inst Result = {};
   U256Inst LHS = extractU256Operand(LHSOp);
 
@@ -358,6 +374,511 @@ EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
   }
 
   return Operand(Result, EVMType::UINT256);
+}
+
+EVMMirBuilder::U256Inst
+EVMMirBuilder::handleLeftShift(const U256Inst &Value, MInstruction *ShiftAmount,
+                               MInstruction *IsLargeShift) {
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  U256Inst Result = {};
+
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
+
+  // EVM SHL operation: result = value << shift
+  // DMIR implementation maps 256-bit shift to 4x64-bit components
+  // shift_mod = shift % 64 (shift amount within 64-bit range)
+  // shift_comp = shift / 64 (which component index shift from)
+  // remaining_bits = 64 - shift_mod (remaining bits for carry calculation)
+  MInstruction *ShiftMod64 = createInstruction<BinaryInstruction>(
+      false, OP_urem, MirI64Type, ShiftAmount, Const64);
+  MInstruction *ComponentShift = createInstruction<BinaryInstruction>(
+      false, OP_udiv, MirI64Type, ShiftAmount, Const64);
+  MInstruction *RemainingBits = createInstruction<BinaryInstruction>(
+      false, OP_sub, MirI64Type, Const64, ShiftMod64);
+
+  MInstruction *MaxIndex =
+      createIntConstInstruction(MirI64Type, EVM_ELEMENTS_COUNT);
+
+  // Process each 64-bit component from low to high
+  // Example: For shift=72 (1*64 + 8), component_shift=1, shift_mod=8
+  // Component 0 gets bits from component -1 (invalid, use 0)
+  // Component 1 gets bits from component 0 shifted left by 8
+  // Component 2 gets bits from component 1 shifted left by 8
+  // Component 3 gets bits from component 2 shifted left by 8
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *CurrentIdx = createIntConstInstruction(MirI64Type, I);
+
+    // Calculate source component index: current index - component shift
+    MInstruction *SrcIdx = createInstruction<BinaryInstruction>(
+        false, OP_sub, MirI64Type, CurrentIdx, ComponentShift);
+
+    // Validate source index bounds
+    // if (0 <= src_idx < EVM_ELEMENTS_COUNT) use Value[src_idx] else 0
+    MInstruction *IsValidLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, SrcIdx, Zero);
+    MInstruction *IsValidHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, SrcIdx,
+        MaxIndex);
+    MInstruction *IsInBounds = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidLow, IsValidHigh);
+
+    // Select source value from the appropriate component
+    // src_value = (src_idx == J) ? Value[J] : 0 for all J
+    MInstruction *SrcValue = Zero;
+    for (size_t J = 0; J < EVM_ELEMENTS_COUNT; ++J) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, J);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, SrcIdx,
+          TargetIdx);
+      SrcValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[J], SrcValue);
+    }
+    SrcValue = createInstruction<SelectInstruction>(false, MirI64Type,
+                                                    IsInBounds, SrcValue, Zero);
+
+    // Calculate previous component index for carry bits
+    // prev_idx = src_idx - 1
+    MInstruction *PrevIdx = createInstruction<BinaryInstruction>(
+        false, OP_sub, MirI64Type, SrcIdx, One);
+
+    // Validate previous component bounds
+    // if (0 <= prev_idx < EVM_ELEMENTS_COUNT) use Value[prev_idx] else 0
+    MInstruction *IsValidPrevLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, PrevIdx,
+        Zero);
+    MInstruction *IsValidPrevHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, PrevIdx,
+        MaxIndex);
+    MInstruction *IsPrevValid = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidPrevLow, IsValidPrevHigh);
+
+    // Calculate carry bits from the previous component
+    // carry_bits = (prev_idx == K) ? (Value[K] >> remaining_bits) : 0
+    MInstruction *CarryValue = Zero;
+    for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, K);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, PrevIdx,
+          TargetIdx);
+      MInstruction *PrevValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[K], Zero);
+      PrevValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsPrevValid, PrevValue, Zero);
+
+      // Extract carry bits by shifting right the remaining bits
+      MInstruction *CarryBits = createInstruction<BinaryInstruction>(
+          false, OP_ushr, MirI64Type, PrevValue, RemainingBits);
+      CarryValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, CarryBits, CarryValue);
+    }
+
+    // Shift the source value left by the modulo amount
+    // shifted_value = src_value << shift_mod
+    MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
+        false, OP_shl, MirI64Type, SrcValue, ShiftMod64);
+
+    // combined_value = shifted_value | carry_bits
+    MInstruction *CombinedValue = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, ShiftedValue, CarryValue);
+
+    // Final result selection based on bounds checking and large shift flag
+    // result[I] = IsLargeShift ? 0 : (IsInBounds ? CombinedValue : 0)
+    Result[I] = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsLargeShift, Zero,
+        createInstruction<SelectInstruction>(false, MirI64Type, IsInBounds,
+                                             CombinedValue, Zero));
+  }
+
+  return Result;
+}
+
+EVMMirBuilder::U256Inst
+EVMMirBuilder::handleLogicalRightShift(const U256Inst &Value,
+                                       MInstruction *ShiftAmount,
+                                       MInstruction *IsLargeShift) {
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  U256Inst Result = {};
+
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
+
+  // EVM SHR operation: result = value >> shift (logical right shift)
+  // DMIR implementation maps 256-bit shift to 4x64-bit components
+  // shift_mod = shift % 64 (shift amount within 64-bit range)
+  // shift_comp = shift / 64 (which component index shift from)
+  MInstruction *ShiftMod64 = createInstruction<BinaryInstruction>(
+      false, OP_urem, MirI64Type, ShiftAmount, Const64);
+  MInstruction *ComponentShift = createInstruction<BinaryInstruction>(
+      false, OP_udiv, MirI64Type, ShiftAmount, Const64);
+
+  MInstruction *MaxIndex =
+      createIntConstInstruction(MirI64Type, EVM_ELEMENTS_COUNT);
+
+  // Process each 64-bit component from low to high
+  // Example: For shift=72 (1*64 + 8), component_shift=1, shift_mod=8
+  // Component 0 gets bits from component 1 shifted right by 8
+  // Component 1 gets bits from component 2 shifted right by 8
+  // Component 2 gets bits from component 3 shifted right by 8
+  // Component 3 gets bits from component 4 (invalid, use 0)
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *CurrentIdx = createIntConstInstruction(MirI64Type, I);
+
+    // Calculate source component index: current index + component shift
+    MInstruction *SrcIdx = createInstruction<BinaryInstruction>(
+        false, OP_add, MirI64Type, CurrentIdx, ComponentShift);
+
+    // Validate source index bounds
+    // if (0 <= src_idx < EVM_ELEMENTS_COUNT) use Value[src_idx] else 0
+    MInstruction *IsValidLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, SrcIdx, Zero);
+    MInstruction *IsValidHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, SrcIdx,
+        MaxIndex);
+    MInstruction *IsInBounds = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidLow, IsValidHigh);
+
+    // Select source value from the appropriate component
+    // src_value = (src_idx == J) ? Value[J] : 0 for all J
+    MInstruction *SrcValue = Zero;
+    for (size_t J = 0; J < EVM_ELEMENTS_COUNT; ++J) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, J);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, SrcIdx,
+          TargetIdx);
+      SrcValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[J], SrcValue);
+    }
+    SrcValue = createInstruction<SelectInstruction>(false, MirI64Type,
+                                                    IsInBounds, SrcValue, Zero);
+
+    // Calculate next component index for carry bits
+    // next_idx = src_idx + 1
+    MInstruction *NextIdx = createInstruction<BinaryInstruction>(
+        false, OP_add, MirI64Type, SrcIdx, One);
+
+    // Validate next component bounds
+    // if (0 <= next_idx < EVM_ELEMENTS_COUNT) use Value[next_idx] else 0
+    MInstruction *IsValidNextLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, NextIdx,
+        Zero);
+    MInstruction *IsValidNextHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, NextIdx,
+        MaxIndex);
+    MInstruction *IsNextValid = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidNextLow, IsValidNextHigh);
+
+    // Calculate carry bits from the next component
+    // carry_bits = (next_idx == K) ? (Value[K] << (64 - shift_mod)) : 0
+    MInstruction *CarryValue = Zero;
+    for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, K);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, NextIdx,
+          TargetIdx);
+      MInstruction *NextValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[K], Zero);
+      NextValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsNextValid, NextValue, Zero);
+
+      // Extract carry bits by shifting left the remaining bits
+      MInstruction *CarryBits = createInstruction<BinaryInstruction>(
+          false, OP_shl, MirI64Type, NextValue,
+          createInstruction<BinaryInstruction>(
+              false, OP_sub, MirI64Type,
+              createIntConstInstruction(MirI64Type, 64), ShiftMod64));
+      CarryValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, CarryBits, CarryValue);
+    }
+
+    // Shift the source value right by the modulo amount
+    // shifted_value = src_value >> shift_mod
+    MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
+        false, OP_ushr, MirI64Type, SrcValue, ShiftMod64);
+
+    // combined_value = shifted_value | carry_bits
+    MInstruction *CombinedValue = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, ShiftedValue, CarryValue);
+
+    // Final result selection based on bounds checking and large shift flag
+    // result[I] = IsLargeShift ? 0 : (IsInBounds ? CombinedValue : 0)
+    Result[I] = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsLargeShift, Zero,
+        createInstruction<SelectInstruction>(false, MirI64Type, IsInBounds,
+                                             CombinedValue, Zero));
+  }
+
+  return Result;
+}
+
+EVMMirBuilder::U256Inst
+EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
+                                          MInstruction *ShiftAmount,
+                                          MInstruction *IsLargeShift) {
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  U256Inst Result = {};
+
+  // Arithmetic right shift: sign-extend when shift >= 256
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  MInstruction *AllOnes = createIntConstInstruction(MirI64Type, ~0ULL);
+
+  // Check sign bit (bit 63 of highest component)
+  MInstruction *HighComponent = Value[EVM_ELEMENTS_COUNT - 1];
+  MInstruction *Const63 = createIntConstInstruction(MirI64Type, 63);
+  MInstruction *SignBit = createInstruction<BinaryInstruction>(
+      false, OP_ushr, MirI64Type, HighComponent, Const63);
+
+  // Sign bit is 1 if negative
+  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+  MInstruction *IsNegative = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, SignBit, One);
+
+  // Large shift result: all 1s if negative, all 0s if positive
+  MInstruction *LargeShiftResult = createInstruction<SelectInstruction>(
+      false, MirI64Type, IsNegative, AllOnes, Zero);
+
+  // intra-component shifts = shift % 64
+  // shift_comp = shift / 64 (which component index shift from)
+  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
+  MInstruction *ShiftMod64 = createInstruction<BinaryInstruction>(
+      false, OP_urem, MirI64Type, ShiftAmount, Const64);
+  MInstruction *ComponentShift = createInstruction<BinaryInstruction>(
+      false, OP_udiv, MirI64Type, ShiftAmount, Const64);
+
+  MInstruction *MaxIndex =
+      createIntConstInstruction(MirI64Type, EVM_ELEMENTS_COUNT);
+
+  // Process each component from low to high
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *CurrentIdx = createIntConstInstruction(MirI64Type, I);
+
+    MInstruction *SrcIdx = createInstruction<BinaryInstruction>(
+        false, OP_add, MirI64Type, CurrentIdx, ComponentShift);
+
+    // Validate source index bounds
+    // if (0 <= src_idx < EVM_ELEMENTS_COUNT) use Value[src_idx] else 0
+    MInstruction *IsValidLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, SrcIdx, Zero);
+    MInstruction *IsValidHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, SrcIdx,
+        MaxIndex);
+    MInstruction *IsInBounds = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidLow, IsValidHigh);
+
+    // Select source value from the component at SrcIdx index
+    MInstruction *SrcValue = LargeShiftResult;
+    for (size_t J = 0; J < EVM_ELEMENTS_COUNT; ++J) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, J);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, SrcIdx,
+          TargetIdx);
+      SrcValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[J], SrcValue);
+    }
+    SrcValue = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsInBounds, SrcValue, LargeShiftResult);
+
+    MInstruction *PrevIdx = createInstruction<BinaryInstruction>(
+        false, OP_sub, MirI64Type, SrcIdx, One);
+
+    // Validate previous component bounds
+    // if (0 <= prev_idx < EVM_ELEMENTS_COUNT) use Value[prev_idx] else 0
+    MInstruction *IsValidPrevLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, PrevIdx,
+        Zero);
+    MInstruction *IsValidPrevHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, PrevIdx,
+        MaxIndex);
+    MInstruction *IsPrevValid = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidPrevLow, IsValidPrevHigh);
+
+    // Calculate carry bits from the previous component (index-1)
+    MInstruction *CarryValue = Zero;
+    for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
+      MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, K);
+      MInstruction *IsMatch = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, PrevIdx,
+          TargetIdx);
+      MInstruction *PrevValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[K], Zero);
+      PrevValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsPrevValid, PrevValue, Zero);
+
+      // Extract high bits from previous component as carry
+      MInstruction *CarryBits = createInstruction<BinaryInstruction>(
+          false, OP_ushr, MirI64Type, PrevValue,
+          createInstruction<BinaryInstruction>(
+              false, OP_sub, MirI64Type,
+              createIntConstInstruction(MirI64Type, 64), ShiftMod64));
+      CarryValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, CarryBits, CarryValue);
+    }
+
+    MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
+        false, OP_sshr, MirI64Type, SrcValue, ShiftMod64);
+    MInstruction *CombinedValue = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, ShiftedValue, CarryValue);
+
+    Result[I] = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsLargeShift, LargeShiftResult,
+        createInstruction<SelectInstruction>(false, MirI64Type, IsInBounds,
+                                             CombinedValue, LargeShiftResult));
+  }
+
+  return Result;
+}
+
+// EVM BYTE opcode: extracts the byte at position 'index' from a 256-bit value
+// BYTE(index, value) = 0 if index ≥ 32, otherwise the byte at position index
+// (value >> (8 × (31 - index))) & 0xFF
+typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
+                                                          Operand ValueOp) {
+  U256Inst IndexComponents = extractU256Operand(IndexOp);
+  U256Inst ValueComponents = extractU256Operand(ValueOp);
+
+  // Check if index >= 32 (out of bounds)
+  MInstruction *IsOutOfBounds = isU256GreaterOrEqual(IndexComponents, 32);
+
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  // Calculate bit shift: (31 - index) * 8
+  MInstruction *Const31 = createIntConstInstruction(MirI64Type, 31);
+  MInstruction *ByteIndex = createInstruction<BinaryInstruction>(
+      false, OP_sub, MirI64Type, Const31, IndexComponents[0]);
+  MInstruction *Const8 = createIntConstInstruction(MirI64Type, 8);
+  MInstruction *BitShift = createInstruction<BinaryInstruction>(
+      false, OP_mul, MirI64Type, ByteIndex, Const8);
+
+  // Determine which 64-bit component contains the byte
+  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
+  MInstruction *ComponentIndex = createInstruction<BinaryInstruction>(
+      false, OP_udiv, MirI64Type, BitShift, Const64);
+
+  // Calculate the bit offset within the selected 64-bit component
+  MInstruction *BitOffset = createInstruction<BinaryInstruction>(
+      false, OP_urem, MirI64Type, BitShift, Const64);
+
+  // Select the appropriate 64-bit component based on component_index
+  // Example: bit_shift=248 → component_index=3 (248/64=3), bit_offset=56
+  // This means target byte is in the highest component (comp3) at bit offset 56
+  MInstruction *SelectedComponent = ValueComponents[0];
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *IsThisComponent = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, ComponentIndex,
+        createIntConstInstruction(MirI64Type, I));
+    SelectedComponent = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsThisComponent, ValueComponents[I],
+        SelectedComponent);
+  }
+
+  // Extract the byte by shifting right and masking
+  // Shift the selected component right by bit_offset to move target byte to LSB
+  // Then mask with 0xFF to extract the lowest 8 bits
+  MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
+      false, OP_ushr, MirI64Type, SelectedComponent, BitOffset);
+  MInstruction *ConstFF = createIntConstInstruction(MirI64Type, 0xFF);
+  MInstruction *ByteValue = createInstruction<BinaryInstruction>(
+      false, OP_and, MirI64Type, ShiftedValue, ConstFF);
+
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  // Return 0 if out of bounds, otherwise return the extracted byte value
+  MInstruction *Result = createInstruction<SelectInstruction>(
+      false, MirI64Type, IsOutOfBounds, Zero, ByteValue);
+
+  // Create U256 result with only the low component set
+  // High components are zeroed out as per EVM specification
+  U256Inst ResultComponents = {};
+  ResultComponents[0] = Result;
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    ResultComponents[I] = Zero;
+  }
+
+  return Operand(ResultComponents, EVMType::UINT256);
+}
+
+// EVM SIGNEXTEND opcode: sign-extends a signed integer from (index+1) bytes to
+// 256 bits SIGNEXTEND(index, value) = value if index >= 31, otherwise
+// sign-extended value The sign bit is at position (index * 8 + 7), and all
+// higher bits are set to the sign bit value.
+// Examples:
+//   SIGNEXTEND(0, 0x80) = 0xFF...FF80 (sign-extends 0x80 from 1 byte)
+//   SIGNEXTEND(1, 0x7FFF) = 0x00...007FFF (sign-extends 0x7FFF from 2 bytes)
+//   SIGNEXTEND(31, 0x1234) = 0x1234 (no extension when index >= 31)
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleSignextend(Operand IndexOp, Operand ValueOp) {
+  U256Inst IndexComponents = extractU256Operand(IndexOp);
+  U256Inst ValueComponents = extractU256Operand(ValueOp);
+
+  // Check if index >= 31 (no sign extension needed)
+  MInstruction *NoExtension = isU256GreaterOrEqual(IndexComponents, 31);
+
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  // Calculate sign bit position: index * 8 + 7
+  MInstruction *Const8 = createIntConstInstruction(MirI64Type, 8);
+  MInstruction *ByteBitPos = createInstruction<BinaryInstruction>(
+      false, OP_mul, MirI64Type, IndexComponents[0], Const8);
+  MInstruction *Const7 = createIntConstInstruction(MirI64Type, 7);
+  MInstruction *SignBitPos = createInstruction<BinaryInstruction>(
+      false, OP_add, MirI64Type, ByteBitPos, Const7);
+
+  // Extract sign bit
+  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
+  MInstruction *ComponentIndex = createInstruction<BinaryInstruction>(
+      false, OP_udiv, MirI64Type, SignBitPos, Const64);
+  MInstruction *BitOffset = createInstruction<BinaryInstruction>(
+      false, OP_urem, MirI64Type, SignBitPos, Const64);
+
+  // Select appropriate component for sign bit
+  MInstruction *SignComponent = ValueComponents[0];
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *IsThisComponent = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, ComponentIndex,
+        createIntConstInstruction(MirI64Type, I));
+    SignComponent = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsThisComponent, ValueComponents[I], SignComponent);
+  }
+
+  // Extract sign bit
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+  MInstruction *SignMask = createInstruction<BinaryInstruction>(
+      false, OP_shl, MirI64Type, One, BitOffset);
+  MInstruction *SignBitValue = createInstruction<BinaryInstruction>(
+      false, OP_and, MirI64Type, SignComponent, SignMask);
+  MInstruction *IsNegative = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, SignBitValue,
+      Zero);
+
+  // Create mask for sign extension
+  MInstruction *LowMask = createInstruction<BinaryInstruction>(
+      false, OP_sub, MirI64Type, SignMask, One);
+  MInstruction *HighMask =
+      createInstruction<NotInstruction>(false, MirI64Type, LowMask);
+
+  U256Inst ResultComponents = {};
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    // Apply sign extension mask if negative
+    MInstruction *ExtendedValue = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, ValueComponents[I], HighMask);
+
+    // Select between original and extended value
+    MInstruction *ComponentResult = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsNegative, ExtendedValue, ValueComponents[I]);
+
+    // Select between result and original based on NoExtension flag
+    ResultComponents[I] = createInstruction<SelectInstruction>(
+        false, MirI64Type, NoExtension, ValueComponents[I], ComponentResult);
+  }
+
+  return Operand(ResultComponents, EVMType::UINT256);
 }
 
 // ==================== Environment Instruction Handlers ====================
@@ -388,37 +909,222 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleGas() {
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeForBytes32(RuntimeFunctions.GetAddress);
+  return callRuntimeFor(RuntimeFunctions.GetAddress);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleBalance(Operand Address) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, const uint8_t *>(
+      RuntimeFunctions.GetBalance, Address);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleOrigin() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeForBytes32(RuntimeFunctions.GetOrigin);
+  return callRuntimeFor(RuntimeFunctions.GetOrigin);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCaller() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeForBytes32(RuntimeFunctions.GetCaller);
+  return callRuntimeFor(RuntimeFunctions.GetCaller);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallValue() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeForBytes32(RuntimeFunctions.GetCallValue);
+  return callRuntimeFor(RuntimeFunctions.GetCallValue);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleCallDataLoad(Operand Offset) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(Offset);
+  return callRuntimeFor<const uint8_t *, uint64_t>(
+      RuntimeFunctions.GetCallDataLoad, Offset);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleGasPrice() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeForU256(RuntimeFunctions.GetGasPrice);
+  return callRuntimeFor(RuntimeFunctions.GetGasPrice);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallDataSize() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeForSize(RuntimeFunctions.GetCallDataSize);
+  return callRuntimeFor(RuntimeFunctions.GetCallDataSize);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCodeSize() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeForSize(RuntimeFunctions.GetCodeSize);
+  return callRuntimeFor(RuntimeFunctions.GetCodeSize);
+}
+
+void EVMMirBuilder::handleCodeCopy(Operand DestOffsetComponents,
+                                   Operand OffsetComponents,
+                                   Operand SizeComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(DestOffsetComponents);
+  normalizeOperandU64(OffsetComponents);
+  normalizeOperandU64(SizeComponents);
+  callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.SetCodeCopy, DestOffsetComponents, OffsetComponents,
+      SizeComponents);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleExtCodeSize(Operand Address) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<uint64_t, const uint8_t *>(
+      RuntimeFunctions.GetExtCodeSize, Address);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleExtCodeHash(Operand Address) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<const uint8_t *, const uint8_t *>(
+      RuntimeFunctions.GetExtCodeHash, Address);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleBlockHash(Operand BlockNumber) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<const uint8_t *, int64_t>(RuntimeFunctions.GetBlockHash,
+                                                  BlockNumber);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleCoinBase() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor(RuntimeFunctions.GetCoinBase);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleTimestamp() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor(RuntimeFunctions.GetTimestamp);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleNumber() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor(RuntimeFunctions.GetNumber);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handlePrevRandao() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor(RuntimeFunctions.GetPrevRandao);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleGasLimit() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor(RuntimeFunctions.GetGasLimit);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleChainId() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor(RuntimeFunctions.GetChainId);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleSelfBalance() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor(RuntimeFunctions.GetSelfBalance);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleBaseFee() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor(RuntimeFunctions.GetBaseFee);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleBlobHash(Operand Index) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(Index);
+  return callRuntimeFor<const uint8_t *, uint64_t>(RuntimeFunctions.GetBlobHash,
+                                                   Index);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleBlobBaseFee() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor(RuntimeFunctions.GetBlobBaseFee);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleMSize() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor(RuntimeFunctions.GetMSize);
+}
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleMLoad(Operand AddrComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(AddrComponents);
+  return callRuntimeFor<intx::uint256, uint64_t>(RuntimeFunctions.GetMLoad,
+                                                 AddrComponents);
+}
+void EVMMirBuilder::handleMStore(Operand AddrComponents,
+                                 Operand ValueComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(AddrComponents);
+  callRuntimeFor<void, uint64_t, intx::uint256>(
+      RuntimeFunctions.SetMStore, AddrComponents, ValueComponents);
+}
+void EVMMirBuilder::handleMStore8(Operand AddrComponents,
+                                  Operand ValueComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(AddrComponents);
+  callRuntimeFor<void, uint64_t, intx::uint256>(
+      RuntimeFunctions.SetMStore8, AddrComponents, ValueComponents);
+}
+void EVMMirBuilder::handleMCopy(Operand DestAddrComponents,
+                                Operand SrcAddrComponents,
+                                Operand LengthComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(DestAddrComponents);
+  normalizeOperandU64(SrcAddrComponents);
+  normalizeOperandU64(LengthComponents);
+  callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.SetMCopy, DestAddrComponents, SrcAddrComponents,
+      LengthComponents);
+}
+void EVMMirBuilder::handleReturn(Operand MemOffsetComponents,
+                                 Operand LengthComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(MemOffsetComponents);
+  normalizeOperandU64(LengthComponents);
+  callRuntimeFor<void, uint64_t, uint64_t>(
+      RuntimeFunctions.SetReturn, MemOffsetComponents, LengthComponents);
+}
+void EVMMirBuilder::handleInvalid() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  callRuntimeFor(RuntimeFunctions.HandleInvalid);
+}
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleSLoad(Operand KeyComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256>(RuntimeFunctions.GetSLoad,
+                                                      KeyComponents);
+}
+void EVMMirBuilder::handleSStore(Operand KeyComponents,
+                                 Operand ValueComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  callRuntimeFor<void, intx::uint256, intx::uint256>(
+      RuntimeFunctions.SetSStore, KeyComponents, ValueComponents);
+}
+typename EVMMirBuilder::Operand EVMMirBuilder::handleTLoad(Operand Index) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<intx::uint256, intx::uint256>(RuntimeFunctions.GetTLoad,
+                                                      Index);
+}
+void EVMMirBuilder::handleTStore(Operand Index, Operand ValueComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  callRuntimeFor<void, intx::uint256, intx::uint256>(RuntimeFunctions.SetTStore,
+                                                     Index, ValueComponents);
+}
+void EVMMirBuilder::handleSelfDestruct(Operand Beneficiary) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  callRuntimeFor<void, const uint8_t *>(RuntimeFunctions.HandleSelfDestruct,
+                                        Beneficiary);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleKeccak256(Operand OffsetComponents,
+                               Operand LengthComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(OffsetComponents);
+  normalizeOperandU64(LengthComponents);
+  return callRuntimeFor<const uint8_t *, uint64_t, uint64_t>(
+      RuntimeFunctions.GetKeccak256, OffsetComponents, LengthComponents);
 }
 
 // ==================== Private Helper Methods ====================
@@ -465,21 +1171,6 @@ MInstruction *EVMMirBuilder::extractOperand(const Operand &Opnd) {
   }
 
   ZEN_UNREACHABLE();
-}
-
-ConstantInstruction *
-EVMMirBuilder::createUInt256ConstInstruction(const intx::uint256 &V) {
-  // This method now returns just the low component instruction
-  // For full U256 creation, use handlePush or createU256FromComponents
-
-  // Get EVMU256Type for semantic awareness
-  zen::common::EVMU256Type *U256Type = EVMFrontendContext::getEVMU256Type();
-
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  // Use lower 64 bits as the primary component
-  uint64_t Value = static_cast<uint64_t>(V & 0xFFFFFFFFFFFFFFFFULL);
-  MConstant *Constant = MConstantInt::get(Ctx, *I64Type, Value);
-  return createInstruction<ConstantInstruction>(false, I64Type, *Constant);
 }
 
 typename EVMMirBuilder::Operand
@@ -705,6 +1396,34 @@ EVMMirBuilder::convertBytes32ToU256Operand(const Operand &Bytes32Op) {
   return Operand(Result, EVMType::UINT256);
 }
 
+MInstruction *EVMMirBuilder::isU256GreaterOrEqual(const U256Inst &Value,
+                                                  uint64_t Threshold) {
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+
+  // Check if any of the higher components are non-zero
+  MInstruction *IsNonZeroHigh = Zero;
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *IsNonZero = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Value[I],
+        Zero);
+    IsNonZeroHigh = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, IsNonZeroHigh, IsNonZero);
+  }
+
+  // Check if low component >= threshold
+  MInstruction *ThresholdConst =
+      createIntConstInstruction(MirI64Type, Threshold);
+  MInstruction *IsLowLarge = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, Value[0],
+      ThresholdConst);
+
+  // Combine result: any high component non-zero OR low component >= threshold
+  return createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                              IsNonZeroHigh, IsLowLarge);
+}
+
 // ==================== EVM to MIR Opcode Mapping ====================
 
 Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
@@ -729,58 +1448,187 @@ Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
 
 // ==================== Interface Helper Methods ====================
 
-typename EVMMirBuilder::Operand
-EVMMirBuilder::callRuntimeForU256(U256Fn RuntimeFunc) {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MType *U256Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
-
-  // Get function address and instance pointer
-  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, U256Type, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-
-  // Convert U256 result to 4-component representation
-  return convertU256InstrToU256Operand(CallInstr);
+// Helper template functions for runtime call type mapping
+template <typename RetType> MType *EVMMirBuilder::getMIRReturnType() {
+  if constexpr (std::is_same_v<RetType, intx::uint256>) {
+    return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT256);
+  } else if constexpr (std::is_same_v<RetType, const uint8_t *>) {
+    return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
+  } else if constexpr (std::is_same_v<RetType, uint64_t>) {
+    return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  } else if constexpr (std::is_same_v<RetType, void>) {
+    return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::VOID);
+  }
+  return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::VOID);
 }
 
+template <typename RetType>
 typename EVMMirBuilder::Operand
-EVMMirBuilder::callRuntimeForSize(SizeFn RuntimeFunc) {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
-  // Get function address and instance pointer
-  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
-  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
-  MInstruction *InstancePtr = getCurrentInstancePointer();
-
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, I64Type, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>(InstancePtr));
-
-  // Convert size to U256 format (size in low component, zeros in high)
-  return convertSingleInstrToU256Operand(CallInstr);
+EVMMirBuilder::convertCallResult(MInstruction *CallInstr) {
+  if constexpr (std::is_same_v<RetType, intx::uint256>) {
+    return convertU256InstrToU256Operand(CallInstr);
+  } else if constexpr (std::is_same_v<RetType, const uint8_t *>) {
+    return Operand(CallInstr, EVMType::BYTES32);
+  } else if constexpr (std::is_same_v<RetType, uint64_t>) {
+    return convertSingleInstrToU256Operand(CallInstr);
+  } else if constexpr (std::is_same_v<RetType, void>) {
+    return Operand();
+  }
+  return Operand();
 }
 
-typename EVMMirBuilder::Operand
-EVMMirBuilder::callRuntimeForBytes32(Bytes32Fn RuntimeFunc) {
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MType *Bytes32Type =
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
+void EVMMirBuilder::normalizeOperandU64(Operand &Param) {
+  if (Param.getType() != EVMType::UINT256) {
+    return;
+  }
+  if (Param.isConstant()) {
+    normalizeOperandU64Const(Param);
+  } else {
+    normalizeOperandU64NonConst(Param);
+  }
+}
 
-  // Get function address and instance pointer
+void EVMMirBuilder::normalizeOperandU64Const(Operand &Param) {
+  const auto &C = Param.getConstValue();
+  bool FitsU64 = (C[1] == 0 && C[2] == 0 && C[3] == 0);
+
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  uint64_t Selected = FitsU64 ? C[0] : UINT64_MAX; // sentinel for overflow
+
+  // Rebuild Param as a normalized U256 with low64=Selected, others=0
+  MInstruction *Low = createIntConstInstruction(I64Type, Selected);
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+  U256Inst NewVal = {Low, Zero, Zero, Zero};
+  Param = Operand(NewVal, EVMType::UINT256);
+}
+
+void EVMMirBuilder::normalizeOperandU64NonConst(Operand &Param) {
+  // Extract four 64-bit parts [low, mid-low, mid-high, high]
+  U256Inst Parts = extractU256Operand(Param);
+
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+
+  // IsU64 = (part[1] == 0) && (part[2] == 0) && (part[3] == 0)
+  MInstruction *IsZero1 = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Parts[1], Zero);
+  MInstruction *IsZero2 = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Parts[2], Zero);
+  MInstruction *IsZero3 = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Parts[3], Zero);
+
+  // Combine to a single condition using 64-bit ANDs
+  MInstruction *Cond12 = createInstruction<BinaryInstruction>(
+      false, OP_and, I64Type, IsZero1, IsZero2);
+  MInstruction *IsU64 = createInstruction<BinaryInstruction>(
+      false, OP_and, I64Type, Cond12, IsZero3);
+
+  // Select: valid -> low part; invalid -> UINT64_MAX (sentinel)
+  MInstruction *AllOnes = createIntConstInstruction(I64Type, UINT64_MAX);
+  MInstruction *Selected = createInstruction<SelectInstruction>(
+      false, I64Type, IsU64, Parts[0], AllOnes);
+
+  // Normalize Param to U256: [Selected, 0, 0, 0]
+  U256Inst NewVal = {Selected, Zero, Zero, Zero};
+  Param = Operand(NewVal, EVMType::UINT256);
+}
+
+// Template function for no-argument runtime calls
+template <typename RetType>
+typename EVMMirBuilder::Operand
+EVMMirBuilder::callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *)) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
   uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
   MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
   MInstruction *InstancePtr = getCurrentInstancePointer();
 
+  MType *ReturnType = getMIRReturnType<RetType>();
+
   MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, Bytes32Type, FuncAddrInst,
+      false, ReturnType, FuncAddrInst,
       llvm::ArrayRef<MInstruction *>(InstancePtr));
 
-  // Return as BYTES32 operand (pointer to existing memory)
-  return Operand(CallInstr, EVMType::BYTES32);
+  return convertCallResult<RetType>(CallInstr);
+}
+
+// Template function for single-argument runtime calls
+template <typename ArgType>
+EVMMirBuilder::U256Inst
+EVMMirBuilder::convertOperandToInstruction(const Operand &Param) {
+  EVMMirBuilder::U256Inst Result = {};
+
+  if constexpr (std::is_same_v<ArgType, int64_t> ||
+                std::is_same_v<ArgType, uint64_t>) {
+    EVMMirBuilder::U256Inst Components = extractU256Operand(Param);
+    Result[0] = Components[0];
+  } else if constexpr (std::is_same_v<ArgType, const uint8_t *>) {
+    Result[0] = Param.getInstr();
+  } else if constexpr (std::is_same_v<ArgType, const intx::uint256> ||
+                       std::is_same_v<ArgType, intx::uint256>) {
+    const U256Value &U256Value = Param.getConstValue();
+    MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      Result[I] = createIntConstInstruction(I64Type, U256Value[I]);
+    }
+  } else {
+    ZEN_ASSERT(false &&
+               "Unsupported argument type in convertOperandToInstruction");
+  }
+
+  return Result;
+}
+
+template <typename RetType, typename... ArgTypes, typename... ParamTypes>
+EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
+    RetType (*RuntimeFunc)(runtime::EVMInstance *, ArgTypes...),
+    const ParamTypes &...Params) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  std::vector<MInstruction *> Args = {InstancePtr};
+
+  auto ParamsTuple = std::forward_as_tuple(Params...);
+
+  auto PushOne = [this, &Args, &ParamsTuple]<std::size_t I>() {
+    using ArgT = typename std::tuple_element<I, std::tuple<ArgTypes...>>::type;
+    const Operand &Op = std::get<I>(ParamsTuple);
+
+    if (Op.getType() == EVMType::UINT256 && Op.isU256MultiComponent()) {
+      if constexpr (std::is_same_v<ArgT, const intx::uint256> ||
+                    std::is_same_v<ArgT, intx::uint256>) {
+        const auto &Components = Op.getU256Components();
+        for (size_t Pos = 0; Pos < EVM_ELEMENTS_COUNT; ++Pos) {
+          Args.push_back(Components[Pos]);
+        }
+      } else {
+        auto Insts = convertOperandToInstruction<ArgT>(Op);
+        for (auto *Inst : Insts)
+          if (Inst)
+            Args.push_back(Inst);
+      }
+    } else {
+      auto Insts = convertOperandToInstruction<ArgT>(Op);
+      for (auto *Inst : Insts)
+        if (Inst)
+          Args.push_back(Inst);
+    }
+  };
+
+  constexpr std::size_t N = sizeof...(ArgTypes);
+  [&]<std::size_t... I>(std::index_sequence<I...>) {
+    (PushOne.template operator()<I>(), ...);
+  }
+  (std::make_index_sequence<N>{});
+
+  MType *ReturnType = getMIRReturnType<RetType>();
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      /*isTail*/ false, ReturnType, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>{Args});
+
+  return convertCallResult<RetType>(CallInstr);
 }
 
 MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
@@ -788,6 +1636,48 @@ MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
   // Convert instance address back to pointer type
   return createInstruction<ConversionInstruction>(
       false, OP_inttoptr, createVoidPtrType(), InstanceAddr);
+}
+
+void EVMMirBuilder::handleCallDataCopy(Operand DestOffsetComponents,
+                                       Operand OffsetComponents,
+                                       Operand SizeComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(DestOffsetComponents);
+  normalizeOperandU64(OffsetComponents);
+  normalizeOperandU64(SizeComponents);
+  callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.SetCallDataCopy, DestOffsetComponents, OffsetComponents,
+      SizeComponents);
+}
+
+void EVMMirBuilder::handleExtCodeCopy(Operand AddressComponents,
+                                      Operand DestOffsetComponents,
+                                      Operand OffsetComponents,
+                                      Operand SizeComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(DestOffsetComponents);
+  normalizeOperandU64(OffsetComponents);
+  normalizeOperandU64(SizeComponents);
+  callRuntimeFor<void, const uint8_t *, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.SetExtCodeCopy, AddressComponents, DestOffsetComponents,
+      OffsetComponents, SizeComponents);
+}
+
+void EVMMirBuilder::handleReturnDataCopy(Operand DestOffsetComponents,
+                                         Operand OffsetComponents,
+                                         Operand SizeComponents) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(DestOffsetComponents);
+  normalizeOperandU64(OffsetComponents);
+  normalizeOperandU64(SizeComponents);
+  callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
+      RuntimeFunctions.SetReturnDataCopy, DestOffsetComponents,
+      OffsetComponents, SizeComponents);
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::handleReturnDataSize() {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  return callRuntimeFor<uint64_t>(RuntimeFunctions.GetReturnDataSize);
 }
 
 } // namespace COMPILER

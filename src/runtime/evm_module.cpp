@@ -15,6 +15,10 @@
 #include <memory>
 #include <string>
 
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+#include "compiler/evm_compiler.h"
+#endif
+
 namespace zen::runtime {
 
 EVMModule::EVMModule(Runtime *RT)
@@ -61,7 +65,9 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
 
   std::vector<uint8_t> PaddedCode = padCode(Data, CodeSize);
 
-  action::EVMModuleLoader Loader(*Mod, PaddedCode);
+  action::EVMModuleLoader Loader(
+      *Mod, reinterpret_cast<const Byte *>(PaddedCode.data()),
+      PaddedCode.size());
 
   auto &Stats = RT.getStatistics();
   auto Timer = Stats.startRecord(utils::StatisticPhase::Load);
@@ -74,6 +80,8 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
 
   ZEN_ASSERT(RT.getEVMHost());
   Mod->Host = RT.getEVMHost();
+
+  action::performEVMJITCompile(*Mod);
 
   return Mod;
 }

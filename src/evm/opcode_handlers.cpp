@@ -39,9 +39,6 @@ using namespace zen::runtime;
     return Cost;                                                               \
   }
 
-#define DEFINE_UNIMPLEMENT_CALCULATE_GAS(OpName, Cost)                         \
-  uint64_t OpName##Handler::calculateGas() { return Cost; }
-
 /* ---------- Define gas cost macros end ---------- */
 
 /* ---------- Implement gas cost begin ---------- */
@@ -107,8 +104,8 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PrevRanDao, OP_PREVRANDAO);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(ChainId, OP_CHAINID);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SelfBalance, OP_SELFBALANCE);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(BaseFee, OP_BASEFEE);
-DEFINE_UNIMPLEMENT_CALCULATE_GAS(BlobHash, BLOBHASH_GAS_COST);
-DEFINE_UNIMPLEMENT_CALCULATE_GAS(BlobBaseFee, BLOBBASEFEE_GAS_COST);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(BlobHash, OP_BLOBHASH);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(BlobBaseFee, OP_BLOBBASEFEE);
 // Storage operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SLoad, OP_SLOAD);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SStore, OP_SSTORE);
@@ -122,10 +119,9 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MLoad, OP_MLOAD);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Jump, OP_JUMP);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(JumpI, OP_JUMPI);
 // Temporary Storage
-// Evmc do not support these opcodes
-DEFINE_UNIMPLEMENT_CALCULATE_GAS(TLoad, TLOAD_GAS_COST);
-DEFINE_UNIMPLEMENT_CALCULATE_GAS(TStore, TSTORE_GAS_COST);
-DEFINE_UNIMPLEMENT_CALCULATE_GAS(MCopy, MCOPY_GAS_COST);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(TLoad, OP_TLOAD);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(TStore, OP_TSTORE);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MCopy, OP_MCOPY);
 
 // Environment operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(PC, OP_PC);
@@ -447,7 +443,7 @@ void CodeCopyHandler::doExecute() {
   auto *Context = getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
-  const uint8_t *Code = Mod->Code;
+  const Byte *Code = Mod->Code;
   size_t CodeSize = Mod->CodeSize;
 
   intx::uint256 DestOffsetVal = Frame->pop();
@@ -747,7 +743,7 @@ void SStoreHandler::doExecute() {
   const auto Status =
       Frame->Host->set_storage(Frame->Msg->recipient, Key, Value);
 
-  const auto [GasCostWarm, GasReFund] = SstoreCosts[Frame->Rev][Status];
+  const auto [GasCostWarm, GasReFund] = SSTORE_COSTS[Frame->Rev][Status];
 
   const auto GasCost = GasCostCold + GasCostWarm;
   if (Frame->Msg->gas < GasCost) {
@@ -850,7 +846,7 @@ void JumpHandler::doExecute() {
   auto *Context = getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
-  const uint8_t *Code = Mod->Code;
+  const Byte *Code = Mod->Code;
   size_t CodeSize = Mod->CodeSize;
   EVM_STACK_CHECK(Frame, 1);
   // We can assume that valid destination can't greater than uint64_t
@@ -870,7 +866,7 @@ void JumpIHandler::doExecute() {
   auto *Context = getContext();
   auto *Inst = Context->getInstance();
   auto *Mod = Inst->getModule();
-  const uint8_t *Code = Mod->Code;
+  const Byte *Code = Mod->Code;
   size_t CodeSize = Mod->CodeSize;
   EVM_STACK_CHECK(Frame, 2);
   // We can assume that valid destination can't greater than uint64_t

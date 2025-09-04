@@ -676,6 +676,9 @@ void Runtime::callEVMMain(EVMInstance &Inst, std::vector<uint8_t> &Result) {
     ZEN_UNREACHABLE();
 #endif
   }
+
+  std::string output = zen::utils::toHex(Result.data(), Result.size());
+  ZEN_LOG_INFO("output: 0x%s", output.c_str());
 }
 
 #ifdef ZEN_ENABLE_JIT

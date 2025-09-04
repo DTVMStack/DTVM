@@ -219,15 +219,31 @@ def evm_to_bytecode(input_file_path, output_file_path):
             # extract argument part
             if len(parts) > 1:
                 argument = parts[1]
-                if argument.startswith("0x"):
+                if argument.upper().startswith("0X"):
                     hex_value = argument[2:]
+                    if not all(c in "0123456789abcdefABCDEF" for c in hex_value):
+                        raise ValueError(f"Invalid hex value: {argument}")
                 else:
-                    hex_value = argument
+                    try:
+                        decimal_value = int(argument)
+                        if decimal_value < 0:
+                            raise ValueError(f"Negative value not allowed: {argument}")
+                        hex_value = format(decimal_value, 'x')
+                    except ValueError:
+                        raise ValueError(f"Invalid decimal value: {argument}")
 
-                # Ensure even length for hex values
-                if len(hex_value) % 2 != 0:
-                    hex_value = '0' + hex_value
-                bytecode.append(hex_value)
+                # For PUSH operations, handle padding
+                if mnemonic.startswith("PUSH"):
+                    push_num = 0 if mnemonic == "PUSH0" else int(mnemonic[4:])
+                    expected_hex_length = push_num * 2
+                    if len(hex_value.lstrip("0") or "0") > expected_hex_length:
+                        raise ValueError(f"Value is too big for {push_num} byte(s): {argument}")
+                    hex_value = hex_value.zfill(expected_hex_length)
+                else:
+                    # Ensure even length for non-PUSH operations
+                    hex_value = hex_value.zfill(len(hex_value) + (len(hex_value) % 2))
+
+                bytecode.append(hex_value.upper())
 
         # write bytecode to output file
         with open(output_file_path, 'w') as output_file:

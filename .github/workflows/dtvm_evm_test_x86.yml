@@ -50,13 +50,14 @@ jobs:
           export CMAKE_BUILD_TARGET=Debug
           export ENABLE_ASAN=true
           export RUN_MODE=interpreter
+          export INPUT_FORMAT=evm
           export ENABLE_LAZY=true
           export ENABLE_MULTITHREAD=true
           export TestSuite=evmtestsuite
           export CPU_EXCEPTION_TYPE='check'
 
           bash .ci/run_test_suite.sh
-  
+
   build_real_test_interp_on_x86:
     name: Build and test DTVM-EVM interpreter on x86-64
     runs-on: ubuntu-latest
@@ -87,6 +88,7 @@ jobs:
           export CMAKE_BUILD_TARGET=Debug
           export ENABLE_ASAN=true
           export RUN_MODE=interpreter
+          export INPUT_FORMAT=evm
           export ENABLE_LAZY=true
           export ENABLE_MULTITHREAD=true
           export TestSuite=evmrealsuite
@@ -94,3 +96,40 @@ jobs:
 
           bash .ci/run_test_suite.sh
 
+  build_test_debug_multipass_lazy_evmtestsuite_on_x86:
+    name: Build and test DTVM-EVM multipass on x86-64
+    runs-on: ubuntu-latest
+    container:
+      image: dtvmdev1/dtvm-dev-x64:main
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: Code Format Check
+        run: |
+          ./tools/format.sh check
+      - name: Install llvm
+        run: |
+          echo "current home is $HOME"
+          export CUR_PROJECT=$(pwd)
+          cd /opt
+          # ./install_llvm15.sh
+          # ./install_rust.sh
+          cd $CUR_PROJECT
+          export LLVM_SYS_150_PREFIX=/opt/llvm15
+          export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
+          export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
+          cd tests/wast/spec
+          git apply ../spec.patch
+          cd $CUR_PROJECT
+          export CMAKE_BUILD_TARGET=Debug
+          export ENABLE_ASAN=true
+          export RUN_MODE=multipass
+          export INPUT_FORMAT=evm
+          export ENABLE_LAZY=false
+          export ENABLE_MULTITHREAD=true
+          export TestSuite=evmrealsuite
+          export CPU_EXCEPTION_TYPE='check'
+
+          bash .ci/run_test_suite.sh

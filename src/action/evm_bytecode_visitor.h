@@ -5,7 +5,6 @@
 #define ZEN_ACTION_EVM_BYTECODE_VISITOR_H
 
 #include "compiler/evm_frontend/evm_mir_compiler.h"
-#include "evm/evm.h"
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
 #include "runtime/evm_module.h"
@@ -33,10 +32,19 @@ public:
   }
 
 private:
-  void push(const Operand &Opnd) { Stack.push(Opnd); }
+  static constexpr size_t EVM_MAX_STACK_SIZE = 1024;
+
+  void push(const Operand &Opnd) {
+    if (Stack.getSize() >= EVM_MAX_STACK_SIZE) {
+      throw getError(common::ErrorCode::EVMStackOverflow);
+    }
+    Stack.push(Opnd);
+  }
 
   Operand pop() {
-    ZEN_ASSERT(!Stack.empty());
+    if (Stack.empty()) {
+      throw getError(common::ErrorCode::EVMStackUnderflow);
+    }
     Operand Opnd = Stack.pop();
     Builder.releaseOperand(Opnd);
     return Opnd;
@@ -54,6 +62,7 @@ private:
       ptrdiff_t Diff = Ip - Bytecode;
       PC = static_cast<uint64_t>(Diff >= 0 ? Diff : 0);
       Ip++;
+      PC++;
 
       switch (Opcode) {
       case OP_STOP:
@@ -62,8 +71,32 @@ private:
       case OP_ADD:
         handleBinaryArithmetic<BinaryOperator::BO_ADD>();
         break;
+      case OP_MUL:
+        handleMul();
+        break;
       case OP_SUB:
         handleBinaryArithmetic<BinaryOperator::BO_SUB>();
+        break;
+      case OP_DIV:
+        handleDiv();
+        break;
+      case OP_SDIV:
+        handleSDiv();
+        break;
+      case OP_MOD:
+        handleMod();
+        break;
+      case OP_SMOD:
+        handleSMod();
+        break;
+      case OP_ADDMOD:
+        handleAddMod();
+        break;
+      case OP_MULMOD:
+        handleMulMod();
+        break;
+      case OP_EXP:
+        handleExp();
         break;
       case OP_LT:
         handleCompare<CompareOperator::CO_LT>();
@@ -95,8 +128,17 @@ private:
       case OP_NOT:
         handleNot();
         break;
+      case OP_SHL:
+        handleShift<BinaryOperator::BO_SHL>();
+        break;
+      case OP_SHR:
+        handleShift<BinaryOperator::BO_SHR_U>();
+        break;
+      case OP_SAR:
+        handleShift<BinaryOperator::BO_SHR_S>();
+        break;
       case OP_POP:
-        Builder.handlePop();
+        handlePop();
         break;
 
       case OP_PUSH0:
@@ -180,60 +222,22 @@ private:
         break;
       }
 
-      case OP_MUL: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_DIV: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_SDIV: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_MOD: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_SMOD: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_ADDMOD: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_MULMOD: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_EXP: {
-        ZEN_ASSERT_TODO();
-      }
-
       case OP_SIGNEXTEND: {
-        ZEN_ASSERT_TODO();
+        handleSignextend();
+        break;
       }
 
       case OP_BYTE: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_SHL: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_SHR: {
-        ZEN_ASSERT_TODO();
-      }
-
-      case OP_SAR: {
-        ZEN_ASSERT_TODO();
+        handleByte();
+        break;
       }
 
       case OP_KECCAK256: {
-        ZEN_ASSERT_TODO();
+        Operand Offset = pop();
+        Operand Length = pop();
+        Operand Result = Builder.handleKeccak256(Offset, Length);
+        push(Result);
+        break;
       }
 
       case OP_ADDRESS: {
@@ -243,7 +247,10 @@ private:
       }
 
       case OP_BALANCE: {
-        ZEN_ASSERT_TODO();
+        Operand Address = pop();
+        Operand Result = Builder.handleBalance(Address);
+        push(Result);
+        break;
       }
 
       case OP_ORIGIN: {
@@ -265,7 +272,10 @@ private:
       }
 
       case OP_CALLDATALOAD: {
-        ZEN_ASSERT_TODO();
+        Operand Offset = pop();
+        Operand Result = Builder.handleCallDataLoad(Offset);
+        push(Result);
+        break;
       }
 
       case OP_CALLDATASIZE: {
@@ -275,7 +285,11 @@ private:
       }
 
       case OP_CALLDATACOPY: {
-        ZEN_ASSERT_TODO();
+        Operand DestOffset = pop();
+        Operand Offset = pop();
+        Operand Size = pop();
+        Builder.handleCallDataCopy(DestOffset, Offset, Size);
+        break;
       }
 
       case OP_CODESIZE: {
@@ -285,7 +299,11 @@ private:
       }
 
       case OP_CODECOPY: {
-        ZEN_ASSERT_TODO();
+        Operand DestOffset = pop();
+        Operand Offset = pop();
+        Operand Size = pop();
+        Builder.handleCodeCopy(DestOffset, Offset, Size);
+        break;
       }
 
       case OP_GASPRICE: {
@@ -295,103 +313,171 @@ private:
       }
 
       case OP_EXTCODESIZE: {
-        ZEN_ASSERT_TODO();
+        Operand Address = pop();
+        Operand Result = Builder.handleExtCodeSize(Address);
+        push(Result);
+        break;
       }
 
       case OP_EXTCODECOPY: {
-        ZEN_ASSERT_TODO();
+        Operand Address = pop();
+        Operand DestOffset = pop();
+        Operand Offset = pop();
+        Operand Size = pop();
+        Builder.handleExtCodeCopy(Address, DestOffset, Offset, Size);
+        break;
       }
 
       case OP_RETURNDATASIZE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleReturnDataSize();
+        push(Result);
+        break;
       }
 
       case OP_RETURNDATACOPY: {
-        ZEN_ASSERT_TODO();
+        Operand DestOffset = pop();
+        Operand Offset = pop();
+        Operand Size = pop();
+        Builder.handleReturnDataCopy(DestOffset, Offset, Size);
+        break;
       }
 
       case OP_EXTCODEHASH: {
-        ZEN_ASSERT_TODO();
+        Operand Address = pop();
+        Operand Result = Builder.handleExtCodeHash(Address);
+        push(Result);
+        break;
       }
 
       case OP_BLOCKHASH: {
-        ZEN_ASSERT_TODO();
+        Operand BlockNumber = pop();
+        Operand Result = Builder.handleBlockHash(BlockNumber);
+        push(Result);
+        break;
       }
 
       case OP_COINBASE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleCoinBase();
+        push(Result);
+        break;
       }
 
       case OP_TIMESTAMP: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleTimestamp();
+        push(Result);
+        break;
       }
 
       case OP_NUMBER: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleNumber();
+        push(Result);
+        break;
       }
 
       case OP_PREVRANDAO: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handlePrevRandao();
+        push(Result);
+        break;
       }
 
       case OP_GASLIMIT: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleGasLimit();
+        push(Result);
+        break;
       }
 
       case OP_CHAINID: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleChainId();
+        push(Result);
+        break;
       }
 
       case OP_SELFBALANCE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleSelfBalance();
+        push(Result);
+        break;
       }
 
       case OP_BASEFEE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleBaseFee();
+        push(Result);
+        break;
       }
 
-      case zen::evm::OP_BLOBHASH: {
-        ZEN_ASSERT_TODO();
+      case OP_BLOBHASH: {
+        Operand Index = pop();
+        Operand Result = Builder.handleBlobHash(Index);
+        push(Result);
+        break;
       }
 
-      case zen::evm::OP_BLOBBASEFEE: {
-        ZEN_ASSERT_TODO();
+      case OP_BLOBBASEFEE: {
+        Operand Result = Builder.handleBlobBaseFee();
+        push(Result);
+        break;
       }
 
       case OP_MLOAD: {
-        ZEN_ASSERT_TODO();
+        Operand Addr = pop();
+        Operand Result = Builder.handleMLoad(Addr);
+        push(Result);
+        break;
       }
 
       case OP_MSTORE: {
-        ZEN_ASSERT_TODO();
+        Operand Addr = pop();
+        Operand Value = pop();
+        Builder.handleMStore(Addr, Value);
+        break;
       }
 
       case OP_MSTORE8: {
-        ZEN_ASSERT_TODO();
+        Operand Addr = pop();
+        Operand Value = pop();
+        Builder.handleMStore8(Addr, Value);
+        break;
       }
 
       case OP_SLOAD: {
-        ZEN_ASSERT_TODO();
+        Operand Key = pop();
+        Operand Result = Builder.handleSLoad(Key);
+        push(Result);
+        break;
       }
 
       case OP_SSTORE: {
-        ZEN_ASSERT_TODO();
+        Operand Key = pop();
+        Operand Value = pop();
+        Builder.handleSStore(Key, Value);
+        break;
       }
 
       case OP_MSIZE: {
-        ZEN_ASSERT_TODO();
+        Operand Result = Builder.handleMSize();
+        push(Result);
+        break;
       }
 
-      case zen::evm::OP_TLOAD: {
-        ZEN_ASSERT_TODO();
+      case OP_TLOAD: {
+        Operand Index = pop();
+        Operand Result = Builder.handleTLoad(Index);
+        push(Result);
+        break;
       }
 
-      case zen::evm::OP_TSTORE: {
-        ZEN_ASSERT_TODO();
+      case OP_TSTORE: {
+        Operand Index = pop();
+        Operand Value = pop();
+        Builder.handleTStore(Index, Value);
+        break;
       }
 
-      case zen::evm::OP_MCOPY: {
-        ZEN_ASSERT_TODO();
+      case OP_MCOPY: {
+        Operand DestAddr = pop();
+        Operand SrcAddr = pop();
+        Operand Length = pop();
+        Builder.handleMCopy(DestAddr, SrcAddr, Length);
+        break;
       }
 
       case OP_LOG0:
@@ -427,7 +513,9 @@ private:
       }
 
       case OP_SELFDESTRUCT: {
-        ZEN_ASSERT_TODO();
+        Operand Beneficiary = pop();
+        Builder.handleSelfDestruct(Beneficiary);
+        break;
       }
 
       // Control flow operations
@@ -464,12 +552,20 @@ private:
 
       // Halt operations
       case OP_RETURN: {
-        ZEN_ASSERT_TODO();
+        Operand MemOffset = pop();
+        Operand Length = pop();
+        Builder.handleReturn(MemOffset, Length);
+        return true;
       }
 
       case OP_REVERT:
         // End execution
         return true;
+
+      case OP_INVALID: {
+        Builder.handleInvalid();
+        break;
+      }
 
       default:
         throw getErrorWithExtraMessage(ErrorCode::UnsupportedOpcode,
@@ -483,22 +579,81 @@ private:
   void handleStop() { Builder.handleStop(); }
 
   template <BinaryOperator Opr> void handleBinaryArithmetic() {
-    Operand RHS = pop();
     Operand LHS = pop();
+    Operand RHS = pop();
     Operand Result = Builder.template handleBinaryArithmetic<Opr>(LHS, RHS);
     push(Result);
   }
 
+  void handleMul() {
+    Operand MultiplicandOp = pop();
+    Operand MultiplierOp = pop();
+    Operand Result = Builder.handleMul(MultiplicandOp, MultiplierOp);
+    push(Result);
+  }
+
+  void handleDiv() {
+    Operand DividendOp = pop();
+    Operand DivisorOp = pop();
+    Operand Result = Builder.handleDiv(DividendOp, DivisorOp);
+    push(Result);
+  }
+
+  void handleSDiv() {
+    Operand DividendOp = pop();
+    Operand DivisorOp = pop();
+    Operand Result = Builder.handleSDiv(DividendOp, DivisorOp);
+    push(Result);
+  }
+
+  void handleMod() {
+    Operand DividendOp = pop();
+    Operand DivisorOp = pop();
+    Operand Result = Builder.handleMod(DividendOp, DivisorOp);
+    push(Result);
+  }
+
+  void handleSMod() {
+    Operand DividendOp = pop();
+    Operand DivisorOp = pop();
+    Operand Result = Builder.handleSMod(DividendOp, DivisorOp);
+    push(Result);
+  }
+
+  void handleAddMod() {
+    Operand AugendOp = pop();
+    Operand AddendOp = pop();
+    Operand ModulusOp = pop();
+    Operand Result = Builder.handleAddMod(AugendOp, AddendOp, ModulusOp);
+    push(Result);
+  }
+
+  void handleMulMod() {
+    Operand MultiplicandOp = pop();
+    Operand MultiplierOp = pop();
+    Operand ModulusOp = pop();
+    Operand Result =
+        Builder.handleMulMod(MultiplicandOp, MultiplierOp, ModulusOp);
+    push(Result);
+  }
+
+  void handleExp() {
+    Operand BaseOp = pop();
+    Operand ExponentOp = pop();
+    Operand Result = Builder.handleExp(BaseOp, ExponentOp);
+    push(Result);
+  }
+
   template <CompareOperator Opr> void handleCompare() {
-    Operand CmpRHS = (Opr != CompareOperator::CO_EQZ) ? pop() : Operand();
     Operand CmpLHS = pop();
+    Operand CmpRHS = (Opr != CompareOperator::CO_EQZ) ? pop() : Operand();
     Operand Result = Builder.template handleCompareOp<Opr>(CmpLHS, CmpRHS);
     push(Result);
   }
 
   template <BinaryOperator Opr> void handleBitwiseOp() {
-    Operand RHS = pop();
     Operand LHS = pop();
+    Operand RHS = pop();
     Operand Result = Builder.template handleBitwiseOp<Opr>(LHS, RHS);
     push(Result);
   }
@@ -506,6 +661,27 @@ private:
   void handleNot() {
     Operand Opnd = pop();
     Operand Result = Builder.handleNot(Opnd);
+    push(Result);
+  }
+
+  void handleSignextend() {
+    Operand IndexOp = pop();
+    Operand ValueOp = pop();
+    Operand Result = Builder.handleSignextend(IndexOp, ValueOp);
+    push(Result);
+  }
+
+  void handleByte() {
+    Operand IndexOp = pop();
+    Operand ValueOp = pop();
+    Operand Result = Builder.handleByte(IndexOp, ValueOp);
+    push(Result);
+  }
+
+  template <BinaryOperator Opr> void handleShift() {
+    Operand ShiftOp = pop();
+    Operand ValueOp = pop();
+    Operand Result = Builder.template handleShift<Opr>(ShiftOp, ValueOp);
     push(Result);
   }
 
@@ -519,19 +695,46 @@ private:
     if (PC + Count > Ctx->getBytecodeSize()) {
       throw getError(common::ErrorCode::UnexpectedEnd);
     }
-    const uint8_t *Bytecode =
-        reinterpret_cast<const uint8_t *>(Ctx->getBytecode());
-    Bytes Result(reinterpret_cast<const std::byte *>(Bytecode + PC), Count);
+    const Byte *Bytecode = Ctx->getBytecode();
+    Bytes Result(Bytecode + PC, Count);
     PC += Count;
     return Result;
   }
 
+  // DUP1-DUP16: Duplicate Nth stack item
   void handleDup(uint8_t Index) {
-    Operand Result = Builder.handleDup(Index);
+    Operand Result = Stack.peek(Index - 1);
     push(Result);
   }
 
-  void handleSwap(uint8_t Index) { Builder.handleSwap(Index); }
+  // POP: Remove top stack item
+  Operand handlePop() {
+    if (Stack.empty()) {
+      throw getError(common::ErrorCode::EVMStackUnderflow);
+    }
+    Operand Result = Stack.getTop();
+    pop();
+    return Result;
+  }
+
+  // SWAP1-SWAP16: Swap top with Nth+1 stack item
+  void handleSwap(uint8_t Index) {
+    if (Stack.getSize() < Index + 1) {
+      throw getError(common::ErrorCode::EVMStackUnderflow);
+    }
+
+    std::vector<Operand> Temp;
+    for (uint8_t I = 0; I <= Index; ++I) {
+      Temp.push_back(pop());
+    }
+    std::swap(Temp[0], Temp[Index]);
+
+    for (int I = Index; I >= 0; --I) {
+      push(Temp[I]);
+    }
+  }
+
+  // ==================== Environment Instruction Handlers ====================
 
   IRBuilder &Builder;
   CompilerContext *Ctx;

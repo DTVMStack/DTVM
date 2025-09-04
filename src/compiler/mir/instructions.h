@@ -80,10 +80,6 @@ public:
     return Inst->getOpcode() == OP_adc;
   }
 
-  const MInstruction *getOperand1() const { return getOperand<0>(); }
-  const MInstruction *getOperand2() const { return getOperand<1>(); }
-  const MInstruction *getCarry() const { return getOperand<2>(); }
-
 private:
   friend class FixedOperandInstruction;
   AdcInstruction(MType *Type, MInstruction *Operand1, MInstruction *Operand2,

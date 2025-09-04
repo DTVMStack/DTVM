@@ -20,7 +20,7 @@ EVMInstanceUniquePtr EVMInstance::newEVMInstance(Isolation &Iso,
                                                  uint64_t GasLimit) {
 
   Runtime *RT = Mod.getRuntime();
-  void *Buf = RT->allocate(sizeof(EVMInstance), Alignment);
+  void *Buf = RT->allocate(sizeof(EVMInstance), ALIGNMENT);
   ZEN_ASSERT(Buf);
 
   EVMInstanceUniquePtr Inst(new (Buf) EVMInstance(Mod, *RT));
@@ -33,5 +33,43 @@ EVMInstanceUniquePtr EVMInstance::newEVMInstance(Isolation &Iso,
 }
 
 EVMInstance::~EVMInstance() {}
+
+uint64_t EVMInstance::calculateMemoryExpansionCost(uint64_t CurrentSize,
+                                                   uint64_t NewSize) {
+  if (NewSize <= CurrentSize) {
+    return 0; // No expansion needed
+  }
+  uint64_t CurrentWords = (CurrentSize + 31) / 32;
+  uint64_t NewWords = (NewSize + 31) / 32;
+  auto MemoryCost = [](uint64_t Words) -> uint64_t {
+    __int128 W = Words;
+    return static_cast<uint64_t>(W * W / 512 + 3 * W);
+  };
+  uint64_t CurrentCost = MemoryCost(CurrentWords);
+  uint64_t NewCost = MemoryCost(NewWords);
+  return NewCost - CurrentCost;
+}
+
+void EVMInstance::consumeMemoryExpansionGas(uint64_t RequiredSize) {
+  uint64_t ExpansionCost =
+      calculateMemoryExpansionCost(Memory.size(), RequiredSize);
+  uint64_t GasLeft = getGas();
+  if (ExpansionCost > GasLeft) {
+    throw common::getError(common::ErrorCode::EVMOutOfGas);
+  }
+  chargeGas(ExpansionCost);
+}
+void EVMInstance::expandMemory(uint64_t RequiredSize) {
+  if (RequiredSize > Memory.size()) {
+    Memory.resize(RequiredSize, 0);
+  }
+}
+void EVMInstance::chargeGas(uint64_t GasCost) {
+  evmc_message *Msg = getCurrentMessage();
+  if ((uint64_t)Msg->gas < GasCost) {
+    throw common::getError(common::ErrorCode::EVMOutOfGas);
+  }
+  Msg->gas -= GasCost;
+}
 
 } // namespace zen::runtime

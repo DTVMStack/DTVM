@@ -10,22 +10,24 @@ namespace zen::action {
 
 class EVMModuleLoader final {
 public:
-  explicit EVMModuleLoader(runtime::EVMModule &Mod,
-                           const std::vector<uint8_t> &Data)
-      : Mod(Mod), Data(Data) {}
+  using Byte = common::Byte;
+  explicit EVMModuleLoader(runtime::EVMModule &Mod, const Byte *Data,
+                           size_t Size)
+      : Mod(Mod), Data(Data), ModuleSize(Size) {}
 
   void load() {
-    if (Data.empty()) {
+    if (Data == nullptr || ModuleSize == 0) {
       throw common::getError(common::ErrorCode::InvalidRawData);
     }
-    Mod.Code = Mod.initCode(Data.size());
-    std::memcpy(Mod.Code, Data.data(), Data.size());
-    Mod.CodeSize = Data.size();
+    Mod.Code = Mod.initCode(ModuleSize);
+    std::memcpy(Mod.Code, Data, ModuleSize);
+    Mod.CodeSize = ModuleSize;
   }
 
 private:
   runtime::EVMModule &Mod;
-  const std::vector<uint8_t> Data;
+  const Byte *Data = nullptr;
+  size_t ModuleSize = 0;
 };
 
 } // namespace zen::action
