@@ -1453,10 +1453,34 @@ EVMMirBuilder::convertOperandToInstruction(const Operand &Param) {
     Result[0] = Param.getInstr();
   } else if constexpr (std::is_same_v<ArgType, const intx::uint256> ||
                        std::is_same_v<ArgType, intx::uint256>) {
-    const U256Value &U256Value = Param.getConstValue();
-    MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-      Result[I] = createIntConstInstruction(I64Type, U256Value[I]);
+    // Support multiple sources for U256 argument:
+    // - BYTES32 pointer -> load 32 bytes and split into 4xI64
+    // - Multi-component U256 -> pass components directly
+    // - Constant U256 -> materialize constants
+    // - Single-instr U256 -> split via shifts/truncs
+    if (Param.getType() == EVMType::BYTES32) {
+      auto U256Op = convertBytes32ToU256Operand(Param);
+      auto Components = U256Op.getU256Components();
+      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I)
+        Result[I] = Components[I];
+    } else if (Param.isU256MultiComponent()) {
+      auto Components = Param.getU256Components();
+      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I)
+        Result[I] = Components[I];
+    } else if (Param.isConstant()) {
+      const U256Value &U256Value = Param.getConstValue();
+      MType *I64Type =
+          EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+        Result[I] = createIntConstInstruction(I64Type, U256Value[I]);
+      }
+    } else if (auto *Instr = Param.getInstr()) {
+      auto U256Op = convertU256InstrToU256Operand(Instr);
+      auto Components = U256Op.getU256Components();
+      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I)
+        Result[I] = Components[I];
+    } else {
+      ZEN_ASSERT(false && "Unsupported non-constant U256 operand");
     }
   } else {
     ZEN_ASSERT(false &&
