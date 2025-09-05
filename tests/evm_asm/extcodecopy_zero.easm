@@ -1,0 +1,10 @@
+// EXTCODECOPY(0x00, mem[0:32], 0, 32) -> zeros for non-existent account
+PUSH1 0x20
+PUSH1 0x00
+PUSH1 0x00
+PUSH1 0x00
+EXTCODECOPY
+PUSH1 0x20
+PUSH1 0x00
+RETURN
+

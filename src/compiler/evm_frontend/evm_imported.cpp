@@ -48,6 +48,7 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
       .SetMStore8 = &evmSetMStore8,
       .GetSLoad = &evmGetSLoad,
       .SetSStore = &evmSetSStore,
+      .GetGas = &evmGetGas,
       .GetTLoad = &evmGetTLoad,
       .SetTStore = &evmSetTStore,
       .SetMCopy = &evmSetMCopy,
@@ -658,6 +659,11 @@ void evmSetSStore(zen::runtime::EVMInstance *Instance, intx::uint256 Index,
   Instance->chargeGas(GasCost);
   Instance->addGasRefund(GasReFund);
 }
+
+uint64_t evmGetGas(zen::runtime::EVMInstance *Instance) {
+  return Instance->getGas();
+}
+
 intx::uint256 evmGetTLoad(zen::runtime::EVMInstance *Instance,
                           intx::uint256 Index) {
   const zen::runtime::EVMModule *Module = Instance->getModule();

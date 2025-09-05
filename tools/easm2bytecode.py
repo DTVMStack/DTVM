@@ -45,7 +45,7 @@ def evm_to_bytecode(input_file_path, output_file_path):
         "SAR": "1D",
 
         # 2x: cryptographic operations
-        "SHA3": "20",
+        "KECCAK256": "20",
 
         # 3x: environmental information
         "ADDRESS": "30",
@@ -70,7 +70,7 @@ def evm_to_bytecode(input_file_path, output_file_path):
         "COINBASE": "41",
         "TIMESTAMP": "42",
         "NUMBER": "43",
-        "DIFFICULTY": "44",
+        "PREVRANDAO": "44",
         "GASLIMIT": "45",
         "CHAINID": "46",
         "SELFBALANCE": "47",
