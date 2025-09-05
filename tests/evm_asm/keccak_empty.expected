@@ -1,0 +1,8 @@
+status: success
+error_code: 0
+stack: []
+memory: 'c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470'
+storage: {}
+transient_storage: {}
+return: 'C5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470'
+events: []

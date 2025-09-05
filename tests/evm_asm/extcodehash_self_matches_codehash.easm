@@ -1,0 +1,17 @@
+// EXTCODEHASH(ADDRESS) equals keccak256(code)
+CODESIZE        // size
+DUP1            // size, size
+PUSH1 0x00      // size, size, 0
+PUSH1 0x00      // size, size, 0, 0
+CODECOPY        // copy code[0:size] -> mem[0:]
+PUSH1 0x00      // size, 0
+KECCAK256       // keccak256(mem[0:size])
+ADDRESS         // hash, address
+EXTCODEHASH     // hash, extcodehash(address)
+EQ              // 1 if equal
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN
+

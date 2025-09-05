@@ -1,4 +1,5 @@
-// We set gas to 1000000UL in the test, 0xF423E = 1000000-2 = 999998
+// gas: remaining gas (after this instruction)
+// GASLIMIT - BASIC_EXECUTION_COST - ACTUAL_COST = 0xFFFFFFFFFFFF - 2100 - 2 = 0xFFFFFFFFADF5
 GAS
 PUSH1 0x00
 MSTORE

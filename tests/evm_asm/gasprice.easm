@@ -1,0 +1,8 @@
+// GASPRICE -> 0 in default tx context
+GASPRICE
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN
+

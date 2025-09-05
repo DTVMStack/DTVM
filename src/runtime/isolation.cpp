@@ -63,6 +63,7 @@ Isolation::createInstance(Module &Mod, uint64_t GasLimit) noexcept {
 
 common::MayBe<EVMInstance *>
 Isolation::createEVMInstance(EVMModule &Mod, uint64_t GasLimit) noexcept {
+  ZEN_ASSERT(GasLimit <= INT64_MAX && "EVM gas limit overflow");
   EVMInstanceUniquePtr Inst;
 
   auto &Stats = getRuntime()->getStatistics();

@@ -16,7 +16,6 @@ namespace COMPILER {
 using U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *);
 using Bytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *);
 using SizeFn = uint64_t (*)(zen::runtime::EVMInstance *);
-using U256WithInt64Fn = intx::uint256 (*)(zen::runtime::EVMInstance *, int64_t);
 using Bytes32WithInt64Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
                                               int64_t);
 using Bytes32WithUint64Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
@@ -90,6 +89,7 @@ struct RuntimeFunctions {
   VoidWithUInt64U256Fn SetMStore8;
   U256WithU256Fn GetSLoad;
   VoidWithU256U256Fn SetSStore;
+  SizeFn GetGas;
   U256WithU256Fn GetTLoad;
   VoidWithU256U256Fn SetTStore;
   VoidWithUInt64UInt64UInt64Fn SetMCopy;
@@ -182,6 +182,7 @@ intx::uint256 evmGetSLoad(zen::runtime::EVMInstance *Instance,
                           intx::uint256 Index);
 void evmSetSStore(zen::runtime::EVMInstance *Instance, intx::uint256 Index,
                   intx::uint256 Value);
+uint64_t evmGetGas(zen::runtime::EVMInstance *Instance);
 intx::uint256 evmGetTLoad(zen::runtime::EVMInstance *Instance,
                           intx::uint256 Index);
 void evmSetTStore(zen::runtime::EVMInstance *Instance, intx::uint256 Index,
