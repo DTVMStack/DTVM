@@ -1,0 +1,9 @@
+// CODECOPY(mem[0:0], 0, 0) noop, return zeros
+PUSH1 0x00
+PUSH1 0x00
+PUSH1 0x00
+CODECOPY
+PUSH1 0x20
+PUSH1 0x00
+RETURN
+

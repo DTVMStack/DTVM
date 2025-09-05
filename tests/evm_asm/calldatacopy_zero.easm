@@ -1,0 +1,9 @@
+// CALLDATACOPY(mem[0:32], 0, 32) with empty calldata -> zeros
+PUSH1 0x20
+PUSH1 0x00
+PUSH1 0x00
+CALLDATACOPY
+PUSH1 0x20
+PUSH1 0x00
+RETURN
+
