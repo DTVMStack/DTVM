@@ -524,15 +524,15 @@ private:
 
   // Program counter for current instruction
   uint64_t PC = 0;
-  
+
   // PC register for runtime PC value
   MInstruction *PCReg = nullptr;
-  
+
   // Jump execution control (similar to interpreter's Context.IsJump)
   bool JumpExecuted = false;
-  
+
   // Jump table for dynamic jumps
-  std::map<uint64_t, MBasicBlock*> JumpDestTable;
+  std::map<uint64_t, MBasicBlock *> JumpDestTable;
   MBasicBlock *DefaultJumpBB = nullptr; // For invalid jump destinations
 
   // ==================== Interface Helper Methods ====================

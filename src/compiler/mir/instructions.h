@@ -142,6 +142,7 @@ public:
   static bool classof(const MInstruction *inst) {
     return inst->getOpcode() == OP_alloca;
   }
+
 private:
   friend class FixedOperandInstruction;
   AllocaInstruction(MType *type)
