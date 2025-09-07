@@ -153,7 +153,7 @@ void EVMMirBuilder::createJumpTable() {
     // Skip over PUSH instruction data
     if (Bytecode[PC] >= static_cast<Byte>(evmc_opcode::OP_PUSH1) && 
         Bytecode[PC] <= static_cast<Byte>(evmc_opcode::OP_PUSH32)) {
-      uint8_t PushSize = Bytecode[PC] - static_cast<Byte>(evmc_opcode::OP_PUSH1) + 1;
+      uint8_t PushSize = static_cast<uint8_t>(Bytecode[PC]) - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
       PC += PushSize; // Skip the immediate data
     }
   }

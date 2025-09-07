@@ -72,6 +72,7 @@ OPCODE(icall)
 OPCODE(return)                      // OP_CTRL_STMT_END
 
 OPCODE(dassign)                     // OP_OTHER_STMT_START
+OPCODE(alloca)
 OPCODE(store)
 OPCODE(wasm_check_memory_access)
 OPCODE(wasm_visit_stack_guard)
