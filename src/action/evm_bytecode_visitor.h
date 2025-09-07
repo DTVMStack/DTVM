@@ -62,9 +62,6 @@ private:
       ptrdiff_t Diff = Ip - Bytecode;
       PC = static_cast<uint64_t>(Diff >= 0 ? Diff : 0);
       
-      // Update the PC in EVMMirBuilder before executing the instruction
-      Builder.updatePC(PC);
-      
       Ip++;
 
       switch (Opcode) {
@@ -180,10 +177,9 @@ private:
         uint8_t NumBytes = Opcode - OP_PUSH0;
         handlePush(NumBytes);
         Ip += NumBytes;
-        // Update PC after consuming immediate bytes (similar to interpreter)
+        // Update PC after consuming immediate bytes
         ptrdiff_t NewDiff = Ip - Bytecode;
         PC = static_cast<uint64_t>(NewDiff >= 0 ? NewDiff : 0);
-        Builder.updatePC(PC);
         break;
       }
 
@@ -527,12 +523,16 @@ private:
 
       // Control flow operations
       case OP_JUMP: {
+        // Update PC register before jump for dynamic execution
+        Builder.updatePC(PC);
         Operand Dest = pop();
         Builder.handleJump(Dest);
         break;
       }
 
       case OP_JUMPI: {
+        // Update PC register before conditional jump for dynamic execution
+        Builder.updatePC(PC);
         Operand Dest = pop();
         Operand Cond = pop();
         Builder.handleJumpI(Dest, Cond);
@@ -546,6 +546,8 @@ private:
 
       // Environment operations
       case OP_PC: {
+        // Store current PC value only when OP_PC opcode is encountered
+        Builder.updatePC(PC);
         Operand Result = Builder.handlePC();
         push(Result);
         break;
