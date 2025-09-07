@@ -412,7 +412,11 @@ private:
 
   void setInsertBlock(MBasicBlock *BB) {
     CurBB = BB;
-    CurFunc->appendBlock(BB);
+    // Check if this basic block is already in the function's BasicBlocks list
+    // to avoid duplicate insertion
+    if (std::find(CurFunc->begin(), CurFunc->end(), BB) == CurFunc->end()) {
+      CurFunc->appendBlock(BB);
+    }
   }
 
   void addSuccessor(MBasicBlock *Succ) { CurBB->addSuccessor(Succ); }
