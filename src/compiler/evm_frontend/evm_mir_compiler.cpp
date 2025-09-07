@@ -149,12 +149,14 @@ void EVMMirBuilder::createJumpTable() {
 
   // Create default jump block for invalid destinations
   DefaultJumpBB = createBasicBlock();
+  CurFunc->appendBlock(DefaultJumpBB);
 
   // Scan for JUMPDEST instructions
   for (size_t PC = 0; PC < BytecodeSize; ++PC) {
     if (Bytecode[PC] == static_cast<Byte>(evmc_opcode::OP_JUMPDEST)) {
       // Create a basic block for this jump destination
       MBasicBlock *DestBB = createBasicBlock();
+      CurFunc->appendBlock(DestBB);
       JumpDestTable[PC] = DestBB;
     }
 
