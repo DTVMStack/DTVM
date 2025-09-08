@@ -118,11 +118,11 @@ struct RuntimeFunctions {
   SizeFn GetReturnDataSize;
   VoidWith2U64And4Bytes32Fn EmitLog;
   Bytes32WithU256UInt64UInt64Fn HandleCreate;
+  Bytes32WithU256UInt64UInt64U256Fn HandleCreate2;
   CallFn HandleCall;
   CallFn HandleCallCode;
   VoidWithUInt64UInt64Fn SetReturn;
   DelegateCallFn HandleDelegateCall;
-  Bytes32WithU256UInt64UInt64U256Fn HandleCreate2;
   DelegateCallFn HandleStaticCall;
   VoidFn HandleInvalid;
   VoidWithBytes32Fn HandleSelfDestruct;
@@ -205,6 +205,9 @@ void evmEmitLog(zen::runtime::EVMInstance *Instance, uint64_t Offset,
 const uint8_t *evmHandleCreate(zen::runtime::EVMInstance *Instance,
                                intx::uint256 Value, uint64_t Offset,
                                uint64_t Size);
+const uint8_t *evmHandleCreate2(zen::runtime::EVMInstance *Instance,
+                                intx::uint256 Value, uint64_t Offset,
+                                uint64_t Size, intx::uint256 Salt);
 uint64_t evmHandleCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
                        const uint8_t *ToAddr, intx::uint256 Value,
                        uint64_t ArgsOffset, uint64_t ArgsSize,
@@ -219,9 +222,6 @@ uint64_t evmHandleDelegateCall(zen::runtime::EVMInstance *Instance,
                                uint64_t Gas, const uint8_t *ToAddr,
                                uint64_t ArgsOffset, uint64_t ArgsSize,
                                uint64_t RetOffset, uint64_t RetSize);
-const uint8_t *evmHandleCreate2(zen::runtime::EVMInstance *Instance,
-                                intx::uint256 Value, uint64_t Offset,
-                                uint64_t Size, intx::uint256 Salt);
 uint64_t evmHandleStaticCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
                              const uint8_t *ToAddr, uint64_t ArgsOffset,
                              uint64_t ArgsSize, uint64_t RetOffset,

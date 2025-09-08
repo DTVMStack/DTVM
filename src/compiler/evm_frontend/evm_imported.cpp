@@ -59,11 +59,11 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
       .GetReturnDataSize = &evmGetReturnDataSize,
       .EmitLog = &evmEmitLog,
       .HandleCreate = &evmHandleCreate,
+      .HandleCreate2 = &evmHandleCreate2,
       .HandleCall = &evmHandleCall,
       .HandleCallCode = &evmHandleCallCode,
       .SetReturn = &evmSetReturn,
       .HandleDelegateCall = &evmHandleDelegateCall,
-      .HandleCreate2 = &evmHandleCreate2,
       .HandleStaticCall = &evmHandleStaticCall,
       .HandleInvalid = &evmHandleInvalid,
       .HandleSelfDestruct = &evmHandleSelfDestruct,
@@ -622,9 +622,11 @@ void evmEmitLog(zen::runtime::EVMInstance *Instance, uint64_t Offset,
   Module->Host->emit_log(Msg->recipient, Data, Size, Topics, NumTopics);
 }
 
-const uint8_t *evmHandleCreate(zen::runtime::EVMInstance *Instance,
-                               intx::uint256 Value, uint64_t Offset,
-                               uint64_t Size) {
+const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
+                                       evmc_call_kind CallKind,
+                                       intx::uint256 Value, uint64_t Offset,
+                                       uint64_t Size,
+                                       intx::uint256 Salt = intx::uint256{0}) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
@@ -639,34 +641,51 @@ const uint8_t *evmHandleCreate(zen::runtime::EVMInstance *Instance,
   auto &Memory = Instance->getMemory();
   const uint8_t *InitCode = Memory.data() + Offset;
 
-  // Create message for CREATE
+  // Create message for CREATE/CREATE2
   evmc_message CreateMsg = {};
-  CreateMsg.kind = EVMC_CREATE;
+  CreateMsg.kind = CallKind;
   CreateMsg.flags = Msg->flags;
   CreateMsg.depth = Msg->depth + 1;
-  CreateMsg.gas = Msg->gas; // Will be adjusted by host
+  CreateMsg.gas = Msg->gas;
   CreateMsg.sender = Msg->recipient;
   std::memcpy(CreateMsg.value.bytes, &Value, 32);
   CreateMsg.input_data = InitCode;
   CreateMsg.input_size = Size;
 
-  // Call host to handle CREATE
+  // Set salt for CREATE2
+  if (CallKind == EVMC_CREATE2) {
+    std::memcpy(CreateMsg.create2_salt.bytes, &Salt, 32);
+  }
+
+  // Call host to handle CREATE/CREATE2
   evmc::Result Result = Module->Host->call(CreateMsg);
 
-  // Store return data for RETURNDATASIZE/RETURNDATACOPY, even on failure
+  // Store return data
   std::vector<uint8_t> ReturnData(Result.output_data,
                                   Result.output_data + Result.output_size);
   Instance->setReturnData(std::move(ReturnData));
   if (Result.status_code == EVMC_SUCCESS) {
     // Return created contract address
     static evmc::address CreatedAddr = Result.create_address;
-
     return CreatedAddr.bytes;
   } else {
     // Return zero address on failure
     static evmc::address ZeroAddr = {};
     return ZeroAddr.bytes;
   }
+}
+
+const uint8_t *evmHandleCreate(zen::runtime::EVMInstance *Instance,
+                               intx::uint256 Value, uint64_t Offset,
+                               uint64_t Size) {
+  return evmHandleCreateInternal(Instance, EVMC_CREATE, Value, Offset, Size);
+}
+
+const uint8_t *evmHandleCreate2(zen::runtime::EVMInstance *Instance,
+                                intx::uint256 Value, uint64_t Offset,
+                                uint64_t Size, intx::uint256 Salt) {
+  return evmHandleCreateInternal(Instance, EVMC_CREATE2, Value, Offset, Size,
+                                 Salt);
 }
 
 // Helper function for all call types
@@ -792,60 +811,6 @@ uint64_t evmHandleDelegateCall(zen::runtime::EVMInstance *Instance,
   return evmHandleCallInternal(Instance, EVMC_DELEGATECALL, Gas, ToAddr,
                                intx::uint256{0}, ArgsOffset, ArgsSize,
                                RetOffset, RetSize);
-}
-
-const uint8_t *evmHandleCreate2(zen::runtime::EVMInstance *Instance,
-                                intx::uint256 Value, uint64_t Offset,
-                                uint64_t Size, intx::uint256 Salt) {
-  const zen::runtime::EVMModule *Module = Instance->getModule();
-  ZEN_ASSERT(Module && Module->Host);
-
-  const evmc_message *Msg = Instance->getCurrentMessage();
-  ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-
-  // Calculate required memory size and charge gas
-  uint64_t RequiredSize = Offset + Size;
-  Instance->consumeMemoryExpansionGas(RequiredSize);
-  Instance->expandMemory(RequiredSize);
-
-  auto &Memory = Instance->getMemory();
-  const uint8_t *InitCode = Memory.data() + Offset;
-
-  // Create message for CREATE2
-  evmc_message Create2Msg = {};
-  Create2Msg.kind = EVMC_CREATE2;
-  Create2Msg.flags = Msg->flags;
-  Create2Msg.depth = Msg->depth + 1;
-  Create2Msg.gas = Msg->gas; // Will be adjusted by host
-  Create2Msg.sender = Msg->recipient;
-  std::memcpy(Create2Msg.value.bytes, &Value, 32);
-  Create2Msg.input_data = InitCode;
-  Create2Msg.input_size = Size;
-  std::memcpy(Create2Msg.create2_salt.bytes, &Salt, 32);
-
-  // Call host to handle CREATE2
-  evmc::Result Result = Module->Host->call(Create2Msg);
-
-  // Handle result
-  if (Result.status_code == EVMC_SUCCESS) {
-    // Store return data for RETURNDATASIZE/RETURNDATACOPY
-    std::vector<uint8_t> ReturnData(Result.output_data,
-                                    Result.output_data + Result.output_size);
-    Instance->setReturnData(std::move(ReturnData));
-
-    // Return created contract address
-    static evmc::address CreatedAddr = Result.create_address;
-    return CreatedAddr.bytes;
-  } else {
-    // Store return data even on failure
-    std::vector<uint8_t> ReturnData(Result.output_data,
-                                    Result.output_data + Result.output_size);
-    Instance->setReturnData(std::move(ReturnData));
-
-    // Return zero address on failure
-    static evmc::address ZeroAddr = {};
-    return ZeroAddr.bytes;
-  }
 }
 
 uint64_t evmHandleStaticCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,

@@ -495,17 +495,17 @@ private:
       }
 
       case OP_CALL: {
-        handleCall();
+        handleCallImpl(&IRBuilder::handleCall);
         break;
       }
 
       case OP_CALLCODE: {
-        handleCallCode();
+        handleCallImpl(&IRBuilder::handleCallCode);
         break;
       }
 
       case OP_DELEGATECALL: {
-        handleDelegateCall();
+        handleCallImplWithoutValue(&IRBuilder::handleDelegateCall);
         break;
       }
 
@@ -515,7 +515,7 @@ private:
       }
 
       case OP_STATICCALL: {
-        handleStaticCall();
+        handleCallImplWithoutValue(&IRBuilder::handleStaticCall);
         break;
       }
 
@@ -771,46 +771,6 @@ private:
     push(RetAddrOp);
   }
 
-  void handleCall() {
-    Operand GasOp = pop();
-    Operand ToAddrOp = pop();
-    Operand ValueOp = pop();
-    Operand ArgsOffsetOp = pop();
-    Operand ArgsSizeOp = pop();
-    Operand RetOffsetOp = pop();
-    Operand RetSizeOp = pop();
-    Operand StatusOp =
-        Builder.handleCall(GasOp, ToAddrOp, ValueOp, ArgsOffsetOp, ArgsSizeOp,
-                           RetOffsetOp, RetSizeOp);
-    push(StatusOp);
-  }
-
-  void handleCallCode() {
-    Operand GasOp = pop();
-    Operand ToAddrOp = pop();
-    Operand ValueOp = pop();
-    Operand ArgsOffsetOp = pop();
-    Operand ArgsSizeOp = pop();
-    Operand RetOffsetOp = pop();
-    Operand RetSizeOp = pop();
-    Operand StatusOp =
-        Builder.handleCallCode(GasOp, ToAddrOp, ValueOp, ArgsOffsetOp,
-                               ArgsSizeOp, RetOffsetOp, RetSizeOp);
-    push(StatusOp);
-  }
-
-  void handleDelegateCall() {
-    Operand GasOp = pop();
-    Operand ToAddrOp = pop();
-    Operand ArgsOffsetOp = pop();
-    Operand ArgsSizeOp = pop();
-    Operand RetOffsetOp = pop();
-    Operand RetSizeOp = pop();
-    Operand StatusOp = Builder.handleDelegateCall(
-        GasOp, ToAddrOp, ArgsOffsetOp, ArgsSizeOp, RetOffsetOp, RetSizeOp);
-    push(StatusOp);
-  }
-
   void handleCreate2() {
     Operand ValueOp = pop();
     Operand OffsetOp = pop();
@@ -821,15 +781,32 @@ private:
     push(RetAddrOp);
   }
 
-  void handleStaticCall() {
+  // template for call/callcode
+  template <typename CallHandler> void handleCallImpl(CallHandler handler) {
+    Operand GasOp = pop();
+    Operand ToAddrOp = pop();
+    Operand ValueOp = pop();
+    Operand ArgsOffsetOp = pop();
+    Operand ArgsSizeOp = pop();
+    Operand RetOffsetOp = pop();
+    Operand RetSizeOp = pop();
+    Operand StatusOp =
+        (Builder.*handler)(GasOp, ToAddrOp, ValueOp, ArgsOffsetOp, ArgsSizeOp,
+                           RetOffsetOp, RetSizeOp);
+    push(StatusOp);
+  }
+
+  // template for delegatecall/staticcall
+  template <typename CallHandler>
+  void handleCallImplWithoutValue(CallHandler handler) {
     Operand GasOp = pop();
     Operand ToAddrOp = pop();
     Operand ArgsOffsetOp = pop();
     Operand ArgsSizeOp = pop();
     Operand RetOffsetOp = pop();
     Operand RetSizeOp = pop();
-    Operand StatusOp = Builder.handleStaticCall(
-        GasOp, ToAddrOp, ArgsOffsetOp, ArgsSizeOp, RetOffsetOp, RetSizeOp);
+    Operand StatusOp = (Builder.*handler)(GasOp, ToAddrOp, ArgsOffsetOp,
+                                          ArgsSizeOp, RetOffsetOp, RetSizeOp);
     push(StatusOp);
   }
 

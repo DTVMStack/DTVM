@@ -1316,6 +1316,18 @@ EVMMirBuilder::handleCreate(Operand ValueOp, Operand OffsetOp, Operand SizeOp) {
       RuntimeFunctions.HandleCreate, ValueOp, OffsetOp, SizeOp);
 }
 
+typename EVMMirBuilder::Operand EVMMirBuilder::handleCreate2(Operand ValueOp,
+                                                             Operand OffsetOp,
+                                                             Operand SizeOp,
+                                                             Operand SaltOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(OffsetOp);
+  normalizeOperandU64(SizeOp);
+  return callRuntimeFor<const uint8_t *, intx::uint256, uint64_t, uint64_t,
+                        intx::uint256>(RuntimeFunctions.HandleCreate2, ValueOp,
+                                       OffsetOp, SizeOp, SaltOp);
+}
+
 typename EVMMirBuilder::Operand
 EVMMirBuilder::handleCall(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
                           Operand ArgsOffsetOp, Operand ArgsSizeOp,
@@ -1374,18 +1386,6 @@ EVMMirBuilder::handleDelegateCall(Operand GasOp, Operand ToAddrOp,
                         uint64_t, uint64_t>(RuntimeFunctions.HandleDelegateCall,
                                             GasOp, ToAddrOp, ArgsOffsetOp,
                                             ArgsSizeOp, RetOffsetOp, RetSizeOp);
-}
-
-typename EVMMirBuilder::Operand EVMMirBuilder::handleCreate2(Operand ValueOp,
-                                                             Operand OffsetOp,
-                                                             Operand SizeOp,
-                                                             Operand SaltOp) {
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  normalizeOperandU64(OffsetOp);
-  normalizeOperandU64(SizeOp);
-  return callRuntimeFor<const uint8_t *, intx::uint256, uint64_t, uint64_t,
-                        intx::uint256>(RuntimeFunctions.HandleCreate2, ValueOp,
-                                       OffsetOp, SizeOp, SaltOp);
 }
 
 typename EVMMirBuilder::Operand

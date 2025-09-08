@@ -376,6 +376,8 @@ public:
                  Operand Topic2, Operand Topic3, Operand Topic4,
                  uint8_t NumTopics);
   Operand handleCreate(Operand ValueOp, Operand OffsetOp, Operand SizeOp);
+  Operand handleCreate2(Operand ValueOp, Operand OffsetOp, Operand SizeOp,
+                        Operand SaltOp);
   Operand handleCall(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
                      Operand ArgsOffsetOp, Operand ArgsSizeOp,
                      Operand RetOffsetOp, Operand RetSizeOp);
@@ -386,8 +388,6 @@ public:
   Operand handleDelegateCall(Operand GasOp, Operand ToAddrOp,
                              Operand ArgsOffsetOp, Operand ArgsSizeOp,
                              Operand RetOffsetOp, Operand RetSizeOp);
-  Operand handleCreate2(Operand ValueOp, Operand OffsetOp, Operand SizeOp,
-                        Operand SaltOp);
   Operand handleStaticCall(Operand GasOp, Operand ToAddrOp,
                            Operand ArgsOffsetOp, Operand ArgsSizeOp,
                            Operand RetOffsetOp, Operand RetSizeOp);
