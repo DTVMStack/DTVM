@@ -19,6 +19,7 @@ public:
   CgRegister lowerClzExpr(llvm::MVT VT, CgRegister Operand);    // fallback
   CgRegister lowerCtzExpr(llvm::MVT VT, CgRegister Operand);    // fallback
   CgRegister lowerPopcntExpr(llvm::MVT VT, CgRegister Operand); // fallback
+  CgRegister lowerNotExpr(llvm::MVT VT, CgRegister Operand);
   CgRegister lowerFPAbsExpr(MVT VT, CgRegister Operand);
   CgRegister lowerFPNegExpr(MVT VT, CgRegister Operand);
   CgRegister lowerFPSqrtExpr(MVT VT, CgRegister Operand);
@@ -67,6 +68,7 @@ public:
   CgRegister lowerSelectExpr(const SelectInstruction &Inst);
   CgRegister lowerWasmOverflowI128BinaryExpr(
       const WasmOverflowI128BinaryInstruction &Inst);
+  CgRegister lowerAdcExpr(const AdcInstruction &Inst);
 
   // ==================== Memory Instructions ====================
 

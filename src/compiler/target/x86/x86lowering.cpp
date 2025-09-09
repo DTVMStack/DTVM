@@ -20,6 +20,16 @@ X86CgLowering::X86CgLowering(CgFunction &MF)
 
 // ==================== Unary Expressions ====================
 
+CgRegister X86CgLowering::lowerNotExpr(MVT VT, CgRegister Operand) {
+  ZEN_ASSERT(VT.isInteger());
+  // Bitwise NOT via XOR with all-ones mask of the same width
+  uint64_t AllOnes = (VT == MVT::i8)    ? 0xFFull
+                     : (VT == MVT::i16) ? 0xFFFFull
+                     : (VT == MVT::i32) ? 0xFFFF'FFFFull
+                                        : 0xFFFF'FFFF'FFFF'FFFFull;
+  return fastEmit_ri_(VT, ISD::XOR, Operand, AllOnes, VT);
+}
+
 CgRegister X86CgLowering::lowerFPAbsExpr(MVT VT, CgRegister Operand) {
   const TargetRegisterClass *RC = TLI.getRegClassFor(VT);
 
@@ -889,6 +899,41 @@ CgRegister X86CgLowering::lowerCmpExpr(const CmpInstruction &Inst) {
     return Result8Reg;
   }
   return fastEmitInst_r(X86::MOVZX32rr8, &X86::GR32RegClass, Result8Reg);
+}
+
+CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
+  // Lower 3-operand add-with-carry as two plain adds: (LHS + RHS) + Carry
+  // Carry is modeled in MIR as i8/i32/i64 0/1 integer, so no flags needed.
+  const MInstruction *LHS = Inst.getOperand<0>();
+  const MInstruction *RHS = Inst.getOperand<1>();
+  const MInstruction *Carry = Inst.getOperand<2>();
+
+  MVT VT = getMVT(*Inst.getType());
+  ZEN_ASSERT(VT.isInteger());
+  const TargetRegisterClass *RC = TLI.getRegClassFor(VT);
+
+  CgRegister LHSReg = lowerExpr(*LHS);
+  CgRegister RHSReg = lowerExpr(*RHS);
+  CgRegister CarryReg = lowerExpr(*Carry);
+
+  // First addition
+  CgRegister SumReg = fastEmit_rr(VT, VT, ISD::ADD, LHSReg, RHSReg);
+  if (!SumReg) {
+    throw getError(ErrorCode::NoMatchedInstruction);
+  }
+
+  // Second addition with carry-in
+  CgRegister SumWithCarry = fastEmit_rr(VT, VT, ISD::ADD, SumReg, CarryReg);
+  if (!SumWithCarry) {
+    // Materialize carry if class mismatch; fallback path
+    CgRegister CarryCopy = fastEmitCopy(RC, CarryReg);
+    SumWithCarry = fastEmit_rr(VT, VT, ISD::ADD, SumReg, CarryCopy);
+    if (!SumWithCarry) {
+      throw getError(ErrorCode::NoMatchedInstruction);
+    }
+  }
+
+  return SumWithCarry;
 }
 
 CgRegister X86CgLowering::lowerSelectExpr(const SelectInstruction &Inst) {

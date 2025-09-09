@@ -179,6 +179,9 @@ protected:
       ResultReg = SELF.lowerWasmOverflowI128BinaryExpr(
           llvm::cast<WasmOverflowI128BinaryInstruction>(Inst));
       break;
+    case MInstruction::ADC:
+      ResultReg = SELF.lowerAdcExpr(llvm::cast<AdcInstruction>(Inst));
+      break;
     case MInstruction::CMP:
       ResultReg = SELF.lowerCmpExpr(llvm::cast<CmpInstruction>(Inst));
       break;
@@ -239,6 +242,8 @@ protected:
 
     unsigned ISDOpcode;
     switch (Opcode) {
+    case OP_not:
+      return SELF.lowerNotExpr(OperandVT, OperandReg);
     case OP_clz:
       ISDOpcode = ISD::CTLZ;
       break;
