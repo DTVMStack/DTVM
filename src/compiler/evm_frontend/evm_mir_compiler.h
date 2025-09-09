@@ -223,12 +223,24 @@ public:
 
         // Calculate carry for next iteration (except for the last component)
         if (I < EVM_ELEMENTS_COUNT - 1) {
-          // Carry = (Result[I] < LHS[I]) for unsigned overflow detection
+          // Carry_out = (Res < LHS) || (Carry_in && Res == LHS)
           auto LTPredicate = CmpInstruction::Predicate::ICMP_ULT;
-          MInstruction *CarryFlag = createInstruction<CmpInstruction>(
-              false, LTPredicate, &Ctx.I64Type, Result[I], LHS[I]);
+          auto EQPredicate = CmpInstruction::Predicate::ICMP_EQ;
 
-          // Convert boolean to i64 for next iteration
+          // Preserve previous carry-in for the equality path
+          MInstruction *PrevCarry = Carry;
+
+          MInstruction *ResLT = createInstruction<CmpInstruction>(
+              false, LTPredicate, &Ctx.I64Type, Result[I], LHS[I]);
+          MInstruction *ResEQ = createInstruction<CmpInstruction>(
+              false, EQPredicate, &Ctx.I64Type, Result[I], LHS[I]);
+
+          MInstruction *EqAndCarry = createInstruction<BinaryInstruction>(
+              false, OP_and, MirI64Type, ResEQ, PrevCarry);
+          MInstruction *CarryFlag = createInstruction<BinaryInstruction>(
+              false, OP_or, MirI64Type, ResLT, EqAndCarry);
+
+          // Ensure carry is materialized as i64 0/1 for next limb
           Carry = createInstruction<ConversionInstruction>(
               false, OP_uext, MirI64Type, CarryFlag);
         }
