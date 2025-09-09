@@ -1312,7 +1312,7 @@ EVMMirBuilder::handleCreate(Operand ValueOp, Operand OffsetOp, Operand SizeOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   normalizeOperandU64(OffsetOp);
   normalizeOperandU64(SizeOp);
-  return callRuntimeFor<const uint8_t *, intx::uint256, uint64_t, uint64_t>(
+  return callRuntimeFor<const uint8_t *, intx::uint128, uint64_t, uint64_t>(
       RuntimeFunctions.HandleCreate, ValueOp, OffsetOp, SizeOp);
 }
 
@@ -1323,9 +1323,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCreate2(Operand ValueOp,
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   normalizeOperandU64(OffsetOp);
   normalizeOperandU64(SizeOp);
-  return callRuntimeFor<const uint8_t *, intx::uint256, uint64_t, uint64_t,
-                        intx::uint256>(RuntimeFunctions.HandleCreate2, ValueOp,
-                                       OffsetOp, SizeOp, SaltOp);
+  return callRuntimeFor<const uint8_t *, intx::uint128, uint64_t, uint64_t,
+                        const uint8_t *>(RuntimeFunctions.HandleCreate2,
+                                         ValueOp, OffsetOp, SizeOp, SaltOp);
 }
 
 typename EVMMirBuilder::Operand
@@ -1339,7 +1339,7 @@ EVMMirBuilder::handleCall(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
   normalizeOperandU64(RetOffsetOp);
   normalizeOperandU64(RetSizeOp);
 
-  return callRuntimeFor<uint64_t, uint64_t, const uint8_t *, intx::uint256,
+  return callRuntimeFor<uint64_t, uint64_t, const uint8_t *, intx::uint128,
                         uint64_t, uint64_t, uint64_t, uint64_t>(
       RuntimeFunctions.HandleCall, GasOp, ToAddrOp, ValueOp, ArgsOffsetOp,
       ArgsSizeOp, RetOffsetOp, RetSizeOp);
@@ -1356,7 +1356,7 @@ EVMMirBuilder::handleCallCode(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
   normalizeOperandU64(RetOffsetOp);
   normalizeOperandU64(RetSizeOp);
 
-  return callRuntimeFor<uint64_t, uint64_t, const uint8_t *, intx::uint256,
+  return callRuntimeFor<uint64_t, uint64_t, const uint8_t *, intx::uint128,
                         uint64_t, uint64_t, uint64_t, uint64_t>(
       RuntimeFunctions.HandleCallCode, GasOp, ToAddrOp, ValueOp, ArgsOffsetOp,
       ArgsSizeOp, RetOffsetOp, RetSizeOp);
@@ -1764,6 +1764,55 @@ EVMMirBuilder::callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *)) {
   return convertCallResult<RetType>(CallInstr);
 }
 
+// Template helper function to handle uintN_t type conversion (N*64 bits)
+// example: Support multiple sources for U256 argument:
+// - BYTES32 pointer -> load 32 bytes and split into 4xI64
+// - Multi-component U256 -> pass components directly
+// - Constant U256 -> materialize constants
+// - Single-instr U256 -> split via shifts/truncs
+template <size_t N>
+EVMMirBuilder::U256Inst
+EVMMirBuilder::convertOperandToUNInstruction(const Operand &Param) {
+  ZEN_STATIC_ASSERT(1 <= N && N <= EVM_ELEMENTS_COUNT);
+
+  U256Inst Result = {};
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+
+  if (Param.getType() == EVMType::BYTES32) {
+    auto U256Op = convertBytes32ToU256Operand(Param);
+    auto Components = U256Op.getU256Components();
+    for (size_t I = 0; I < N; ++I) {
+      Result[I] = Components[I];
+    }
+  } else if (Param.isU256MultiComponent()) {
+    auto Components = Param.getU256Components();
+    for (size_t I = 0; I < N; ++I) {
+      Result[I] = Components[I];
+    }
+  } else if (Param.isConstant()) {
+    const U256Value &U256Value = Param.getConstValue();
+    for (size_t I = 0; I < N; ++I) {
+      Result[I] = createIntConstInstruction(I64Type, U256Value[I]);
+    }
+  } else if (auto *Instr = Param.getInstr()) {
+    auto U256Op = convertU256InstrToU256Operand(Instr);
+    auto Components = U256Op.getU256Components();
+    for (size_t I = 0; I < N; ++I) {
+      Result[I] = Components[I];
+    }
+  } else {
+    ZEN_ASSERT(false && "Unsupported operand for uintN conversion");
+  }
+
+  // Initialize high components to zero for types smaller than U256
+  for (size_t I = N; I < EVM_ELEMENTS_COUNT; ++I) {
+    Result[I] = Zero;
+  }
+
+  return Result;
+}
+
 // Template function for single-argument runtime calls
 template <typename ArgType>
 EVMMirBuilder::U256Inst
@@ -1772,41 +1821,15 @@ EVMMirBuilder::convertOperandToInstruction(const Operand &Param) {
 
   if constexpr (std::is_same_v<ArgType, int64_t> ||
                 std::is_same_v<ArgType, uint64_t>) {
-    EVMMirBuilder::U256Inst Components = extractU256Operand(Param);
-    Result[0] = Components[0];
+    Result = convertOperandToUNInstruction<1>(Param); // 64 = 1 * 64
   } else if constexpr (std::is_same_v<ArgType, const uint8_t *>) {
     Result[0] = Param.getInstr();
+  } else if constexpr (std::is_same_v<ArgType, intx::uint128> ||
+                       std::is_same_v<ArgType, const intx::uint128>) {
+    Result = convertOperandToUNInstruction<2>(Param); // 128 = 2 * 64
   } else if constexpr (std::is_same_v<ArgType, const intx::uint256> ||
                        std::is_same_v<ArgType, intx::uint256>) {
-    // Support multiple sources for U256 argument:
-    // - BYTES32 pointer -> load 32 bytes and split into 4xI64
-    // - Multi-component U256 -> pass components directly
-    // - Constant U256 -> materialize constants
-    // - Single-instr U256 -> split via shifts/truncs
-    if (Param.getType() == EVMType::BYTES32) {
-      auto U256Op = convertBytes32ToU256Operand(Param);
-      auto Components = U256Op.getU256Components();
-      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I)
-        Result[I] = Components[I];
-    } else if (Param.isU256MultiComponent()) {
-      auto Components = Param.getU256Components();
-      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I)
-        Result[I] = Components[I];
-    } else if (Param.isConstant()) {
-      const U256Value &U256Value = Param.getConstValue();
-      MType *I64Type =
-          EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-        Result[I] = createIntConstInstruction(I64Type, U256Value[I]);
-      }
-    } else if (auto *Instr = Param.getInstr()) {
-      auto U256Op = convertU256InstrToU256Operand(Instr);
-      auto Components = U256Op.getU256Components();
-      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I)
-        Result[I] = Components[I];
-    } else {
-      ZEN_ASSERT(false && "Unsupported non-constant U256 operand");
-    }
+    Result = convertOperandToUNInstruction<4>(Param); // 256 = 4 * 64
   } else {
     ZEN_ASSERT(false &&
                "Unsupported argument type in convertOperandToInstruction");

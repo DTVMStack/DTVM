@@ -599,7 +599,7 @@ void evmEmitLog(zen::runtime::EVMInstance *Instance, uint64_t Offset,
   const uint8_t *Data = Memory.data() + Offset;
 
   // Build topic array - only include non-null topics
-  evmc::bytes32 Topics[4];
+  evmc::bytes32 Topics[4] = {};
   size_t NumTopics = 0;
 
   if (Topic1) {
@@ -624,9 +624,9 @@ void evmEmitLog(zen::runtime::EVMInstance *Instance, uint64_t Offset,
 
 const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
                                        evmc_call_kind CallKind,
-                                       intx::uint256 Value, uint64_t Offset,
+                                       intx::uint128 Value, uint64_t Offset,
                                        uint64_t Size,
-                                       intx::uint256 Salt = intx::uint256{0}) {
+                                       const uint8_t *Salt = nullptr) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
@@ -653,8 +653,8 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   CreateMsg.input_size = Size;
 
   // Set salt for CREATE2
-  if (CallKind == EVMC_CREATE2) {
-    std::memcpy(CreateMsg.create2_salt.bytes, &Salt, 32);
+  if (CallKind == EVMC_CREATE2 && Salt != nullptr) {
+    std::memcpy(CreateMsg.create2_salt.bytes, Salt, 32);
   }
 
   // Call host to handle CREATE/CREATE2
@@ -676,14 +676,14 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
 }
 
 const uint8_t *evmHandleCreate(zen::runtime::EVMInstance *Instance,
-                               intx::uint256 Value, uint64_t Offset,
+                               intx::uint128 Value, uint64_t Offset,
                                uint64_t Size) {
   return evmHandleCreateInternal(Instance, EVMC_CREATE, Value, Offset, Size);
 }
 
 const uint8_t *evmHandleCreate2(zen::runtime::EVMInstance *Instance,
-                                intx::uint256 Value, uint64_t Offset,
-                                uint64_t Size, intx::uint256 Salt) {
+                                intx::uint128 Value, uint64_t Offset,
+                                uint64_t Size, const uint8_t *Salt) {
   return evmHandleCreateInternal(Instance, EVMC_CREATE2, Value, Offset, Size,
                                  Salt);
 }
@@ -692,7 +692,7 @@ const uint8_t *evmHandleCreate2(zen::runtime::EVMInstance *Instance,
 static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
                                       evmc_call_kind CallKind, uint64_t Gas,
                                       const uint8_t *ToAddr,
-                                      intx::uint256 Value, uint64_t ArgsOffset,
+                                      intx::uint128 Value, uint64_t ArgsOffset,
                                       uint64_t ArgsSize, uint64_t RetOffset,
                                       uint64_t RetSize) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
@@ -785,7 +785,7 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
 }
 
 uint64_t evmHandleCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
-                       const uint8_t *ToAddr, intx::uint256 Value,
+                       const uint8_t *ToAddr, intx::uint128 Value,
                        uint64_t ArgsOffset, uint64_t ArgsSize,
                        uint64_t RetOffset, uint64_t RetSize) {
   return evmHandleCallInternal(Instance, EVMC_CALL, Gas, ToAddr, Value,
@@ -793,7 +793,7 @@ uint64_t evmHandleCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
 }
 
 uint64_t evmHandleCallCode(zen::runtime::EVMInstance *Instance, uint64_t Gas,
-                           const uint8_t *ToAddr, intx::uint256 Value,
+                           const uint8_t *ToAddr, intx::uint128 Value,
                            uint64_t ArgsOffset, uint64_t ArgsSize,
                            uint64_t RetOffset, uint64_t RetSize) {
   return evmHandleCallInternal(Instance, EVMC_CALLCODE, Gas, ToAddr, Value,
@@ -809,7 +809,7 @@ uint64_t evmHandleDelegateCall(zen::runtime::EVMInstance *Instance,
                                uint64_t ArgsOffset, uint64_t ArgsSize,
                                uint64_t RetOffset, uint64_t RetSize) {
   return evmHandleCallInternal(Instance, EVMC_DELEGATECALL, Gas, ToAddr,
-                               intx::uint256{0}, ArgsOffset, ArgsSize,
+                               intx::uint128{0}, ArgsOffset, ArgsSize,
                                RetOffset, RetSize);
 }
 
@@ -818,7 +818,7 @@ uint64_t evmHandleStaticCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
                              uint64_t ArgsSize, uint64_t RetOffset,
                              uint64_t RetSize) {
   return evmHandleCallInternal(Instance, EVMC_CALL, Gas, ToAddr,
-                               intx::uint256{0}, ArgsOffset, ArgsSize,
+                               intx::uint128{0}, ArgsOffset, ArgsSize,
                                RetOffset, RetSize);
 }
 

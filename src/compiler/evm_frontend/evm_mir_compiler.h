@@ -537,6 +537,10 @@ private:
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
   Operand convertBytes32ToU256Operand(const Operand &Bytes32Op);
 
+  // Helper functions for operand conversion
+  template <size_t N>
+  U256Inst convertOperandToUNInstruction(const Operand &Param);
+
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;
   MBasicBlock *CurBB = nullptr;
