@@ -68,5 +68,8 @@ void EagerEVMJITCompiler::compile() {
   // Compile the EVM bytecode to MIR and then to machine code
   // 0: func index(only one func in EVM)
   compileEVMToMC(Ctx, Mod, 0, Config.DisableMultipassGreedyRA);
+
+  // TODO: Explicitly reset the memory pool to prevent memory leaks
+  Ctx.MemPool = CompileMemPool();
 }
 } // namespace COMPILER

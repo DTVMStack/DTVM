@@ -51,8 +51,6 @@ class TestRunner:
 
     # TODO: Failed test cases, temporarily ignored
     IGNORE_CASES = {
-        # other error
-        "jumpi.evm.hex",
     }
 
     def __init__(self, args):
