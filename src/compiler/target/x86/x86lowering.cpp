@@ -902,8 +902,10 @@ CgRegister X86CgLowering::lowerCmpExpr(const CmpInstruction &Inst) {
 }
 
 CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
-  // Lower 3-operand add-with-carry as two plain adds: (LHS + RHS) + Carry
-  // Carry is modeled in MIR as i8/i32/i64 0/1 integer, so no flags needed.
+  // Use x86 flags with direct ADC on operands:
+  // 1) BT Carry, 0
+  // 2) Sum = COPY LHS
+  // 3) Result = ADCrr Sum, RHS
   const MInstruction *LHS = Inst.getOperand<0>();
   const MInstruction *RHS = Inst.getOperand<1>();
   const MInstruction *Carry = Inst.getOperand<2>();
@@ -916,24 +918,39 @@ CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
   CgRegister RHSReg = lowerExpr(*RHS);
   CgRegister CarryReg = lowerExpr(*Carry);
 
-  // First addition
-  CgRegister SumReg = fastEmit_rr(VT, VT, ISD::ADD, LHSReg, RHSReg);
-  if (!SumReg) {
+  // Inject CF from CarryReg bit 0 using BT.
+  switch (VT.SimpleTy) {
+  case MVT::i32:
+    fastEmitNoDefInst_ri(X86::BT32ri8, CarryReg, 0);
+    break;
+  case MVT::i64:
+    fastEmitNoDefInst_ri(X86::BT64ri8, CarryReg, 0);
+    break;
+  case MVT::i8:
+  case MVT::i16: {
+    CgRegister Carry32 = fastEmitCopy(&X86::GR32RegClass, CarryReg);
+    fastEmitNoDefInst_ri(X86::BT32ri8, Carry32, 0);
+    break;
+  }
+  default:
     throw getError(ErrorCode::NoMatchedInstruction);
   }
 
-  // Second addition with carry-in
-  CgRegister SumWithCarry = fastEmit_rr(VT, VT, ISD::ADD, SumReg, CarryReg);
-  if (!SumWithCarry) {
-    // Materialize carry if class mismatch; fallback path
-    CgRegister CarryCopy = fastEmitCopy(RC, CarryReg);
-    SumWithCarry = fastEmit_rr(VT, VT, ISD::ADD, SumReg, CarryCopy);
-    if (!SumWithCarry) {
-      throw getError(ErrorCode::NoMatchedInstruction);
-    }
+  // Move LHS into destination and consume CF via ADC with RHS.
+  CgRegister SumReg = fastEmitCopy(RC, LHSReg);
+  switch (VT.SimpleTy) {
+  case MVT::i8:
+    return fastEmitInst_rr(X86::ADC8rr, &X86::GR8RegClass, SumReg, RHSReg);
+  case MVT::i16:
+    return fastEmitInst_rr(X86::ADC16rr, &X86::GR16RegClass, SumReg, RHSReg);
+  case MVT::i32:
+    return fastEmitInst_rr(X86::ADC32rr, &X86::GR32RegClass, SumReg, RHSReg);
+  case MVT::i64:
+    return fastEmitInst_rr(X86::ADC64rr, &X86::GR64RegClass, SumReg, RHSReg);
+  default:
+    // Should be unreachable: VT was validated in CF injection above.
+    throw getError(ErrorCode::NoMatchedInstruction);
   }
-
-  return SumWithCarry;
 }
 
 CgRegister X86CgLowering::lowerSelectExpr(const SelectInstruction &Inst) {
