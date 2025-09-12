@@ -926,8 +926,10 @@ CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
   case MVT::i64:
     fastEmitNoDefInst_ri(X86::BT64ri8, CarryReg, 0);
     break;
-  case MVT::i8:
-  case MVT::i16: {
+  case MVT::i16:
+    fastEmitNoDefInst_ri(X86::BT16ri8, CarryReg, 0);
+    break;
+  case MVT::i8: {
     CgRegister Carry32 = fastEmitCopy(&X86::GR32RegClass, CarryReg);
     fastEmitNoDefInst_ri(X86::BT32ri8, Carry32, 0);
     break;
@@ -940,13 +942,21 @@ CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
   CgRegister SumReg = fastEmitCopy(RC, LHSReg);
   switch (VT.SimpleTy) {
   case MVT::i8:
-    return fastEmitInst_rr(X86::ADC8rr, &X86::GR8RegClass, SumReg, RHSReg);
+    MF->createCgInstruction(*CurBB, TII.get(X86::ADC8rr), SumReg, RHSReg,
+                            SumReg);
+    return SumReg;
   case MVT::i16:
-    return fastEmitInst_rr(X86::ADC16rr, &X86::GR16RegClass, SumReg, RHSReg);
+    MF->createCgInstruction(*CurBB, TII.get(X86::ADC16rr), SumReg, RHSReg,
+                            SumReg);
+    return SumReg;
   case MVT::i32:
-    return fastEmitInst_rr(X86::ADC32rr, &X86::GR32RegClass, SumReg, RHSReg);
+    MF->createCgInstruction(*CurBB, TII.get(X86::ADC32rr), SumReg, RHSReg,
+                            SumReg);
+    return SumReg;
   case MVT::i64:
-    return fastEmitInst_rr(X86::ADC64rr, &X86::GR64RegClass, SumReg, RHSReg);
+    MF->createCgInstruction(*CurBB, TII.get(X86::ADC64rr), SumReg, RHSReg,
+                            SumReg);
+    return SumReg;
   default:
     // Should be unreachable: VT was validated in CF injection above.
     throw getError(ErrorCode::NoMatchedInstruction);
