@@ -88,6 +88,9 @@ private:
     setOperand<0>(Operand1);
     setOperand<1>(Operand2);
     setOperand<2>(Carry);
+    // Although carry is not used in the current x86lowering, the adc
+    // instruction still retains the carry for potential use in future lowering
+    // on other architectures.
   }
 };
 
