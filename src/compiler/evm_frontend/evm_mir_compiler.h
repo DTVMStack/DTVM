@@ -208,6 +208,11 @@ public:
 
     if constexpr (Operator == BinaryOperator::BO_ADD) {
       // u256 in little-endian order: [low64, med64_1, med64_2, high64]
+
+      // The carry here is only used for constructing the adc instruction.
+      // We currently use adc only in bo_add, and since we can guarantee the
+      // instructions are consecutive, there’s no need to compute the carry
+      // in DMIR.
       MInstruction *Carry = createIntConstInstruction(MirI64Type, 0);
 
       for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
@@ -216,33 +221,10 @@ public:
           Result[I] = createInstruction<BinaryInstruction>(
               false, OP_add, MirI64Type, LHS[I], RHS[I]);
         } else {
-          // Subsequent components: use ADC (add with carry)
+          // Subsequent components: use ADC (without carry)
+          // The carry here is only used for constructing the adc instruction.
           Result[I] = createInstruction<AdcInstruction>(false, MirI64Type,
                                                         LHS[I], RHS[I], Carry);
-        }
-
-        // Calculate carry for next iteration (except for the last component)
-        if (I < EVM_ELEMENTS_COUNT - 1) {
-          // Carry_out = (Res < LHS) || (Carry_in && Res == LHS)
-          auto LTPredicate = CmpInstruction::Predicate::ICMP_ULT;
-          auto EQPredicate = CmpInstruction::Predicate::ICMP_EQ;
-
-          // Preserve previous carry-in for the equality path
-          MInstruction *PrevCarry = Carry;
-
-          MInstruction *ResLT = createInstruction<CmpInstruction>(
-              false, LTPredicate, &Ctx.I64Type, Result[I], LHS[I]);
-          MInstruction *ResEQ = createInstruction<CmpInstruction>(
-              false, EQPredicate, &Ctx.I64Type, Result[I], LHS[I]);
-
-          MInstruction *EqAndCarry = createInstruction<BinaryInstruction>(
-              false, OP_and, MirI64Type, ResEQ, PrevCarry);
-          MInstruction *CarryFlag = createInstruction<BinaryInstruction>(
-              false, OP_or, MirI64Type, ResLT, EqAndCarry);
-
-          // Ensure carry is materialized as i64 0/1 for next limb
-          Carry = createInstruction<ConversionInstruction>(
-              false, OP_uext, MirI64Type, CarryFlag);
         }
       }
     } else if constexpr (Operator == BinaryOperator::BO_SUB) {

@@ -902,13 +902,11 @@ CgRegister X86CgLowering::lowerCmpExpr(const CmpInstruction &Inst) {
 }
 
 CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
-  // Use x86 flags with direct ADC on operands:
-  // 1) BT Carry, 0
-  // 2) Sum = COPY LHS
-  // 3) Result = ADCrr Sum, RHS
+  // Use x86 flags with direct ADC without carry on operands
+  // We can be certain that CF will always be produced by the preceding add or
+  // by a chain of consecutive adc instructions, so CF injection can be omitted.
   const MInstruction *LHS = Inst.getOperand<0>();
   const MInstruction *RHS = Inst.getOperand<1>();
-  const MInstruction *Carry = Inst.getOperand<2>();
 
   MVT VT = getMVT(*Inst.getType());
   ZEN_ASSERT(VT.isInteger());
@@ -916,27 +914,6 @@ CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
 
   CgRegister LHSReg = lowerExpr(*LHS);
   CgRegister RHSReg = lowerExpr(*RHS);
-  CgRegister CarryReg = lowerExpr(*Carry);
-
-  // Inject CF from CarryReg bit 0 using BT.
-  switch (VT.SimpleTy) {
-  case MVT::i32:
-    fastEmitNoDefInst_ri(X86::BT32ri8, CarryReg, 0);
-    break;
-  case MVT::i64:
-    fastEmitNoDefInst_ri(X86::BT64ri8, CarryReg, 0);
-    break;
-  case MVT::i16:
-    fastEmitNoDefInst_ri(X86::BT16ri8, CarryReg, 0);
-    break;
-  case MVT::i8: {
-    CgRegister Carry32 = fastEmitCopy(&X86::GR32RegClass, CarryReg);
-    fastEmitNoDefInst_ri(X86::BT32ri8, Carry32, 0);
-    break;
-  }
-  default:
-    throw getError(ErrorCode::NoMatchedInstruction);
-  }
 
   // Move LHS into destination and consume CF via ADC with RHS.
   CgRegister SumReg = fastEmitCopy(RC, LHSReg);
