@@ -1135,14 +1135,19 @@ void CreateHandler::doExecute() {
   }
 
   evmc_message NewMsg{.kind = evmc_call_kind::EVMC_CREATE,
+                      .flags = 0u,
                       .depth = Frame->Msg->depth + 1,
                       .gas = Frame->Msg->gas,
+                      .recipient = {},
                       .sender = Frame->Msg->sender,
                       .input_data =
                           Frame->Memory.data() + uint256ToUint64(CodeOffset),
                       .input_size = uint256ToUint64(CodeSizeVal),
                       .value = intx::be::store<evmc::bytes32>(Value),
-                      .create2_salt = intx::be::store<evmc::bytes32>(Salt)};
+                      .create2_salt = intx::be::store<evmc::bytes32>(Salt),
+                      .code_address = {},
+                      .code = nullptr,
+                      .code_size = 0};
 
   // EIP-150
   if (Frame->Rev >= EVMC_TANGERINE_WHISTLE) {
@@ -1242,7 +1247,10 @@ void CallHandler::doExecute() {
       .value = (OpCode == OP_DELEGATECALL)
                    ? Frame->Msg->value
                    : intx::be::store<evmc::bytes32>(Value),
+      .create2_salt = {},
       .code_address = Dest,
+      .code = nullptr,
+      .code_size = 0,
   };
 
   if (Frame->Rev >= EVMC_TANGERINE_WHISTLE) {

@@ -185,9 +185,18 @@ TEST_P(EVMSampleTest, ExecuteSample) {
 
   evmc_message Msg = {
       .kind = EVMC_CREATE,
-      .flags = 0,
+      .flags = 0u,
       .depth = 0,
-      .gas = (long)GasLimit,
+      .gas = static_cast<int64_t>(GasLimit),
+      .recipient = {},
+      .sender = {},
+      .input_data = nullptr,
+      .input_size = 0,
+      .value = {},
+      .create2_salt = {},
+      .code_address = {},
+      .code = nullptr,
+      .code_size = 0,
   };
   Ctx.allocFrame(&Msg);
 

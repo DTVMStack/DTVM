@@ -657,9 +657,18 @@ void Runtime::callEVMInInterpMode(EVMInstance &Inst,
   evm::BaseInterpreter Interpreter(Ctx);
   evmc_message Msg = {
       .kind = EVMC_CALL,
-      .flags = 0,
+      .flags = 0u,
       .depth = 0,
-      .gas = Inst.getGas(),
+      .gas = static_cast<int64_t>(Inst.getGas()),
+      .recipient = {},
+      .sender = {},
+      .input_data = nullptr,
+      .input_size = 0,
+      .value = {},
+      .create2_salt = {},
+      .code_address = {},
+      .code = nullptr,
+      .code_size = 0,
   };
   Ctx.allocFrame(&Msg);
   Interpreter.interpret();

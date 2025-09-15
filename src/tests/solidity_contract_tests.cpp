@@ -575,11 +575,18 @@ TEST_P(SolidityContractTest, ExecuteContractSequence) {
 
     evmc_message Msg = {
         .kind = EVMC_CREATE,
-        .flags = 0,
+        .flags = 0u,
         .depth = 0,
-        .gas = (long)GasLimit,
+        .gas = static_cast<int64_t>(GasLimit),
         .recipient = NewContractAddr,
         .sender = DeployerAddr,
+        .input_data = nullptr,
+        .input_size = 0,
+        .value = {},
+        .create2_salt = {},
+        .code_address = {},
+        .code = nullptr,
+        .code_size = 0,
     };
     DeployCtx.allocFrame(&Msg);
     // Set the host for the execution frame
@@ -674,13 +681,18 @@ TEST_P(SolidityContractTest, ExecuteContractSequence) {
 
     evmc_message Msg = {
         .kind = EVMC_CALL,
-        .flags = 0,
+        .flags = 0u,
         .depth = 0,
-        .gas = (long)GasLimit,
+        .gas = static_cast<int64_t>(GasLimit),
         .recipient = ContractInstance.Address,
         .sender = DeployerAddr,
         .input_data = Calldata->data(),
         .input_size = Calldata->size(),
+        .value = {},
+        .create2_salt = {},
+        .code_address = {},
+        .code = nullptr,
+        .code_size = 0,
     };
     CallCtx.allocFrame(&Msg);
     // Set the host for the execution frame
