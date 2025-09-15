@@ -15,6 +15,8 @@
 #include "evm_test_host.hpp"
 #include "evmc/mocked_host.hpp"
 #include "host/evm/crypto.h"
+#include "runtime/evm_instance.h"
+#include "runtime/evm_module.h"
 #include "utils/others.h"
 #include "zetaengine.h"
 
@@ -691,8 +693,9 @@ TEST_P(SolidityContractTest, ExecuteContractSequence) {
         .value = {},
         .create2_salt = {},
         .code_address = {},
-        .code = nullptr,
-        .code_size = 0,
+        .code = reinterpret_cast<const uint8_t *>(
+            ContractInstance.Instance->getModule()->Code),
+        .code_size = ContractInstance.Instance->getModule()->CodeSize,
     };
     CallCtx.allocFrame(&Msg);
     // Set the host for the execution frame

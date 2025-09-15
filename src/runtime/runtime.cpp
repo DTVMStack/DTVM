@@ -668,8 +668,8 @@ void Runtime::callEVMInInterpMode(EVMInstance &Inst,
       .value = {},
       .create2_salt = {},
       .code_address = {},
-      .code = nullptr,
-      .code_size = 0,
+      .code = reinterpret_cast<const uint8_t *>(Inst.getModule()->Code),
+      .code_size = Inst.getModule()->CodeSize,
   };
   Ctx.allocFrame(&Msg);
   Interpreter.interpret();
