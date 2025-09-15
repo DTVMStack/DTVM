@@ -659,6 +659,7 @@ void Runtime::callEVMInInterpMode(EVMInstance &Inst,
       .kind = EVMC_CALL,
       .flags = 0u,
       .depth = 0,
+      // we already check the bounds in createEVMInstance function
       .gas = static_cast<int64_t>(Inst.getGas()),
       .recipient = {},
       .sender = {},
