@@ -83,6 +83,7 @@ public:
   CgRegister lowerCall(const CallInstructionBase &Inst);
   void lowerFormalArguments();
   void lowerReturnStmt(llvm::MVT VT, CgRegister OperandReg);
+  void lowerAllocaStmt(const AllocaInstruction &Inst);
 
   // ==================== Wasm Check Statements ====================
 
