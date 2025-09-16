@@ -1574,25 +1574,27 @@ void X86CgLowering::lowerReturnStmt(llvm::MVT VT, CgRegister OperandReg) {
 }
 
 static uint64_t getTypeSizeInBytes(const COMPILER::MType *Ty) {
-    if (!Ty) return 8;  // fallback
-    return Ty->getNumBytes();
+  if (!Ty)
+    return 8; // fallback
+  return Ty->getNumBytes();
 }
 
 void X86CgLowering::lowerAllocaStmt(const AllocaInstruction &Inst) {
-    const MType *Ty = Inst.getType();
-    uint64_t sizeBytes = getTypeSizeInBytes(Ty);
+  const MType *Ty = Inst.getType();
+  uint64_t sizeBytes = getTypeSizeInBytes(Ty);
 
-    int frameIndex =  MF->getFrameInfo().CreateStackObject(sizeBytes, llvm::Align(8), false);
+  int frameIndex =
+      MF->getFrameInfo().CreateStackObject(sizeBytes, llvm::Align(8), false);
 
-    const TargetRegisterClass *PtrRC =
-        TLI.getRegClassFor(sizeof(void*) == 8 ? MVT::i64 : MVT::i32);
-    CgRegister AddrReg = createReg(PtrRC);
+  const TargetRegisterClass *PtrRC =
+      TLI.getRegClassFor(sizeof(void *) == 8 ? MVT::i64 : MVT::i32);
+  CgRegister AddrReg = createReg(PtrRC);
 
-    SmallVector<CgOperand,2> Ops;
-    Ops.push_back(CgOperand::createRegOperand(AddrReg, true));
-    Ops.push_back(CgOperand::createFI(frameIndex));
+  SmallVector<CgOperand, 2> Ops;
+  Ops.push_back(CgOperand::createRegOperand(AddrReg, true));
+  Ops.push_back(CgOperand::createFI(frameIndex));
 
-    MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), Ops);
+  MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), Ops);
 
-    _expr_reg_map[&Inst] = AddrReg;
+  _expr_reg_map[&Inst] = AddrReg;
 }
