@@ -195,7 +195,22 @@ int main(int argc, char *argv[]) {
     EVMInstance *Inst = *InstRet;
 
     std::vector<uint8_t> Result;
-    RT->callEVMMain(*Inst, Result);
+    evmc_message Msg{
+        .kind = EVMC_CALL,
+        .flags = 0u,
+        .depth = 0,
+        .gas = static_cast<int64_t>(GasLimit),
+        .recipient = {},
+        .sender = {},
+        .input_data = nullptr,
+        .input_size = 0,
+        .value = {},
+        .create2_salt = {},
+        .code_address = {},
+        .code = {}, // code will load in callEVMMain
+        .code_size = 0,
+    };
+    RT->callEVMMain(*Inst, Msg, Result);
 
     if (!RT->unloadEVMModule(Mod)) {
       ZEN_LOG_ERROR("failed to unload EVM module");

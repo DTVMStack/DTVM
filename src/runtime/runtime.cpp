@@ -651,37 +651,25 @@ void Runtime::callWasmFunctionInInterpMode(Instance &Inst, uint32_t FuncIdx,
   }
 }
 
-void Runtime::callEVMInInterpMode(EVMInstance &Inst,
+void Runtime::callEVMInInterpMode(EVMInstance &Inst, evmc_message &Msg,
                                   std::vector<uint8_t> &Result) {
   evm::InterpreterExecContext Ctx(&Inst);
   evm::BaseInterpreter Interpreter(Ctx);
-  evmc_message Msg = {
-      .kind = EVMC_CALL,
-      .flags = 0u,
-      .depth = 0,
-      // we already check the bounds in createEVMInstance function
-      .gas = static_cast<int64_t>(Inst.getGas()),
-      .recipient = {},
-      .sender = {},
-      .input_data = nullptr,
-      .input_size = 0,
-      .value = {},
-      .create2_salt = {},
-      .code_address = {},
-      .code = reinterpret_cast<const uint8_t *>(Inst.getModule()->Code),
-      .code_size = Inst.getModule()->CodeSize,
-  };
   Ctx.allocFrame(&Msg);
   Interpreter.interpret();
   Result = Ctx.getReturnData();
 }
 
-void Runtime::callEVMMain(EVMInstance &Inst, std::vector<uint8_t> &Result) {
+void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
+                          std::vector<uint8_t> &Result) {
+  evmc_message MsgWithCode = Msg;
+  MsgWithCode.code = reinterpret_cast<uint8_t *>(Inst.getModule()->Code);
+  MsgWithCode.code_size = Inst.getModule()->CodeSize;
   if (getConfig().Mode == RunMode::InterpMode) {
-    callEVMInInterpMode(Inst, Result);
+    callEVMInInterpMode(Inst, MsgWithCode, Result);
   } else {
 #ifdef ZEN_ENABLE_JIT
-    callEVMInJITMode(Inst, Result);
+    callEVMInJITMode(Inst, MsgWithCode, Result);
 #else
     ZEN_UNREACHABLE();
 #endif
@@ -799,11 +787,11 @@ void Runtime::callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
 #endif // ZEN_ENABLE_CPU_EXCEPTION
 }
 
-void Runtime::callEVMInJITMode(EVMInstance &Inst,
+void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
                                std::vector<uint8_t> &Result) {
   // TODO: Implement EVM JIT compilation and execution
   // For now, fallback to interpreter mode as placeholder
-  callEVMInInterpMode(Inst, Result);
+  callEVMInInterpMode(Inst, Msg, Result);
 }
 #endif // ZEN_ENABLE_JIT
 
