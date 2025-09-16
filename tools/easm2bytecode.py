@@ -210,6 +210,24 @@ def evm_to_bytecode(input_file_path, output_file_path):
 
             mnemonic = parts[0]
 
+            # Special directive: HEX <hex-bytes>
+            # Emits raw bytes directly without using opcode_map (for development/testing only)
+            if mnemonic == "HEX":
+                if len(parts) <= 1:
+                    raise ValueError("HEX requires a following value")
+                raw = parts[1]
+                if raw.upper().startswith("0X"):
+                    raw = raw[2:]
+                if not raw:
+                    raise ValueError("HEX value cannot be empty")
+                if not all(c in "0123456789abcdefABCDEF" for c in raw):
+                    raise ValueError(f"Invalid HEX value: {parts[1]}")
+                # Ensure even number of hex digits
+                if len(raw) % 2 == 1:
+                    raw = "0" + raw
+                bytecode.append(raw.upper())
+                continue
+
             if mnemonic not in opcode_map:
                 raise ValueError(f"unknow opcode: {mnemonic}")
 
