@@ -85,7 +85,7 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   MType *UInt64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MInstruction *InitialPC = createIntConstInstruction(UInt64Type, 0);
-  PCReg = createInstruction<AllocaInstruction>(false, UInt64Type);
+  PCReg = createIntConstInstruction(UInt64Type, 0);
   createInstruction<StoreInstruction>(false, UInt64Type, PCReg, InitialPC);
 
   // Initialize jump control flag
@@ -108,8 +108,7 @@ void EVMMirBuilder::updatePC(uint64_t NewPC) {
   // Update the runtime PC value in PCReg
   MType *UInt64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MInstruction *NewPCInstr = createIntConstInstruction(UInt64Type, NewPC);
-  createInstruction<StoreInstruction>(false, UInt64Type, PCReg, NewPCInstr);
+  PCReg = createIntConstInstruction(UInt64Type, NewPC);
 }
 
 MInstruction *EVMMirBuilder::validateJumpDestination(MInstruction *JumpTarget) {
@@ -290,10 +289,8 @@ void EVMMirBuilder::handleJump(Operand Dest) {
   MInstruction *JumpTarget =
       DestComponents[0]; // Use low 64 bits as jump target
 
-  // Update PC register to the jump destination
-  MType *UInt64Type =
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  createInstruction<StoreInstruction>(false, UInt64Type, PCReg, JumpTarget);
+  // Update PC register to the jump destination (SSA form)
+  PCReg = JumpTarget;
 
   // Set jump executed flag
   JumpExecuted = true;
@@ -347,8 +344,8 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
   MInstruction *JumpTarget =
       DestComponents[0]; // Use low 64 bits as jump target
 
-  // Update PC register to the jump destination
-  createInstruction<StoreInstruction>(false, UInt64Type, PCReg, JumpTarget);
+  // Update PC register to the jump destination (SSA)
+  PCReg = JumpTarget;
 
   // Set jump executed flag
   JumpExecuted = true;
@@ -1096,11 +1093,7 @@ EVMMirBuilder::handleSignextend(Operand IndexOp, Operand ValueOp) {
 typename EVMMirBuilder::Operand EVMMirBuilder::handlePC() {
   ZEN_ASSERT(PCReg && "PC register not initialized");
 
-  // Generate load instruction to read current PC value from PC register
-  MType *UInt64Type =
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MInstruction *PCValue =
-      createInstruction<LoadInstruction>(false, UInt64Type, PCReg);
+  MInstruction *PCValue = PCReg;
 
   // Convert the 64-bit PC value to U256 format (EVM specification)
   return convertSingleInstrToU256Operand(PCValue);

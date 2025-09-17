@@ -120,9 +120,6 @@ protected:
     case MInstruction::RETURN:
       lowerReturnStmt(llvm::cast<ReturnInstruction>(Inst));
       break;
-    case MInstruction::ALLOCA:
-      SELF.lowerAllocaStmt(llvm::cast<AllocaInstruction>(Inst));
-      break;
     case MInstruction::WASM_CHECK:
       switch (Inst.getOpcode()) {
       case OP_wasm_check_memory_access:
