@@ -63,6 +63,7 @@ private:
       PC = static_cast<uint64_t>(Diff >= 0 ? Diff : 0);
 
       Ip++;
+      PC++; // offset 1 byte for opcode
 
       switch (Opcode) {
       case OP_STOP:
@@ -183,9 +184,6 @@ private:
         uint8_t NumBytes = Opcode - OP_PUSH0;
         handlePush(NumBytes);
         Ip += NumBytes;
-        // Update PC after consuming immediate bytes
-        ptrdiff_t NewDiff = Ip - Bytecode;
-        PC = static_cast<uint64_t>(NewDiff >= 0 ? NewDiff : 0);
         break;
       }
 
