@@ -545,8 +545,8 @@ private:
   // Program counter for current instruction
   uint64_t PC = 0;
 
-  // PC register for runtime PC value
-  MInstruction *PCReg = nullptr;
+  // PC register variable index in DMIR
+  uint32_t PCRegIdx = 0;
 
   // Jump execution control (similar to interpreter's Context.IsJump)
   bool JumpExecuted = false;
