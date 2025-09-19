@@ -173,7 +173,8 @@ int main(int argc, char *argv[]) {
       const Error &Err = ModRet.getError();
       ZEN_ASSERT(!Err.isEmpty());
       const auto &ErrMsg = Err.getFormattedMessage(false);
-      SIMPLE_LOG_ERROR("failed to load module: %s", ErrMsg.c_str());
+      SIMPLE_LOG_ERROR("failed to load module: %s, %s", ErrMsg.c_str(),
+                       Filename.c_str());
       return exitMain(EXIT_FAILURE, RT.get());
     }
     EVMModule *Mod = *ModRet;

@@ -63,7 +63,6 @@ private:
       PC = static_cast<uint64_t>(Diff >= 0 ? Diff : 0);
 
       Ip++;
-      PC++; // offset 1 byte for opcode
 
       switch (Opcode) {
       case OP_STOP:
@@ -582,6 +581,7 @@ private:
         throw getErrorWithExtraMessage(ErrorCode::UnsupportedOpcode,
                                        std::to_string(Opcode));
       }
+      PC++; // offset 1 byte for opcode
     }
 
     return true;
@@ -703,11 +703,12 @@ private:
   }
 
   Bytes readBytes(uint8_t Count) {
-    if (PC + Count > Ctx->getBytecodeSize()) {
+    // offset 1 byte for opcode
+    if (PC + 1 + Count > Ctx->getBytecodeSize()) {
       throw getError(common::ErrorCode::UnexpectedEnd);
     }
     const Byte *Bytecode = Ctx->getBytecode();
-    Bytes Result(Bytecode + PC, Count);
+    Bytes Result(Bytecode + PC + 1, Count);
     PC += Count;
     return Result;
   }
