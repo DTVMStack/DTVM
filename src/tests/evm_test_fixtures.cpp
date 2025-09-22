@@ -315,9 +315,19 @@ createTransactionFromIndex(const rapidjson::Document &Transaction,
     PT.Message->sender = parseAddress(Transaction["sender"].GetString());
   }
 
+  bool IsCreateTx = true;
   if (Transaction.HasMember("to") && Transaction["to"].IsString()) {
-    PT.Message->recipient = parseAddress(Transaction["to"].GetString());
+    std::string ToStr = Transaction["to"].GetString();
+    std::string Stripped = stripHexPrefix(ToStr);
+    if (!ToStr.empty() && !Stripped.empty()) {
+      PT.Message->recipient = parseAddress(ToStr);
+      IsCreateTx = false;
+    }
+  } else if (Transaction.HasMember("to") && Transaction["to"].IsNull()) {
+    IsCreateTx = true;
   }
+
+  PT.Message->kind = IsCreateTx ? EVMC_CREATE : EVMC_CALL;
 
   if (Transaction.HasMember("gasLimit") && Transaction["gasLimit"].IsArray()) {
     const rapidjson::Value &GasArray = Transaction["gasLimit"];
