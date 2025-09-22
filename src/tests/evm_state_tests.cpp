@@ -4,6 +4,7 @@
 #include "evm/interpreter.h"
 #include "evm_test_fixtures.h"
 #include "evm_test_helpers.h"
+#include "evm_test_host.hpp"
 #include "host/evm/crypto.h"
 #include "runtime/runtime.h"
 #include "utils/others.h"
@@ -27,87 +28,6 @@ using namespace zen::evm_test_utils;
 namespace {
 
 const bool Debug = false;
-
-/// Recursive Host that can execute CALL instructions by creating new
-/// interpreters
-class RecursiveHost : public evmc::MockedHost {
-private:
-  Runtime *RT = nullptr;
-  Isolation *Iso = nullptr;
-
-public:
-  RecursiveHost(Runtime *RT, Isolation *Iso) : RT(RT), Iso(Iso) {}
-
-  evmc::Result call(const evmc_message &Msg) noexcept override {
-    // First call the parent MockedHost to record the call
-    evmc::Result ParentResult = evmc::MockedHost::call(Msg);
-
-    // Try to find the target contract
-    auto It = accounts.find(Msg.recipient);
-    if (It == accounts.end() || It->second.code.empty()) {
-      // No contract found, return parent result
-      return ParentResult;
-    }
-
-    try {
-      // Create temporary hex file from contract code using RAII
-      std::string HexCode = "0x" + zen::utils::toHex(It->second.code.data(),
-                                                     It->second.code.size());
-      TempHexFile TempFile(HexCode);
-      if (!TempFile.isValid()) {
-        return ParentResult;
-      }
-
-      // Load EVM module
-      auto ModRet = RT->loadEVMModule(TempFile.getPath());
-      if (!ModRet) {
-        return ParentResult;
-      }
-
-      EVMModule *Mod = *ModRet;
-
-      // Create EVM instance
-      auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
-      if (!InstRet) {
-        return ParentResult;
-      }
-
-      EVMInstance *Inst = *InstRet;
-
-      // Create interpreter context and execute
-      InterpreterExecContext Ctx(Inst);
-      BaseInterpreter Interpreter(Ctx);
-
-      evmc_message CallMsg = Msg;
-      Ctx.allocFrame(&CallMsg);
-
-      // Set the host for the execution frame
-      auto *Frame = Ctx.getCurFrame();
-      Frame->Host = this;
-
-      // Execute the interpreter
-      Interpreter.interpret();
-
-      // Create result based on execution status
-      evmc::Result Result;
-      Result.status_code = Ctx.getStatus();
-      Result.gas_left = CallMsg.gas;
-
-      const auto &ReturnData = Ctx.getReturnData();
-      if (!ReturnData.empty()) {
-        Result.output_data = ReturnData.data();
-        Result.output_size = ReturnData.size();
-      }
-
-      return Result;
-
-    } catch (const std::exception &E) {
-      // On error, return parent result
-      std::cout << "Error in recursive call: " << E.what() << std::endl;
-      return ParentResult;
-    }
-  }
-};
 
 std::string getDefaultTestDir() {
   std::filesystem::path DirPath =
@@ -187,23 +107,22 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
       return false;
     }
 
-    // Create Isolation for recursive host
+    // Create Isolation for the mocked host
     Isolation *IsoForRecursive = RT->createManagedIsolation();
     if (!IsoForRecursive) {
       return false;
     }
 
-    // Now create RecursiveHost with Runtime and Isolation references
-    auto RecursiveHostPtr =
-        std::make_unique<RecursiveHost>(RT.get(), IsoForRecursive);
-    RecursiveHost *MockedHost = RecursiveHostPtr.get();
+    // Now create ZenMockedEVMHost with Runtime and Isolation references
+    auto HostPtr = std::make_unique<ZenMockedEVMHost>(RT.get(), IsoForRecursive);
+    ZenMockedEVMHost *MockedHost = HostPtr.get();
 
     // Copy accounts and context from temporary host
     MockedHost->accounts = TempMockedHost->accounts;
     MockedHost->tx_context = TempMockedHost->tx_context;
 
-    // Switch to using RecursiveHost
-    std::unique_ptr<evmc::Host> Host = std::move(RecursiveHostPtr);
+    // Switch to using ZenMockedEVMHost
+    std::unique_ptr<evmc::Host> Host = std::move(HostPtr);
 
     auto ModRet = RT->loadEVMModule(TempFile.getPath());
     if (!ModRet) {
