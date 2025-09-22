@@ -139,7 +139,7 @@ bool verifyLogsHash(const std::vector<evmc::MockedHost::log_record> &Logs,
   return CalculatedHash == ExpectedHash;
 }
 
-bool verifyStateRoot(evmc::MockedHost &Host, const std::string &ExpectedHash) {
+std::string calculateStateRootHash(evmc::MockedHost &Host) {
   zen::evm::mpt::MerklePatriciaTrie StateTrie;
 
   for (const auto &[Address, Account] : Host.accounts) {
@@ -154,7 +154,11 @@ bool verifyStateRoot(evmc::MockedHost &Host, const std::string &ExpectedHash) {
   auto StateRoot = StateTrie.rootHash();
 
   evmc::bytes_view HashView(StateRoot.data(), StateRoot.size());
-  std::string CalculatedHash = "0x" + evmc::hex(HashView);
+  return "0x" + evmc::hex(HashView);
+}
+
+bool verifyStateRoot(evmc::MockedHost &Host, const std::string &ExpectedHash) {
+  std::string CalculatedHash = calculateStateRootHash(Host);
 
   if (CalculatedHash != ExpectedHash) {
     std::cout << "CalculatedRootHash: " << CalculatedHash << std::endl;

@@ -102,6 +102,7 @@ calculateLogsHash(const std::vector<evmc::MockedHost::log_record> &Logs);
 bool verifyLogsHash(const std::vector<evmc::MockedHost::log_record> &Logs,
                     const std::string &ExpectedHash);
 
+std::string calculateStateRootHash(evmc::MockedHost &Host);
 bool verifyStateRoot(evmc::MockedHost &Host, const std::string &ExpectedHash);
 
 } // namespace zen::evm_test_utils
