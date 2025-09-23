@@ -118,6 +118,7 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MLoad, OP_MLOAD);
 // Control flow operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Jump, OP_JUMP);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(JumpI, OP_JUMPI);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(JumpDest, OP_JUMPDEST);
 // Temporary Storage
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(TLoad, OP_TLOAD);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(TStore, OP_TSTORE);
@@ -897,6 +898,10 @@ void JumpIHandler::doExecute() {
 
   Frame->Pc = Dest;
   Context->IsJump = true;
+}
+
+void JumpDestHandler::doExecute() {
+  // No additional state updates required; gas is charged in execute().
 }
 // Temporary storage operations
 void TLoadHandler::doExecute() {

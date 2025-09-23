@@ -446,12 +446,7 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_JUMPDEST: {
-      auto *Instance = Context.getInstance();
-      const auto Revision =
-          Instance ? Instance->getRevision() : DEFAULT_REVISION;
-      const auto *Table = evmc_get_instruction_metrics_table(Revision);
-      const auto Cost = Table[OP_JUMPDEST].gas_cost;
-      Frame->Msg->gas -= Cost;
+      EVMOpcodeHandlerRegistry::getJumpDestHandler().execute();
       break;
     }
 
