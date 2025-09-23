@@ -33,6 +33,7 @@ EVMFrame *InterpreterExecContext::allocFrame(
   Frame.Msg->sender = Sender;
   Frame.Msg->input_data = CallData.data();
   Frame.Msg->input_size = CallData.size();
+  Frame.Rev = Inst ? Inst->getRevision() : DEFAULT_REVISION;
 
   GasUsed = GasLimit;
 
@@ -47,6 +48,8 @@ EVMFrame *InterpreterExecContext::allocFrame(evmc_message *Msg) {
   EVMFrame &Frame = FrameStack.back();
 
   Frame.Msg = std::make_unique<evmc_message>(*Msg);
+
+  Frame.Rev = Inst ? Inst->getRevision() : DEFAULT_REVISION;
 
   GasUsed = Frame.Msg->gas;
 
@@ -64,8 +67,10 @@ void InterpreterExecContext::freeBackFrame() {
   auto &BackFrame = FrameStack.back();
 
   GasUsed = GasUsed - BackFrame.Msg->gas;
-  uint64_t GasRefund = std::min(
-      BackFrame.GasRefund, static_cast<uint64_t>(BackFrame.Msg->gas / 2LL));
+  const bool LondonOrLater = BackFrame.Rev >= EVMC_LONDON;
+  const uint64_t RefundLimit =
+      LondonOrLater ? (GasUsed / 5) : (GasUsed / 2); // EIP-3529 update
+  uint64_t GasRefund = std::min(BackFrame.GasRefund, RefundLimit);
   GasUsed = GasUsed - GasRefund;
 
   FrameStack.pop_back();
