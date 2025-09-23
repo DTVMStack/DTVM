@@ -33,7 +33,6 @@ EVMFrame *InterpreterExecContext::allocFrame(
   Frame.Msg->sender = Sender;
   Frame.Msg->input_data = CallData.data();
   Frame.Msg->input_size = CallData.size();
-  Frame.Rev = Inst ? Inst->getRevision() : DEFAULT_REVISION;
 
   GasUsed = GasLimit;
 
@@ -48,8 +47,6 @@ EVMFrame *InterpreterExecContext::allocFrame(evmc_message *Msg) {
   EVMFrame &Frame = FrameStack.back();
 
   Frame.Msg = std::make_unique<evmc_message>(*Msg);
-
-  Frame.Rev = Inst ? Inst->getRevision() : DEFAULT_REVISION;
 
   GasUsed = Frame.Msg->gas;
 
@@ -67,9 +64,9 @@ void InterpreterExecContext::freeBackFrame() {
   auto &BackFrame = FrameStack.back();
 
   GasUsed = GasUsed - BackFrame.Msg->gas;
-  const bool LondonOrLater = BackFrame.Rev >= EVMC_LONDON;
+  const auto Revision = Inst ? Inst->getRevision() : DEFAULT_REVISION;
   const uint64_t RefundLimit =
-      LondonOrLater ? (GasUsed / 5) : (GasUsed / 2); // EIP-3529 update
+      (Revision >= EVMC_LONDON) ? (GasUsed / 5) : (GasUsed / 2);
   uint64_t GasRefund = std::min(BackFrame.GasRefund, RefundLimit);
   GasUsed = GasUsed - GasRefund;
 
@@ -449,8 +446,11 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_JUMPDEST: {
-      static auto *Table = evmc_get_instruction_metrics_table(Frame->Rev);
-      static const auto Cost = Table[OP_JUMPDEST].gas_cost;
+      auto *Instance = Context.getInstance();
+      const auto Revision =
+          Instance ? Instance->getRevision() : DEFAULT_REVISION;
+      const auto *Table = evmc_get_instruction_metrics_table(Revision);
+      const auto Cost = Table[OP_JUMPDEST].gas_cost;
       Frame->Msg->gas -= Cost;
       break;
     }
