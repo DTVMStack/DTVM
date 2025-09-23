@@ -65,8 +65,9 @@ void InterpreterExecContext::freeBackFrame() {
 
   GasUsed = GasUsed - BackFrame.Msg->gas;
   const auto Revision = Inst ? Inst->getRevision() : DEFAULT_REVISION;
-  const uint64_t RefundLimit =
-      (Revision >= EVMC_LONDON) ? (GasUsed / 5) : (GasUsed / 2);
+  const uint64_t RefundLimit = (Revision >= EVMC_LONDON)
+                                   ? (GasUsed / 5)
+                                   : (GasUsed / 2); // EIP-3529 update
   uint64_t GasRefund = std::min(BackFrame.GasRefund, RefundLimit);
   GasUsed = GasUsed - GasRefund;
 
