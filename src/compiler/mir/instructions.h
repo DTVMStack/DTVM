@@ -135,23 +135,6 @@ protected:
       : FixedOperandInstruction(kind, opcode, 0, type) {}
 };
 
-class AllocaInstruction : public NaryInstruction {
-public:
-  template <typename... Arguments>
-  static AllocaInstruction *create(Arguments &&...args) {
-    return FixedOperandInstruction::create<AllocaInstruction>(
-        std::forward<Arguments>(args)...);
-  }
-  static bool classof(const MInstruction *inst) {
-    return inst->getOpcode() == OP_alloca;
-  }
-
-private:
-  friend class FixedOperandInstruction;
-  AllocaInstruction(MType *type)
-      : NaryInstruction(MInstruction::ALLOCA, OP_alloca, type) {}
-};
-
 class DassignInstruction : public UnaryInstruction {
 public:
   template <typename... Arguments>

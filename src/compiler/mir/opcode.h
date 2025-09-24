@@ -49,7 +49,6 @@ public:
     // TODO: use desc information
     switch (opcode) {
     case OP_dassign:
-    case OP_alloca:
     case OP_return:
     case OP_store:
       return true;

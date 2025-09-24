@@ -65,10 +65,6 @@ void MInstruction::print(llvm::raw_ostream &OS) const {
     OS << '$' << assign->getVarIdx() << " = " << getOperand<0>() << "\n";
     break;
   }
-  case ALLOCA: {
-    OS << "alloca " << getType() << "\n";
-    break;
-  }
   case CMP: {
     auto *cmp_inst = llvm::cast<CmpInstruction>(this);
     OS << "cmp " << cmp_inst->getPredicateName() << " (" << getOperand<0>()

@@ -11,9 +11,6 @@
 #include "compiler/mir/pointer.h"
 #include "intx/intx.hpp"
 
-#include <array>
-#include <map>
-
 // Forward declaration to avoid circular dependency
 namespace COMPILER {
 struct RuntimeFunctions;
