@@ -167,7 +167,7 @@ void EVMMirBuilder::implementIndirectJump(MInstruction *JumpTarget,
   CompileVector<std::pair<ConstantInstruction *, MBasicBlock *>> Cases(
       JumpDestTable.size(), Ctx.MemPool);
 
-  uint32_t Index = 0;
+  uint64_t Index = 0;
   for (const auto &[DestPC, DestBB] : JumpDestTable) {
     Cases[Index].first = createIntConstInstruction(UInt64Type, DestPC);
     Cases[Index].second = DestBB;
