@@ -66,179 +66,117 @@ bool EVMMirBuilder::compile(CompilerContext *Context) {
   return Visitor.compile();
 }
 
+void EVMMirBuilder::loadEVMInstanceAttr() {
+  InstanceAddr = createInstruction<ConversionInstruction>(
+      false, OP_ptrtoint, &Ctx.I64Type,
+      createInstruction<DreadInstruction>(false, createVoidPtrType(), 0));
+
+  ExceptionReturnBB = CurFunc->createExceptionReturnBB();
+}
+
 void EVMMirBuilder::initEVM(CompilerContext *Context) {
   // Create entry basic block
   MBasicBlock *EntryBB = createBasicBlock();
   setInsertBlock(EntryBB);
 
   // Initialize instance address for JIT function calls
-  // Get EVM instance pointer from function parameter 0 (like WASM)
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  InstanceAddr = createInstruction<ConversionInstruction>(
-      false, OP_ptrtoint, I64Type,
-      createInstruction<DreadInstruction>(false, createVoidPtrType(), 0));
+  loadEVMInstanceAttr();
 
   // Initialize program counter
   PC = 0;
 
-  // Allocate PC register slot in DMIR
-  MType *UInt64Type =
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  PCRegIdx = 0; // PC = slot 0
-  // Initialize PC value = 0
-  MInstruction *InitialPC = createIntConstInstruction(UInt64Type, 0);
-  createInstruction<DassignInstruction>(true, UInt64Type, InitialPC, PCRegIdx);
-
-  // Initialize jump control flag
-  JumpExecuted = false;
-
-  // Create jump table for complete jump implementation
   createJumpTable();
 }
 
 void EVMMirBuilder::finalizeEVMBase() {
-  // Note: After padding 33 bytes 0x00, normal termination is sufficient
-}
+  const auto &ExceptionSetBBs = CurFunc->getExceptionSetBBs();
 
-void EVMMirBuilder::updatePC(uint64_t NewPC) {
-  ZEN_ASSERT(PCRegIdx != UINT32_MAX && "PC register not initialized");
+  VariableIdx ExceptionIDIdx =
+      CurFunc->createVariable(&Ctx.I32Type)->getVarIdx();
+  MBasicBlock *ExceptionHandlingBB = CurFunc->createExceptionHandlingBB();
 
-  // Update the static PC value for tracking
-  PC = NewPC;
+  auto GenExceptionSetBBs = [&]() {
+    for (const auto [ErrCode, ExceptionSetBB] : ExceptionSetBBs) {
+      setInsertBlock(ExceptionSetBB);
+      createInstruction<DassignInstruction>(
+          true, &Ctx.VoidType,
+          createIntConstInstruction(&Ctx.I32Type,
+                                    common::to_underlying(ErrCode)),
+          ExceptionIDIdx);
+      createInstruction<BrInstruction>(true, Ctx, ExceptionHandlingBB);
+      addSuccessor(ExceptionHandlingBB);
+    }
+  };
 
-  // Update the runtime PC value in PCReg
-  MType *UInt64Type =
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MInstruction *NewPCInstr = createIntConstInstruction(UInt64Type, NewPC);
-  createInstruction<DassignInstruction>(true, UInt64Type, NewPCInstr, PCRegIdx);
-}
+  auto HandleException = [&](uintptr_t ExceptionHandlerAddr) {
+    MInstruction *HandlerAddr =
+        createIntConstInstruction(&Ctx.I64Type, ExceptionHandlerAddr);
 
-MInstruction *EVMMirBuilder::validateJumpDestination(MInstruction *JumpTarget) {
-  // Create validation logic similar to interpreter:
-  // 1. Check if target address is within bytecode bounds
-  // 2. Check if target instruction is JUMPDEST
+    CompileVector<MInstruction *> SetExceptionArgs{
+        {
+            InstanceAddr,
+            createInstruction<DreadInstruction>(false, &Ctx.I32Type,
+                                                ExceptionIDIdx),
+        },
+        Ctx.MemPool,
+    };
+    createInstruction<ICallInstruction>(true, &Ctx.VoidType, HandlerAddr,
+                                        SetExceptionArgs);
 
-  MType *UInt64Type =
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+    createInstruction<BrInstruction>(true, Ctx, ExceptionReturnBB);
+    addSuccessor(ExceptionReturnBB);
+  };
 
-  // Get bytecode size from context
-  size_t BytecodeSize =
-      static_cast<EVMFrontendContext *>(&Ctx)->getBytecodeSize();
-  MInstruction *CodeSizeConst =
-      createIntConstInstruction(UInt64Type, BytecodeSize);
-
-  // Check: JumpTarget < CodeSize
-  MInstruction *IsWithinBounds = createInstruction<CmpInstruction>(
-      false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, JumpTarget,
-      CodeSizeConst);
-
-  // For a complete implementation, we would also need to:
-  // 1. Load the bytecode instruction at JumpTarget
-  // 2. Check if it equals OP_JUMPDEST (0x5b)
-  // For now, we return the bounds check as the validation result
-
-  return IsWithinBounds;
+  GenExceptionSetBBs();
+  setInsertBlock(ExceptionHandlingBB);
+  HandleException(uintptr_t(Instance::triggerInstanceExceptionOnJIT));
+  setInsertBlock(ExceptionReturnBB);
 }
 
 void EVMMirBuilder::createJumpTable() {
-  // Scan bytecode to find all JUMPDEST instructions and create corresponding
-  // basic blocks
   const EVMFrontendContext *EvmCtx =
       static_cast<const EVMFrontendContext *>(&Ctx);
   const Byte *Bytecode = EvmCtx->getBytecode();
   size_t BytecodeSize = EvmCtx->getBytecodeSize();
 
-  // Create default jump block for invalid destinations
-  DefaultJumpBB = createBasicBlock();
-  CurFunc->appendBlock(DefaultJumpBB);
-
-  // Scan for JUMPDEST instructions
   for (size_t PC = 0; PC < BytecodeSize; ++PC) {
     if (Bytecode[PC] == static_cast<Byte>(evmc_opcode::OP_JUMPDEST)) {
-      // Create a basic block for this jump destination
       MBasicBlock *DestBB = createBasicBlock();
       CurFunc->appendBlock(DestBB);
       JumpDestTable[PC] = DestBB;
-    }
-
-    // Skip over PUSH instruction data
-    if (Bytecode[PC] >= static_cast<Byte>(evmc_opcode::OP_PUSH1) &&
-        Bytecode[PC] <= static_cast<Byte>(evmc_opcode::OP_PUSH32)) {
-      uint8_t PushSize = static_cast<uint8_t>(Bytecode[PC]) -
-                         static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
+    } else if (static_cast<Byte>(evmc_opcode::OP_PUSH0) <= Bytecode[PC] &&
+               Bytecode[PC] <= static_cast<Byte>(evmc_opcode::OP_PUSH32)) {
+      uint8_t PushSize = static_cast<uint8_t>(Bytecode[PC]) + 1 -
+                         static_cast<uint8_t>(evmc_opcode::OP_PUSH1);
       PC += PushSize; // Skip the immediate data
     }
   }
 }
 
-MBasicBlock *EVMMirBuilder::getJumpDestBlock(uint64_t PC) {
-  auto It = JumpDestTable.find(PC);
-  if (It != JumpDestTable.end()) {
-    return It->second;
-  }
-  return DefaultJumpBB; // Return default block for invalid destinations
-}
-
 void EVMMirBuilder::implementIndirectJump(MInstruction *JumpTarget,
                                           MBasicBlock *FailureBB) {
-  // Implement indirect jump using switch-like mechanism
-  // This creates a complete control flow for all possible jump destinations
+  if (JumpDestTable.empty()) {
+    createInstruction<BrInstruction>(true, Ctx, FailureBB);
+    addUniqueSuccessor(FailureBB);
+    return;
+  }
 
   MType *UInt64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
-  if (JumpDestTable.empty()) {
-    // No jump destinations found, all jumps are invalid
-    createInstruction<BrInstruction>(true, Ctx, FailureBB);
-    addSuccessor(FailureBB);
-    return;
-  }
+  CompileVector<std::pair<ConstantInstruction *, MBasicBlock *>> Cases(
+      JumpDestTable.size(), Ctx.MemPool);
 
-  // Create switch instruction for all possible jump destinations
-  // Note: This is a simplified version - a full implementation would use
-  // MIR's switch instruction or create a cascading if-then-else chain
-
-  MBasicBlock *FirstCheck = nullptr;
-  MBasicBlock *PrevFailBB = FailureBB;
-
-  // Create a chain of conditional branches for each possible destination
-  for (auto &Entry : JumpDestTable) {
-    uint64_t DestPC = Entry.first;
-    MBasicBlock *DestBB = Entry.second;
-
-    MBasicBlock *CheckBB = createBasicBlock();
-    if (!FirstCheck)
-      FirstCheck = CheckBB;
-
-    setInsertBlock(CheckBB);
-
-    // Check if JumpTarget == DestPC
-    MInstruction *DestPCConst = createIntConstInstruction(UInt64Type, DestPC);
-    MInstruction *IsMatch = createInstruction<CmpInstruction>(
-        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, JumpTarget,
-        DestPCConst);
-
-    // If match, jump to destination; otherwise continue checking
-    MBasicBlock *NextCheck =
-        (std::next(std::find_if(JumpDestTable.begin(), JumpDestTable.end(),
-                                [&](const auto &p) {
-                                  return p.first == DestPC;
-                                })) != JumpDestTable.end())
-            ? createBasicBlock()
-            : PrevFailBB;
-
-    createInstruction<BrIfInstruction>(true, Ctx, IsMatch, DestBB, NextCheck);
+  uint32_t Index = 0;
+  for (const auto &[DestPC, DestBB] : JumpDestTable) {
+    Cases[Index].first = createIntConstInstruction(UInt64Type, DestPC);
+    Cases[Index].second = DestBB;
     addSuccessor(DestBB);
-    addSuccessor(NextCheck);
-
-    PrevFailBB = NextCheck;
+    Index++;
   }
 
-  // Branch to the first check
-  if (FirstCheck) {
-    createInstruction<BrInstruction>(true, Ctx, FirstCheck);
-    addSuccessor(FirstCheck);
-  }
+  createInstruction<SwitchInstruction>(true, Ctx, JumpTarget, FailureBB, Cases);
+  addUniqueSuccessor(FailureBB);
 }
 
 // ==================== Stack Instruction Handlers ====================
@@ -286,95 +224,43 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handlePush(const Bytes &Data) {
 // ==================== Control Flow Instruction Handlers ====================
 
 void EVMMirBuilder::handleJump(Operand Dest) {
-  // Extract the jump destination from the operand
   U256Inst DestComponents = extractU256Operand(Dest);
-  MInstruction *JumpTarget =
-      DestComponents[0]; // Use low 64 bits as jump target
+  MInstruction *JumpTarget = DestComponents[0];
 
-  MType *UInt64Type =
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  createInstruction<DassignInstruction>(true, UInt64Type, JumpTarget, PCRegIdx);
-
-  // Set jump executed flag
-  JumpExecuted = true;
-
-  // Setup error handling for invalid jumps
-  setInsertBlock(DefaultJumpBB);
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  callRuntimeFor(RuntimeFunctions.HandleInvalid);
-
-  // Implement complete indirect jump using jump table
-  MBasicBlock *CurrentBB = createBasicBlock();
-  setInsertBlock(CurrentBB);
-  implementIndirectJump(JumpTarget, DefaultJumpBB);
+  MBasicBlock *InvalidJumpBB =
+      getOrCreateExceptionSetBB(ErrorCode::EVMBadJumpDestination);
+  implementIndirectJump(JumpTarget, InvalidJumpBB);
 }
 
 void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
-  // Extract the jump destination and condition
   U256Inst DestComponents = extractU256Operand(Dest);
   U256Inst CondComponents = extractU256Operand(Cond);
+  MInstruction *JumpTarget = DestComponents[0];
 
-  // Check if condition is non-zero (EVM JUMPI semantics)
   MType *UInt64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MInstruction *Zero = createIntConstInstruction(UInt64Type, 0);
+  MInstruction *IsNonZero = isU256GreaterOrEqual(CondComponents, 1);
 
-  // Create condition: OR all components, then compare with 0
-  MInstruction *OrResult = CondComponents[0];
-  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
-    OrResult = createInstruction<BinaryInstruction>(
-        false, OP_or, UInt64Type, OrResult, CondComponents[I]);
+  MBasicBlock *FallThroughBB = createBasicBlock();
+  MBasicBlock *InvalidJumpBB =
+      getOrCreateExceptionSetBB(ErrorCode::EVMBadJumpDestination);
+
+  if (JumpDestTable.empty()) {
+    createInstruction<BrIfInstruction>(true, Ctx, IsNonZero, InvalidJumpBB,
+                                       FallThroughBB);
+    addUniqueSuccessor(InvalidJumpBB);
+    addSuccessor(FallThroughBB);
+  } else {
+    MBasicBlock *JumpTableBB = createBasicBlock();
+    createInstruction<BrIfInstruction>(true, Ctx, IsNonZero, JumpTableBB,
+                                       FallThroughBB);
+    addSuccessor(JumpTableBB);
+    addSuccessor(FallThroughBB);
+    setInsertBlock(JumpTableBB);
+    implementIndirectJump(JumpTarget, InvalidJumpBB);
   }
 
-  // Condition is true if any component is non-zero
-  MInstruction *IsNonZero = createInstruction<CmpInstruction>(
-      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, OrResult, Zero);
-
-  // Create conditional branch basic blocks
-  MBasicBlock *JumpBB = createBasicBlock(); // Jump taken path
-  MBasicBlock *FallThroughBB =
-      createBasicBlock(); // Fall through path (condition false)
-  MBasicBlock *MergeBB = createBasicBlock(); // Merge point after both paths
-
-  // First branch: check condition
-  createInstruction<BrIfInstruction>(true, Ctx, IsNonZero, JumpBB,
-                                     FallThroughBB);
-  addSuccessor(JumpBB);
-  addSuccessor(FallThroughBB);
-
-  // Handle condition true: perform complete jump
-  setInsertBlock(JumpBB);
-  MInstruction *JumpTarget =
-      DestComponents[0]; // Use low 64 bits as jump target
-
-  createInstruction<DassignInstruction>(true, UInt64Type, JumpTarget, PCRegIdx);
-
-  // Set jump executed flag
-  JumpExecuted = true;
-
-  // Implement complete indirect jump using jump table
-  implementIndirectJump(JumpTarget, DefaultJumpBB);
-  // Note: implementIndirectJump creates its own control flow, no need to merge
-
-  // Handle Fall through path (condition is false)
   setInsertBlock(FallThroughBB);
-  // PC continues to next instruction (no PC update needed, handled by bytecode
-  // visitor)
-  createInstruction<BrInstruction>(true, Ctx, MergeBB);
-  addSuccessor(MergeBB);
-
-  // Set merge block as current insertion point for subsequent instructions
-  setInsertBlock(MergeBB);
-}
-
-void EVMMirBuilder::handleJumpDest() {
-  // JUMPDEST creates a valid jump target
-  // In DMIR, this is handled by basic block boundaries
-  // The PC will be updated by the bytecode visitor automatically
-
-  // Create a new basic block for the jump destination
-  MBasicBlock *JumpDestBB = createBasicBlock();
-  setInsertBlock(JumpDestBB);
 }
 
 // ==================== Arithmetic Instruction Handlers ====================
@@ -1093,15 +979,13 @@ EVMMirBuilder::handleSignextend(Operand IndexOp, Operand ValueOp) {
 // ==================== Environment Instruction Handlers ====================
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handlePC() {
-  ZEN_ASSERT(PCRegIdx != UINT32_MAX && "PC register not initialized");
-
   MType *UInt64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MInstruction *PCValue =
-      createInstruction<DreadInstruction>(false, UInt64Type, PCRegIdx);
+  MInstruction *PCInst =
+      createInstruction<DreadInstruction>(false, UInt64Type, PC);
 
   // Convert the 64-bit PC value to U256 format (EVM specification)
-  return convertSingleInstrToU256Operand(PCValue);
+  return convertSingleInstrToU256Operand(PCInst);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleGas() {
@@ -1612,26 +1496,24 @@ MInstruction *EVMMirBuilder::isU256GreaterOrEqual(const U256Inst &Value,
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
 
-  // Check if any of the higher components are non-zero
-  MInstruction *IsNonZeroHigh = Zero;
-  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
-    MInstruction *IsNonZero = createInstruction<CmpInstruction>(
-        false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Value[I],
-        Zero);
-    IsNonZeroHigh = createInstruction<BinaryInstruction>(
-        false, OP_or, MirI64Type, IsNonZeroHigh, IsNonZero);
-  }
+  // Check if any high component is non-zero
+  MInstruction *HighBits12 = createInstruction<BinaryInstruction>(
+      false, OP_or, MirI64Type, Value[1], Value[2]);
+  MInstruction *HighBits = createInstruction<BinaryInstruction>(
+      false, OP_or, MirI64Type, HighBits12, Value[3]);
+  MInstruction *IsHighNonZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, HighBits, Zero);
 
-  // Check if low component >= threshold
   MInstruction *ThresholdConst =
       createIntConstInstruction(MirI64Type, Threshold);
-  MInstruction *IsLowLarge = createInstruction<CmpInstruction>(
+  // Check if low component >= threshold
+  MInstruction *IsLowGE = createInstruction<CmpInstruction>(
       false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, Value[0],
       ThresholdConst);
 
   // Combine result: any high component non-zero OR low component >= threshold
   return createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
-                                              IsNonZeroHigh, IsLowLarge);
+                                              IsHighNonZero, IsLowGE);
 }
 
 // ==================== EVM to MIR Opcode Mapping ====================

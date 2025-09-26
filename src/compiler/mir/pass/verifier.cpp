@@ -105,8 +105,8 @@ void MVerifier::visitWasmOverflowI128BinaryInstruction(
 
 void MVerifier::visitCmpInstruction(CmpInstruction &I) {
   MType *Type = I.getType();
-  CHECK(Type->isI8() || Type->isI32(),
-        "The type of cmp instruction result must be i8/i32");
+  CHECK(Type->isI8() || Type->isI32() || Type->isI64(),
+        "The type of cmp instruction result must be i8/i32/i64");
 
   MType *LHSType = I.getOperand<0>()->getType();
   MType *RHSType = I.getOperand<1>()->getType();
@@ -126,7 +126,7 @@ void MVerifier::visitSelectInstruction(SelectInstruction &I) {
   MType *CondType = I.getOperand<0>()->getType();
   MType *LHSType = I.getOperand<1>()->getType();
   MType *RHSType = I.getOperand<2>()->getType();
-  CHECK(CondType->isI8() || CondType->isI32(),
+  CHECK(CondType->isI8() || CondType->isI32() || CondType->isI64(),
         "The type of select instruction condition must be i8/i32");
   CHECK(LHSType->getKind() == RHSType->getKind(),
         "The select left operand must have same type as select right operand");
@@ -223,8 +223,8 @@ void MVerifier::visitBrInstruction(BrInstruction &I) {
 
 void MVerifier::visitBrIfInstruction(BrIfInstruction &I) {
   MType *CondType = I.getOperand<0>()->getType();
-  CHECK(CondType->isI8() || CondType->isI32(),
-        "The condition type of br_if instruction must be i8/i32");
+  CHECK(CondType->isI8() || CondType->isI32() || CondType->isI64(),
+        "The condition type of br_if instruction must be i8/i32/i64");
 
   CHECK(I.getTrueBlock(), "The br_if instruction must have true target");
   uint32_t NumBasicBlocks = CurFunc->getNumBasicBlocks();

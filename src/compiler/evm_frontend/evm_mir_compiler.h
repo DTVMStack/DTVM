@@ -156,23 +156,12 @@ public:
   };
 
   bool compile(CompilerContext *Context);
-
+  void loadEVMInstanceAttr();
   void initEVM(CompilerContext *Context);
   void finalizeEVMBase();
 
-  // Update program counter value
-  void updatePC(uint64_t NewPC);
-
-  // Validate jump destination (checks if target is JUMPDEST)
-  MInstruction *validateJumpDestination(MInstruction *JumpTarget);
-
-  // Jump control mechanism (similar to interpreter's Context.IsJump)
-  bool shouldContinueLinearExecution() const { return !JumpExecuted; }
-  void setJumpExecuted(bool Executed) { JumpExecuted = Executed; }
-
   // Complete jump implementation with jump table
   void createJumpTable();
-  MBasicBlock *getJumpDestBlock(uint64_t PC);
   void implementIndirectJump(MInstruction *JumpTarget, MBasicBlock *FailureBB);
 
   void releaseOperand(Operand Opnd) {}
@@ -191,7 +180,6 @@ public:
 
   void handleJump(Operand Dest);
   void handleJumpI(Operand Dest, Operand Cond);
-  void handleJumpDest();
 
   // ==================== Arithmetic Instruction Handlers ====================
 
@@ -430,6 +418,18 @@ private:
 
   void addSuccessor(MBasicBlock *Succ) { CurBB->addSuccessor(Succ); }
 
+  void addUniqueSuccessor(MBasicBlock *Succ) {
+    auto E = CurBB->successors().end();
+    auto It = std::find(CurBB->successors().begin(), E, Succ);
+    if (It == E) {
+      CurBB->addSuccessor(Succ);
+    }
+  }
+
+  MBasicBlock *getOrCreateExceptionSetBB(ErrorCode ErrCode) {
+    return CurFunc->getOrCreateExceptionSetBB(ErrCode);
+  }
+
   // ==================== EVMU256 Helper Methods ====================
 
   void extractU256ComponentsExplicit(uint64_t *Components,
@@ -538,15 +538,11 @@ private:
 
   // Instance address for JIT function calls
   MInstruction *InstanceAddr = nullptr;
+  // exit when has exception
+  MBasicBlock *ExceptionReturnBB = nullptr;
 
   // Program counter for current instruction
   uint64_t PC = 0;
-
-  // PC register variable index in DMIR
-  uint32_t PCRegIdx = 0;
-
-  // Jump execution control (similar to interpreter's Context.IsJump)
-  bool JumpExecuted = false;
 
   // Jump table for dynamic jumps
   std::map<uint64_t, MBasicBlock *> JumpDestTable;

@@ -524,16 +524,12 @@ private:
 
       // Control flow operations
       case OP_JUMP: {
-        // Update PC register before jump for dynamic execution
-        Builder.updatePC(PC);
         Operand Dest = pop();
         Builder.handleJump(Dest);
         break;
       }
 
       case OP_JUMPI: {
-        // Update PC register before conditional jump for dynamic execution
-        Builder.updatePC(PC);
         Operand Dest = pop();
         Operand Cond = pop();
         Builder.handleJumpI(Dest, Cond);
@@ -541,14 +537,12 @@ private:
       }
 
       case OP_JUMPDEST: {
-        Builder.handleJumpDest();
+        // Note: already processed in `EVMMirBuilder::createJumpTable()`
         break;
       }
 
       // Environment operations
       case OP_PC: {
-        // Store current PC value only when OP_PC opcode is encountered
-        Builder.updatePC(PC);
         Operand Result = Builder.handlePC();
         push(Result);
         break;
@@ -731,7 +725,7 @@ private:
 
   // SWAP1-SWAP16: Swap top with Nth+1 stack item
   void handleSwap(uint8_t Index) {
-    if (Stack.getSize() < Index + 1) {
+    if (Stack.getSize() < static_cast<uint32_t>(Index) + 1u) {
       throw getError(common::ErrorCode::EVMStackUnderflow);
     }
 
