@@ -33,8 +33,10 @@ constexpr auto MAX_CODE_SIZE = 0x6000;
 // constexpr auto MAX_INITCODE_SIZE = 2 * MAX_CODE_SIZE;
 constexpr auto MAX_SIZE_OF_INITCODE = 0xC000;
 
-/// The keccak256 hash of the empty input. Used to identify empty account's code.
-static constexpr auto EMPTY_CODE_HASH = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470_bytes32;
+/// The keccak256 hash of the empty input. Used to identify empty account's
+/// code.
+static constexpr auto EMPTY_CODE_HASH =
+    0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470_bytes32;
 
 } // namespace evm
 } // namespace zen
