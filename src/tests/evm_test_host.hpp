@@ -215,6 +215,7 @@ public:
       EVMInstance *Inst = *InstRet;
       // 3 Create new account status
       auto& NewAcc = accounts[NewAddr]; 
+      //TODO: Obtain Revision to initialize nounce
       // NewAcc.nonce = (Inst->getRevision() >= EVMC_SPURIOUS_DRAGON) ? 1 : 0; 
       NewAcc.nonce = 0; 
       NewAcc.balance = evmc::bytes32{0};
