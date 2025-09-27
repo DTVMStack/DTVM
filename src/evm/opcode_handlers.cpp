@@ -1155,6 +1155,7 @@ void CreateHandler::doExecute() {
   }
 
   evmc::Result Result = Frame->Host->call(NewMsg);
+  Context->setResource();
   chargeGas(Frame,
             NewMsg.gas - Result.gas_left); // it's safe to charge gas here
   Frame->GasRefund += Result.gas_refund;

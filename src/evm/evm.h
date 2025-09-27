@@ -7,6 +7,7 @@
 
 namespace zen {
 namespace evm {
+using namespace evmc::literals;
 constexpr auto MAXSTACK = 1024;
 
 // Limit required memory size to prevent excessive memory consumption
@@ -23,8 +24,17 @@ constexpr auto ADDITIONAL_COLD_ACCOUNT_ACCESS_COST =
 constexpr auto CALL_VALUE_COST = 9000;
 constexpr auto ACCOUNT_CREATION_COST = 25000;
 constexpr auto CALL_GAS_STIPEND = 2300;
+/// The limit of the size of created contract
+/// defined by [EIP-170](https://eips.ethereum.org/EIPS/eip-170)
+constexpr auto MAX_CODE_SIZE = 0x6000;
 
+/// The limit of the size of init codes for contract creation
+/// defined by [EIP-3860](https://eips.ethereum.org/EIPS/eip-3860)
+// constexpr auto MAX_INITCODE_SIZE = 2 * MAX_CODE_SIZE;
 constexpr auto MAX_SIZE_OF_INITCODE = 0xC000;
+
+/// The keccak256 hash of the empty input. Used to identify empty account's code.
+static constexpr auto EMPTY_CODE_HASH = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470_bytes32;
 
 } // namespace evm
 } // namespace zen
