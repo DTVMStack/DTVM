@@ -34,6 +34,20 @@ EVMInstanceUniquePtr EVMInstance::newEVMInstance(Isolation &Iso,
 
 EVMInstance::~EVMInstance() {}
 
+void EVMInstance::setGas(uint64_t NewGas) { Gas = NewGas; }
+
+void EVMInstance::pushMessage(evmc_message *Msg) {
+  MessageStack.push_back(Msg);
+  Gas = MessageStack.back()->gas;
+}
+
+void EVMInstance::popMessage() {
+  if (!MessageStack.empty()) {
+    MessageStack.pop_back();
+  }
+  Gas = MessageStack.empty() ? 0 : MessageStack.back()->gas;
+}
+
 uint64_t EVMInstance::calculateMemoryExpansionCost(uint64_t CurrentSize,
                                                    uint64_t NewSize) {
   if (NewSize <= CurrentSize) {
@@ -66,10 +80,12 @@ void EVMInstance::expandMemory(uint64_t RequiredSize) {
 }
 void EVMInstance::chargeGas(uint64_t GasCost) {
   evmc_message *Msg = getCurrentMessage();
+  ZEN_ASSERT(Msg && "Active message required for gas accounting");
   if ((uint64_t)Msg->gas < GasCost) {
     throw common::getError(common::ErrorCode::EVMOutOfGas);
   }
-  Msg->gas -= GasCost;
+  Msg->gas -= static_cast<int64_t>(GasCost);
+  setGas(static_cast<uint64_t>(Msg->gas));
 }
 
 } // namespace zen::runtime

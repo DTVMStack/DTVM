@@ -64,6 +64,8 @@ private:
 
       Ip++;
 
+      Builder.meterOpcode(Opcode);
+
       switch (Opcode) {
       case OP_STOP:
         handleStop();

@@ -79,6 +79,9 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   MBasicBlock *EntryBB = createBasicBlock();
   setInsertBlock(EntryBB);
 
+  InstructionMetrics =
+      evmc_get_instruction_metrics_table(zen::evm::DEFAULT_REVISION);
+
   // Initialize instance address for JIT function calls
   loadEVMInstanceAttr();
 
@@ -131,6 +134,60 @@ void EVMMirBuilder::finalizeEVMBase() {
   setInsertBlock(ExceptionHandlingBB);
   HandleException(uintptr_t(Instance::triggerInstanceExceptionOnJIT));
   setInsertBlock(ExceptionReturnBB);
+}
+
+LoadInstruction *EVMMirBuilder::getInstanceElement(MType *ValueType,
+                                                   uint32_t Scale,
+                                                   MInstruction *Index,
+                                                   uint64_t Offset) {
+  ZEN_ASSERT(Offset <= std::numeric_limits<int32_t>::max());
+  MPointerType *ValuePtrType = MPointerType::create(Ctx, *ValueType);
+  MInstruction *InstancePtr =
+      createInstruction<DreadInstruction>(false, ValuePtrType, 0);
+  return createInstruction<LoadInstruction>(false, ValueType, InstancePtr,
+                                            Scale, Index,
+                                            static_cast<int32_t>(Offset));
+}
+
+StoreInstruction *EVMMirBuilder::setInstanceElement(MType *ValueType,
+                                                    MInstruction *Value,
+                                                    uint64_t Offset) {
+  ZEN_ASSERT(Offset <= std::numeric_limits<int32_t>::max());
+  MPointerType *ValuePtrType = MPointerType::create(Ctx, *ValueType);
+  MInstruction *InstancePtr =
+      createInstruction<DreadInstruction>(false, ValuePtrType, 0);
+  return createInstruction<StoreInstruction>(
+      true, &Ctx.VoidType, Value, InstancePtr, static_cast<int32_t>(Offset));
+}
+
+void EVMMirBuilder::meterOpcode(evmc_opcode Opcode) {
+  const uint8_t Index = static_cast<uint8_t>(Opcode);
+  const auto &Metrics = InstructionMetrics[Index];
+  meterGas(static_cast<uint64_t>(Metrics.gas_cost));
+}
+
+void EVMMirBuilder::meterGas(uint64_t GasCost) {
+  if (GasCost == 0) {
+    return;
+  }
+
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  const uint64_t GasOffset = zen::runtime::EVMInstance::getGasFieldOffset();
+
+  MInstruction *GasLeft = getInstanceElement(I64Type, GasOffset);
+  MInstruction *CostValue = createIntConstInstruction(I64Type, GasCost);
+
+  MInstruction *IsExhausted = createInstruction<CmpInstruction>(
+      false, CmpInstruction::ICMP_ULT, &Ctx.I64Type, GasLeft, CostValue);
+
+  MBasicBlock *OutOfGasBB =
+      CurFunc->getOrCreateExceptionSetBB(common::ErrorCode::EVMOutOfGas);
+  createInstruction<BrIfInstruction>(true, Ctx, IsExhausted, OutOfGasBB);
+  addUniqueSuccessor(OutOfGasBB);
+
+  MInstruction *NewGas = createInstruction<BinaryInstruction>(
+      false, OP_sub, I64Type, GasLeft, CostValue);
+  setInstanceElement(I64Type, NewGas, GasOffset);
 }
 
 void EVMMirBuilder::createJumpTable() {
