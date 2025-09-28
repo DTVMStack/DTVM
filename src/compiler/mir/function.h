@@ -159,7 +159,6 @@ public:
 
     // TODO: move to dmir->cgir pass
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
-    llvm::outs() << "Created instruction: ";
     Inst->print(llvm::outs());
     llvm::outs() << "\n";
 #endif

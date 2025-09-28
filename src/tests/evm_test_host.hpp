@@ -37,6 +37,14 @@ public:
       return handleCreate(Msg);
     }
     evmc::Result ParentResult = evmc::MockedHost::call(Msg);
+
+    // TODO: support EVMC_CREATE/EVMC_CREATE2 by executing initcode, updating
+    // create_address, and committing runtime bytecode instead of delegating to
+    // the parent mocked host.
+    if (Msg.kind == EVMC_CREATE || Msg.kind == EVMC_CREATE2) {
+      return ParentResult;
+    }
+
     // Try to find the target contract
     auto It = accounts.find(Msg.recipient);
     if (It == accounts.end() || It->second.code.empty()) {

@@ -64,8 +64,11 @@ void InterpreterExecContext::freeBackFrame() {
   auto &BackFrame = FrameStack.back();
 
   GasUsed = GasUsed - BackFrame.Msg->gas;
-  uint64_t GasRefund = std::min(
-      BackFrame.GasRefund, static_cast<uint64_t>(BackFrame.Msg->gas / 2LL));
+  const auto Revision = Inst ? Inst->getRevision() : DEFAULT_REVISION;
+  const uint64_t RefundLimit = (Revision >= EVMC_LONDON)
+                                   ? (GasUsed / 5)
+                                   : (GasUsed / 2); // EIP-3529 update
+  uint64_t GasRefund = std::min(BackFrame.GasRefund, RefundLimit);
   GasUsed = GasUsed - GasRefund;
 
   FrameStack.pop_back();
@@ -444,9 +447,7 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_JUMPDEST: {
-      static auto *Table = evmc_get_instruction_metrics_table(Frame->Rev);
-      static const auto Cost = Table[OP_JUMPDEST].gas_cost;
-      Frame->Msg->gas -= Cost;
+      EVMOpcodeHandlerRegistry::getJumpDestHandler().execute();
       break;
     }
 

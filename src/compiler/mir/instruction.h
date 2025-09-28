@@ -32,7 +32,6 @@ public:
 
     //===---------- Statement Instructions ----------===//
     DASSIGN,
-    ALLOCA,
     STORE,
     BR,
     BR_IF,

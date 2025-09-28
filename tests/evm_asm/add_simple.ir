@@ -1,0 +1,13 @@
+const.i64 1
+const.i64 0
+const.i64 0
+const.i64 0
+const.i64 2
+const.i64 0
+const.i64 0
+const.i64 0
+const.i64 0
+add (const.i64 1, const.i64 2)
+adc (const.i64 0, const.i64 0, const.i64 0)
+adc (const.i64 0, const.i64 0, const.i64 0)
+adc (const.i64 0, const.i64 0, const.i64 0)

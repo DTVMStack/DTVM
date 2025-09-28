@@ -183,9 +183,6 @@ private:
         uint8_t NumBytes = Opcode - OP_PUSH0;
         handlePush(NumBytes);
         Ip += NumBytes;
-        // Update PC after consuming immediate bytes
-        ptrdiff_t NewDiff = Ip - Bytecode;
-        PC = static_cast<uint64_t>(NewDiff >= 0 ? NewDiff : 0);
         break;
       }
 
@@ -584,6 +581,7 @@ private:
         throw getErrorWithExtraMessage(ErrorCode::UnsupportedOpcode,
                                        std::to_string(Opcode));
       }
+      PC++; // offset 1 byte for opcode
     }
 
     return true;
@@ -705,11 +703,12 @@ private:
   }
 
   Bytes readBytes(uint8_t Count) {
-    if (PC + Count > Ctx->getBytecodeSize()) {
+    // offset 1 byte for opcode
+    if (PC + 1 + Count > Ctx->getBytecodeSize()) {
       throw getError(common::ErrorCode::UnexpectedEnd);
     }
     const Byte *Bytecode = Ctx->getBytecode();
-    Bytes Result(Bytecode + PC, Count);
+    Bytes Result(Bytecode + PC + 1, Count);
     PC += Count;
     return Result;
   }

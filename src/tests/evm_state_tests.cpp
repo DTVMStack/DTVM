@@ -4,6 +4,7 @@
 #include "evm/interpreter.h"
 #include "evm_test_fixtures.h"
 #include "evm_test_helpers.h"
+#include "evm_test_host.hpp"
 #include "host/evm/crypto.h"
 #include "runtime/runtime.h"
 #include "utils/others.h"
@@ -12,12 +13,15 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <evmc/evmc.hpp>
 #include <evmc/mocked_host.hpp>
 #include <filesystem>
 #include <iostream>
 #include <rapidjson/document.h>
+#include <string>
+#include <vector>
 
 using namespace zen;
 using namespace zen::evm;
@@ -28,87 +32,6 @@ namespace {
 
 const bool Debug = false;
 
-/// Recursive Host that can execute CALL instructions by creating new
-/// interpreters
-class RecursiveHost : public evmc::MockedHost {
-private:
-  Runtime *RT = nullptr;
-  Isolation *Iso = nullptr;
-
-public:
-  RecursiveHost(Runtime *RT, Isolation *Iso) : RT(RT), Iso(Iso) {}
-
-  evmc::Result call(const evmc_message &Msg) noexcept override {
-    // First call the parent MockedHost to record the call
-    evmc::Result ParentResult = evmc::MockedHost::call(Msg);
-
-    // Try to find the target contract
-    auto It = accounts.find(Msg.recipient);
-    if (It == accounts.end() || It->second.code.empty()) {
-      // No contract found, return parent result
-      return ParentResult;
-    }
-
-    try {
-      // Create temporary hex file from contract code using RAII
-      std::string HexCode = "0x" + zen::utils::toHex(It->second.code.data(),
-                                                     It->second.code.size());
-      TempHexFile TempFile(HexCode);
-      if (!TempFile.isValid()) {
-        return ParentResult;
-      }
-
-      // Load EVM module
-      auto ModRet = RT->loadEVMModule(TempFile.getPath());
-      if (!ModRet) {
-        return ParentResult;
-      }
-
-      EVMModule *Mod = *ModRet;
-
-      // Create EVM instance
-      auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
-      if (!InstRet) {
-        return ParentResult;
-      }
-
-      EVMInstance *Inst = *InstRet;
-
-      // Create interpreter context and execute
-      InterpreterExecContext Ctx(Inst);
-      BaseInterpreter Interpreter(Ctx);
-
-      evmc_message CallMsg = Msg;
-      Ctx.allocFrame(&CallMsg);
-
-      // Set the host for the execution frame
-      auto *Frame = Ctx.getCurFrame();
-      Frame->Host = this;
-
-      // Execute the interpreter
-      Interpreter.interpret();
-
-      // Create result based on execution status
-      evmc::Result Result;
-      Result.status_code = Ctx.getStatus();
-      Result.gas_left = CallMsg.gas;
-
-      const auto &ReturnData = Ctx.getReturnData();
-      if (!ReturnData.empty()) {
-        Result.output_data = ReturnData.data();
-        Result.output_size = ReturnData.size();
-      }
-
-      return Result;
-
-    } catch (const std::exception &E) {
-      // On error, return parent result
-      std::cout << "Error in recursive call: " << E.what() << std::endl;
-      return ParentResult;
-    }
-  }
-};
-
 std::string getDefaultTestDir() {
   std::filesystem::path DirPath =
       std::filesystem::path(__FILE__).parent_path() /
@@ -118,24 +41,19 @@ std::string getDefaultTestDir() {
 
 const std::string DefaultTestDir = getDefaultTestDir();
 
-struct TestResult {
-  std::string TestName;
-  std::string ForkName;
-  bool Passed;
+struct ExecutionResult {
+  bool Passed = false;
   std::string ErrorMessage;
 };
 
-struct TestSummary {
-  size_t TotalTests = 0;
-  size_t PassedTests = 0;
-  size_t FailedTests = 0;
-  std::vector<TestResult> FailedTestDetails;
-};
+ExecutionResult executeStateTest(const StateTestFixture &Fixture,
+                                 const std::string &Fork,
+                                 const ForkPostResult &ExpectedResult) {
+  auto makeFailure = [&](const std::string &Msg) {
+    return ExecutionResult{false, Msg};
+  };
 
-bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
-                      const ForkPostResult &ExpectedResult) {
   try {
-    // Parse transaction data
     ParsedTransaction PT =
         createTransactionFromIndex(*Fixture.Transaction, ExpectedResult);
 
@@ -149,11 +67,18 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
     }
 
     if (!TargetAccount) {
+      if (!ExpectedResult.ExpectedException.empty()) {
+        return {true, {}};
+      }
       if (Debug) {
         std::cout << "No target account found for test: " << Fixture.TestName
                   << std::endl;
       }
-      return !ExpectedResult.ExpectedException.empty();
+      return makeFailure(
+          "Target account " +
+          evmc::hex(evmc::bytes_view(PT.Message->recipient.bytes, 20)) +
+          " not present in pre-state for " + Fixture.TestName + " (" + Fork +
+          ")");
     }
 
     // Skip if no code to execute
@@ -162,7 +87,7 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
         std::cout << "No code to execute for test: " << Fixture.TestName
                   << std::endl;
       }
-      return true; // Empty code execution is considered success
+      return {true, {}};
     }
 
     // Convert code to hex string and create temp file using RAII
@@ -170,6 +95,10 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
         "0x" + zen::utils::toHex(TargetAccount->Account.code.data(),
                                  TargetAccount->Account.code.size());
     TempHexFile TempFile(HexCode);
+    if (!TempFile.isValid()) {
+      return makeFailure("Failed to materialize temp bytecode file for " +
+                         Fixture.TestName + " (" + Fork + ")");
+    }
 
     RuntimeConfig Config;
     Config.Mode = common::RunMode::InterpMode;
@@ -184,43 +113,45 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
 
     auto RT = Runtime::newEVMRuntime(Config, TempMockedHost.get());
     if (!RT) {
-      return false;
+      return makeFailure("Failed to create EVM runtime for " +
+                         Fixture.TestName + " (" + Fork + ")");
     }
 
-    // Create Isolation for recursive host
+    // Create Isolation for the mocked host
     Isolation *IsoForRecursive = RT->createManagedIsolation();
     if (!IsoForRecursive) {
-      return false;
+      return makeFailure("Failed to create isolation for recursive host in " +
+                         Fixture.TestName + " (" + Fork + ")");
     }
 
-    // Now create RecursiveHost with Runtime and Isolation references
-    auto RecursiveHostPtr =
-        std::make_unique<RecursiveHost>(RT.get(), IsoForRecursive);
-    RecursiveHost *MockedHost = RecursiveHostPtr.get();
+    // Now create ZenMockedEVMHost with Runtime and Isolation references
+    auto HostPtr =
+        std::make_unique<ZenMockedEVMHost>(RT.get(), IsoForRecursive);
+    ZenMockedEVMHost *MockedHost = HostPtr.get();
 
     // Copy accounts and context from temporary host
     MockedHost->accounts = TempMockedHost->accounts;
     MockedHost->tx_context = TempMockedHost->tx_context;
 
-    // Switch to using RecursiveHost
-    std::unique_ptr<evmc::Host> Host = std::move(RecursiveHostPtr);
-
     auto ModRet = RT->loadEVMModule(TempFile.getPath());
     if (!ModRet) {
-      return false;
+      return makeFailure("Failed to load module for " + Fixture.TestName +
+                         " (" + Fork + ")");
     }
 
     EVMModule *Mod = *ModRet;
 
     Isolation *Iso = RT->createManagedIsolation();
     if (!Iso) {
-      return false;
+      return makeFailure("Failed to create execution isolation for " +
+                         Fixture.TestName + " (" + Fork + ")");
     }
 
     uint64_t GasLimit = static_cast<uint64_t>(PT.Message->gas) * 100;
     auto InstRet = Iso->createEVMInstance(*Mod, GasLimit);
     if (!InstRet) {
-      return false;
+      return makeFailure("Failed to create interpreter instance for " +
+                         Fixture.TestName + " (" + Fork + ")");
     }
 
     EVMInstance *Inst = *InstRet;
@@ -264,11 +195,14 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
 
     bool ExecutionSucceeded = true;
     uint64_t ExecutionGasUsed = 0;
+    std::string ExecutionError;
+
     try {
       Interpreter.interpret();
       ExecutionGasUsed = Ctx.getGasUsed();
     } catch (const std::exception &E) {
       ExecutionSucceeded = false;
+      ExecutionError = E.what();
       std::cout << "Execution failed for " << Fixture.TestName << ": "
                 << E.what() << std::endl;
     }
@@ -341,80 +275,98 @@ bool executeStateTest(const StateTestFixture &Fixture, const std::string &Fork,
     }
 
     if (!ExpectedResult.ExpectedException.empty()) {
-      return !ExecutionSucceeded;
+      if (ExecutionSucceeded) {
+        return makeFailure("Expected exception '" +
+                           ExpectedResult.ExpectedException + "' for " +
+                           Fixture.TestName + " (" + Fork +
+                           ") but execution succeeded");
+      }
+      return {true, {}};
     }
 
     if (!ExecutionSucceeded) {
-      return false;
+      return makeFailure("Execution threw exception for " + Fixture.TestName +
+                         " (" + Fork + "): " + ExecutionError);
     }
 
-    if (Debug) {
-      for (auto Account : MockedHost->accounts) {
-        std::cout << "Account: "
-                  << evmc::hex(evmc::bytes_view(Account.first.bytes, 20))
-                  << std::endl;
-        std::cout << "  balance: "
-                  << evmc::hex(
-                         evmc::bytes_view(Account.second.balance.bytes, 32))
-                  << std::endl;
-        std::cout << "  nonce: " << Account.second.nonce << std::endl;
-        std::cout << "  code size: " << Account.second.code.size() << std::endl;
-        std::cout << "  storage keys: " << Account.second.storage.size()
-                  << std::endl;
-      }
+    std::string ActualStateRoot = calculateStateRootHash(*MockedHost);
+    if (ActualStateRoot != ExpectedResult.ExpectedHash) {
+      return makeFailure("State root mismatch for " + Fixture.TestName + " (" +
+                         Fork + ") expected " + ExpectedResult.ExpectedHash +
+                         " got " + ActualStateRoot);
     }
 
-    return verifyStateRoot(*MockedHost, ExpectedResult.ExpectedHash) &&
-           verifyLogsHash(MockedHost->recorded_logs,
-                          ExpectedResult.ExpectedLogs);
+    std::string ActualLogsHash =
+        "0x" + calculateLogsHash(MockedHost->recorded_logs);
+    if (ActualLogsHash != ExpectedResult.ExpectedLogs) {
+      return makeFailure("Logs hash mismatch for " + Fixture.TestName + " (" +
+                         Fork + ") expected " + ExpectedResult.ExpectedLogs +
+                         " got " + ActualLogsHash);
+    }
+
+    return {true, {}};
 
   } catch (const std::exception &E) {
-    std::cout << "Exception in executeStateTest for " << Fixture.TestName
-              << ": " << E.what() << std::endl;
-    return !ExpectedResult.ExpectedException.empty();
+    return makeFailure("Exception in executeStateTest for " + Fixture.TestName +
+                       " (" + Fork + "): " + E.what());
   }
 }
 
-class StateTestRunner {
-public:
-  explicit StateTestRunner(const std::string &TestDirectory = DefaultTestDir)
-      : TestDirectory(TestDirectory) {}
+struct StateTestCaseParam {
+  const StateTestFixture *Fixture = nullptr;
+  std::string ForkName;
+  ForkPostResult Expected;
+  bool Valid = false;
+  std::string LoadError;
+  std::string CaseName;
+};
 
-  bool loadTestFixtures() {
-    LoadedFixtures.clear();
-
-    auto JsonFiles = findJsonFiles(TestDirectory);
+const std::vector<StateTestFixture> &getStateFixtures() {
+  static std::vector<StateTestFixture> Fixtures = [] {
+    std::vector<StateTestFixture> Loaded;
+    auto JsonFiles = findJsonFiles(DefaultTestDir);
     if (Debug) {
       std::cout << "Found " << JsonFiles.size() << " JSON test files in "
-                << TestDirectory << std::endl;
+                << DefaultTestDir << std::endl;
     }
 
     for (const auto &FilePath : JsonFiles) {
-      auto Fixtures = parseStateTestFile(FilePath);
-      for (auto &Fixture : Fixtures) {
-        LoadedFixtures.push_back(std::move(Fixture));
+      auto FixturesFromFile = parseStateTestFile(FilePath);
+      for (auto &Fixture : FixturesFromFile) {
+        if (Debug) {
+          std::cout << "Loaded fixture: " << Fixture.TestName << std::endl;
+        }
+        Loaded.push_back(std::move(Fixture));
       }
     }
 
     if (Debug) {
-      std::cout << "Loaded " << LoadedFixtures.size() << " test fixtures"
-                << std::endl;
-    }
-    return !LoadedFixtures.empty();
-  }
-
-  TestSummary executeAllTests() {
-    TestSummary Summary;
-    if (LoadedFixtures.empty()) {
-      std::cerr << "No test fixtures loaded. Call loadTestFixtures() first."
-                << std::endl;
-      return Summary;
+      std::cout << "Total fixtures loaded: " << Loaded.size() << std::endl;
     }
 
-    for (const auto &Fixture : LoadedFixtures) {
+    return Loaded;
+  }();
+
+  return Fixtures;
+}
+
+const std::vector<StateTestCaseParam> &getStateTestParams() {
+  static std::vector<StateTestCaseParam> Params = [] {
+    std::vector<StateTestCaseParam> Cases;
+    const auto &Fixtures = getStateFixtures();
+
+    size_t CaseCounter = 0;
+
+    for (const auto &Fixture : Fixtures) {
       if (!Fixture.Post || !Fixture.Post->IsObject()) {
-        ADD_FAILURE() << "Invalid test fixture: " << Fixture.TestName
-                      << " - Post section missing or invalid";
+        StateTestCaseParam Param;
+        Param.Fixture = &Fixture;
+        Param.Valid = false;
+        Param.LoadError = "Invalid test fixture: " + Fixture.TestName +
+                          " - Post section missing or invalid";
+        Param.CaseName =
+            Fixture.TestName + "_InvalidPost_" + std::to_string(CaseCounter++);
+        Cases.push_back(std::move(Param));
         continue;
       }
 
@@ -423,113 +375,96 @@ public:
 
         const rapidjson::Value &ForkResults = Fork.value;
         if (!ForkResults.IsArray()) {
-          ADD_FAILURE() << "Invalid fork results format for: " << ForkName
-                        << " in test: " << Fixture.TestName;
+          StateTestCaseParam Param;
+          Param.Fixture = &Fixture;
+          Param.Valid = false;
+          Param.LoadError = "Invalid fork results format for: " + ForkName +
+                            " in test: " + Fixture.TestName;
+          Param.CaseName = Fixture.TestName + "_" + ForkName +
+                           "_InvalidResults_" + std::to_string(CaseCounter++);
+          Cases.push_back(std::move(Param));
           continue;
         }
 
         for (rapidjson::SizeType I = 0; I < ForkResults.Size(); ++I) {
-          Summary.TotalTests++;
-          TestResult Result =
-              executeTestCase(Fixture, ForkName, ForkResults[I]);
+          try {
+            ForkPostResult ExpectedResult = parseForkPostResult(ForkResults[I]);
 
-          if (Result.Passed) {
-            Summary.PassedTests++;
-            if (Debug) {
-              std::cout << "✅ " << Result.TestName << " [" << Result.ForkName
-                        << "]" << std::endl;
-            }
-          } else {
-            Summary.FailedTests++;
-            Summary.FailedTestDetails.push_back(Result);
-            if (Debug) {
-              std::cout << "❌ " << Result.TestName << " [" << Result.ForkName
-                        << "]" << std::endl;
-            }
+            StateTestCaseParam Param;
+            Param.Fixture = &Fixture;
+            Param.ForkName = ForkName;
+            Param.Expected = std::move(ExpectedResult);
+            Param.Valid = true;
+            Param.CaseName =
+                Fixture.TestName + "_" + ForkName + "_" + std::to_string(I);
+            Cases.push_back(std::move(Param));
+          } catch (const std::exception &E) {
+            StateTestCaseParam Param;
+            Param.Fixture = &Fixture;
+            Param.Valid = false;
+            Param.LoadError = "Failed to parse post result " +
+                              std::to_string(I) + " for fork " + ForkName +
+                              " in test " + Fixture.TestName + ": " + E.what();
+            Param.CaseName = Fixture.TestName + "_" + ForkName +
+                             "_ParseError_" + std::to_string(CaseCounter++);
+            Cases.push_back(std::move(Param));
           }
         }
       }
     }
 
-    return Summary;
-  }
-
-  // Print test summary
-  static void printTestSummary(const TestSummary &Summary) {
-    std::cout << "\n" << std::string(60, '=') << std::endl;
-    std::cout << "EVM State Test Results Summary:" << std::endl;
-    std::cout << std::string(60, '=') << std::endl;
-    std::cout << "Total Tests:   " << Summary.TotalTests << std::endl;
-    std::cout << "Passed Tests:  " << Summary.PassedTests << " ("
-              << (Summary.TotalTests > 0
-                      ? (Summary.PassedTests * 100 / Summary.TotalTests)
-                      : 0)
-              << "%)" << std::endl;
-    std::cout << "Failed Tests:  " << Summary.FailedTests << std::endl;
-
-    if (!Summary.FailedTestDetails.empty()) {
-      std::cout << "\nFailed Tests:" << std::endl;
-      for (const auto &Result : Summary.FailedTestDetails) {
-        std::cout << "  - " << Result.TestName << " [" << Result.ForkName
-                  << "]: " << Result.ErrorMessage << std::endl;
-      }
-    }
-  }
-
-private:
-  std::string TestDirectory;
-  std::vector<StateTestFixture> LoadedFixtures;
-
-  TestResult executeTestCase(const StateTestFixture &Fixture,
-                             const std::string &ForkName,
-                             const rapidjson::Value &PostResult) {
-    TestResult Result{Fixture.TestName, ForkName, false, ""};
-
-    try {
-      ForkPostResult ExpectedResult = parseForkPostResult(PostResult);
-      Result.Passed = executeStateTest(Fixture, ForkName, ExpectedResult);
-      if (!Result.Passed) {
-        Result.ErrorMessage = "Test execution failed";
-      }
-    } catch (const std::exception &E) {
-      Result.ErrorMessage = E.what();
-    }
-
-    return Result;
-  }
-};
-
-class EVMStateTest : public testing::Test {
-public:
-  static void SetUpTestSuite() {
-    Runner = std::make_unique<StateTestRunner>();
-    if (!Runner->loadTestFixtures()) {
-      std::cerr << "Failed to load test fixtures from " << DefaultTestDir
+    if (Debug) {
+      std::cout << "Generated " << Cases.size() << " state test cases"
                 << std::endl;
     }
-  }
 
-  static void TearDownTestSuite() { Runner.reset(); }
+    return Cases;
+  }();
 
-protected:
-  static std::unique_ptr<StateTestRunner> Runner;
-};
-
-std::unique_ptr<StateTestRunner> EVMStateTest::Runner;
-
-TEST_F(EVMStateTest, ExecuteAllStateTests) {
-  ASSERT_TRUE(Runner) << "Test runner not initialized";
-
-  TestSummary Summary = Runner->executeAllTests();
-  StateTestRunner::printTestSummary(Summary);
-
-  if (Summary.TotalTests == 0) {
-    GTEST_SKIP() << "No compatible test cases found";
-  }
-
-  EXPECT_EQ(Summary.FailedTests, 0)
-      << "Found " << Summary.FailedTests << " failed tests out of "
-      << Summary.TotalTests;
+  return Params;
 }
+
+std::string sanitizeTestName(const std::string &Name) {
+  std::string Result;
+  Result.reserve(Name.size());
+  for (char C : Name) {
+    if (std::isalnum(static_cast<unsigned char>(C))) {
+      Result.push_back(C);
+    } else {
+      Result.push_back('_');
+    }
+  }
+  if (Result.empty()) {
+    Result = "Case";
+  }
+  if (std::isdigit(static_cast<unsigned char>(Result.front()))) {
+    Result.insert(Result.begin(), '_');
+  }
+  return Result;
+}
+
+class EVMStateTest : public testing::TestWithParam<StateTestCaseParam> {};
+
+TEST_P(EVMStateTest, ExecutesStateTest) {
+  const auto &Param = GetParam();
+
+  if (!Param.Valid) {
+    FAIL() << Param.LoadError;
+    return;
+  }
+
+  ASSERT_NE(Param.Fixture, nullptr);
+
+  ExecutionResult Result =
+      executeStateTest(*Param.Fixture, Param.ForkName, Param.Expected);
+
+  EXPECT_TRUE(Result.Passed) << Result.ErrorMessage;
+}
+
+INSTANTIATE_TEST_SUITE_P(ExecuteAllStateTests, EVMStateTest,
+                         ::testing::ValuesIn(getStateTestParams()),
+                         [](const auto &Info) {
+                           return sanitizeTestName(Info.param.CaseName);
+                         });
 
 } // anonymous namespace

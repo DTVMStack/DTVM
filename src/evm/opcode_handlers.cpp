@@ -118,6 +118,7 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(MLoad, OP_MLOAD);
 // Control flow operations
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Jump, OP_JUMP);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(JumpI, OP_JUMPI);
+DEFINE_NOT_TEMPLATE_CALCULATE_GAS(JumpDest, OP_JUMPDEST);
 // Temporary Storage
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(TLoad, OP_TLOAD);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(TStore, OP_TSTORE);
@@ -245,6 +246,15 @@ uint64_t uint256ToUint64(const intx::uint256 &Value) {
   return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
 }
 
+evmc_revision currentRevision() {
+  auto *Context = EVMResource::getInterpreterExecContext();
+  if (!Context) {
+    return DEFAULT_REVISION;
+  }
+  auto *Instance = Context->getInstance();
+  return Instance ? Instance->getRevision() : DEFAULT_REVISION;
+}
+
 } // anonymous namespace
 /* ---------- Implement utility functions end ---------- */
 
@@ -337,7 +347,8 @@ void BalanceHandler::doExecute() {
   intx::uint256 X = Frame->pop();
   const auto Addr = intx::be::trunc<evmc::address>(X);
 
-  if (Frame->Rev >= EVMC_BERLIN &&
+  const auto Rev = currentRevision();
+  if (Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
     if (!chargeGas(Frame, ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
       Context->setStatus(EVMC_OUT_OF_GAS);
@@ -493,7 +504,8 @@ void ExtCodeSizeHandler::doExecute() {
   intx::uint256 X = Frame->pop();
   const auto Addr = intx::be::trunc<evmc::address>(X);
 
-  if (Frame->Rev >= EVMC_BERLIN &&
+  const auto Rev = currentRevision();
+  if (Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
     if (Frame->Msg->gas < ADDITIONAL_COLD_ACCOUNT_ACCESS_COST) {
       Context->setStatus(EVMC_OUT_OF_GAS);
@@ -530,7 +542,8 @@ void ExtCodeCopyHandler::doExecute() {
     return;
   }
 
-  if (Frame->Rev >= EVMC_BERLIN &&
+  const auto Rev = currentRevision();
+  if (Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
     if (Frame->Msg->gas < ADDITIONAL_COLD_ACCOUNT_ACCESS_COST) {
       Context->setStatus(EVMC_OUT_OF_GAS);
@@ -617,7 +630,8 @@ void ExtCodeHashHandler::doExecute() {
   intx::uint256 X = Frame->pop();
   const auto Addr = intx::be::trunc<evmc::address>(X);
 
-  if (Frame->Rev >= EVMC_BERLIN &&
+  const auto Rev = currentRevision();
+  if (Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
     if (Frame->Msg->gas < ADDITIONAL_COLD_ACCOUNT_ACCESS_COST) {
       Context->setStatus(EVMC_OUT_OF_GAS);
@@ -712,7 +726,8 @@ void SLoadHandler::doExecute() {
   EVM_STACK_CHECK(Frame, 1);
   intx::uint256 Key = Frame->pop();
   const auto KeyAddr = intx::be::store<evmc::bytes32>(Key);
-  if (Frame->Rev >= EVMC_BERLIN &&
+  const auto Rev = currentRevision();
+  if (Rev >= EVMC_BERLIN &&
       Frame->Host->access_storage(Frame->Msg->recipient, KeyAddr) ==
           EVMC_ACCESS_COLD) {
     if (Frame->Msg->gas < ADDITIONAL_COLD_ACCOUNT_ACCESS_COST) {
@@ -735,7 +750,8 @@ void SStoreHandler::doExecute() {
   const auto Key = intx::be::store<evmc::bytes32>(Frame->pop());
   const auto Value = intx::be::store<evmc::bytes32>(Frame->pop());
 
-  const auto GasCostCold = (Frame->Rev >= EVMC_BERLIN &&
+  const auto Rev = currentRevision();
+  const auto GasCostCold = (Rev >= EVMC_BERLIN &&
                             Frame->Host->access_storage(
                                 Frame->Msg->recipient, Key) == EVMC_ACCESS_COLD)
                                ? COLD_SLOAD_COST
@@ -743,7 +759,7 @@ void SStoreHandler::doExecute() {
   const auto Status =
       Frame->Host->set_storage(Frame->Msg->recipient, Key, Value);
 
-  const auto [GasCostWarm, GasReFund] = SSTORE_COSTS[Frame->Rev][Status];
+  const auto [GasCostWarm, GasReFund] = SSTORE_COSTS[Rev][Status];
 
   const auto GasCost = GasCostCold + GasCostWarm;
   if (Frame->Msg->gas < GasCost) {
@@ -882,6 +898,10 @@ void JumpIHandler::doExecute() {
 
   Frame->Pc = Dest;
   Context->IsJump = true;
+}
+
+void JumpDestHandler::doExecute() {
+  // No additional state updates required; gas is charged in execute().
 }
 // Temporary storage operations
 void TLoadHandler::doExecute() {
@@ -1102,13 +1122,14 @@ void CreateHandler::doExecute() {
     return;
   }
 
+  const auto Rev = currentRevision();
   // EIP-3860
-  if (Frame->Rev >= EVMC_SHANGHAI and CodeSizeVal > MAX_SIZE_OF_INITCODE) {
+  if (Rev >= EVMC_SHANGHAI and CodeSizeVal > MAX_SIZE_OF_INITCODE) {
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
   const auto InitCodeWordCost =
-      6 * (OpCode == OP_CREATE2) + 2 * (Frame->Rev >= EVMC_SHANGHAI);
+      6 * (OpCode == OP_CREATE2) + 2 * (Rev >= EVMC_SHANGHAI);
   const auto InitCodeSize =
       uint256ToUint64((CodeSizeVal + 31) / 32); // round up to the nearest word
   const auto InitCodeCost = InitCodeWordCost * InitCodeSize;
@@ -1150,7 +1171,7 @@ void CreateHandler::doExecute() {
                       .code_size = 0};
 
   // EIP-150
-  if (Frame->Rev >= EVMC_TANGERINE_WHISTLE) {
+  if (Rev >= EVMC_TANGERINE_WHISTLE) {
     NewMsg.gas = NewMsg.gas - NewMsg.gas / 64;
   }
 
@@ -1200,7 +1221,8 @@ void CallHandler::doExecute() {
   Context->setReturnData(std::vector<uint8_t>());
 
   // EIP-2929
-  if (Frame->Rev >= EVMC_BERLIN and
+  const auto Rev = currentRevision();
+  if (Rev >= EVMC_BERLIN and
       Frame->Host->access_account(Dest) == EVMC_ACCESS_COLD) {
     if (!chargeGas(Frame, COLD_ACCOUNT_ACCESS_COST)) {
       Context->setStatus(EVMC_OUT_OF_GAS);
@@ -1254,7 +1276,7 @@ void CallHandler::doExecute() {
       .code_size = 0,
   };
 
-  if (Frame->Rev >= EVMC_TANGERINE_WHISTLE) {
+  if (Rev >= EVMC_TANGERINE_WHISTLE) {
     NewMsg.gas = std::min(NewMsg.gas, (Frame->Msg->gas - Frame->Msg->gas / 64));
   } else if (NewMsg.gas > Frame->Msg->gas) {
     Context->setStatus(EVMC_OUT_OF_GAS);
@@ -1365,7 +1387,8 @@ void SelfDestructHandler::doExecute() {
   const auto Beneficiary = intx::be::trunc<evmc::address>(BeneficiaryAddr);
 
   // EIP-161: if target account does not exist, charge account creation cost
-  if (Frame->Rev >= EVMC_SPURIOUS_DRAGON &&
+  const auto Rev = currentRevision();
+  if (Rev >= EVMC_SPURIOUS_DRAGON &&
       !Frame->Host->account_exists(Beneficiary)) {
     if (!chargeGas(Frame, ACCOUNT_CREATION_COST)) {
       Context->setStatus(EVMC_OUT_OF_GAS);
@@ -1374,7 +1397,7 @@ void SelfDestructHandler::doExecute() {
   }
 
   // EIP-2929: Charge cold account access cost if needed
-  if (Frame->Rev >= EVMC_BERLIN &&
+  if (Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Beneficiary) == EVMC_ACCESS_COLD) {
     if (!chargeGas(Frame, ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
       Context->setStatus(EVMC_OUT_OF_GAS);

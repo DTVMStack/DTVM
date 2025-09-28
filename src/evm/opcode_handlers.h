@@ -266,6 +266,7 @@ DEFINE_UNIMPLEMENT_HANDLER(MLoad);
 // Control flow operations
 DEFINE_UNIMPLEMENT_HANDLER(Jump);
 DEFINE_UNIMPLEMENT_HANDLER(JumpI);
+DEFINE_UNIMPLEMENT_HANDLER(JumpDest);
 // Temporary Storage
 DEFINE_UNIMPLEMENT_HANDLER(TLoad);
 DEFINE_UNIMPLEMENT_HANDLER(TStore);
@@ -372,6 +373,7 @@ public:
   // Control flow operations
   EVM_REGISTRY_GET(Jump);
   EVM_REGISTRY_GET(JumpI);
+  EVM_REGISTRY_GET(JumpDest);
   // Temporary Storage
   EVM_REGISTRY_GET(TLoad);
   EVM_REGISTRY_GET(TStore);

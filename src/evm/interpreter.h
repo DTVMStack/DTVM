@@ -30,7 +30,6 @@ struct EVMFrame {
   std::vector<uint8_t> CallData;
   std::unique_ptr<evmc_message> Msg;
   evmc::Host *Host = nullptr;
-  evmc_revision Rev = DEFAULT_REVISION;
   evmc_tx_context MTx = {};
 
   size_t Sp = 0;

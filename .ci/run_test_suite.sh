@@ -126,6 +126,16 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             ;;
         "evmrealsuite")
             python3 tools/run_evm_tests.py -r build/dtvm $EXTRA_EXE_OPTIONS
+
+            # simple IR output validation for multipass mode
+            if [[ $RUN_MODE == "multipass" ]]; then
+                ./build/dtvm --format evm -m multipass tests/evm_asm/add.evm.hex --gas-limit 0xFFFFFFFFFFFF 2>&1 | tee tests/evm_asm/add_simple_dmir_output.ir
+                # Check missing content
+                while IFS= read -r line; do
+                    [ -n "$line" ] && ! grep -qF "$line" tests/evm_asm/add_simple_dmir_output.ir && echo "❌ Missing: $line" && exit 1
+                done < tests/evm_asm/add_simple.ir
+                echo "✅ DMIR validation passed"
+            fi
             ;;
     esac
 done

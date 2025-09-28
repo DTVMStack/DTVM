@@ -11,9 +11,6 @@
 #include "compiler/mir/pointer.h"
 #include "intx/intx.hpp"
 
-#include <array>
-#include <map>
-
 // Forward declaration to avoid circular dependency
 namespace COMPILER {
 struct RuntimeFunctions;
@@ -545,8 +542,8 @@ private:
   // Program counter for current instruction
   uint64_t PC = 0;
 
-  // PC register for runtime PC value
-  MInstruction *PCReg = nullptr;
+  // PC register variable index in DMIR
+  uint32_t PCRegIdx = 0;
 
   // Jump execution control (similar to interpreter's Context.IsJump)
   bool JumpExecuted = false;
