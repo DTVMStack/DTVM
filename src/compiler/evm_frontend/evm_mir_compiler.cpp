@@ -237,9 +237,23 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
   U256Inst CondComponents = extractU256Operand(Cond);
   MInstruction *JumpTarget = DestComponents[0];
 
-  MType *UInt64Type =
+  MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MInstruction *IsNonZero = isU256GreaterOrEqual(CondComponents, 1);
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+
+  // Condition is true if any component is non-zero
+  MInstruction *OrResult = createInstruction<BinaryInstruction>(
+      false, OP_or, MirI64Type, CondComponents[0], CondComponents[1]);
+  OrResult = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                  OrResult, CondComponents[2]);
+  OrResult = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                  OrResult, CondComponents[3]);
+
+  MInstruction *IsNonZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, OrResult, Zero);
+  IsNonZero = createInstruction<SelectInstruction>(false, MirI64Type, IsNonZero,
+                                                   One, Zero);
 
   MBasicBlock *FallThroughBB = createBasicBlock();
   MBasicBlock *InvalidJumpBB =
