@@ -182,12 +182,22 @@ void EVMMirBuilder::meterGas(uint64_t GasCost) {
 
   MBasicBlock *OutOfGasBB =
       CurFunc->getOrCreateExceptionSetBB(common::ErrorCode::EVMOutOfGas);
-  createInstruction<BrIfInstruction>(true, Ctx, IsExhausted, OutOfGasBB);
-  addUniqueSuccessor(OutOfGasBB);
+  MBasicBlock *ChargeBB = createBasicBlock();
+  MBasicBlock *PostBB = createBasicBlock();
 
+  createInstruction<BrIfInstruction>(true, Ctx, IsExhausted, OutOfGasBB,
+                                     ChargeBB);
+  addUniqueSuccessor(OutOfGasBB);
+  addSuccessor(ChargeBB);
+
+  setInsertBlock(ChargeBB);
   MInstruction *NewGas = createInstruction<BinaryInstruction>(
       false, OP_sub, I64Type, GasLeft, CostValue);
   setInstanceElement(I64Type, NewGas, GasOffset);
+  createInstruction<BrInstruction>(true, Ctx, PostBB);
+  addSuccessor(PostBB);
+
+  setInsertBlock(PostBB);
 }
 
 void EVMMirBuilder::createJumpTable() {
