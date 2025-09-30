@@ -140,7 +140,7 @@ LoadInstruction *EVMMirBuilder::getInstanceElement(MType *ValueType,
                                                    uint32_t Scale,
                                                    MInstruction *Index,
                                                    uint64_t Offset) {
-  ZEN_ASSERT(Offset <= std::numeric_limits<int32_t>::max());
+  ZEN_ASSERT(Offset <= std::numeric_limits<uint64_t>::max());
   MPointerType *ValuePtrType = MPointerType::create(Ctx, *ValueType);
   MInstruction *InstancePtr =
       createInstruction<DreadInstruction>(false, ValuePtrType, 0);
