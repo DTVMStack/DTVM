@@ -143,6 +143,10 @@ int main(int argc, char *argv[]) {
     CLIParser->add_flag("--enable-multipass-lazy", Config.EnableMultipassLazy,
                         "Enable multipass lazy mode(on request compile)");
     CLIParser->add_option("--entry-hint", EntryHint, "Entry function hint");
+    CLIParser->add_flag_function(
+        "--enable-evm-gas",
+        [&](std::int64_t) { Config.EnableEvmGasMetering = true; },
+        "Enable EVM gas metering when compiling EVM bytecode");
 #endif // ZEN_ENABLE_MULTIPASS_JIT
 
     CLI11_PARSE(*CLIParser, argc, argv);

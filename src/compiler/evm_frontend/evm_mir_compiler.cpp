@@ -54,7 +54,8 @@ EVMFrontendContext::EVMFrontendContext() {
 
 EVMFrontendContext::EVMFrontendContext(const EVMFrontendContext &OtherCtx)
     : CompileContext(OtherCtx), Bytecode(OtherCtx.Bytecode),
-      BytecodeSize(OtherCtx.BytecodeSize) {}
+      BytecodeSize(OtherCtx.BytecodeSize),
+      GasMeteringEnabled(OtherCtx.GasMeteringEnabled) {}
 
 // ==================== EVMMirBuilder Implementation ====================
 
@@ -161,6 +162,9 @@ StoreInstruction *EVMMirBuilder::setInstanceElement(MType *ValueType,
 }
 
 void EVMMirBuilder::meterOpcode(evmc_opcode Opcode) {
+  if (!Ctx.isGasMeteringEnabled()) {
+    return;
+  }
   const uint8_t Index = static_cast<uint8_t>(Opcode);
   const auto &Metrics = InstructionMetrics[Index];
   meterGas(static_cast<uint64_t>(Metrics.gas_cost));

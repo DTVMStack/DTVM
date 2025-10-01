@@ -16,6 +16,10 @@ struct RuntimeConfig {
   bool DisableWasmMemoryMap = false;
   // Enable benchmark
   bool EnableBenchmark = false;
+  // Enable MIR-level gas metering when compiling EVM bytecode
+  // It’s disabled by default because enabling gas metering generates a lot of
+  // MIR, which can interfere with normal debugging.
+  bool EnableEvmGasMetering = false;
 #ifdef ZEN_ENABLE_BUILTIN_WASI
   // Disable WASI
   bool DisableWASI = false;

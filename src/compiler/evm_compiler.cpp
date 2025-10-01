@@ -62,6 +62,7 @@ void EagerEVMJITCompiler::compile() {
   auto Timer = Stats.startRecord(zen::utils::StatisticPhase::JITCompilation);
 
   EVMFrontendContext Ctx;
+  Ctx.setGasMeteringEnabled(Config.EnableEvmGasMetering);
   Ctx.setBytecode(reinterpret_cast<const Byte *>(EVMMod->Code),
                   EVMMod->CodeSize);
   auto &MainMemPool = Ctx.ThreadMemPool;

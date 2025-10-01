@@ -73,9 +73,13 @@ public:
   const Byte *getBytecode() const { return Bytecode; }
   size_t getBytecodeSize() const { return BytecodeSize; }
 
+  void setGasMeteringEnabled(bool Enabled) { GasMeteringEnabled = Enabled; }
+  bool isGasMeteringEnabled() const { return GasMeteringEnabled; }
+
 private:
   const Byte *Bytecode = nullptr;
   size_t BytecodeSize = 0;
+  bool GasMeteringEnabled = false;
 };
 
 class EVMMirBuilder final {
