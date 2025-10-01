@@ -140,25 +140,23 @@ void EVMMirBuilder::finalizeEVMBase() {
 LoadInstruction *EVMMirBuilder::getInstanceElement(MType *ValueType,
                                                    uint32_t Scale,
                                                    MInstruction *Index,
-                                                   uint64_t Offset) {
-  ZEN_ASSERT(Offset <= std::numeric_limits<uint64_t>::max());
+                                                   int32_t Offset) {
   MPointerType *ValuePtrType = MPointerType::create(Ctx, *ValueType);
   MInstruction *InstancePtr =
       createInstruction<DreadInstruction>(false, ValuePtrType, 0);
   return createInstruction<LoadInstruction>(false, ValueType, InstancePtr,
-                                            Scale, Index,
-                                            static_cast<int32_t>(Offset));
+                                            Scale, Index, Offset);
 }
 
 StoreInstruction *EVMMirBuilder::setInstanceElement(MType *ValueType,
                                                     MInstruction *Value,
-                                                    uint64_t Offset) {
-  ZEN_ASSERT(Offset <= std::numeric_limits<int32_t>::max());
+                                                    int32_t Offset) {
+  ZEN_ASSERT(Offset >= 0);
   MPointerType *ValuePtrType = MPointerType::create(Ctx, *ValueType);
   MInstruction *InstancePtr =
       createInstruction<DreadInstruction>(false, ValuePtrType, 0);
-  return createInstruction<StoreInstruction>(
-      true, &Ctx.VoidType, Value, InstancePtr, static_cast<int32_t>(Offset));
+  return createInstruction<StoreInstruction>(true, &Ctx.VoidType, Value,
+                                             InstancePtr, Offset);
 }
 
 void EVMMirBuilder::meterOpcode(evmc_opcode Opcode) {
@@ -176,7 +174,7 @@ void EVMMirBuilder::meterGas(uint64_t GasCost) {
   }
 
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  const uint64_t GasOffset = zen::runtime::EVMInstance::getGasFieldOffset();
+  const int32_t GasOffset = zen::runtime::EVMInstance::getGasFieldOffset();
 
   MInstruction *GasLeft = getInstanceElement(I64Type, GasOffset);
   MInstruction *CostValue = createIntConstInstruction(I64Type, GasCost);

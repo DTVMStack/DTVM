@@ -411,14 +411,14 @@ private:
   }
 
   LoadInstruction *getInstanceElement(MType *ValueType, uint32_t Scale,
-                                      MInstruction *Index, uint64_t Offset);
+                                      MInstruction *Index, int32_t Offset);
 
-  LoadInstruction *getInstanceElement(MType *ValueType, uint64_t Offset) {
+  LoadInstruction *getInstanceElement(MType *ValueType, int32_t Offset) {
     return getInstanceElement(ValueType, 1, nullptr, Offset);
   }
 
   StoreInstruction *setInstanceElement(MType *ValueType, MInstruction *Value,
-                                       uint64_t Offset);
+                                       int32_t Offset);
 
   // Create a full U256 operand from intx::uint256 value
   Operand createU256ConstOperand(const intx::uint256 &V);

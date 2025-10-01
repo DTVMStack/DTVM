@@ -12,6 +12,7 @@
 #include "intx/intx.hpp"
 #include "runtime/evm_module.h"
 #include "utils/backtrace.h"
+#include <limits>
 #include <unordered_map>
 #include <vector>
 
@@ -111,8 +112,11 @@ public:
   const std::vector<uint8_t> &getReturnData() const { return ReturnData; }
   void exit(int32_t exitCode) { InstanceExitCode = exitCode; }
 
-  static constexpr size_t getGasFieldOffset() {
-    return offsetof(EVMInstance, Gas);
+  static constexpr int32_t getGasFieldOffset() {
+    static_assert(offsetof(EVMInstance, Gas) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "EVMInstance offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(EVMInstance, Gas));
   }
 
 private:
