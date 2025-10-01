@@ -135,6 +135,12 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                     [ -n "$line" ] && ! grep -qF "$line" tests/evm_asm/add_simple_dmir_output.ir && echo "❌ Missing: $line" && exit 1
                 done < tests/evm_asm/add_simple.ir
                 echo "✅ DMIR validation passed"
+
+                ./build/dtvm --format evm -m multipass tests/evm_asm/add.evm.hex --gas-limit 0xFFFFFFFFFFFF --enable-evm-gas 2>&1 | tee tests/evm_asm/mir_gas_meter_dmir_output.ir
+                while IFS= read -r line; do
+                    [ -n "$line" ] && ! grep -qF "$line" tests/evm_asm/mir_gas_meter_dmir_output.ir && echo "❌ Missing: $line" && exit 1
+                done < tests/evm_asm/mir_gas_meter.ir
+                echo "✅ MIR gas metering validation passed"
             fi
             ;;
     esac
