@@ -564,9 +564,12 @@ private:
         return true;
       }
 
-      case OP_REVERT:
-        // End execution
+      case OP_REVERT: {
+        Operand OffsetOp = pop();
+        Operand SizeOp = pop();
+        Builder.handleRevert(OffsetOp, SizeOp);
         return true;
+      }
 
       case OP_INVALID: {
         Builder.handleInvalid();

@@ -1,0 +1,8 @@
+status: revert
+error_code: 2
+stack: []
+memory: 'FF01000000000000000000000000000000000000000000000000000000000000'
+storage: {}
+transient_storage: {}
+return: 'FF01'
+events: []

@@ -378,6 +378,7 @@ public:
   Operand handleStaticCall(Operand GasOp, Operand ToAddrOp,
                            Operand ArgsOffsetOp, Operand ArgsSizeOp,
                            Operand RetOffsetOp, Operand RetSizeOp);
+  void handleRevert(Operand OffsetOp, Operand SizeOp);
   void handleInvalid();
   Operand handleKeccak256(Operand OffsetComponents, Operand LengthComponents);
   Operand handleSLoad(Operand KeyComponents);

@@ -65,6 +65,7 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
       .SetReturn = &evmSetReturn,
       .HandleDelegateCall = &evmHandleDelegateCall,
       .HandleStaticCall = &evmHandleStaticCall,
+      .SetRevert = &evmSetRevert,
       .HandleInvalid = &evmHandleInvalid,
       .HandleSelfDestruct = &evmHandleSelfDestruct,
       .GetKeccak256 = &evmGetKeccak256};
@@ -820,6 +821,16 @@ uint64_t evmHandleStaticCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
   return evmHandleCallInternal(Instance, EVMC_CALL, Gas, ToAddr,
                                intx::uint128{0}, ArgsOffset, ArgsSize,
                                RetOffset, RetSize);
+}
+
+void evmSetRevert(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                  uint64_t Size) {
+  auto &Memory = Instance->getMemory();
+  std::vector<uint8_t> ReturnData(Memory.begin() + Offset,
+                                  Memory.begin() + Offset + Size);
+  Instance->setReturnData(std::move(ReturnData));
+  // Immediately terminate the execution and return the revert code (2)
+  Instance->exit(2);
 }
 
 void evmSetCodeCopy(zen::runtime::EVMInstance *Instance, uint64_t DestOffset,

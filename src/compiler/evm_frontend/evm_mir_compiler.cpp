@@ -1370,6 +1370,14 @@ EVMMirBuilder::handleStaticCall(Operand GasOp, Operand ToAddrOp,
                                             ArgsSizeOp, RetOffsetOp, RetSizeOp);
 }
 
+void EVMMirBuilder::handleRevert(Operand OffsetOp, Operand SizeOp) {
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOperandU64(OffsetOp);
+  normalizeOperandU64(SizeOp);
+  callRuntimeFor<void, uint64_t, uint64_t>(RuntimeFunctions.SetRevert, OffsetOp,
+                                           SizeOp);
+}
+
 void EVMMirBuilder::handleInvalid() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   callRuntimeFor(RuntimeFunctions.HandleInvalid);

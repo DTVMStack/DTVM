@@ -1,10 +1,7 @@
-#include <algorithm>
+// Copyright (C) 2025 the DTVM authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 #include <filesystem>
 #include <fstream>
-#include <iostream>
-#include <string>
-#include <vector>
-
 #include <gtest/gtest.h>
 #include <yaml-cpp/yaml.h>
 
@@ -12,7 +9,6 @@
 #include "evmc/mocked_host.hpp"
 #include "runtime/evm_module.h"
 #include "utils/others.h"
-#include "zetaengine-c.h"
 #include "zetaengine.h"
 
 using namespace zen;
@@ -142,6 +138,11 @@ ExpectedResult readExpectedResult(const std::string &FilePath) {
 
 class EVMSampleTest : public ::testing::TestWithParam<std::string> {};
 
+std::string GetTestName(const testing::TestParamInfo<std::string> &info) {
+  std::filesystem::path path(info.param);
+  return path.stem().stem().string();
+}
+
 TEST_P(EVMSampleTest, ExecuteSample) {
   const std::string &FilePath = GetParam();
 
@@ -210,8 +211,7 @@ TEST_P(EVMSampleTest, ExecuteSample) {
   }
 
   evmc_status_code ActualStatus = Ctx.getStatus();
-  std::string ActualStatusStr =
-      (ActualStatus == EVMC_SUCCESS) ? "success" : "fail";
+  std::string ActualStatusStr = evmc::to_string(ActualStatus);
 
   if (!Expected.Status.empty()) {
     EXPECT_EQ(ActualStatusStr, Expected.Status)
@@ -220,16 +220,12 @@ TEST_P(EVMSampleTest, ExecuteSample) {
         << "\nActual status: " << ActualStatusStr;
   }
 
-  if (Expected.ErrorCode != 0) {
-    EXPECT_NE(ActualStatus, EVMC_SUCCESS)
-        << "Test: " << std::filesystem::path(FilePath).filename().string()
-        << "\nExpected error_code: " << Expected.ErrorCode
-        << "\nActual status: " << ActualStatus;
-  } else {
-    EXPECT_EQ(ActualStatus, EVMC_SUCCESS)
-        << "Test: " << std::filesystem::path(FilePath).filename().string()
-        << "\nExpected success but got status: " << ActualStatus;
-  }
+  evmc_status_code expectedStatus =
+      static_cast<evmc_status_code>(Expected.ErrorCode);
+  EXPECT_EQ(ActualStatus, expectedStatus)
+      << "Test: " << std::filesystem::path(FilePath).filename().string()
+      << "\nExpected error_code: " << Expected.ErrorCode
+      << "\nActual status: " << ActualStatus;
 
   const auto &Ret = Ctx.getReturnData();
   std::string HexRet = zen::utils::toHex(Ret.data(), Ret.size());
@@ -255,4 +251,5 @@ INSTANTIATE_TEST_SUITE_P(
     EVMSamples, EVMSampleTest,
     ::testing::ValuesIn(EvmFiles.empty()
                             ? std::vector<std::string>{"NoEvmHexFiles"}
-                            : EvmFiles));
+                            : EvmFiles),
+    GetTestName);

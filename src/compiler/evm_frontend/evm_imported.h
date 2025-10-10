@@ -121,6 +121,7 @@ struct RuntimeFunctions {
   VoidWithUInt64UInt64Fn SetReturn;
   DelegateCallFn HandleDelegateCall;
   DelegateCallFn HandleStaticCall;
+  VoidWithUInt64UInt64Fn SetRevert;
   VoidFn HandleInvalid;
   VoidWithBytes32Fn HandleSelfDestruct;
   Bytes32WithUInt64UInt64Fn GetKeccak256;
@@ -223,6 +224,8 @@ uint64_t evmHandleStaticCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
                              const uint8_t *ToAddr, uint64_t ArgsOffset,
                              uint64_t ArgsSize, uint64_t RetOffset,
                              uint64_t RetSize);
+void evmSetRevert(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                  uint64_t Size);
 void evmHandleInvalid(zen::runtime::EVMInstance *Instance);
 const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,
                                uint64_t Offset, uint64_t Length);
