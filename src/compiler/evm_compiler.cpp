@@ -65,7 +65,6 @@ void EagerEVMJITCompiler::compile() {
   Ctx.setGasMeteringEnabled(Config.EnableEvmGasMetering);
   Ctx.setBytecode(reinterpret_cast<const Byte *>(EVMMod->Code),
                   EVMMod->CodeSize);
-  auto &MainMemPool = Ctx.ThreadMemPool;
 
   // Create MModule for EVM
   MModule Mod(Ctx);
@@ -86,78 +85,25 @@ void EagerEVMJITCompiler::compile() {
                           FuncSize)
 #else
 #define JIT_DUMP_WRITE_FUNC(...)
-#endif
-
-#ifdef ZEN_ENABLE_DUMP_CALL_STACK
-  auto &SortedJITFuncPtrs = EVMMod->getSortedJITFuncPtrs();
-#define INSERT_JITED_FUNC_PTR(JITCodePtr, FuncIdx)                             \
-  SortedJITFuncPtrs.emplace_back(JITCodePtr, FuncIdx)
-#define SORT_JITED_FUNC_PTRS                                                   \
-  std::sort(                                                                   \
-      SortedJITFuncPtrs.begin(), SortedJITFuncPtrs.end(),                      \
-      [](const auto &A, const auto &B) -> bool { return A.first > B.first; })
-#else
-#define INSERT_JITED_FUNC_PTR(...)
-#define SORT_JITED_FUNC_PTRS
-#endif // ZEN_ENABLE_DUMP_CALL_STACK
+#endif // ZEN_ENABLE_LINUX_PERF
 
   auto &CodeMPool = EVMMod->getJITCodeMemPool();
   uint8_t *JITCode = const_cast<uint8_t *>(CodeMPool.getMemStart());
 
-  if (Config.DisableMultipassMultithread) {
-    // Single-threaded compilation
-    compileEVMToMC(Ctx, Mod, 0, Config.DisableMultipassGreedyRA);
-    emitObjectBuffer(&Ctx);
-    ZEN_ASSERT(Ctx.ExternRelocs.empty());
+  // EVM has only 1 function, use direct single-threaded compilation
+  compileEVMToMC(Ctx, Mod, 0, Config.DisableMultipassGreedyRA);
+  emitObjectBuffer(&Ctx);
+  ZEN_ASSERT(Ctx.ExternRelocs.empty());
 
-    // Since EVM has only 1 function, handle it directly
-    uint8_t *JITFuncPtr = Ctx.CodePtr + Ctx.FuncOffsetMap[0];
-    EVMMod->setJITCodeAndSize(JITFuncPtr, Ctx.CodeSize);
-    JIT_DUMP_WRITE_FUNC(0, JITFuncPtr, Ctx.FuncSizeMap[0]);
-    INSERT_JITED_FUNC_PTR((void *)(JITFuncPtr), 0);
-  } else {
-    // Multi-threaded compilation (though EVM has only 1 function)
-    common::ThreadPool<EVMFrontendContext> ThreadPool(1);
-    uint32_t NumThreads = ThreadPool.getThreadCount();
-    ZEN_LOG_DEBUG("using %u threads for multipass EVM JIT compilation",
-                  NumThreads);
-
-    CompileVector<EVMFrontendContext> AuxContexts(NumThreads - 1, Ctx,
-                                                  MainMemPool);
-    CompileVector<EVMFrontendContext *> Contexts(MainMemPool);
-
-    ThreadPool.setThreadContext(0, &Ctx, emitObjectBuffer);
-    Contexts.push_back(&Ctx);
-    for (uint32_t I = 0; I < NumThreads - 1; ++I) {
-      ThreadPool.setThreadContext(I + 1, &AuxContexts[I], emitObjectBuffer);
-      Contexts.push_back(&AuxContexts[I]);
-    }
-
-    // 0: func index(only one func in EVM)
-    ThreadPool.pushTask([&](EVMFrontendContext *Ctx) {
-      compileEVMToMC(*Ctx, Mod, 0, Config.DisableMultipassGreedyRA);
-    });
-
-    ThreadPool.setNoNewTask();
-    ThreadPool.waitForTasks();
-
-    // Since EVM has only one function, process the result
-    for (EVMFrontendContext *Ctx : Contexts) {
-      if (!Ctx->FuncOffsetMap.empty()) {
-        uint8_t *JITFuncPtr = Ctx->CodePtr + Ctx->FuncOffsetMap[0];
-        EVMMod->setJITCodeAndSize(JITFuncPtr, Ctx->CodeSize);
-        JIT_DUMP_WRITE_FUNC(0, JITFuncPtr, Ctx->FuncSizeMap[0]);
-        INSERT_JITED_FUNC_PTR((void *)(JITFuncPtr), 0);
-      }
-    }
-  }
+  uint8_t *JITFuncPtr = Ctx.CodePtr + Ctx.FuncOffsetMap[0];
+  EVMMod->setJITCodeAndSize(JITFuncPtr, Ctx.CodeSize);
+  JIT_DUMP_WRITE_FUNC(0, JITFuncPtr, Ctx.FuncSizeMap[0]);
+  // EVM single function - no function pointer tracking needed
 
   size_t CodeSize = CodeMPool.getMemEnd() - JITCode;
   platform::mprotect(JITCode, TO_MPROTECT_CODE_SIZE(CodeSize),
                      PROT_READ | PROT_EXEC);
   EVMMod->setJITCodeAndSize(JITCode, CodeSize);
-
-  SORT_JITED_FUNC_PTRS;
 
   Stats.stopRecord(Timer);
 }
