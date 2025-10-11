@@ -138,9 +138,9 @@ ExpectedResult readExpectedResult(const std::string &FilePath) {
 
 class EVMSampleTest : public ::testing::TestWithParam<std::string> {};
 
-std::string GetTestName(const testing::TestParamInfo<std::string> &info) {
-  std::filesystem::path path(info.param);
-  return path.stem().stem().string();
+std::string GetTestName(const testing::TestParamInfo<std::string> &Info) {
+  std::filesystem::path Path(Info.param);
+  return Path.stem().stem().string();
 }
 
 TEST_P(EVMSampleTest, ExecuteSample) {

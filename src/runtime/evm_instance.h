@@ -1,36 +1,18 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// #ifndef ZEN_RUNTIME_INSTANCE_H
-// #define ZEN_RUNTIME_INSTANCE_H
+#ifndef ZEN_RUNTIME_EVM_INSTANCE_H
+#define ZEN_RUNTIME_EVM_INSTANCE_H
 
-#include "common/errors.h"
-#include "common/traphandler.h"
 #include "evm/evm.h"
 #include "evm/gas_storage_cost.h"
 #include "evmc/evmc.hpp"
 #include "intx/intx.hpp"
 #include "runtime/evm_module.h"
-#include "utils/backtrace.h"
 #include <limits>
-#include <unordered_map>
-#include <vector>
 
 // Forward declaration for evmc_message
 struct evmc_message;
-#ifdef ZEN_ENABLE_VIRTUAL_STACK
-#include "utils/virtual_stack.h"
-#include <queue>
-#endif
-
-#ifdef ZEN_ENABLE_CPU_EXCEPTION
-#include <csetjmp>
-#include <csignal>
-#endif // ZEN_ENABLE_CPU_EXCEPTION
-
-#ifdef ZEN_ENABLE_BUILTIN_WASI
-#include "host/wasi/wasi.h"
-#endif
 
 namespace zen {
 
@@ -110,7 +92,8 @@ public:
     ReturnData = std::move(Data);
   }
   const std::vector<uint8_t> &getReturnData() const { return ReturnData; }
-  void exit(int32_t exitCode) { InstanceExitCode = exitCode; }
+  void exit(int32_t ExitCode) { InstanceExitCode = ExitCode; }
+  int32_t getExitCode() const { return InstanceExitCode; }
 
   static constexpr int32_t getGasFieldOffset() {
     static_assert(offsetof(EVMInstance, Gas) <=
@@ -154,4 +137,4 @@ private:
 } // namespace runtime
 } // namespace zen
 
-// #endif // ZEN_RUNTIME_INSTANCE_H
+#endif // ZEN_RUNTIME_EVM_INSTANCE_H

@@ -156,22 +156,42 @@ class TestRunner:
         cmd.append(test_case.file_path)
         return cmd
 
-    def parseTestOutput(self, stdout: str) -> Dict[str, Any]:
+    def parseTestOutput(self, stdout: str, returncode: int) -> Dict[str, Any]:
         """Parse test output"""
-        hex_start = stdout.find("output: 0x")
-        if hex_start == -1:
-            return {"status": "success", "error_code": 0, "stack": [], "memory": "", "return": ""}
+        # Map return code to EVM status based on EVMC specification, same as `evmc::to_string(evmc_status_code)`
+        status_map = {
+            0: "success",                    # EVMC_SUCCESS
+            1: "failure",                    # EVMC_FAILURE
+            2: "revert",                     # EVMC_REVERT
+            3: "out_of_gas",                 # EVMC_OUT_OF_GAS
+            4: "invalid_instruction",        # EVMC_INVALID_INSTRUCTION
+            5: "undefined_instruction",      # EVMC_UNDEFINED_INSTRUCTION
+            6: "stack_overflow",             # EVMC_STACK_OVERFLOW
+            7: "stack_underflow",            # EVMC_STACK_UNDERFLOW
+            8: "bad_jump_destination",       # EVMC_BAD_JUMP_DESTINATION
+            9: "invalid_memory_access",      # EVMC_INVALID_MEMORY_ACCESS
+            10: "call_depth_exceeded",       # EVMC_CALL_DEPTH_EXCEEDED
+            11: "static_mode_violation",     # EVMC_STATIC_MODE_VIOLATION
+            12: "precompile_failure",        # EVMC_PRECOMPILE_FAILURE
+            13: "contract_validation_failure", # EVMC_CONTRACT_VALIDATION_FAILURE
+            14: "argument_out_of_range",     # EVMC_ARGUMENT_OUT_OF_RANGE
+            15: "wasm_unreachable_instruction", # EVMC_WASM_UNREACHABLE_INSTRUCTION
+            16: "wasm_trap",                 # EVMC_WASM_TRAP
+            17: "insufficient_balance",     # EVMC_INSUFFICIENT_BALANCE
+            -1: "internal_error",            # EVMC_INTERNAL_ERROR
+            -2: "rejected",                  # EVMC_REJECTED
+            -3: "out_of_memory"              # EVMC_OUT_OF_MEMORY
+        }
 
-        hex_start += len("output: 0x")
-        hex_end = stdout.find("\n", hex_start)
-        if hex_end == -1:
-            hex_end = len(stdout)
-
-        return_value = stdout[hex_start:hex_end].strip()
+        return_value = ""
+        if "output: 0x" in stdout:
+            start = stdout.find("output: 0x") + 10
+            hex_value = stdout[start:].split("\n", 1)[0].strip()
+            return_value = hex_value[2:] if hex_value.startswith("0x") else hex_value
 
         return {
-            "status": "success",
-            "error_code": 0,
+            "status": status_map.get(returncode, "failure"),
+            "error_code": returncode,
             "stack": [],
             "memory": [],
             "return": return_value
@@ -210,17 +230,21 @@ class TestRunner:
 
                 elapsed = (time.time() - start_time) * 1000
 
+                with open(test_case.expected_file, 'r', encoding='utf-8') as f:
+                    expected_data = self.parseYamlOutput(f.read())
+                expected_returncode = expected_data.get('error_code', 0)
+
                 # Print result
                 print(f"\n{'='*80}")
-                if result.returncode == 0:
+                if result.returncode == expected_returncode:
                     self.statistics.addSucc()
                     print(f"✅ PASSED: {test_case.name} ({elapsed:.1f}ms)")
                 else:
                     self.statistics.addFail()
-                    print(f"❌ FAILED: {test_case.name} ({elapsed:.1f}ms)")
+                    print(f"❌ FAILED: {test_case.name} ({elapsed:.1f}ms) - return code mismatch: expected {expected_returncode}, got {result.returncode}")
                     self.failed_cases.append(test_case)
                 print(f"{'='*80}\n")
-                return result.returncode == 0
+                return result.returncode == expected_returncode
             else:
                 # capture output and parse
                 result = subprocess.run(
@@ -236,12 +260,14 @@ class TestRunner:
                     expected_data = self.parseYamlOutput(f.read())
 
                 # Parse actual results
-                actual_data = self.parseTestOutput(result.stdout)
+                actual_data = self.parseTestOutput(result.stdout, result.returncode)
 
                 # Compare results
                 is_match, error_msg = self.checkResults(actual_data, expected_data)
 
-                if result.returncode == 0 and is_match:
+                expected_returncode = expected_data.get('error_code', 0)
+                returncode_match = result.returncode == expected_returncode
+                if returncode_match and is_match:
                     self.statistics.addSucc()
                     print(f"PASSED {test_case.name:<40} ({elapsed:.1f}ms)")
                     return True
@@ -250,9 +276,11 @@ class TestRunner:
                     self.failed_cases.append(test_case)
                     print(f"FAILED {test_case.name:<40} ({elapsed:.1f}ms)")
 
-                    if self.args.verbose or not is_match or result.returncode != 0:
+                    if self.args.verbose or not is_match or not returncode_match:
                         if result.stderr:
                             print(f"    stderr: {result.stderr.strip()}")
+                        if not returncode_match:
+                            print(f"    return code mismatch: expected {expected_returncode}, got {result.returncode}")
                         if not is_match:
                             print(f"    {error_msg}")
                         if self.args.verbose:

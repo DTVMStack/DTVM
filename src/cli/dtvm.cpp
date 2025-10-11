@@ -215,7 +215,9 @@ int main(int argc, char *argv[]) {
         .code = {}, // code will load in callEVMMain
         .code_size = 0,
     };
-    RT->callEVMMain(*Inst, Msg, Result);
+    evmc_status_code Status = RT->callEVMMain(*Inst, Msg, Result);
+    // Use EVM status code directly as process exit code
+    int ExitCode = static_cast<int>(Status);
 
     if (!RT->unloadEVMModule(Mod)) {
       ZEN_LOG_ERROR("failed to unload EVM module");
@@ -227,7 +229,7 @@ int main(int argc, char *argv[]) {
       return exitMain(EXIT_FAILURE, RT.get());
     }
 
-    return 0;
+    return exitMain(ExitCode, RT.get());
   }
 
   /// ================ Create ZetaEngine runtime ================

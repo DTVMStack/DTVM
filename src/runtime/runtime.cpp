@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #include "runtime/runtime.h"
@@ -651,25 +651,28 @@ void Runtime::callWasmFunctionInInterpMode(Instance &Inst, uint32_t FuncIdx,
   }
 }
 
-void Runtime::callEVMInInterpMode(EVMInstance &Inst, evmc_message &Msg,
-                                  std::vector<uint8_t> &Result) {
+evmc_status_code Runtime::callEVMInInterpMode(EVMInstance &Inst,
+                                              evmc_message &Msg,
+                                              std::vector<uint8_t> &Result) {
   evm::InterpreterExecContext Ctx(&Inst);
   evm::BaseInterpreter Interpreter(Ctx);
   Ctx.allocFrame(&Msg);
   Interpreter.interpret();
   Result = Ctx.getReturnData();
+  return Ctx.getStatus();
 }
 
-void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
-                          std::vector<uint8_t> &Result) {
+evmc_status_code Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
+                                      std::vector<uint8_t> &Result) {
   evmc_message MsgWithCode = Msg;
   MsgWithCode.code = reinterpret_cast<uint8_t *>(Inst.getModule()->Code);
   MsgWithCode.code_size = Inst.getModule()->CodeSize;
+  evmc_status_code Status = EVMC_SUCCESS;
   if (getConfig().Mode == RunMode::InterpMode) {
-    callEVMInInterpMode(Inst, MsgWithCode, Result);
+    Status = callEVMInInterpMode(Inst, MsgWithCode, Result);
   } else {
 #ifdef ZEN_ENABLE_JIT
-    callEVMInJITMode(Inst, MsgWithCode, Result);
+    Status = callEVMInJITMode(Inst, MsgWithCode, Result);
 #else
     ZEN_UNREACHABLE();
 #endif
@@ -677,6 +680,7 @@ void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
 
   std::string output = zen::utils::toHex(Result.data(), Result.size());
   ZEN_LOG_INFO("output: 0x%s", output.c_str());
+  return Status;
 }
 
 #ifdef ZEN_ENABLE_JIT
@@ -787,11 +791,11 @@ void Runtime::callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
 #endif // ZEN_ENABLE_CPU_EXCEPTION
 }
 
-void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
-                               std::vector<uint8_t> &Result) {
+evmc_status_code Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
+                                           std::vector<uint8_t> &Result) {
   // TODO: Implement EVM JIT compilation and execution
   // For now, fallback to interpreter mode as placeholder
-  callEVMInInterpMode(Inst, Msg, Result);
+  return callEVMInInterpMode(Inst, Msg, Result);
 }
 #endif // ZEN_ENABLE_JIT
 
