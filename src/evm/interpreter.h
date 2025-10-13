@@ -74,6 +74,7 @@ private:
   std::vector<EVMFrame> FrameStack;
   evmc_status_code Status = EVMC_SUCCESS;
   std::vector<uint8_t> ReturnData;
+  evmc::Result ExeResult;
   uint64_t GasUsed = 0;
 
 public:
@@ -110,6 +111,8 @@ public:
   void setReturnData(std::vector<uint8_t> Data) {
     ReturnData = std::move(Data);
   }
+  const evmc::Result &getExeResult() const { return ExeResult; }
+  void setExeResult(evmc::Result Result) { ExeResult = std::move(Result); }
 };
 
 class BaseInterpreter {

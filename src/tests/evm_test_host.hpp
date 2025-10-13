@@ -46,7 +46,7 @@ public:
     auto It = accounts.find(CodeAddr);
     if (It == accounts.end() || It->second.code.empty()) {
       // No contract found, return parent result
-      ZEN_LOG_DEBUG("No contract found for code address {},return parent result",
+      ZEN_LOG_DEBUG("No contract found for code address {}, return parent result",
                    evmc::hex(evmc::bytes_view(CodeAddr.bytes, 20)).c_str());
       return ParentResult;
     }
@@ -97,20 +97,11 @@ public:
       Interpreter.interpret();
 
       // Calculate gas consumed and remaining
-      uint64_t GasUsed = Ctx.getGasUsed();
-      int64_t RemainingGas = Msg.gas - GasUsed;
-
-      // Create result based on execution status
-      evmc::Result Result;
-      Result.status_code = Ctx.getStatus();
-      Result.gas_left = RemainingGas;
-
+      int64_t RemainingGas = Msg.gas - Ctx.getGasUsed();
       ReturnData = Ctx.getReturnData();
-      if (!ReturnData.empty()) {
-        Result.output_data = ReturnData.data();
-        Result.output_size = ReturnData.size();
-      }
-      return Result;
+      return evmc::Result(Ctx.getStatus(), RemainingGas, 0,
+                          ReturnData.empty() ? nullptr : ReturnData.data(),
+                          ReturnData.size());
 
     } catch (const std::exception &E) {
       // On error, return parent result
@@ -188,7 +179,7 @@ public:
   evmc_message prepareMessage(evmc_message Msg) noexcept {
     if (Msg.kind == EVMC_CREATE || Msg.kind == EVMC_CREATE2)
     {
-        const auto& SenderAcc = accounts[Msg.sender]; 
+        const auto& SenderAcc = accounts[Msg.sender];
         if (Msg.kind == EVMC_CREATE)
             Msg.recipient = computeCreateAddress(Msg.sender, SenderAcc.nonce);
         else if (Msg.kind == EVMC_CREATE2)
@@ -223,18 +214,18 @@ public:
       auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
       EVMInstance *Inst = *InstRet;
       // 3 Create new account status
-      auto& NewAcc = accounts[NewAddr]; 
+      auto& NewAcc = accounts[NewAddr];
       //TODO: Obtain Revision to initialize nounce
-      // NewAcc.nonce = (Inst->getRevision() >= EVMC_SPURIOUS_DRAGON) ? 1 : 0; 
-      NewAcc.nonce = 0; 
+      // NewAcc.nonce = (Inst->getRevision() >= EVMC_SPURIOUS_DRAGON) ? 1 : 0;
+      NewAcc.nonce = 0;
       NewAcc.balance = evmc::bytes32{0};
 
       // 4 Transfer the balance (from the sender to the new account)
       auto& SenderAcc = accounts[Msg.sender];
       const auto Value = intx::be::load<intx::uint256>(Msg.value);
       intx::uint256 SenderBalance = intx::be::load<intx::uint256>(SenderAcc.balance);
-      if (SenderBalance< Value) { 
-          ZEN_LOG_ERROR("Insufficient balance for CREATE: have {}, need {}", 
+      if (SenderBalance < Value) {
+          ZEN_LOG_ERROR("Insufficient balance for CREATE: have {}, need {}",
               SenderBalance, Value);
           return evmc::Result{EVMC_INSUFFICIENT_BALANCE, Msg.gas, 0, NewAddr};
       }
@@ -243,11 +234,11 @@ public:
       NewAccBalance += Value;
       SenderAcc.balance = intx::be::store<evmc::bytes32>(SenderBalance);
       NewAcc.balance = intx::be::store<evmc::bytes32>(NewAccBalance);
-      
+
       // 5 Execute the contract creation code
       InterpreterExecContext Ctx(Inst);
       BaseInterpreter Interp(Ctx);
-      
+
       evmc_message CallMsg = Msg;
       Ctx.allocFrame(&CallMsg);
       auto *Frame = Ctx.getCurFrame();
@@ -255,26 +246,22 @@ public:
       Interp.interpret();
 
       // Calculate gas consumed and remaining
-      uint64_t GasUsed = Ctx.getGasUsed();
-      int64_t RemainingGas = Msg.gas - GasUsed;
-
-      evmc::Result Result;
-      Result.status_code = Ctx.getStatus();
-      Result.gas_left = RemainingGas;
+      const int64_t RemainingGas = Msg.gas - Ctx.getGasUsed();
+      const auto Status = Ctx.getStatus();
       ReturnData = Ctx.getReturnData();
 
       // 6 Deploy the contract code (the output is the runtime code)
-      if (Result.status_code != EVMC_SUCCESS) {
+      if (Status != EVMC_SUCCESS) {
           accounts.erase(NewAddr);
-          return evmc::Result{ Result.status_code, Result.gas_left, 0, NewAddr };
+          return evmc::Result{ Status, RemainingGas, 0, NewAddr };
       }
       if (!ReturnData.empty()) {
           if (ReturnData.size() > MAX_CODE_SIZE) {
               accounts.erase(NewAddr);
-              return evmc::Result{ EVMC_FAILURE, Result.gas_left, 0, NewAddr };
+              return evmc::Result{ EVMC_FAILURE, RemainingGas, 0, NewAddr };
           }
           NewAcc.code = evmc::bytes(ReturnData.data(), ReturnData.size());
-          const std::vector<uint8_t> CodeHashVec =host::evm::crypto::keccak256(ReturnData);
+          const std::vector<uint8_t> CodeHashVec = host::evm::crypto::keccak256(ReturnData);
           assert(CodeHashVec.size() == 32 && "Keccak256 hash must be 32 bytes");
           evmc::bytes32 CodeHash;
           std::memcpy(CodeHash.bytes, CodeHashVec.data(), 32);
@@ -285,18 +272,10 @@ public:
           SenderAcc.nonce++;
       }
 
-      evmc::Result CreateResult;
-      CreateResult.status_code = EVMC_SUCCESS;
-      CreateResult.gas_left = Result.gas_left;
+      evmc::Result CreateResult(EVMC_SUCCESS, RemainingGas, 0,
+                          NewAcc.code.empty() ? nullptr : NewAcc.code.data(),
+                          NewAcc.code.size());
       CreateResult.create_address = NewAddr;
-      if (!NewAcc.code.empty()) {
-          CreateResult.output_data = NewAcc.code.data();
-          CreateResult.output_size = NewAcc.code.size();
-      } else {
-          CreateResult.output_data = nullptr;
-          CreateResult.output_size = 0;
-      }
-      
       return CreateResult;
     } catch (const std::exception &E) {
       ZEN_LOG_ERROR("Error in handleCreate: {}", E.what());

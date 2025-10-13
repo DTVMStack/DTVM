@@ -315,8 +315,7 @@ public:
       Instance &Inst, uint32_t FuncIdx, const std::vector<TypedValue> &Args,
       std::vector<common::TypedValue> &Results) noexcept;
 
-  evmc_status_code callEVMMain(EVMInstance &Inst, evmc_message &Msg,
-                               std::vector<uint8_t> &Result);
+  void callEVMMain(EVMInstance &Inst, evmc_message &Msg, evmc::Result &Result);
 
   evmc::Host *getEVMHost() const { return EVMHost; }
 
@@ -338,16 +337,16 @@ private:
                                     const std::vector<TypedValue> &Args,
                                     std::vector<common::TypedValue> &Results);
 
-  evmc_status_code callEVMInInterpMode(EVMInstance &Inst, evmc_message &Msg,
-                                       std::vector<uint8_t> &Result);
+  void callEVMInInterpMode(EVMInstance &Inst, evmc_message &Msg,
+                           evmc::Result &Result);
 
 #ifdef ZEN_ENABLE_JIT
   void callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
                                  const std::vector<TypedValue> &Args,
                                  std::vector<common::TypedValue> &Results);
 
-  evmc_status_code callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
-                                    std::vector<uint8_t> &Result);
+  void callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
+                        evmc::Result &Result);
 #endif
 
   common::Mutex Mtx;

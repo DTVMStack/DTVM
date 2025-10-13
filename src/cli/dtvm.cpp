@@ -199,7 +199,6 @@ int main(int argc, char *argv[]) {
     }
     EVMInstance *Inst = *InstRet;
 
-    std::vector<uint8_t> Result;
     evmc_message Msg{
         .kind = EVMC_CALL,
         .flags = 0u,
@@ -215,9 +214,10 @@ int main(int argc, char *argv[]) {
         .code = {}, // code will load in callEVMMain
         .code_size = 0,
     };
-    evmc_status_code Status = RT->callEVMMain(*Inst, Msg, Result);
+    evmc::Result ExeResult;
+    RT->callEVMMain(*Inst, Msg, ExeResult);
     // Use EVM status code directly as process exit code
-    int ExitCode = static_cast<int>(Status);
+    int ExitCode = static_cast<int>(ExeResult.status_code);
 
     if (!RT->unloadEVMModule(Mod)) {
       ZEN_LOG_ERROR("failed to unload EVM module");

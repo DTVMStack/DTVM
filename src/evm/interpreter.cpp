@@ -123,6 +123,11 @@ void BaseInterpreter::interpret() {
       Context.freeBackFrame();
       Frame = Context.getCurFrame();
       if (!Frame) {
+        const auto &ReturnData = Context.getReturnData();
+        evmc::Result ExeResult(EVMC_SUCCESS, Frame ? Frame->Msg->gas : 0,
+                               Frame ? Frame->GasRefund : 0, ReturnData.data(),
+                               ReturnData.size());
+        Context.setExeResult(std::move(ExeResult));
         return;
       }
       continue;
@@ -491,6 +496,10 @@ void BaseInterpreter::interpret() {
       EVMOpcodeHandlerRegistry::getReturnHandler().execute();
       Frame = Context.getCurFrame();
       if (!Frame) {
+        const auto &ReturnData = Context.getReturnData();
+        evmc::Result ExeResult(EVMC_SUCCESS, 0, Frame ? Frame->GasRefund : 0,
+                               ReturnData.data(), ReturnData.size());
+        Context.setExeResult(std::move(ExeResult));
         return;
       }
       break;
@@ -500,6 +509,10 @@ void BaseInterpreter::interpret() {
       EVMOpcodeHandlerRegistry::getRevertHandler().execute();
       Frame = Context.getCurFrame();
       if (!Frame) {
+        const auto &ReturnData = Context.getReturnData();
+        evmc::Result ExeResult(EVMC_REVERT, 0, Frame ? Frame->GasRefund : 0,
+                               ReturnData.data(), ReturnData.size());
+        Context.setExeResult(std::move(ExeResult));
         return;
       }
       break;
@@ -513,6 +526,10 @@ void BaseInterpreter::interpret() {
       EVMOpcodeHandlerRegistry::getSelfDestructHandler().execute();
       Frame = Context.getCurFrame();
       if (!Frame) {
+        const auto &ReturnData = Context.getReturnData();
+        evmc::Result ExeResult(EVMC_SUCCESS, 0, Frame ? Frame->GasRefund : 0,
+                               ReturnData.data(), ReturnData.size());
+        Context.setExeResult(std::move(ExeResult));
         return;
       }
       break;
@@ -603,4 +620,9 @@ void BaseInterpreter::interpret() {
 
     Frame->Pc++;
   }
+  const auto &ReturnData = Context.getReturnData();
+  evmc::Result ExeResult(Context.getStatus(), Frame ? Frame->Msg->gas : 0,
+                         Frame ? Frame->GasRefund : 0, ReturnData.data(),
+                         ReturnData.size());
+  Context.setExeResult(std::move(ExeResult));
 }
