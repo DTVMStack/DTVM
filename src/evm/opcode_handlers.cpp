@@ -1152,7 +1152,7 @@ void CreateHandler::doExecute() {
                       .depth = Frame->Msg->depth + 1,
                       .gas = Frame->Msg->gas,
                       .recipient = {},
-                      .sender = Frame->Msg->sender,
+                      .sender = Frame->Msg->recipient,
                       .input_data =
                           Frame->Memory.data() + uint256ToUint64(CodeOffset),
                       .input_size = uint256ToUint64(CodeSizeVal),
@@ -1245,8 +1245,27 @@ void CallHandler::doExecute() {
     return;
   }
 
+  // Map opcode to evmc_call_kind
+  evmc_call_kind CallKind;
+  switch (OpCode) {
+  case OP_CALL:
+    CallKind = EVMC_CALL;
+    break;
+  case OP_CALLCODE:
+    CallKind = EVMC_CALLCODE;
+    break;
+  case OP_DELEGATECALL:
+    CallKind = EVMC_DELEGATECALL;
+    break;
+  case OP_STATICCALL:
+    CallKind = EVMC_CALL; // STATICCALL uses EVMC_CALL with EVMC_STATIC flag
+    break;
+  default:
+    throw common::getError(common::ErrorCode::EVMInvalidInstruction);
+  }
+
   evmc_message NewMsg{
-      .kind = static_cast<evmc_call_kind>(OpCode),
+      .kind = CallKind,
       .flags = (OpCode == evmc_opcode::OP_STATICCALL) ? uint32_t{EVMC_STATIC}
                                                       : Frame->Msg->flags,
       .depth = Frame->Msg->depth + 1,
@@ -1277,12 +1296,12 @@ void CallHandler::doExecute() {
   // Charge CALL_VALUE_COST only if actually transferring value (EIP-150)
   int64_t Cost = (NeedValue && Value != 0) ? CALL_VALUE_COST : 0;
 
-  if (OpCode == OP_CALL) {
-    if (Frame->isStaticMode()) {
+  if (OpCode == OP_CALL || OpCode == OP_CALLCODE) {
+    if (Value != 0 && Frame->isStaticMode()) {
       Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
       return;
     }
-    if (Value != 0 && !Frame->Host->account_exists(Dest)) {
+    if (OpCode == OP_CALL && Value != 0 && !Frame->Host->account_exists(Dest)) {
       Cost += ACCOUNT_CREATION_COST;
     }
   }
