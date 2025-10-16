@@ -1,0 +1,8 @@
+status: stack underflow
+error_code: 7
+stack: []
+memory: ''
+storage: {}
+transient_storage: {}
+return: ''
+events: []

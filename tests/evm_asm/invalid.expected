@@ -1,0 +1,8 @@
+status: invalid instruction
+error_code: 4
+stack: []
+memory: ''
+storage: {}
+transient_storage: {}
+return: ''
+events: []

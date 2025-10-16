@@ -4,6 +4,7 @@
 #include "evm/opcode_handlers.h"
 #include "common/errors.h"
 #include "evm/interpreter.h"
+#include "evmc/evmc.h"
 #include "evmc/instructions.h"
 #include "host/evm/crypto.h"
 #include "runtime/evm_instance.h"
@@ -736,7 +737,7 @@ void SStoreHandler::doExecute() {
   auto *Frame = getFrame();
   auto *Context = getContext();
   EVM_FRAME_CHECK(Frame);
-  EVM_REQUIRE(!Frame->isStaticMode(), EVMStaticModeViolation);
+  EVM_SET_EXCEPTION_UNLESS(!Frame->isStaticMode(), EVMC_STATIC_MODE_VIOLATION);
 
   EVM_STACK_CHECK(Frame, 2);
   const auto Key = intx::be::store<evmc::bytes32>(Frame->pop());
@@ -860,9 +861,10 @@ void JumpHandler::doExecute() {
   // We can assume that valid destination can't greater than uint64_t
   uint64_t Dest = uint256ToUint64(Frame->pop());
 
-  EVM_REQUIRE(Dest < CodeSize, EVMBadJumpDestination);
-  EVM_REQUIRE(static_cast<evmc_opcode>(Code[Dest]) == evmc_opcode::OP_JUMPDEST,
-              EVMBadJumpDestination);
+  EVM_SET_EXCEPTION_UNLESS(Dest < CodeSize, EVMC_BAD_JUMP_DESTINATION);
+  EVM_SET_EXCEPTION_UNLESS(static_cast<evmc_opcode>(Code[Dest]) ==
+                               evmc_opcode::OP_JUMPDEST,
+                           EVMC_BAD_JUMP_DESTINATION);
 
   Frame->Pc = Dest;
   Context->IsJump = true;
@@ -884,9 +886,10 @@ void JumpIHandler::doExecute() {
   if (!Cond) {
     return;
   }
-  EVM_REQUIRE(Dest < CodeSize, EVMBadJumpDestination);
-  EVM_REQUIRE(static_cast<evmc_opcode>(Code[Dest]) == evmc_opcode::OP_JUMPDEST,
-              EVMBadJumpDestination);
+  EVM_SET_EXCEPTION_UNLESS(Dest < CodeSize, EVMC_BAD_JUMP_DESTINATION);
+  EVM_SET_EXCEPTION_UNLESS(static_cast<evmc_opcode>(Code[Dest]) ==
+                               evmc_opcode::OP_JUMPDEST,
+                           EVMC_BAD_JUMP_DESTINATION);
 
   Frame->Pc = Dest;
   Context->IsJump = true;
@@ -909,7 +912,7 @@ void TLoadHandler::doExecute() {
 void TStoreHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
-  EVM_REQUIRE(!Frame->isStaticMode(), EVMStaticModeViolation);
+  EVM_SET_EXCEPTION_UNLESS(!Frame->isStaticMode(), EVMC_STATIC_MODE_VIOLATION);
 
   EVM_STACK_CHECK(Frame, 2);
   const auto Key = intx::be::store<evmc::bytes32>(Frame->pop());
@@ -1068,7 +1071,7 @@ void DupHandler::doExecute() {
   uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
   // DUP1 ~ DUP16
   uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_DUP1) + 1;
-  EVM_REQUIRE(Frame->stackHeight() >= N, UnexpectedNumArgs);
+  EVM_SET_EXCEPTION_UNLESS(Frame->stackHeight() >= N, EVMC_STACK_UNDERFLOW);
   intx::uint256 V = Frame->peek(N - 1);
   Frame->push(V);
 }
@@ -1079,7 +1082,8 @@ void SwapHandler::doExecute() {
   uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
   // SWAP1 ~ SWAP16
   uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_SWAP1) + 1;
-  EVM_REQUIRE(Frame->stackHeight() >= (N + 1), UnexpectedNumArgs);
+  EVM_SET_EXCEPTION_UNLESS(Frame->stackHeight() >= (N + 1),
+                           EVMC_STACK_UNDERFLOW);
   intx::uint256 &Top = Frame->peek(0);
   intx::uint256 &Nth = Frame->peek(N);
   std::swap(Top, Nth);
@@ -1096,7 +1100,8 @@ void CreateHandler::doExecute() {
     EVM_STACK_CHECK(Frame, 4);
   } else {
     // in fact, this should never happen, but we still need to handle it
-    throw common::getError(common::ErrorCode::EVMInvalidInstruction);
+    Context->setStatus(EVMC_INVALID_INSTRUCTION);
+    return;
   }
 
   intx::uint256 Value = Frame->pop();
@@ -1197,7 +1202,8 @@ void CallHandler::doExecute() {
     EVM_STACK_CHECK(Frame, 6);
   } else {
     // in fact, this should never happen, but we still need to handle it
-    throw common::getError(common::ErrorCode::EVMInvalidInstruction);
+    Context->setStatus(EVMC_INVALID_INSTRUCTION);
+    return;
   }
 
   const auto Gas = Frame->pop();

@@ -12,7 +12,8 @@
 // EVM error checking macro definitions
 #define EVM_STACK_CHECK(FramePtr, N)                                           \
   if ((FramePtr)->stackHeight() < (N)) {                                       \
-    throw zen::common::getError(zen::common::ErrorCode::UnexpectedNumArgs);    \
+    getContext()->setStatus(EVMC_STACK_UNDERFLOW);                             \
+    return;                                                                    \
   }
 
 // EVMFrame check
@@ -25,6 +26,14 @@
 #define EVM_REQUIRE(Condition, errorCode)                                      \
   if (!(Condition)) {                                                          \
     throw zen::common::getError(zen::common::ErrorCode::errorCode);            \
+  }
+
+// Sets the specified error status and returns immediately unless the given
+// condition is true.
+#define EVM_SET_EXCEPTION_UNLESS(Condition, errorStatus)                       \
+  if (!(Condition)) {                                                          \
+    getContext()->setStatus(errorStatus);                                      \
+    return;                                                                    \
   }
 
 #define EVM_REGISTRY_GET(OpName)                                               \
