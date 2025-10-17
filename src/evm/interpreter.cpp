@@ -609,6 +609,12 @@ void BaseInterpreter::interpret() {
         Context.freeBackFrame();
         Frame = Context.getCurFrame();
         if (!Frame) {
+          const auto &ReturnData = Context.getReturnData();
+          evmc::Result ExeResult(Context.getStatus(),
+                                 Frame ? Frame->Msg->gas : 0,
+                                 Frame ? Frame->GasRefund : 0,
+                                 ReturnData.data(), ReturnData.size());
+          Context.setExeResult(std::move(ExeResult));
           return;
         }
         break;
@@ -622,6 +628,12 @@ void BaseInterpreter::interpret() {
         Context.freeBackFrame();
         Frame = Context.getCurFrame();
         if (!Frame) {
+          const auto &ReturnData = Context.getReturnData();
+          evmc::Result ExeResult(Context.getStatus(),
+                                 Frame ? Frame->Msg->gas : 0,
+                                 Frame ? Frame->GasRefund : 0,
+                                 ReturnData.data(), ReturnData.size());
+          Context.setExeResult(std::move(ExeResult));
           return;
         }
       }

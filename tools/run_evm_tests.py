@@ -163,24 +163,24 @@ class TestRunner:
             0: "success",                    # EVMC_SUCCESS
             1: "failure",                    # EVMC_FAILURE
             2: "revert",                     # EVMC_REVERT
-            3: "out_of_gas",                 # EVMC_OUT_OF_GAS
-            4: "invalid_instruction",        # EVMC_INVALID_INSTRUCTION
-            5: "undefined_instruction",      # EVMC_UNDEFINED_INSTRUCTION
-            6: "stack_overflow",             # EVMC_STACK_OVERFLOW
-            7: "stack_underflow",            # EVMC_STACK_UNDERFLOW
-            8: "bad_jump_destination",       # EVMC_BAD_JUMP_DESTINATION
-            9: "invalid_memory_access",      # EVMC_INVALID_MEMORY_ACCESS
-            10: "call_depth_exceeded",       # EVMC_CALL_DEPTH_EXCEEDED
-            11: "static_mode_violation",     # EVMC_STATIC_MODE_VIOLATION
-            12: "precompile_failure",        # EVMC_PRECOMPILE_FAILURE
-            13: "contract_validation_failure", # EVMC_CONTRACT_VALIDATION_FAILURE
-            14: "argument_out_of_range",     # EVMC_ARGUMENT_OUT_OF_RANGE
-            15: "wasm_unreachable_instruction", # EVMC_WASM_UNREACHABLE_INSTRUCTION
-            16: "wasm_trap",                 # EVMC_WASM_TRAP
-            17: "insufficient_balance",     # EVMC_INSUFFICIENT_BALANCE
-            -1: "internal_error",            # EVMC_INTERNAL_ERROR
+            3: "out of gas",                 # EVMC_OUT_OF_GAS
+            4: "invalid instruction",        # EVMC_INVALID_INSTRUCTION
+            5: "undefined instruction",      # EVMC_UNDEFINED_INSTRUCTION
+            6: "stack overflow",             # EVMC_STACK_OVERFLOW
+            7: "stack underflow",            # EVMC_STACK_UNDERFLOW
+            8: "bad jump destination",       # EVMC_BAD_JUMP_DESTINATION
+            9: "invalid memory access",      # EVMC_INVALID_MEMORY_ACCESS
+            10: "call depth exceeded",       # EVMC_CALL_DEPTH_EXCEEDED
+            11: "static mode violation",     # EVMC_STATIC_MODE_VIOLATION
+            12: "precompile failure",        # EVMC_PRECOMPILE_FAILURE
+            13: "contract validation_failure", # EVMC_CONTRACT_VALIDATION_FAILURE
+            14: "argument out of range",     # EVMC_ARGUMENT_OUT_OF_RANGE
+            15: "wasm unreachable instruction", # EVMC_WASM_UNREACHABLE_INSTRUCTION
+            16: "wasm trap",                 # EVMC_WASM_TRAP
+            17: "insufficient balance",     # EVMC_INSUFFICIENT_BALANCE
+            -1: "internal error",            # EVMC_INTERNAL_ERROR
             -2: "rejected",                  # EVMC_REJECTED
-            -3: "out_of_memory"              # EVMC_OUT_OF_MEMORY
+            -3: "out of memory"              # EVMC_OUT_OF_MEMORY
         }
 
         return_value = ""
