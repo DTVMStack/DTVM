@@ -52,12 +52,9 @@ public:
     if (InitialGasLimitStack.empty())
       return 0;
     uint64_t InitialLimit = InitialGasLimitStack.back();
-    // Get the remaining gas from the current message if available
+    // Use the saved gas value in the instance. This is updated just before
+    // frame destruction to capture the correct gas state.
     uint64_t CurrentGas = Gas;
-    const evmc_message *Msg = getCurrentMessage();
-    if (Msg) {
-      CurrentGas = static_cast<uint64_t>(Msg->gas);
-    }
     uint64_t GasUsed =
         InitialLimit > CurrentGas ? InitialLimit - CurrentGas : 0;
     return GasUsed;

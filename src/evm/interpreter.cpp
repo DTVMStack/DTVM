@@ -72,15 +72,23 @@ void InterpreterExecContext::freeBackFrame() {
   if (FrameStack.empty())
     return;
 
+  EVMFrame &Frame = FrameStack.back();
+
+  // Save the gas value before frame destruction, so getGasUsed() can read it
+  // after all frames are destroyed and messages are popped.
+  Inst->setGas(static_cast<uint64_t>(Frame.Msg->gas));
+
   // Gas management is entirely handled by EVMInstance.
   // The instance uses a stack to track InitialGasLimit for each frame.
   // Only pop for nested frames (depth > 0). Keep the main frame's gas limit
   // on the stack so tests can read it after execution completes.
   if (FrameStack.size() > 1) {
     Inst->popInitialGasLimit();
+    // Pop message for nested frames to keep stack clean
     Inst->popMessage();
   }
 
+  // Destroy frame (and its message)
   FrameStack.pop_back();
 }
 
