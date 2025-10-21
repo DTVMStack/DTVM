@@ -65,8 +65,8 @@ public:
   void expandMemory(uint64_t RequiredSize);
   void chargeGas(uint64_t GasCost);
 
-  void addGasRefund(uint64_t amount) { GasRefund += amount; }
-  void setGasRefund(uint64_t amount) { GasRefund = amount; }
+  void addGasRefund(uint64_t Amount) { GasRefund += Amount; }
+  void setGasRefund(uint64_t Amount) { GasRefund = Amount; }
   uint64_t getGasRefund() const { return GasRefund; }
 
   // ==================== Memory Methods ====================
@@ -83,8 +83,8 @@ public:
     return MessageStack.empty() ? nullptr : MessageStack.back();
   }
   bool isStaticMode() const {
-    const evmc_message *msg = getCurrentMessage();
-    return msg && (msg->flags & EVMC_STATIC) != 0;
+    const evmc_message *Msg = getCurrentMessage();
+    return Msg && (Msg->flags & EVMC_STATIC) != 0;
   }
   evmc_revision getRevision() const { return Rev; }
 

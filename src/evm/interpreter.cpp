@@ -10,8 +10,6 @@
 using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
-using zen::common::ErrorCode;
-using zen::common::getError;
 
 EVMFrame *InterpreterExecContext::allocFrame(
     evmc_message *ParentMsg, uint64_t GasLimit, evmc_call_kind Kind,
