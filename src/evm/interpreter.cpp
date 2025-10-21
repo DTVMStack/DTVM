@@ -34,7 +34,7 @@ EVMFrame *InterpreterExecContext::allocFrame(
   Frame.Msg->input_data = CallData.data();
   Frame.Msg->input_size = CallData.size();
 
-  GasUsed = GasLimit;
+  Inst->setInitialGasLimit(GasLimit);
 
   return &Frame;
 }
@@ -53,7 +53,7 @@ EVMFrame *InterpreterExecContext::allocFrame(evmc_message *Msg) {
 
   Frame.Msg = std::make_unique<evmc_message>(*Msg);
 
-  GasUsed = Frame.Msg->gas;
+  Inst->setInitialGasLimit(Frame.Msg->gas);
 
   Frame.Msg->gas = Frame.Msg->gas - IntrinsicGas;
 
@@ -66,12 +66,9 @@ void InterpreterExecContext::freeBackFrame() {
   if (FrameStack.empty())
     return;
 
-  auto &BackFrame = FrameStack.back();
-
-  GasUsed = GasUsed - BackFrame.Msg->gas;
-  // Note: Gas refunds are accumulated in TotalRefund via addGasRefund(),
-  // and returned to the caller via getGasRefund(). The refund limit
-  // should only be applied at the top-level transaction, not in subcalls.
+  // Gas management is entirely handled by EVMInstance.
+  // The instance tracks InitialGasLimit and current Gas to calculate usage.
+  // Gas refunds are accumulated in instance and returned via getGasRefund().
 
   FrameStack.pop_back();
 }

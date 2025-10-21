@@ -762,8 +762,8 @@ void SStoreHandler::doExecute() {
   Frame->Msg->gas -= GasCost;
 
   Frame->GasRefund += GasReFund;
-  // Also track at Context level so it persists after frame is freed
-  Context->addGasRefund(GasReFund);
+  // Track refund at Instance level
+  Context->getInstance()->addGasRefund(GasReFund);
 }
 
 void Keccak256Handler::doExecute() {
@@ -1346,8 +1346,8 @@ void CallHandler::doExecute() {
   chargeGas(Frame, GasUsed); // it's safe to charge gas here
 
   Frame->GasRefund += Result.gas_refund;
-  // Also track subcall refund at Context level
-  Context->addGasRefund(Result.gas_refund);
+  // Track subcall refund at Instance level
+  Context->getInstance()->addGasRefund(Result.gas_refund);
   Context->setStatus(Result.status_code);
 }
 

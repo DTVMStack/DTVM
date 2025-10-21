@@ -8,6 +8,7 @@
 #include "host/evm/crypto.h"
 #include "host/evm/keccak/keccak.hpp"
 #include "mpt/rlp_encoding.h"
+#include "runtime/evm_instance.h"
 #include "runtime/isolation.h"
 #include "runtime/runtime.h"
 #include "utils/others.h"
@@ -97,8 +98,8 @@ public:
       Interpreter.interpret();
 
       // Calculate gas consumed and remaining
-      int64_t RemainingGas = Msg.gas - Ctx.getGasUsed();
-      int64_t GasRefund = Ctx.getGasRefund();
+      int64_t RemainingGas = Msg.gas - Ctx.getInstance()->getGasUsed();
+      int64_t GasRefund = Ctx.getInstance()->getGasRefund();
       ReturnData = Ctx.getReturnData();
 
       return evmc::Result(Ctx.getStatus(), RemainingGas, GasRefund,
@@ -248,7 +249,7 @@ public:
       Interp.interpret();
 
       // Calculate gas consumed and remaining
-      const int64_t RemainingGas = Msg.gas - Ctx.getGasUsed();
+      const int64_t RemainingGas = Msg.gas - Ctx.getInstance()->getGasUsed();
       const auto Status = Ctx.getStatus();
       ReturnData = Ctx.getReturnData();
 

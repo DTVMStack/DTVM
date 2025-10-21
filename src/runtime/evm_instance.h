@@ -41,6 +41,10 @@ public:
 
   uint64_t getGas() const { return Gas; }
   void setGas(uint64_t NewGas);
+  void setInitialGasLimit(uint64_t Limit) { InitialGasLimit = Limit; }
+  uint64_t getGasUsed() const {
+    return InitialGasLimit > Gas ? InitialGasLimit - Gas : 0;
+  }
   static uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize,
                                                uint64_t NewSize);
   void consumeMemoryExpansionGas(uint64_t RequiredSize);
@@ -48,6 +52,7 @@ public:
   void chargeGas(uint64_t GasCost);
 
   void addGasRefund(uint64_t amount) { GasRefund += amount; }
+  uint64_t getGasRefund() const { return GasRefund; }
 
   // ==================== Memory Methods ====================
   size_t getMemorySize() const { return Memory.size(); }
@@ -117,6 +122,7 @@ private:
   Error Err = ErrorCode::NoError;
 
   uint64_t Gas = 0;
+  uint64_t InitialGasLimit = 0; // Track initial gas limit for each execution
   uint64_t GasRefund = 0;
   // memory
   std::vector<uint8_t> Memory;
