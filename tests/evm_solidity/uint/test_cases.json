@@ -1,0 +1,16 @@
+{
+  "main_contract": "uintTest",
+  "deploy_contracts": ["uintTest"],
+  "test_cases": [
+    {
+      "name": "add64",
+      "function": "add()",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "name": "testAddOverflow",
+      "function": "testAddOverflow()",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000001"
+    }
+  ]
+}
