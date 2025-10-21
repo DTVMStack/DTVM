@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
@@ -37,6 +37,9 @@ public:
       break;
     case MInstruction::BINARY:
       visitBinaryInstruction(static_cast<BinaryInstruction &>(I));
+      break;
+    case MInstruction::ADC:
+      visitAdcInstruction(static_cast<AdcInstruction &>(I));
       break;
     case MInstruction::OVERFLOW_I128_BINARY:
       visitWasmOverflowI128BinaryInstruction(
@@ -122,6 +125,7 @@ public:
   virtual void visitUnaryInstruction(UnaryInstruction &I) { VISIT_OPERAND_1 }
   virtual void visitBinaryInstruction(BinaryInstruction &I) { VISIT_OPERAND_2 }
   virtual void visitCmpInstruction(CmpInstruction &I) { VISIT_OPERAND_2 }
+  virtual void visitAdcInstruction(AdcInstruction &I) { VISIT_OPERAND_3 }
   virtual void visitSelectInstruction(SelectInstruction &I) { VISIT_OPERAND_3 }
   virtual void visitDassignInstruction(DassignInstruction &I) {
     VISIT_OPERAND_1

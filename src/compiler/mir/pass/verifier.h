@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
@@ -29,19 +29,21 @@ public:
       return;
     }
     const MInstruction *LastInst = *std::prev(BB.end());
-    CHECK(LastInst->isTerminator(),
-          "The last instruction in basic block must be terminator");
+    CHECK(LastInst->isTerminator(), "The last instruction in BB @" +
+                                        std::to_string(BB.getIdx()) +
+                                        " must be terminator");
     if (LastInst->getKind() == MInstruction::BR_IF) {
       const BrIfInstruction *BrIf = llvm::cast<BrIfInstruction>(LastInst);
-      CHECK(BrIf->hasFalseBlock(),
-            "The br_if instruction at the end of basic block must have "
-            "false target");
+      CHECK(BrIf->hasFalseBlock(), "The br_if instruction at the end of BB @" +
+                                       std::to_string(BB.getIdx()) +
+                                       "must have false target");
     }
     MVisitor::visitBasicBlock(BB);
   }
 
   void visitUnaryInstruction(UnaryInstruction &I) override;
   void visitBinaryInstruction(BinaryInstruction &I) override;
+  void visitAdcInstruction(AdcInstruction &I) override;
   void visitCmpInstruction(CmpInstruction &I) override;
   void visitSelectInstruction(SelectInstruction &I) override;
   void visitDassignInstruction(DassignInstruction &I) override;

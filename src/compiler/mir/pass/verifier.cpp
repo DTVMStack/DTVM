@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 #include "compiler/mir/pass/verifier.h"
 #include "compiler/mir/pointer.h"
@@ -11,6 +11,7 @@ void MVerifier::visitUnaryInstruction(UnaryInstruction &I) {
   switch (Opc) {
   case OP_clz:
   case OP_ctz:
+  case OP_not:
   case OP_popcnt:
     CHECK(OperandType->isInteger(),
           "The type of " + getOpcodeString(Opc) + " operand must be integer");
@@ -101,6 +102,21 @@ void MVerifier::visitWasmOverflowI128BinaryInstruction(
   CHECK(Instr.getType()->isI64(),
         "The type of wasm_overflow_i128_binary result must be i64");
   MVisitor::visitWasmOverflowI128BinaryInstruction(Instr);
+}
+
+void MVerifier::visitAdcInstruction(AdcInstruction &I) {
+  MType *Operand1Type = I.getOperand<0>()->getType();
+  MType *Operand2Type = I.getOperand<1>()->getType();
+  MType *CarryType = I.getOperand<2>()->getType();
+
+  CHECK(Operand1Type->getKind() == Operand2Type->getKind(),
+        "The first two operands of adc instruction must be of the same type");
+  CHECK(CarryType->isInteger(),
+        "The carry operand of adc instruction must be integer");
+  CHECK(Operand1Type->isInteger(),
+        "The first two operands of adc instruction must be integer");
+
+  MVisitor::visitAdcInstruction(I);
 }
 
 void MVerifier::visitCmpInstruction(CmpInstruction &I) {
