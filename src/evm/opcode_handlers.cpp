@@ -761,8 +761,7 @@ void SStoreHandler::doExecute() {
   }
   Frame->Msg->gas -= GasCost;
 
-  Frame->GasRefund += GasReFund;
-  // Track refund at Instance level
+  // Track refund at Instance level (consolidate all gas refund tracking there)
   Context->getInstance()->addGasRefund(GasReFund);
 }
 
@@ -1179,7 +1178,7 @@ void CreateHandler::doExecute() {
   Context->setResource();
   chargeGas(Frame,
             NewMsg.gas - Result.gas_left); // it's safe to charge gas here
-  Frame->GasRefund += Result.gas_refund;
+  Context->getInstance()->addGasRefund(Result.gas_refund);
 
   Context->setReturnData(std::vector<uint8_t>(
       Result.output_data, Result.output_data + Result.output_size));
@@ -1345,7 +1344,6 @@ void CallHandler::doExecute() {
   const auto GasUsed = NewMsg.gas - Result.gas_left;
   chargeGas(Frame, GasUsed); // it's safe to charge gas here
 
-  Frame->GasRefund += Result.gas_refund;
   // Track subcall refund at Instance level
   Context->getInstance()->addGasRefund(Result.gas_refund);
   Context->setStatus(Result.status_code);

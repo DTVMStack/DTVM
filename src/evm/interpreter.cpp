@@ -138,7 +138,8 @@ void BaseInterpreter::interpret() {
       if (!Frame) {
         const auto &ReturnData = Context.getReturnData();
         evmc::Result ExeResult(EVMC_SUCCESS, Frame ? Frame->Msg->gas : 0,
-                               Frame ? Frame->GasRefund : 0, ReturnData.data(),
+                               Context.getInstance()->getGasRefund(),
+                               ReturnData.data(),
                                ReturnData.size());
         Context.setExeResult(std::move(ExeResult));
         return;
@@ -510,7 +511,8 @@ void BaseInterpreter::interpret() {
       Frame = Context.getCurFrame();
       if (!Frame) {
         const auto &ReturnData = Context.getReturnData();
-        evmc::Result ExeResult(EVMC_SUCCESS, 0, Frame ? Frame->GasRefund : 0,
+        evmc::Result ExeResult(EVMC_SUCCESS, 0,
+                               Context.getInstance()->getGasRefund(),
                                ReturnData.data(), ReturnData.size());
         Context.setExeResult(std::move(ExeResult));
         return;
@@ -523,7 +525,8 @@ void BaseInterpreter::interpret() {
       Frame = Context.getCurFrame();
       if (!Frame) {
         const auto &ReturnData = Context.getReturnData();
-        evmc::Result ExeResult(EVMC_REVERT, 0, Frame ? Frame->GasRefund : 0,
+        evmc::Result ExeResult(EVMC_REVERT, 0,
+                               Context.getInstance()->getGasRefund(),
                                ReturnData.data(), ReturnData.size());
         Context.setExeResult(std::move(ExeResult));
         return;
@@ -541,7 +544,8 @@ void BaseInterpreter::interpret() {
       Frame = Context.getCurFrame();
       if (!Frame) {
         const auto &ReturnData = Context.getReturnData();
-        evmc::Result ExeResult(EVMC_SUCCESS, 0, Frame ? Frame->GasRefund : 0,
+        evmc::Result ExeResult(EVMC_SUCCESS, 0,
+                               Context.getInstance()->getGasRefund(),
                                ReturnData.data(), ReturnData.size());
         Context.setExeResult(std::move(ExeResult));
         return;
@@ -617,7 +621,7 @@ void BaseInterpreter::interpret() {
       case EVMC_INSUFFICIENT_BALANCE:
         // Fatal errors: consume all remaining gas and clear return data
         Frame->Msg->gas = 0;
-        Frame->GasRefund = 0;
+        Context.getInstance()->setGasRefund(0);
         Context.setReturnData(std::vector<uint8_t>());
         Context.freeBackFrame();
         Frame = Context.getCurFrame();
@@ -625,7 +629,7 @@ void BaseInterpreter::interpret() {
           const auto &ReturnData = Context.getReturnData();
           evmc::Result ExeResult(Context.getStatus(),
                                  Frame ? Frame->Msg->gas : 0,
-                                 Frame ? Frame->GasRefund : 0,
+                                 Context.getInstance()->getGasRefund(),
                                  ReturnData.data(), ReturnData.size());
           Context.setExeResult(std::move(ExeResult));
           return;
@@ -636,7 +640,7 @@ void BaseInterpreter::interpret() {
       default:
         // Generic failure: consume all remaining gas and clear return data
         Frame->Msg->gas = 0;
-        Frame->GasRefund = 0;
+        Context.getInstance()->setGasRefund(0);
         Context.setReturnData(std::vector<uint8_t>());
         Context.freeBackFrame();
         Frame = Context.getCurFrame();
@@ -644,7 +648,7 @@ void BaseInterpreter::interpret() {
           const auto &ReturnData = Context.getReturnData();
           evmc::Result ExeResult(Context.getStatus(),
                                  Frame ? Frame->Msg->gas : 0,
-                                 Frame ? Frame->GasRefund : 0,
+                                 Context.getInstance()->getGasRefund(),
                                  ReturnData.data(), ReturnData.size());
           Context.setExeResult(std::move(ExeResult));
           return;
@@ -658,7 +662,8 @@ void BaseInterpreter::interpret() {
   }
   const auto &ReturnData = Context.getReturnData();
   evmc::Result ExeResult(Context.getStatus(), Frame ? Frame->Msg->gas : 0,
-                         Frame ? Frame->GasRefund : 0, ReturnData.data(),
+                         Context.getInstance()->getGasRefund(),
+                         ReturnData.data(),
                          ReturnData.size());
   Context.setExeResult(std::move(ExeResult));
 }

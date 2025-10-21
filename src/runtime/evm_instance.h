@@ -66,6 +66,7 @@ public:
   void chargeGas(uint64_t GasCost);
 
   void addGasRefund(uint64_t amount) { GasRefund += amount; }
+  void setGasRefund(uint64_t amount) { GasRefund = amount; }
   uint64_t getGasRefund() const { return GasRefund; }
 
   // ==================== Memory Methods ====================
