@@ -601,7 +601,8 @@ private:
       default:
         ExitCode = 1; // EVMC_FAILURE;
       }
-      // Ctx->setError(exitCode);
+      // TODO: Store the abnormal state in the evmc_status_code type
+      // for example, Ctx->setError(exitCode);
       return false;
     }
     return true;
