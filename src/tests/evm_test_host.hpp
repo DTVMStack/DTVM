@@ -98,8 +98,10 @@ public:
 
       // Calculate gas consumed and remaining
       int64_t RemainingGas = Msg.gas - Ctx.getGasUsed();
+      int64_t GasRefund = Ctx.getGasRefund();
       ReturnData = Ctx.getReturnData();
-      return evmc::Result(Ctx.getStatus(), RemainingGas, 0,
+
+      return evmc::Result(Ctx.getStatus(), RemainingGas, GasRefund,
                           ReturnData.empty() ? nullptr : ReturnData.data(),
                           ReturnData.size());
 

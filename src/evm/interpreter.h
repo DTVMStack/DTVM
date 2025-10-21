@@ -76,6 +76,7 @@ private:
   std::vector<uint8_t> ReturnData;
   evmc::Result ExeResult;
   uint64_t GasUsed = 0;
+  uint64_t TotalRefund = 0; // Accumulated gas refund for this execution context
 
 public:
   bool IsJump = false;
@@ -99,6 +100,12 @@ public:
   runtime::EVMInstance *getInstance() { return Inst; }
 
   uint64_t getGasUsed() const { return GasUsed; }
+
+  // Get the accumulated gas refund
+  uint64_t getGasRefund() const { return TotalRefund; }
+
+  // Add to the accumulated gas refund (called by SSTORE handler)
+  void addGasRefund(uint64_t Refund) { TotalRefund += Refund; }
 
   void setCallData(const std::vector<uint8_t> &Data);
   void setTxContext(const evmc_tx_context &TxContext);

@@ -250,8 +250,17 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
         PriorityFee = GasPrice > BaseFee ? GasPrice - BaseFee : 0;
       }
 
-      uint64_t TotalGasCost = ExecutionGasUsed * GasPrice;
-      uint64_t CoinBaseGas = ExecutionGasUsed * PriorityFee;
+      // Apply gas refund with EIP-3529 limit (London: max_refund = gas_used /
+      // 5)
+      uint64_t GasRefund = Ctx.getGasRefund();
+      // For now, assume London or later (max_refund = gas_used / 5)
+      // TODO: get actual revision from the fork name
+      uint64_t RefundLimit = ExecutionGasUsed / 5;
+      uint64_t EffectiveRefund = std::min(GasRefund, RefundLimit);
+      uint64_t GasCharged = ExecutionGasUsed - EffectiveRefund;
+
+      uint64_t TotalGasCost = GasCharged * GasPrice;
+      uint64_t CoinBaseGas = GasCharged * PriorityFee;
 
       // Subtract gas cost from sender balance using intx arithmetic
       intx::uint256 SenderBalance =
