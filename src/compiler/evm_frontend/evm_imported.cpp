@@ -802,7 +802,8 @@ uint64_t evmHandleCallCode(zen::runtime::EVMInstance *Instance, uint64_t Gas,
 }
 
 void evmHandleInvalid(zen::runtime::EVMInstance *Instance) {
-  throw zen::common::getError(zen::common::ErrorCode::EVMInvalidInstruction);
+  // Immediately terminate the execution and return the revert code (2)
+  Instance->exit(4);
 }
 
 uint64_t evmHandleDelegateCall(zen::runtime::EVMInstance *Instance,
