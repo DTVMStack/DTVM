@@ -41,9 +41,26 @@ public:
 
   uint64_t getGas() const { return Gas; }
   void setGas(uint64_t NewGas);
-  void setInitialGasLimit(uint64_t Limit) { InitialGasLimit = Limit; }
+  void pushInitialGasLimit(uint64_t Limit) {
+    InitialGasLimitStack.push_back(Limit);
+  }
+  void popInitialGasLimit() {
+    if (!InitialGasLimitStack.empty())
+      InitialGasLimitStack.pop_back();
+  }
   uint64_t getGasUsed() const {
-    return InitialGasLimit > Gas ? InitialGasLimit - Gas : 0;
+    if (InitialGasLimitStack.empty())
+      return 0;
+    uint64_t InitialLimit = InitialGasLimitStack.back();
+    // Get the remaining gas from the current message if available
+    uint64_t CurrentGas = Gas;
+    const evmc_message *Msg = getCurrentMessage();
+    if (Msg) {
+      CurrentGas = static_cast<uint64_t>(Msg->gas);
+    }
+    uint64_t GasUsed =
+        InitialLimit > CurrentGas ? InitialLimit - CurrentGas : 0;
+    return GasUsed;
   }
   static uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize,
                                                uint64_t NewSize);
@@ -122,8 +139,9 @@ private:
   Error Err = ErrorCode::NoError;
 
   uint64_t Gas = 0;
-  uint64_t InitialGasLimit = 0; // Track initial gas limit for each execution
   uint64_t GasRefund = 0;
+  std::vector<uint64_t>
+      InitialGasLimitStack; // Stack to track initial gas for each frame
   // memory
   std::vector<uint8_t> Memory;
   std::vector<uint8_t> ReturnData;

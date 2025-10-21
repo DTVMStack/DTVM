@@ -253,6 +253,9 @@ public:
       const auto Status = Ctx.getStatus();
       ReturnData = Ctx.getReturnData();
 
+      // Pop the gas limit stack when this frame is done
+      Ctx.getInstance()->popInitialGasLimit();
+
       // 6 Deploy the contract code (the output is the runtime code)
       if (Status != EVMC_SUCCESS) {
           accounts.erase(NewAddr);
