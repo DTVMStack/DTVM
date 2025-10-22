@@ -140,6 +140,8 @@ private:
   std::vector<void *> Traces;
 };
 
+// Note: Similar to WASM initPlatformTrapHandler, keep logic consistent
+// TODO: Refactor to share common code with WASM version
 bool initEVMPlatformTrapHandler();
 
 // when gcc no-frame-pointer, the rbp of triggerInstanceExceptionOnJIT
