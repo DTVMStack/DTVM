@@ -41,14 +41,8 @@ void EVMJITCompiler::compileEVMToMC(EVMFrontendContext &Ctx, MModule &Mod,
   // Create MFunction for EVM bytecode compilation
   MFunction MFunc(Ctx, FuncIdx);
   CgFunction CgFunc(Ctx, MFunc);
-
-  // Set up EVM MIR builder
-  EVMMirBuilder MIRBuilder(Ctx, MFunc);
-
-  // Set bytecode for compilation
   MFunc.setFunctionType(Mod.getFuncType(FuncIdx));
-
-  // Compile EVM bytecode to MIR
+  EVMMirBuilder MIRBuilder(Ctx, MFunc);
   MIRBuilder.compile(&Ctx);
 
   // Apply MIR optimizations and generate machine code
@@ -66,16 +60,8 @@ void EagerEVMJITCompiler::compile() {
   Ctx.setBytecode(reinterpret_cast<const Byte *>(EVMMod->Code),
                   EVMMod->CodeSize);
 
-  // Create MModule for EVM
   MModule Mod(Ctx);
-
-  // Create function type for EVM (only one func in EVM)
-  MType *VoidType = &Ctx.VoidType;
-  MType *I64Type = &Ctx.I64Type;
-  llvm::SmallVector<MType *, 1> Params = {I64Type};
-  MFunctionType *FuncType = MFunctionType::create(Ctx, *VoidType, Params);
-  Mod.addFuncType(FuncType);
-
+  buildEVMFunction(Ctx, Mod, *EVMMod);
   Ctx.CodeMPool = &EVMMod->getJITCodeMemPool();
 
 #ifdef ZEN_ENABLE_LINUX_PERF

@@ -4,13 +4,8 @@
 #include "compiler/evm_frontend/evm_mir_compiler.h"
 #include "action/evm_bytecode_visitor.h"
 #include "compiler/evm_frontend/evm_imported.h"
-#include "compiler/mir/basic_block.h"
-#include "compiler/mir/constants.h"
-#include "compiler/mir/function.h"
-#include "compiler/mir/instructions.h"
-#include "compiler/mir/type.h"
+#include "compiler/mir/module.h"
 #include "evmc/evmc.hpp"
-#include "evmc/instructions.h"
 #include "runtime/evm_instance.h"
 
 namespace COMPILER {
@@ -44,6 +39,14 @@ MType *EVMFrontendContext::getMIRTypeFromEVMType(EVMType Type) {
     throw getErrorWithPhase(ErrorCode::UnexpectedType, ErrorPhase::Compilation,
                             ErrorSubphase::MIREmission);
   }
+}
+
+void buildEVMFunction(EVMFrontendContext &Context, MModule &MMod,
+                      const runtime::EVMModule &EVMMod) {
+  CompileVector<MType *> MParamTypes(1, Context.ThreadMemPool);
+  MParamTypes[0] = MPointerType::create(Context, Context.VoidType);
+  MType *MRetType = Context.getMIRTypeFromEVMType(EVMType::VOID);
+  MMod.addFuncType(MFunctionType::create(Context, *MRetType, MParamTypes));
 }
 
 // ==================== EVMFrontendContext Implementation ====================
@@ -83,13 +86,10 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   InstructionMetrics =
       evmc_get_instruction_metrics_table(zen::evm::DEFAULT_REVISION);
 
-  // Initialize instance address for JIT function calls
-  loadEVMInstanceAttr();
-
-  // Initialize program counter
   PC = 0;
-
   createJumpTable();
+  ReturnBB = createBasicBlock();
+  loadEVMInstanceAttr();
 }
 
 void EVMMirBuilder::finalizeEVMBase() {
@@ -131,10 +131,49 @@ void EVMMirBuilder::finalizeEVMBase() {
     addSuccessor(ExceptionReturnBB);
   };
 
+#if defined(ZEN_ENABLE_CPU_EXCEPTION) && !defined(ZEN_ENABLE_DWASM)
+  // When check call exception after call_indirect or call hostapi, just
+  // throw, no need set args again
+  auto ThrowException = [&] {
+    MInstruction *ThrowExceptionAddr = createIntConstInstruction(
+        &Ctx.I64Type,
+        uintptr_t(zen::runtime::EVMInstance::throwInstanceExceptionOnJIT));
+
+    CompileVector<MInstruction *> ThrowExceptionArgs{
+        {InstanceAddr},
+        Ctx.MemPool,
+    };
+    createInstruction<ICallInstruction>(true, &Ctx.VoidType, ThrowExceptionAddr,
+                                        ThrowExceptionArgs);
+  };
+  // Has exceptions that cannot be checked by cpu-hardware
+  // No need to worry about underflow
+  bool HasPureSoftException =
+      ExceptionSetBBs.size() -
+          ExceptionSetBBs.count(ErrorCode::IntegerDivByZero) -
+          ExceptionSetBBs.count(ErrorCode::OutOfBoundsMemory) >
+      0;
+
+  if (HasPureSoftException) {
+    GenExceptionSetBBs();
+    setInsertBlock(ExceptionHandlingBB);
+    HandleException(
+        uintptr_t(zen::runtime::EVMInstance::setInstanceExceptionOnJIT));
+    setInsertBlock(ExceptionReturnBB);
+    ThrowException();
+    handleVoidReturn();
+  } else {
+    CurFunc->deleteMBasicBlock(ExceptionHandlingBB);
+    CurFunc->deleteMBasicBlock(ExceptionReturnBB);
+  }
+#else
   GenExceptionSetBBs();
   setInsertBlock(ExceptionHandlingBB);
-  HandleException(uintptr_t(Instance::triggerInstanceExceptionOnJIT));
+  HandleException(
+      uintptr_t(zen::runtime::EVMInstance::triggerInstanceExceptionOnJIT));
   setInsertBlock(ExceptionReturnBB);
+  handleVoidReturn();
+#endif
 }
 
 LoadInstruction *EVMMirBuilder::getInstanceElement(MType *ValueType,
@@ -202,6 +241,17 @@ void EVMMirBuilder::meterGas(uint64_t GasCost) {
   setInsertBlock(PostBB);
 }
 
+void EVMMirBuilder::handleStop() {
+  createInstruction<BrInstruction>(true, Ctx, ReturnBB);
+  addSuccessor(ReturnBB);
+  setInsertBlock(ReturnBB);
+  createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
+}
+
+void EVMMirBuilder::handleVoidReturn() {
+  createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
+}
+
 void EVMMirBuilder::createJumpTable() {
   const EVMFrontendContext *EvmCtx =
       static_cast<const EVMFrontendContext *>(&Ctx);
@@ -211,7 +261,6 @@ void EVMMirBuilder::createJumpTable() {
   for (size_t PC = 0; PC < BytecodeSize; ++PC) {
     if (Bytecode[PC] == static_cast<Byte>(evmc_opcode::OP_JUMPDEST)) {
       MBasicBlock *DestBB = createBasicBlock();
-      CurFunc->appendBlock(DestBB);
       JumpDestTable[PC] = DestBB;
     } else if (static_cast<Byte>(evmc_opcode::OP_PUSH0) <= Bytecode[PC] &&
                Bytecode[PC] <= static_cast<Byte>(evmc_opcode::OP_PUSH32)) {
@@ -299,6 +348,9 @@ void EVMMirBuilder::handleJump(Operand Dest) {
   MBasicBlock *InvalidJumpBB =
       getOrCreateExceptionSetBB(ErrorCode::EVMBadJumpDestination);
   implementIndirectJump(JumpTarget, InvalidJumpBB);
+
+  MBasicBlock *SkipBB = createBasicBlock();
+  setInsertBlock(SkipBB);
 }
 
 void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
@@ -344,6 +396,11 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
   }
 
   setInsertBlock(FallThroughBB);
+}
+
+void EVMMirBuilder::handleJumpDest(const uint64_t &PC) {
+  MBasicBlock *DestBB = JumpDestTable.at(PC);
+  setInsertBlock(DestBB);
 }
 
 // ==================== Arithmetic Instruction Handlers ====================
@@ -1729,7 +1786,7 @@ EVMMirBuilder::callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *)) {
   MType *ReturnType = getMIRReturnType<RetType>();
 
   MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      false, ReturnType, FuncAddrInst,
+      true, ReturnType, FuncAddrInst,
       llvm::ArrayRef<MInstruction *>(InstancePtr));
 
   return convertCallResult<RetType>(CallInstr);
@@ -1855,8 +1912,7 @@ EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
 
   MType *ReturnType = getMIRReturnType<RetType>();
   MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      /*isTail*/ false, ReturnType, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>{Args});
+      true, ReturnType, FuncAddrInst, llvm::ArrayRef<MInstruction *>{Args});
 
   return convertCallResult<RetType>(CallInstr);
 }

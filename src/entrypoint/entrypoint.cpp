@@ -7,6 +7,7 @@
 #include "entrypoint/entrypoint.h"
 #include "common/errors.h"
 #include "common/type.h"
+#include "runtime/evm_instance.h"
 #include "runtime/instance.h"
 
 namespace zen::entrypoint {
@@ -122,6 +123,45 @@ void callNativeGeneral(Instance *Instance, GenericFunctionPointer FuncPtr,
       ZEN_ASSERT_TODO();
     }
   }
+
+  if (Instance) {
+    Instance->getRuntime()->endCPUTracing();
+  }
+
+  if (ArgcNative > sizeof(ArgvBuf) / sizeof(uint64_t)) {
+    MPool->deallocate(ArgvNative);
+  }
+}
+
+void callNativeGeneral(EVMInstance *Instance, GenericFunctionPointer FuncPtr,
+                       SysMemPool *MPool, bool SkipInstanceProcessing) {
+
+  uint64_t ArgvBuf[32] = {0};
+  uint64_t *ArgvNative = ArgvBuf;
+
+  uint64_t ArgcNative = 1 + MaxFloatRegs * 2;
+  if (ArgcNative > sizeof(ArgvBuf) / sizeof(uint64_t)) {
+    ArgvNative =
+        static_cast<uint64_t *>(MPool->allocate(sizeof(uint64_t) * ArgcNative));
+    ZEN_ASSERT(ArgvNative);
+  }
+
+  uint32_t NumIntArgs = 0;   // number of used integer registers
+  uint32_t NumStackArgs = 0; // number of used stack cell
+
+  V128 *Fps = (V128 *)ArgvNative;                    // store float registers
+  uint64_t *Ints = (uint64_t *)(Fps + MaxFloatRegs); // store integer registers
+
+  if (Instance) {
+    Ints[NumIntArgs++] = (uint64_t)(uintptr_t)Instance;
+  } else {
+    SkipInstanceProcessing = true;
+  }
+
+  if (Instance) {
+    Instance->getRuntime()->startCPUTracing();
+  }
+  callNative_Void(FuncPtr, ArgvNative, NumStackArgs, SkipInstanceProcessing);
 
   if (Instance) {
     Instance->getRuntime()->endCPUTracing();

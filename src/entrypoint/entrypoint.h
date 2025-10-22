@@ -47,6 +47,7 @@ struct TypedValue;
 
 namespace runtime {
 class Instance;
+class EVMInstance;
 } // namespace runtime
 
 namespace entrypoint {
@@ -57,6 +58,11 @@ void callNativeGeneral(runtime::Instance *Instance,
                        std::vector<common::TypedValue> &Results,
                        common::SysMemPool *MPool,
                        bool SkipInstProcessing = false);
+
+void callNativeGeneral(runtime::EVMInstance *Instance,
+                       GenericFunctionPointer FuncPtr,
+                       common::SysMemPool *MPool,
+                       bool SkipInstanceProcessing = false);
 
 } // namespace entrypoint
 } // namespace zen

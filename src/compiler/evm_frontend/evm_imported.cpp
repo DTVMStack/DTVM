@@ -658,8 +658,9 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
     std::memcpy(CreateMsg.create2_salt.bytes, Salt, 32);
   }
 
-  // Call host to handle CREATE/CREATE2
+  Instance->pushMessage(&CreateMsg);
   evmc::Result Result = Module->Host->call(CreateMsg);
+  Instance->popMessage();
 
   // Store return data
   std::vector<uint8_t> ReturnData(Result.output_data,
@@ -759,8 +760,9 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     return 0;
   }
 
-  // Perform the call
+  Instance->pushMessage(&CallMsg);
   evmc::Result Result = Module->Host->call(CallMsg);
+  Instance->popMessage();
 
   // Copy return data to memory if output area is specified
   if (RetSize > 0 && Result.output_size > 0) {

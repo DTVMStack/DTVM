@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #include "runtime/evm_instance.h"
@@ -6,9 +6,10 @@
 #include "action/instantiator.h"
 #include "common/enums.h"
 #include "common/errors.h"
-#include "common/traphandler.h"
+#include "common/evm_traphandler.h"
 #include "entrypoint/entrypoint.h"
 #include "runtime/config.h"
+#include "utils/backtrace.h"
 #include <algorithm>
 
 namespace zen::runtime {
@@ -18,6 +19,10 @@ using namespace common;
 EVMInstanceUniquePtr EVMInstance::newEVMInstance(Isolation &Iso,
                                                  const EVMModule &Mod,
                                                  uint64_t GasLimit) {
+#ifdef ZEN_ENABLE_CPU_EXCEPTION
+  [[maybe_unused]] static bool _ =
+      common::evm_traphandler::initEVMPlatformTrapHandler();
+#endif // ZEN_ENABLE_CPU_EXCEPTION
 
   Runtime *RT = Mod.getRuntime();
   void *Buf = RT->allocate(sizeof(EVMInstance), ALIGNMENT);
@@ -63,6 +68,48 @@ uint64_t EVMInstance::calculateMemoryExpansionCost(uint64_t CurrentSize,
   uint64_t NewCost = MemoryCost(NewWords);
   return NewCost - CurrentCost;
 }
+
+void EVMInstance::setExecutionError(const Error &NewErr, uint32_t IgnoredDepth,
+                                    common::evm_traphandler::EVMTrapState TS) {
+  ZEN_ASSERT(NewErr.getPhase() == common::ErrorPhase::Execution);
+  setError(NewErr);
+
+  if (NewErr.getCode() == ErrorCode::GasLimitExceeded) {
+    setGas(0); // gas left
+  }
+}
+
+void EVMInstance::exit(int32_t ExitCode) {
+  this->InstanceExitCode = ExitCode;
+  setExceptionByHostapi(common::getError(ErrorCode::InstanceExit));
+}
+
+#ifdef ZEN_ENABLE_JIT
+
+void EVMInstance::setInstanceExceptionOnJIT(EVMInstance *Inst,
+                                            common::ErrorCode ErrCode) {
+  Inst->setExecutionError(common::getError(ErrCode), 1,
+                          common::evm_traphandler::EVMTrapState{});
+}
+
+void EVMInstance::throwInstanceExceptionOnJIT(EVMInstance *Inst) {
+#ifdef ZEN_ENABLE_CPU_EXCEPTION
+  SAVE_EVM_HOSTAPI_FRAME_POINTER_TO_TLS
+
+  utils::throwCpuIllegalInstructionTrap();
+#endif // ZEN_ENABLE_CPU_EXCEPTION
+}
+
+void EVMInstance::triggerInstanceExceptionOnJIT(EVMInstance *Inst,
+                                                common::ErrorCode ErrCode) {
+  // Not use setInstanceExceptionOnJIT instead of the following code, because we
+  // need correct `ignored_depth`
+  Inst->setExecutionError(common::getError(ErrCode), 1,
+                          common::evm_traphandler::EVMTrapState{});
+
+  throwInstanceExceptionOnJIT(Inst);
+}
+#endif // ZEN_ENABLE_JIT
 
 void EVMInstance::consumeMemoryExpansionGas(uint64_t RequiredSize) {
   uint64_t ExpansionCost =

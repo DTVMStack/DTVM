@@ -540,7 +540,7 @@ private:
         }
 
         case OP_JUMPDEST: {
-          // Note: already processed in `EVMMirBuilder::createJumpTable()`
+          Builder.handleJumpDest(PC);
           break;
         }
 
@@ -562,19 +562,19 @@ private:
           Operand MemOffset = pop();
           Operand Length = pop();
           Builder.handleReturn(MemOffset, Length);
-          return true;
+          break;
         }
 
         case OP_REVERT: {
           Operand OffsetOp = pop();
           Operand SizeOp = pop();
           Builder.handleRevert(OffsetOp, SizeOp);
-          return true;
+          break;
         }
 
         case OP_INVALID: {
           Builder.handleInvalid();
-          return true;
+          break;
         }
 
         default:

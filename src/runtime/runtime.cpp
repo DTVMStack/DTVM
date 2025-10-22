@@ -4,6 +4,7 @@
 #include "runtime/runtime.h"
 
 #ifdef ZEN_ENABLE_CPU_EXCEPTION
+#include "common/evm_traphandler.h"
 #include <csetjmp>
 #include <csignal>
 #include <pthread.h>
@@ -665,6 +666,7 @@ void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
   evmc_message MsgWithCode = Msg;
   MsgWithCode.code = reinterpret_cast<uint8_t *>(Inst.getModule()->Code);
   MsgWithCode.code_size = Inst.getModule()->CodeSize;
+  Inst.pushMessage(&MsgWithCode);
   if (getConfig().Mode == RunMode::InterpMode) {
     callEVMInInterpMode(Inst, MsgWithCode, Result);
   } else {
@@ -792,9 +794,112 @@ void Runtime::callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
 
 void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
                                evmc::Result &Result) {
-  // TODO: Implement EVM JIT compilation and execution
-  // For now, fallback to interpreter mode as placeholder
-  callEVMInInterpMode(Inst, Msg, Result);
+  EVMModule *Module = const_cast<EVMModule *>(Inst.getModule());
+  auto FuncPtr = GenericFunctionPointer(Module->getJITCode());
+
+#ifdef ZEN_ENABLE_CPU_EXCEPTION
+  jmp_buf JmpBuf;
+  common::evm_traphandler::EVMCallThreadState TLS(&Inst, &JmpBuf,
+                                                  __builtin_frame_address(0));
+
+  // longjmp with asan(in gcc-9) not works well, it affects the asan stack
+  // malloc. so use wrapper func to recover the stack
+  auto CallEVMFnWrapper = [&]() {
+    int JmpSignum = ::setjmp(JmpBuf);
+    if (JmpSignum == 0) {
+      TLS.restartHandler();
+#endif // ZEN_ENABLE_CPU_EXCEPTION
+
+      entrypoint::callNativeGeneral(&Inst, FuncPtr, this->getMemAllocator());
+      // Normal execution - set status to success (0)
+      Result.status_code = EVMC_SUCCESS;
+
+#ifdef ZEN_ENABLE_CPU_EXCEPTION
+    } else { // When cpu-exception
+      // NoError means not need capture trap state
+      ErrorCode CapturedTapErrCode = ErrorCode::NoError;
+      evmc_status_code StatusCode = EVMC_SUCCESS;
+      switch (JmpSignum) {
+      case SIGSEGV:
+      case SIGBUS: {
+        // out of bounds signal
+        CapturedTapErrCode = ErrorCode::OutOfBoundsMemory;
+        StatusCode = EVMC_INVALID_MEMORY_ACCESS;
+#ifdef ZEN_ENABLE_STACK_CHECK_CPU
+        // when the accessed address in virtual stack, raise CallStackExhausted
+        auto *FaultingAddress =
+            static_cast<uint8_t *>(TLS.getTrapState().FaultingAddress);
+#ifdef ZEN_ENABLE_VIRTUAL_STACK
+        auto *VirtualStack = Inst.currentVirtualStack();
+        if (FaultingAddress != nullptr && VirtualStack) {
+          if (FaultingAddress >= VirtualStack->AllInfo &&
+              FaultingAddress < VirtualStack->StackMemoryTop) {
+            CapturedTapErrCode = ErrorCode::CallStackExhausted;
+            StatusCode = EVMC_STACK_OVERFLOW;
+          }
+        }
+#else
+
+#ifdef ZEN_BUILD_PLATFORM_DARWIN
+        // on darwin get stack info
+        void *StackAddr = pthread_get_stackaddr_np(pthread_self());
+        size_t StackSize = pthread_get_stacksize_np(pthread_self());
+#else
+        // on linux get stack info
+        pthread_attr_t Attrs;
+        pthread_getattr_np(pthread_self(), &Attrs);
+
+        void *StackAddr;
+        size_t StackSize;
+        pthread_attr_getstack(&Attrs, &StackAddr, &StackSize);
+#endif
+
+        size_t GuardSize =
+            common::StackGuardSize; // stack overflow guard, when overflow not
+                                    // in dwasm, not greater then StackGuardSize
+                                    // bytes
+        if ((uintptr_t)FaultingAddress >= (uintptr_t)StackAddr - GuardSize &&
+            (uintptr_t)FaultingAddress < ((uintptr_t)StackAddr + StackSize)) {
+          CapturedTapErrCode = ErrorCode::CallStackExhausted;
+          StatusCode = EVMC_STACK_OVERFLOW;
+        }
+#ifndef ZEN_BUILD_PLATFORM_DARWIN
+        pthread_attr_destroy(&Attrs);
+#endif // ZEN_BUILD_PLATFORM_DARWIN
+
+#endif // ZEN_ENABLE_VIRTUAL_STACK
+
+#endif // ZEN_ENABLE_STACK_CHECK_CPU
+        break;
+      }
+      default: {
+        // SIGILL not process here. the traces set by EVMInstance::setException
+        StatusCode = EVMC_INTERNAL_ERROR;
+        break;
+      }
+      }
+      if (Inst.getError().getCode() == ErrorCode::GasLimitExceeded) {
+        Inst.setGas(0);
+        StatusCode = EVMC_OUT_OF_GAS;
+      } else if (Config.Mode == RunMode::SinglepassMode) {
+        // restore gas left from register when trap in singlepass JIT mode
+        Inst.setGas(TLS.getGasRegisterValue());
+      }
+      if (CapturedTapErrCode != ErrorCode::NoError) {
+        const auto &TrapState = TLS.getTrapState();
+        Inst.setExecutionError(common::getError(CapturedTapErrCode),
+                               TrapState.NumIgnoredFrames, TrapState);
+      }
+
+      // Set error status code
+      Result.status_code = StatusCode;
+    }
+  };
+  CallEVMFnWrapper();
+#else
+  // No CPU exception handling - assume success
+  Result.status_code = EVMC_SUCCESS;
+#endif // ZEN_ENABLE_CPU_EXCEPTION
 }
 #endif // ZEN_ENABLE_JIT
 

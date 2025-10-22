@@ -82,6 +82,9 @@ private:
   bool GasMeteringEnabled = false;
 };
 
+void buildEVMFunction(EVMFrontendContext &Context, MModule &MMod,
+                      const runtime::EVMModule &EVMMod);
+
 class EVMMirBuilder final {
 public:
   typedef EVMFrontendContext CompilerContext;
@@ -182,12 +185,11 @@ public:
 
   // ==================== Control Flow Instruction Handlers ====================
 
-  void handleStop() {
-    createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
-  }
-
+  void handleStop();
+  void handleVoidReturn();
   void handleJump(Operand Dest);
   void handleJumpI(Operand Dest, Operand Cond);
+  void handleJumpDest(const uint64_t &PC);
 
   // ==================== Arithmetic Instruction Handlers ====================
 
@@ -554,6 +556,7 @@ private:
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;
   MBasicBlock *CurBB = nullptr;
+  MBasicBlock *ReturnBB = nullptr;
 
   // Instance address for JIT function calls
   MInstruction *InstanceAddr = nullptr;

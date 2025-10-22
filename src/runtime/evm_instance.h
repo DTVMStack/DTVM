@@ -4,6 +4,7 @@
 #ifndef ZEN_RUNTIME_EVM_INSTANCE_H
 #define ZEN_RUNTIME_EVM_INSTANCE_H
 
+#include "common/evm_traphandler.h"
 #include "evm/evm.h"
 #include "evm/gas_storage_cost.h"
 #include "evmc/evmc.hpp"
@@ -68,6 +69,36 @@ public:
   }
   evmc_revision getRevision() const { return Rev; }
 
+  const Error &getError() const { return Err; }
+  void setError(const Error &E) { Err = E; }
+  void clearError() { Err = ErrorCode::NoError; }
+
+  // can only called by hostapi directly
+  // setExceptionByHostapi must be inline to capture the hostapi's frame
+  // pointer
+  void __attribute__((always_inline))
+  setExceptionByHostapi(const Error &NewErr) {
+    setExecutionError(NewErr, 1, {});
+  }
+
+  // ignored_depth: the distance from the setExecutionError to the top of
+  // expected call stack
+  void __attribute__((noinline))
+  setExecutionError(const Error &NewErr, uint32_t IgnoredDepth = 0,
+                    common::evm_traphandler::EVMTrapState TS = {});
+
+  // ==================== JIT Methods ====================
+
+#ifdef ZEN_ENABLE_JIT
+  static void __attribute__((noinline))
+  setInstanceExceptionOnJIT(EVMInstance *Inst, ErrorCode ErrCode);
+  static void __attribute__((noinline))
+  throwInstanceExceptionOnJIT(EVMInstance *Inst);
+  // trigger = set + throw
+  static void __attribute__((noinline))
+  triggerInstanceExceptionOnJIT(EVMInstance *Inst, ErrorCode ErrCode);
+#endif // ZEN_ENABLE_JIT
+
   struct PairHash {
     template <class T1, class T2>
     std::size_t operator()(const std::pair<T1, T2> &Pair) const {
@@ -92,7 +123,7 @@ public:
     ReturnData = std::move(Data);
   }
   const std::vector<uint8_t> &getReturnData() const { return ReturnData; }
-  void exit(int32_t ExitCode) { InstanceExitCode = ExitCode; }
+  void exit(int32_t ExitCode);
   int32_t getExitCode() const { return InstanceExitCode; }
 
   static constexpr int32_t getGasFieldOffset() {
