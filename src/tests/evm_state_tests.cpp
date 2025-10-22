@@ -164,7 +164,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     BaseInterpreter Interpreter(Ctx);
 
     evmc_message Msg = *PT.Message;
-    Ctx.allocFrame(&Msg);
+    Ctx.allocTopFrame(&Msg);
 
     // Set the host for the execution frame
     auto *Frame = Ctx.getCurFrame();

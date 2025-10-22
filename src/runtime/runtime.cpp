@@ -655,7 +655,7 @@ void Runtime::callEVMInInterpMode(EVMInstance &Inst, evmc_message &Msg,
                                   evmc::Result &Result) {
   evm::InterpreterExecContext Ctx(&Inst);
   evm::BaseInterpreter Interpreter(Ctx);
-  Ctx.allocFrame(&Msg);
+  Ctx.allocTopFrame(&Msg);
   Interpreter.interpret();
   Result = std::move(const_cast<evmc::Result &>(Ctx.getExeResult()));
 }

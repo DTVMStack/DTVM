@@ -11,33 +11,7 @@ using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
 
-EVMFrame *InterpreterExecContext::allocFrame(
-    evmc_message *ParentMsg, uint64_t GasLimit, evmc_call_kind Kind,
-    evmc::address Recipient, evmc::address Sender,
-    std::vector<uint8_t> CallData, intx::uint256 Value) {
-  EVM_REQUIRE(GasLimit >= BASIC_EXECUTION_COST, EVMOutOfGas);
-
-  FrameStack.emplace_back();
-
-  EVMFrame &Frame = FrameStack.back();
-
-  Frame.Msg = std::make_unique<evmc_message>();
-  Frame.Msg->kind = Kind;
-  Frame.Msg->flags = ParentMsg->flags;
-  Frame.Msg->depth = ParentMsg->depth + 1;
-  Frame.Msg->gas = GasLimit - BASIC_EXECUTION_COST;
-  Frame.Msg->value = intx::be::store<evmc::bytes32>(Value);
-  Frame.Msg->recipient = Recipient;
-  Frame.Msg->sender = Sender;
-  Frame.Msg->input_data = CallData.data();
-  Frame.Msg->input_size = CallData.size();
-
-  Inst->pushInitialGasLimit(GasLimit);
-
-  return &Frame;
-}
-
-EVMFrame *InterpreterExecContext::allocFrame(evmc_message *Msg) {
+EVMFrame *InterpreterExecContext::allocTopFrame(evmc_message *Msg) {
   // Only deduct intrinsic gas (BASIC_EXECUTION_COST) for top-level transactions
   // (depth == 0) Nested calls (depth > 0) should not pay intrinsic gas
   const bool IsTopLevel = (Msg->depth == 0);

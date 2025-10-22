@@ -590,7 +590,7 @@ TEST_P(SolidityContractTest, ExecuteContractSequence) {
         .code = nullptr,
         .code_size = 0,
     };
-    DeployCtx.allocFrame(&Msg);
+    DeployCtx.allocTopFrame(&Msg);
     // Set the host for the execution frame
     auto *Frame = DeployCtx.getCurFrame();
     Frame->Host = MockedHost;
@@ -697,7 +697,7 @@ TEST_P(SolidityContractTest, ExecuteContractSequence) {
             ContractInstance.Instance->getModule()->Code),
         .code_size = ContractInstance.Instance->getModule()->CodeSize,
     };
-    CallCtx.allocFrame(&Msg);
+    CallCtx.allocTopFrame(&Msg);
     // Set the host for the execution frame
     auto *Frame = CallCtx.getCurFrame();
     Frame->Host = MockedHost;

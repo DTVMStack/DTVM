@@ -80,11 +80,7 @@ public:
 
   InterpreterExecContext(runtime::EVMInstance *Inst) : Inst(Inst) {}
 
-  EVMFrame *allocFrame(evmc_message *ParentMsg, uint64_t GasLimit,
-                       evmc_call_kind Kind, evmc::address Recipient,
-                       evmc::address Sender, std::vector<uint8_t> CallData,
-                       intx::uint256 Value);
-  EVMFrame *allocFrame(evmc_message *Msg);
+  EVMFrame *allocTopFrame(evmc_message *Msg);
   void freeBackFrame();
 
   EVMFrame *getCurFrame() {

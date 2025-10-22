@@ -200,7 +200,7 @@ TEST_P(EVMSampleTest, ExecuteSample) {
       .code = reinterpret_cast<const uint8_t *>(Mod->Code),
       .code_size = Mod->CodeSize,
   };
-  Ctx.allocFrame(&Msg);
+  Ctx.allocTopFrame(&Msg);
 
   EXPECT_NO_THROW({ Interpreter.interpret(); });
 

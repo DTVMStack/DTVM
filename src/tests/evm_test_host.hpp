@@ -93,7 +93,7 @@ public:
       BaseInterpreter Interpreter(Ctx);
 
       evmc_message CallMsg = Msg;
-      Ctx.allocFrame(&CallMsg);
+      Ctx.allocTopFrame(&CallMsg);
 
       // Set the host for the execution frame
       auto *Frame = Ctx.getCurFrame();
@@ -254,7 +254,7 @@ public:
       BaseInterpreter Interp(Ctx);
 
       evmc_message CallMsg = Msg;
-      Ctx.allocFrame(&CallMsg);
+      Ctx.allocTopFrame(&CallMsg);
       auto *Frame = Ctx.getCurFrame();
       Frame->Host = this;
       Interp.interpret();
