@@ -137,8 +137,7 @@ void BaseInterpreter::interpret() {
         const auto &ReturnData = Context.getReturnData();
         evmc::Result ExeResult(EVMC_SUCCESS, Frame ? Frame->Msg->gas : 0,
                                Context.getInstance()->getGasRefund(),
-                               ReturnData.data(),
-                               ReturnData.size());
+                               ReturnData.data(), ReturnData.size());
         Context.setExeResult(std::move(ExeResult));
         return;
       }
@@ -661,7 +660,6 @@ void BaseInterpreter::interpret() {
   const auto &ReturnData = Context.getReturnData();
   evmc::Result ExeResult(Context.getStatus(), Frame ? Frame->Msg->gas : 0,
                          Context.getInstance()->getGasRefund(),
-                         ReturnData.data(),
-                         ReturnData.size());
+                         ReturnData.data(), ReturnData.size());
   Context.setExeResult(std::move(ExeResult));
 }
