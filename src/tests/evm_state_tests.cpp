@@ -31,7 +31,7 @@ using namespace zen::evm_test_utils;
 
 namespace {
 
-const bool Debug = false;
+const bool DEBUG = false;
 
 std::string getDefaultTestDir() {
   std::filesystem::path DirPath =
@@ -40,7 +40,7 @@ std::string getDefaultTestDir() {
   return DirPath.string();
 }
 
-const std::string DefaultTestDir = getDefaultTestDir();
+const std::string DEFAULT_TEST_DIR = getDefaultTestDir();
 
 struct ExecutionResult {
   bool Passed = false;
@@ -50,7 +50,7 @@ struct ExecutionResult {
 ExecutionResult executeStateTest(const StateTestFixture &Fixture,
                                  const std::string &Fork,
                                  const ForkPostResult &ExpectedResult) {
-  auto makeFailure = [&](const std::string &Msg) {
+  auto MakeFailure = [&](const std::string &Msg) {
     ExecutionResult Result;
     Result.Passed = false;
     Result.ErrorMessages.push_back(Msg);
@@ -74,11 +74,11 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
       if (!ExpectedResult.ExpectedException.empty()) {
         return {true, {}};
       }
-      if (Debug) {
+      if (DEBUG) {
         std::cout << "No target account found for test: " << Fixture.TestName
                   << std::endl;
       }
-      return makeFailure(
+      return MakeFailure(
           "Target account " +
           evmc::hex(evmc::bytes_view(PT.Message->recipient.bytes, 20)) +
           " not present in pre-state for " + Fixture.TestName + " (" + Fork +
@@ -87,7 +87,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
 
     // Skip if no code to execute
     if (TargetAccount->Account.code.empty()) {
-      if (Debug) {
+      if (DEBUG) {
         std::cout << "No code to execute for test: " << Fixture.TestName
                   << std::endl;
       }
@@ -100,7 +100,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
                                  TargetAccount->Account.code.size());
     TempHexFile TempFile(HexCode);
     if (!TempFile.isValid()) {
-      return makeFailure("Failed to materialize temp bytecode file for " +
+      return MakeFailure("Failed to materialize temp bytecode file for " +
                          Fixture.TestName + " (" + Fork + ")");
     }
 
@@ -117,14 +117,14 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
 
     auto RT = Runtime::newEVMRuntime(Config, TempMockedHost.get());
     if (!RT) {
-      return makeFailure("Failed to create EVM runtime for " +
+      return MakeFailure("Failed to create EVM runtime for " +
                          Fixture.TestName + " (" + Fork + ")");
     }
 
     // Create Isolation for the mocked host
     Isolation *IsoForRecursive = RT->createManagedIsolation();
     if (!IsoForRecursive) {
-      return makeFailure("Failed to create isolation for recursive host in " +
+      return MakeFailure("Failed to create isolation for recursive host in " +
                          Fixture.TestName + " (" + Fork + ")");
     }
 
@@ -139,7 +139,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
 
     auto ModRet = RT->loadEVMModule(TempFile.getPath());
     if (!ModRet) {
-      return makeFailure("Failed to load module for " + Fixture.TestName +
+      return MakeFailure("Failed to load module for " + Fixture.TestName +
                          " (" + Fork + ")");
     }
 
@@ -147,14 +147,14 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
 
     Isolation *Iso = RT->createManagedIsolation();
     if (!Iso) {
-      return makeFailure("Failed to create execution isolation for " +
+      return MakeFailure("Failed to create execution isolation for " +
                          Fixture.TestName + " (" + Fork + ")");
     }
 
     uint64_t GasLimit = static_cast<uint64_t>(PT.Message->gas) * 100;
     auto InstRet = Iso->createEVMInstance(*Mod, GasLimit);
     if (!InstRet) {
-      return makeFailure("Failed to create interpreter instance for " +
+      return MakeFailure("Failed to create interpreter instance for " +
                          Fixture.TestName + " (" + Fork + ")");
     }
 
@@ -211,7 +211,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
                 << E.what() << std::endl;
     }
 
-    if (Debug) {
+    if (DEBUG) {
       std::cout << "ExecutionSucceeded: " << ExecutionSucceeded << std::endl;
       std::cout << "ExecutionGasUsed: " << ExecutionGasUsed << std::endl;
     }
@@ -289,7 +289,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
 
     if (!ExpectedResult.ExpectedException.empty()) {
       if (ExecutionSucceeded) {
-        return makeFailure("Expected exception '" +
+        return MakeFailure("Expected exception '" +
                            ExpectedResult.ExpectedException + "' for " +
                            Fixture.TestName + " (" + Fork +
                            ") but execution succeeded");
@@ -298,7 +298,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     }
 
     if (!ExecutionSucceeded) {
-      return makeFailure("Execution threw exception for " + Fixture.TestName +
+      return MakeFailure("Execution threw exception for " + Fixture.TestName +
                          " (" + Fork + "): " + ExecutionError);
     }
 
@@ -337,7 +337,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     return {true, {}};
 
   } catch (const std::exception &E) {
-    return makeFailure("Exception in executeStateTest for " + Fixture.TestName +
+    return MakeFailure("Exception in executeStateTest for " + Fixture.TestName +
                        " (" + Fork + "): " + E.what());
   }
 }
@@ -354,23 +354,23 @@ struct StateTestCaseParam {
 const std::vector<StateTestFixture> &getStateFixtures() {
   static std::vector<StateTestFixture> Fixtures = [] {
     std::vector<StateTestFixture> Loaded;
-    auto JsonFiles = findJsonFiles(DefaultTestDir);
-    if (Debug) {
+    auto JsonFiles = findJsonFiles(DEFAULT_TEST_DIR);
+    if (DEBUG) {
       std::cout << "Found " << JsonFiles.size() << " JSON test files in "
-                << DefaultTestDir << std::endl;
+                << DEFAULT_TEST_DIR << std::endl;
     }
 
     for (const auto &FilePath : JsonFiles) {
       auto FixturesFromFile = parseStateTestFile(FilePath);
       for (auto &Fixture : FixturesFromFile) {
-        if (Debug) {
+        if (DEBUG) {
           std::cout << "Loaded fixture: " << Fixture.TestName << std::endl;
         }
         Loaded.push_back(std::move(Fixture));
       }
     }
 
-    if (Debug) {
+    if (DEBUG) {
       std::cout << "Total fixtures loaded: " << Loaded.size() << std::endl;
     }
 
@@ -443,7 +443,7 @@ const std::vector<StateTestCaseParam> &getStateTestParams() {
       }
     }
 
-    if (Debug) {
+    if (DEBUG) {
       std::cout << "Generated " << Cases.size() << " state test cases"
                 << std::endl;
     }

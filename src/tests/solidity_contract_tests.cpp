@@ -471,9 +471,9 @@ class SolidityContractTest
     : public testing::TestWithParam<SolidityContractTestData> {
 protected:
   static void SetUpTestCase() {
-    auto logger = zen::utils::createConsoleLogger(
+    auto Logger = zen::utils::createConsoleLogger(
         "evm_solidity_test_logger", zen::utils::LoggerLevel::Debug);
-    zen::setGlobalLogger(logger);
+    zen::setGlobalLogger(Logger);
   }
 };
 

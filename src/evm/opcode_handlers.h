@@ -18,8 +18,7 @@
 // Overflow: k elements will be pushed in this time (usually k=1), whether it
 // exceeds 1024
 #define EVM_REQUIRE_STACK_SPACE(FramePtr, k)                                   \
-  \                                                          
-    if ((FramePtr)->stackHeight() + (k) > 1024) {                              \
+  if ((FramePtr)->stackHeight() + (k) > 1024) {                                \
     getContext()->setStatus(EVMC_STACK_OVERFLOW);                              \
     return;                                                                    \
   }
