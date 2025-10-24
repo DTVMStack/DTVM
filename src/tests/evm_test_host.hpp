@@ -103,7 +103,7 @@ public:
       Interpreter.interpret();
 
       // Calculate gas consumed and remaining
-      int64_t RemainingGas = Msg.gas - Ctx.getInstance()->getGasUsed();
+      int64_t RemainingGas = Inst->getGas();
       int64_t GasRefund = Ctx.getInstance()->getGasRefund();
       ReturnData = Ctx.getReturnData();
 
@@ -260,7 +260,7 @@ public:
       Interp.interpret();
 
       // Calculate gas consumed and remaining
-      const int64_t RemainingGas = Msg.gas - Ctx.getInstance()->getGasUsed();
+      const int64_t RemainingGas = Inst->getGas();
       const auto Status = Ctx.getStatus();
       ReturnData = Ctx.getReturnData();
 

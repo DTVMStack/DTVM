@@ -24,17 +24,9 @@ EVMFrame *InterpreterExecContext::allocTopFrame(evmc_message *Msg) {
   EVMFrame &Frame = FrameStack.back();
 
   Frame.Msg = std::make_unique<evmc_message>(*Msg);
-
-  // Push the original message gas as the initial limit for this frame
-  // This is the gas available for execution (before intrinsic gas deduction)
-  Inst->pushInitialGasLimit(static_cast<uint64_t>(Frame.Msg->gas));
-
-  Frame.Msg->gas = Frame.Msg->gas - IntrinsicGas;
-
-  // Push the message onto the instance's message stack so gas charging can
-  // access it
   Inst->pushMessage(Frame.Msg.get());
 
+  Frame.Msg->gas = Frame.Msg->gas - IntrinsicGas;
   return &Frame;
 }
 
@@ -46,17 +38,9 @@ void InterpreterExecContext::freeBackFrame() {
 
   EVMFrame &Frame = FrameStack.back();
 
-  // Save the gas value before frame destruction, so getGasUsed() can read it
-  // after all frames are destroyed and messages are popped.
   Inst->setGas(static_cast<uint64_t>(Frame.Msg->gas));
 
-  // Gas management is entirely handled by EVMInstance.
-  // The instance uses a stack to track InitialGasLimit for each frame.
-  // Only pop for nested frames (depth > 0). Keep the main frame's gas limit
-  // on the stack so tests can read it after execution completes.
   if (FrameStack.size() > 1) {
-    Inst->popInitialGasLimit();
-    // Pop message for nested frames to keep stack clean
     Inst->popMessage();
   }
 

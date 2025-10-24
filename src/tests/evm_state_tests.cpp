@@ -165,7 +165,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
 
     evmc_message Msg = *PT.Message;
     Ctx.allocTopFrame(&Msg);
-
+    uint64_t OriginalGas = Inst->getGas();
     // Set the host for the execution frame
     auto *Frame = Ctx.getCurFrame();
     Frame->Host = MockedHost;
@@ -203,7 +203,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
 
     try {
       Interpreter.interpret();
-      ExecutionGasUsed = Inst->getGasUsed();
+      ExecutionGasUsed = OriginalGas - Inst->getGas();
     } catch (const std::exception &E) {
       ExecutionSucceeded = false;
       ExecutionError = E.what();
