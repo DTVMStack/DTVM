@@ -41,3 +41,4 @@ bazel-testlogs
 
 # fuzzer
 /wtf
+clash-for-linux-install/
