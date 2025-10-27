@@ -59,7 +59,7 @@ class TestRunner:
         self.test_dir = self.validateTestDir()
         self.statistics = Statistics()
         self.test_cases: List[TestCase] = []
-        self.success_cases :List[TestCase] = []
+        self.success_cases: List[TestCase] = []
         self.failed_cases: List[TestCase] = []
         self.start_time = None
 
