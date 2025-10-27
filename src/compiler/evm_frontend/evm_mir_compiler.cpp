@@ -5,7 +5,6 @@
 #include "action/evm_bytecode_visitor.h"
 #include "compiler/evm_frontend/evm_imported.h"
 #include "compiler/mir/module.h"
-#include "evmc/evmc.hpp"
 #include "runtime/evm_instance.h"
 
 namespace COMPILER {
@@ -408,35 +407,40 @@ void EVMMirBuilder::handleJumpDest(const uint64_t &PC) {
 typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
                                                          Operand MultiplierOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+  return callRuntimeFor<intx::uint256, const intx::uint256 &,
+                        const intx::uint256 &>(
       RuntimeFunctions.GetMul, MultiplicandOp, MultiplierOp);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
                                                          Operand DivisorOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+  return callRuntimeFor<intx::uint256, const intx::uint256 &,
+                        const intx::uint256 &>(
       RuntimeFunctions.GetDiv, DividendOp, DivisorOp);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleSDiv(Operand DividendOp,
                                                           Operand DivisorOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+  return callRuntimeFor<intx::uint256, const intx::uint256 &,
+                        const intx::uint256 &>(
       RuntimeFunctions.GetSDiv, DividendOp, DivisorOp);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
                                                          Operand DivisorOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+  return callRuntimeFor<intx::uint256, const intx::uint256 &,
+                        const intx::uint256 &>(
       RuntimeFunctions.GetMod, DividendOp, DivisorOp);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleSMod(Operand DividendOp,
                                                           Operand DivisorOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+  return callRuntimeFor<intx::uint256, const intx::uint256 &,
+                        const intx::uint256 &>(
       RuntimeFunctions.GetSMod, DividendOp, DivisorOp);
 }
 
@@ -444,24 +448,25 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
                                                             Operand AddendOp,
                                                             Operand ModulusOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256,
-                        intx::uint256>(RuntimeFunctions.GetAddMod, AugendOp,
-                                       AddendOp, ModulusOp);
+  return callRuntimeFor<intx::uint256, const intx::uint256 &,
+                        const intx::uint256 &, const intx::uint256 &>(
+      RuntimeFunctions.GetAddMod, AugendOp, AddendOp, ModulusOp);
 }
 
 typename EVMMirBuilder::Operand
 EVMMirBuilder::handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
                             Operand ModulusOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256,
-                        intx::uint256>(RuntimeFunctions.GetMulMod,
-                                       MultiplicandOp, MultiplierOp, ModulusOp);
+  return callRuntimeFor<intx::uint256, const intx::uint256 &,
+                        const intx::uint256 &, const intx::uint256 &>(
+      RuntimeFunctions.GetMulMod, MultiplicandOp, MultiplierOp, ModulusOp);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
                                                          Operand ExponentOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<intx::uint256, intx::uint256, intx::uint256>(
+  return callRuntimeFor<intx::uint256, const intx::uint256 &,
+                        const intx::uint256 &>(
       RuntimeFunctions.GetExp, BaseOp, ExponentOp);
 }
 
@@ -1282,14 +1287,14 @@ void EVMMirBuilder::handleMStore(Operand AddrComponents,
                                  Operand ValueComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   normalizeOperandU64(AddrComponents);
-  callRuntimeFor<void, uint64_t, intx::uint256>(
+  callRuntimeFor<void, uint64_t, const intx::uint256 &>(
       RuntimeFunctions.SetMStore, AddrComponents, ValueComponents);
 }
 void EVMMirBuilder::handleMStore8(Operand AddrComponents,
                                   Operand ValueComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   normalizeOperandU64(AddrComponents);
-  callRuntimeFor<void, uint64_t, intx::uint256>(
+  callRuntimeFor<void, uint64_t, const intx::uint256 &>(
       RuntimeFunctions.SetMStore8, AddrComponents, ValueComponents);
 }
 void EVMMirBuilder::handleMCopy(Operand DestAddrComponents,
@@ -1442,24 +1447,24 @@ void EVMMirBuilder::handleInvalid() {
 typename EVMMirBuilder::Operand
 EVMMirBuilder::handleSLoad(Operand KeyComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<intx::uint256, intx::uint256>(RuntimeFunctions.GetSLoad,
-                                                      KeyComponents);
+  return callRuntimeFor<intx::uint256, const intx::uint256 &>(
+      RuntimeFunctions.GetSLoad, KeyComponents);
 }
 void EVMMirBuilder::handleSStore(Operand KeyComponents,
                                  Operand ValueComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  callRuntimeFor<void, intx::uint256, intx::uint256>(
-      RuntimeFunctions.SetSStore, KeyComponents, ValueComponents);
+  callRuntimeFor<void, const intx::uint256 &, const intx::uint256 &>(
+    RuntimeFunctions.SetSStore, KeyComponents, ValueComponents);
 }
 typename EVMMirBuilder::Operand EVMMirBuilder::handleTLoad(Operand Index) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<intx::uint256, intx::uint256>(RuntimeFunctions.GetTLoad,
-                                                      Index);
+  return callRuntimeFor<intx::uint256, const intx::uint256 &>(
+      RuntimeFunctions.GetTLoad, Index);
 }
 void EVMMirBuilder::handleTStore(Operand Index, Operand ValueComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  callRuntimeFor<void, intx::uint256, intx::uint256>(RuntimeFunctions.SetTStore,
-                                                     Index, ValueComponents);
+  callRuntimeFor<void, const intx::uint256 &, const intx::uint256 &>(
+      RuntimeFunctions.SetTStore, Index, ValueComponents);
 }
 void EVMMirBuilder::handleSelfDestruct(Operand Beneficiary) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
@@ -1486,15 +1491,15 @@ EVMMirBuilder::createU256ConstOperand(const intx::uint256 &V) {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
   // Use EVMU256Type's element count and structure
-  uint64_t Components[U256Type->getElementsCount()];
-  for (size_t I = 0; I < U256Type->getElementsCount(); ++I) {
+  std::array<uint64_t, EVM_ELEMENTS_COUNT> Components{};
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
     Components[I] =
         static_cast<uint64_t>((V >> (I * 64)) & 0xFFFFFFFFFFFFFFFFULL);
   }
 
   // Create constant instructions based on EVMU256Type's inner types
   U256Inst ComponentInstrs;
-  for (size_t I = 0; I < U256Type->getElementsCount(); ++I) {
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
     MConstant *Constant = MConstantInt::get(Ctx, *I64Type, Components[I]);
     ComponentInstrs[I] =
         createInstruction<ConstantInstruction>(false, I64Type, *Constant);
@@ -1847,16 +1852,16 @@ EVMMirBuilder::U256Inst
 EVMMirBuilder::convertOperandToInstruction(const Operand &Param) {
   EVMMirBuilder::U256Inst Result = {};
 
-  if constexpr (std::is_same_v<ArgType, int64_t> ||
-                std::is_same_v<ArgType, uint64_t>) {
+  using CleanArgT = std::remove_cv_t<std::remove_reference_t<ArgType>>;
+
+  if constexpr (std::is_same_v<CleanArgT, int64_t> ||
+                std::is_same_v<CleanArgT, uint64_t>) {
     Result = convertOperandToUNInstruction<1>(Param); // 64 = 1 * 64
-  } else if constexpr (std::is_same_v<ArgType, const uint8_t *>) {
+  } else if constexpr (std::is_same_v<CleanArgT, const uint8_t *>) {
     Result[0] = Param.getInstr();
-  } else if constexpr (std::is_same_v<ArgType, intx::uint128> ||
-                       std::is_same_v<ArgType, const intx::uint128>) {
+  } else if constexpr (std::is_same_v<CleanArgT, intx::uint128>) {
     Result = convertOperandToUNInstruction<2>(Param); // 128 = 2 * 64
-  } else if constexpr (std::is_same_v<ArgType, const intx::uint256> ||
-                       std::is_same_v<ArgType, intx::uint256>) {
+  } else if constexpr (std::is_same_v<CleanArgT, intx::uint256>) {
     Result = convertOperandToUNInstruction<4>(Param); // 256 = 4 * 64
   } else {
     ZEN_ASSERT(false &&
@@ -1864,6 +1869,70 @@ EVMMirBuilder::convertOperandToInstruction(const Operand &Param) {
   }
 
   return Result;
+}
+
+MInstruction *EVMMirBuilder::packU256Argument(const Operand &Param,
+                                              std::size_t ScratchSlot) {
+  ZEN_ASSERT(ScratchSlot < zen::runtime::EVMInstance::HostArgScratchSlots);
+
+  auto Components = convertOperandToInstruction<intx::uint256>(Param);
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  const int32_t BaseOffset =
+      zen::runtime::EVMInstance::getHostArgScratchOffset() +
+      static_cast<int32_t>(ScratchSlot *
+                           zen::runtime::EVMInstance::getHostArgScratchSlotSize());
+
+  for (std::size_t Index = 0; Index < EVM_ELEMENTS_COUNT; ++Index) {
+    MInstruction *Component = Components[Index];
+    if (Component == nullptr) {
+      Component = createIntConstInstruction(I64Type, 0);
+    }
+
+    const int32_t Offset = BaseOffset +
+                           static_cast<int32_t>(Index * sizeof(uint64_t));
+    setInstanceElement(I64Type, Component, Offset);
+  }
+
+  MInstruction *OffsetValue = createIntConstInstruction(I64Type, BaseOffset);
+  MInstruction *ScratchAddrInt =
+      createInstruction<BinaryInstruction>(false, OP_add, I64Type, InstanceAddr,
+                                           OffsetValue);
+
+  return createInstruction<ConversionInstruction>(false, OP_inttoptr,
+                                                  createVoidPtrType(),
+                                                  ScratchAddrInt);
+}
+
+template <typename ArgType>
+void EVMMirBuilder::appendRuntimeArg(std::vector<MInstruction *> &Args,
+                                     const Operand &Param,
+                                     std::size_t &ScratchCursor) {
+  using BaseT = std::remove_cv_t<std::remove_reference_t<ArgType>>;
+
+  if constexpr (std::is_same_v<BaseT, intx::uint256>) {
+    ZEN_ASSERT(ScratchCursor <
+               zen::runtime::EVMInstance::HostArgScratchSlots);
+    MInstruction *Ptr = packU256Argument(Param, ScratchCursor);
+    ++ScratchCursor;
+    Args.push_back(Ptr);
+  } else {
+    auto Insts = convertOperandToInstruction<ArgType>(Param);
+  constexpr size_t WordBytes = sizeof(uint64_t);
+  constexpr size_t RequiredWords =
+    (sizeof(BaseT) + WordBytes - 1) / WordBytes;
+  constexpr size_t NormalizedWords =
+    RequiredWords == 0 ? size_t{1} : RequiredWords;
+  constexpr size_t MaxWords =
+    NormalizedWords > EVM_ELEMENTS_COUNT ? EVM_ELEMENTS_COUNT
+                       : NormalizedWords;
+
+    for (size_t Index = 0; Index < MaxWords; ++Index) {
+      if (Insts[Index] != nullptr) {
+        Args.push_back(Insts[Index]);
+      }
+    }
+  }
 }
 
 template <typename RetType, typename... ArgTypes, typename... ParamTypes>
@@ -1878,37 +1947,23 @@ EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
   std::vector<MInstruction *> Args = {InstancePtr};
 
   auto ParamsTuple = std::forward_as_tuple(Params...);
+  std::size_t ScratchCursor = 0;
 
-  auto PushOne = [this, &Args, &ParamsTuple]<std::size_t I>() {
+  auto PushOne = [this, &Args, &ParamsTuple, &ScratchCursor](auto IndexTag) {
+    constexpr std::size_t I = decltype(IndexTag)::value;
     using ArgT = typename std::tuple_element<I, std::tuple<ArgTypes...>>::type;
-    const Operand &Op = std::get<I>(ParamsTuple);
+    this->appendRuntimeArg<ArgT>(Args, std::get<I>(ParamsTuple), ScratchCursor);
+  };
 
-    if (Op.getType() == EVMType::UINT256 && Op.isU256MultiComponent()) {
-      if constexpr (std::is_same_v<ArgT, const intx::uint256> ||
-                    std::is_same_v<ArgT, intx::uint256>) {
-        const auto &Components = Op.getU256Components();
-        for (size_t Pos = 0; Pos < EVM_ELEMENTS_COUNT; ++Pos) {
-          Args.push_back(Components[Pos]);
-        }
-      } else {
-        auto Insts = convertOperandToInstruction<ArgT>(Op);
-        for (auto *Inst : Insts)
-          if (Inst)
-            Args.push_back(Inst);
-      }
-    } else {
-      auto Insts = convertOperandToInstruction<ArgT>(Op);
-      for (auto *Inst : Insts)
-        if (Inst)
-          Args.push_back(Inst);
+  auto PushAll = [&](auto Self, auto IndexTag) -> void {
+    constexpr std::size_t I = decltype(IndexTag)::value;
+    if constexpr (I < sizeof...(ArgTypes)) {
+      PushOne(IndexTag);
+      Self(Self, std::integral_constant<std::size_t, I + 1>{});
     }
   };
 
-  constexpr std::size_t N = sizeof...(ArgTypes);
-  [&]<std::size_t... I>(std::index_sequence<I...>) {
-    (PushOne.template operator()<I>(), ...);
-  }
-  (std::make_index_sequence<N>{});
+  PushAll(PushAll, std::integral_constant<std::size_t, 0>{});
 
   MType *ReturnType = getMIRReturnType<RetType>();
   MInstruction *CallInstr = createInstruction<ICallInstruction>(

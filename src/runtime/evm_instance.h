@@ -10,6 +10,7 @@
 #include "evmc/evmc.hpp"
 #include "intx/intx.hpp"
 #include "runtime/evm_module.h"
+#include <array>
 #include <limits>
 
 // Forward declaration for evmc_message
@@ -34,6 +35,10 @@ class EVMInstance final : public RuntimeObject<EVMInstance> {
   friend class action::Instantiator;
 
 public:
+  static constexpr size_t HostArgScratchSlots = 8;
+  static constexpr size_t HostArgScratchSize =
+      HostArgScratchSlots * sizeof(intx::uint256);
+
   // ==================== Module Accessing Methods ====================
 
   const EVMModule *getModule() const { return Mod; }
@@ -125,6 +130,8 @@ public:
     ReturnData = std::move(Data);
   }
   const std::vector<uint8_t> &getReturnData() const { return ReturnData; }
+  void setExeResult(evmc::Result Result) { ExeResult = std::move(Result); }
+  const evmc::Result &getExeResult() const { return ExeResult; }
   void exit(int32_t ExitCode);
   int32_t getExitCode() const { return InstanceExitCode; }
 
@@ -133,6 +140,21 @@ public:
                       std::numeric_limits<int32_t>::max(),
                   "EVMInstance offsets should fit in 32-bit signed range");
     return static_cast<int32_t>(offsetof(EVMInstance, Gas));
+  }
+
+  static constexpr size_t getHostArgScratchSlotSize() {
+    return sizeof(intx::uint256);
+  }
+
+  static constexpr size_t getHostArgScratchCapacity() {
+    return HostArgScratchSize;
+  }
+
+  static constexpr int32_t getHostArgScratchOffset() {
+    static_assert(offsetof(EVMInstance, HostArgScratch) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "EVMInstance offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(EVMInstance, HostArgScratch));
   }
 
 private:
@@ -154,6 +176,7 @@ private:
   // memory
   std::vector<uint8_t> Memory;
   std::vector<uint8_t> ReturnData;
+  evmc::Result ExeResult;
 
   // Message stack for call hierarchy tracking
   std::vector<evmc_message *> MessageStack;
@@ -165,6 +188,7 @@ private:
   // exit code set by Instance.exit(ExitCode)
   int32_t InstanceExitCode = 0;
   static constexpr size_t ALIGNMENT = 8;
+  alignas(16) std::array<uint8_t, HostArgScratchSize> HostArgScratch{};
 };
 
 } // namespace runtime

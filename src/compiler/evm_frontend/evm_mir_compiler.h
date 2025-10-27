@@ -11,6 +11,7 @@
 #include "compiler/mir/pointer.h"
 #include "evmc/instructions.h"
 #include "intx/intx.hpp"
+#include <vector>
 
 // Forward declaration to avoid circular dependency
 namespace COMPILER {
@@ -523,6 +524,13 @@ private:
 
   template <typename ArgType>
   U256Inst convertOperandToInstruction(const Operand &Param);
+
+  MInstruction *packU256Argument(const Operand &Param,
+                                 std::size_t ScratchSlot);
+
+  template <typename ArgType>
+  void appendRuntimeArg(std::vector<MInstruction *> &Args,
+                        const Operand &Param, std::size_t &ScratchCursor);
 
   template <typename RetType, typename... ArgTypes, typename... ParamTypes>
   Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *,

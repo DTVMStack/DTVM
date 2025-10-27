@@ -59,6 +59,7 @@ class TestRunner:
         self.test_dir = self.validateTestDir()
         self.statistics = Statistics()
         self.test_cases: List[TestCase] = []
+        self.success_cases :List[TestCase] = []
         self.failed_cases: List[TestCase] = []
         self.start_time = None
 
@@ -109,6 +110,26 @@ class TestRunner:
     def getSuiteCases(self) -> List[TestCase]:
         """Discover test cases"""
         test_cases = []
+
+        # Handle a single test file
+        if self.args.single_case:
+            file_path = self.args.single_case
+            if not os.path.isfile(file_path):
+                print(f"Error: Single test file not found: {file_path}")
+                sys.exit(1)
+            if not file_path.endswith('.evm.hex'):
+                print(f"Error: Single test file must end with .evm.hex: {file_path}")
+                sys.exit(1)
+            
+            test_case = TestCase(file_path)
+            test_case.is_ignored = os.path.basename(file_path) in self.IGNORE_CASES
+            if test_case.is_ignored:
+                self.statistics.addIgnore()
+                if self.args.verbose:
+                    print(f"IGNORE {os.path.basename(file_path):<40} (in ignore list)")
+                return test_cases
+            self.test_cases.append(test_case)
+            return self.test_cases
 
         for file in sorted(os.listdir(self.test_dir)):
             if not file.endswith('.evm.hex'):
@@ -239,6 +260,7 @@ class TestRunner:
                 if result.returncode == expected_returncode:
                     self.statistics.addSucc()
                     print(f"✅ PASSED: {test_case.name} ({elapsed:.1f}ms)")
+                    self.success_cases.append(test_case)
                 else:
                     self.statistics.addFail()
                     print(f"❌ FAILED: {test_case.name} ({elapsed:.1f}ms) - return code mismatch: expected {expected_returncode}, got {result.returncode}")
@@ -270,6 +292,7 @@ class TestRunner:
                 if returncode_match and is_match:
                     self.statistics.addSucc()
                     print(f"PASSED {test_case.name:<40} ({elapsed:.1f}ms)")
+                    self.success_cases.append(test_case)
                     return True
                 else:
                     self.statistics.addFail()
@@ -346,6 +369,17 @@ class TestRunner:
                 print(test_case.file_path)
 
             print("=" * 70)
+        #print all succeeded test cases
+        if self.success_cases:
+            print()
+            print("=" * 70)
+            print("SUCCEEDED TEST CASES:")
+            print("=" * 70)
+
+            for test_case in self.success_cases:
+                print(test_case.file_path)
+
+            print("=" * 70)
 
     def runAllSuites(self) -> int:
         """Run all tests"""
@@ -398,6 +432,8 @@ def main():
                         help="Disable multipass multithreading")
     parser.add_argument("--gas-limit", type=lambda x: int(x, 0), default=0xFFFFFFFFFFFF,
                         help="Gas limit for EVM execution (default: 0xFFFFFFFFFFFF)")
+    parser.add_argument("--single-case", dest="single_case", default=None,
+                    help="Path to a single test case file (e.g., tests/evm_asm/add_simple.evm.hex)")
 
     args = parser.parse_args()
 
