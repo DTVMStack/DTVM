@@ -243,14 +243,12 @@ const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,
 intx::uint256 evmGetSLoad(zen::runtime::EVMInstance *Instance,
                           const intx::uint256 &Index);
 void evmSetSStore(zen::runtime::EVMInstance *Instance,
-                  const intx::uint256 &Index,
-                  const intx::uint256 &Value);
+                  const intx::uint256 &Index, const intx::uint256 &Value);
 uint64_t evmGetGas(zen::runtime::EVMInstance *Instance);
 intx::uint256 evmGetTLoad(zen::runtime::EVMInstance *Instance,
                           const intx::uint256 &Index);
 void evmSetTStore(zen::runtime::EVMInstance *Instance,
-                  const intx::uint256 &Index,
-                  const intx::uint256 &Value);
+                  const intx::uint256 &Index, const intx::uint256 &Value);
 void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
                            const uint8_t *Beneficiary);
 } // namespace COMPILER

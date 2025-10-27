@@ -408,40 +408,40 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
                                                          Operand MultiplierOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeFor<intx::uint256, const intx::uint256 &,
-                        const intx::uint256 &>(
-      RuntimeFunctions.GetMul, MultiplicandOp, MultiplierOp);
+                        const intx::uint256 &>(RuntimeFunctions.GetMul,
+                                               MultiplicandOp, MultiplierOp);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
                                                          Operand DivisorOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeFor<intx::uint256, const intx::uint256 &,
-                        const intx::uint256 &>(
-      RuntimeFunctions.GetDiv, DividendOp, DivisorOp);
+                        const intx::uint256 &>(RuntimeFunctions.GetDiv,
+                                               DividendOp, DivisorOp);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleSDiv(Operand DividendOp,
                                                           Operand DivisorOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeFor<intx::uint256, const intx::uint256 &,
-                        const intx::uint256 &>(
-      RuntimeFunctions.GetSDiv, DividendOp, DivisorOp);
+                        const intx::uint256 &>(RuntimeFunctions.GetSDiv,
+                                               DividendOp, DivisorOp);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
                                                          Operand DivisorOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeFor<intx::uint256, const intx::uint256 &,
-                        const intx::uint256 &>(
-      RuntimeFunctions.GetMod, DividendOp, DivisorOp);
+                        const intx::uint256 &>(RuntimeFunctions.GetMod,
+                                               DividendOp, DivisorOp);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleSMod(Operand DividendOp,
                                                           Operand DivisorOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeFor<intx::uint256, const intx::uint256 &,
-                        const intx::uint256 &>(
-      RuntimeFunctions.GetSMod, DividendOp, DivisorOp);
+                        const intx::uint256 &>(RuntimeFunctions.GetSMod,
+                                               DividendOp, DivisorOp);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
@@ -466,8 +466,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
                                                          Operand ExponentOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeFor<intx::uint256, const intx::uint256 &,
-                        const intx::uint256 &>(
-      RuntimeFunctions.GetExp, BaseOp, ExponentOp);
+                        const intx::uint256 &>(RuntimeFunctions.GetExp, BaseOp,
+                                               ExponentOp);
 }
 
 EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQZ(const U256Inst &LHS,
@@ -1454,7 +1454,7 @@ void EVMMirBuilder::handleSStore(Operand KeyComponents,
                                  Operand ValueComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   callRuntimeFor<void, const intx::uint256 &, const intx::uint256 &>(
-    RuntimeFunctions.SetSStore, KeyComponents, ValueComponents);
+      RuntimeFunctions.SetSStore, KeyComponents, ValueComponents);
 }
 typename EVMMirBuilder::Operand EVMMirBuilder::handleTLoad(Operand Index) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
@@ -1880,8 +1880,8 @@ MInstruction *EVMMirBuilder::packU256Argument(const Operand &Param,
 
   const int32_t BaseOffset =
       zen::runtime::EVMInstance::getHostArgScratchOffset() +
-      static_cast<int32_t>(ScratchSlot *
-                           zen::runtime::EVMInstance::getHostArgScratchSlotSize());
+      static_cast<int32_t>(
+          ScratchSlot * zen::runtime::EVMInstance::getHostArgScratchSlotSize());
 
   for (std::size_t Index = 0; Index < EVM_ELEMENTS_COUNT; ++Index) {
     MInstruction *Component = Components[Index];
@@ -1889,19 +1889,17 @@ MInstruction *EVMMirBuilder::packU256Argument(const Operand &Param,
       Component = createIntConstInstruction(I64Type, 0);
     }
 
-    const int32_t Offset = BaseOffset +
-                           static_cast<int32_t>(Index * sizeof(uint64_t));
+    const int32_t Offset =
+        BaseOffset + static_cast<int32_t>(Index * sizeof(uint64_t));
     setInstanceElement(I64Type, Component, Offset);
   }
 
   MInstruction *OffsetValue = createIntConstInstruction(I64Type, BaseOffset);
-  MInstruction *ScratchAddrInt =
-      createInstruction<BinaryInstruction>(false, OP_add, I64Type, InstanceAddr,
-                                           OffsetValue);
+  MInstruction *ScratchAddrInt = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, InstanceAddr, OffsetValue);
 
-  return createInstruction<ConversionInstruction>(false, OP_inttoptr,
-                                                  createVoidPtrType(),
-                                                  ScratchAddrInt);
+  return createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, createVoidPtrType(), ScratchAddrInt);
 }
 
 template <typename ArgType>
@@ -1911,21 +1909,20 @@ void EVMMirBuilder::appendRuntimeArg(std::vector<MInstruction *> &Args,
   using BaseT = std::remove_cv_t<std::remove_reference_t<ArgType>>;
 
   if constexpr (std::is_same_v<BaseT, intx::uint256>) {
-    ZEN_ASSERT(ScratchCursor <
-               zen::runtime::EVMInstance::HostArgScratchSlots);
+    ZEN_ASSERT(ScratchCursor < zen::runtime::EVMInstance::HostArgScratchSlots);
     MInstruction *Ptr = packU256Argument(Param, ScratchCursor);
     ++ScratchCursor;
     Args.push_back(Ptr);
   } else {
     auto Insts = convertOperandToInstruction<ArgType>(Param);
-  constexpr size_t WordBytes = sizeof(uint64_t);
-  constexpr size_t RequiredWords =
-    (sizeof(BaseT) + WordBytes - 1) / WordBytes;
-  constexpr size_t NormalizedWords =
-    RequiredWords == 0 ? size_t{1} : RequiredWords;
-  constexpr size_t MaxWords =
-    NormalizedWords > EVM_ELEMENTS_COUNT ? EVM_ELEMENTS_COUNT
-                       : NormalizedWords;
+    constexpr size_t WordBytes = sizeof(uint64_t);
+    constexpr size_t RequiredWords =
+        (sizeof(BaseT) + WordBytes - 1) / WordBytes;
+    constexpr size_t NormalizedWords =
+        RequiredWords == 0 ? size_t{1} : RequiredWords;
+    constexpr size_t MaxWords = NormalizedWords > EVM_ELEMENTS_COUNT
+                                    ? EVM_ELEMENTS_COUNT
+                                    : NormalizedWords;
 
     for (size_t Index = 0; Index < MaxWords; ++Index) {
       if (Insts[Index] != nullptr) {

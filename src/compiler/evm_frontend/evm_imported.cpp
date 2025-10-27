@@ -7,8 +7,8 @@
 #include "runtime/evm_instance.h"
 #include "runtime/evm_module.h"
 #include <cstdint>
-#include <vector>
 #include <evmc/evmc.h>
+#include <vector>
 
 namespace COMPILER {
 
@@ -821,9 +821,9 @@ uint64_t evmHandleCallCode(zen::runtime::EVMInstance *Instance, uint64_t Gas,
 
 void evmHandleInvalid(zen::runtime::EVMInstance *Instance) {
   // Immediately terminate the execution and return the revert code (2)
-  evmc::Result ExeResult(EVMC_INVALID_INSTRUCTION, 0,
-                         Instance ? Instance->getGasRefund() : 0,
-                         Instance->getReturnData().data(), Instance->getReturnData().size());
+  evmc::Result ExeResult(
+      EVMC_INVALID_INSTRUCTION, 0, Instance ? Instance->getGasRefund() : 0,
+      Instance->getReturnData().data(), Instance->getReturnData().size());
   Instance->setExeResult(std::move(ExeResult));
   Instance->exit(4);
 }
@@ -853,9 +853,9 @@ void evmSetRevert(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                                   Memory.begin() + Offset + Size);
   Instance->setReturnData(std::move(ReturnData));
   // Immediately terminate the execution and return the revert code (2)
-  evmc::Result ExeResult(EVMC_REVERT, 0,
-                         Instance ? Instance->getGasRefund() : 0,
-                         Instance->getReturnData().data(), Instance->getReturnData().size());
+  evmc::Result ExeResult(
+      EVMC_REVERT, 0, Instance ? Instance->getGasRefund() : 0,
+      Instance->getReturnData().data(), Instance->getReturnData().size());
   Instance->setExeResult(std::move(ExeResult));
   Instance->exit(2);
 }
@@ -918,8 +918,7 @@ intx::uint256 evmGetSLoad(zen::runtime::EVMInstance *Instance,
   return intx::be::load<intx::uint256>(Value);
 }
 void evmSetSStore(zen::runtime::EVMInstance *Instance,
-                  const intx::uint256 &Index,
-                  const intx::uint256 &Value) {
+                  const intx::uint256 &Index, const intx::uint256 &Value) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   if (Instance->isStaticMode()) {
@@ -958,8 +957,7 @@ intx::uint256 evmGetTLoad(zen::runtime::EVMInstance *Instance,
   return intx::be::load<intx::uint256>(Value);
 }
 void evmSetTStore(zen::runtime::EVMInstance *Instance,
-                  const intx::uint256 &Index,
-                  const intx::uint256 &Value) {
+                  const intx::uint256 &Index, const intx::uint256 &Value) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   if (Instance->isStaticMode()) {
@@ -1001,9 +999,9 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
   if (const evmc_message *Parent = Instance->getCurrentMessage()) {
     const_cast<evmc_message *>(Parent)->gas += RemainingGas;
   } else {
-    evmc::Result ExeResult(EVMC_SUCCESS, 0,
-                         Instance ? Instance->getGasRefund() : 0,
-                         Instance->getReturnData().data(), Instance->getReturnData().size());
+    evmc::Result ExeResult(
+        EVMC_SUCCESS, 0, Instance ? Instance->getGasRefund() : 0,
+        Instance->getReturnData().data(), Instance->getReturnData().size());
     Instance->setExeResult(std::move(ExeResult));
     Instance->exit(0);
   }

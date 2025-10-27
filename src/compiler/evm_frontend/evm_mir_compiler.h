@@ -525,12 +525,11 @@ private:
   template <typename ArgType>
   U256Inst convertOperandToInstruction(const Operand &Param);
 
-  MInstruction *packU256Argument(const Operand &Param,
-                                 std::size_t ScratchSlot);
+  MInstruction *packU256Argument(const Operand &Param, std::size_t ScratchSlot);
 
   template <typename ArgType>
-  void appendRuntimeArg(std::vector<MInstruction *> &Args,
-                        const Operand &Param, std::size_t &ScratchCursor);
+  void appendRuntimeArg(std::vector<MInstruction *> &Args, const Operand &Param,
+                        std::size_t &ScratchCursor);
 
   template <typename RetType, typename... ArgTypes, typename... ParamTypes>
   Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *,
