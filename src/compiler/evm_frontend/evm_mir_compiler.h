@@ -16,19 +16,6 @@
 // Forward declaration to avoid circular dependency
 namespace COMPILER {
 struct RuntimeFunctions;
-using U256Fn = intx::uint256 (*)(zen::runtime::EVMInstance *);
-using Bytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *);
-using SizeFn = uint64_t (*)(zen::runtime::EVMInstance *);
-using Bytes32WithInt64Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
-                                              int64_t);
-using Bytes32WithUint64Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
-                                               uint64_t);
-using Bytes32WithBytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
-                                                const uint8_t *);
-using SizeWithBytes32Fn = uint64_t (*)(zen::runtime::EVMInstance *,
-                                       const uint8_t *);
-using U256WithBytes32Fn = intx::uint256 (*)(zen::runtime::EVMInstance *,
-                                            const uint8_t *);
 } // namespace COMPILER
 
 namespace zen::runtime {
@@ -403,6 +390,9 @@ private:
     return MPointerType::create(Ctx, Ctx.VoidType);
   }
 
+  Variable *storeInstructionInTemp(MInstruction *Value, MType *Type);
+  MInstruction *loadVariable(Variable *Var);
+
   template <class T, typename... Arguments>
   T *createInstruction(bool IsStmt, Arguments &&...Args) {
     return CurFunc->createInstruction<T>(IsStmt, *CurBB,
@@ -537,7 +527,7 @@ private:
                          const ParamTypes &...Params);
 
   // Helper template functions for runtime call type mapping
-  template <typename RetType> static MType *getMIRReturnType();
+  template <typename RetType> MType *getMIRReturnType();
 
   template <typename RetType>
   Operand convertCallResult(MInstruction *CallInstr);

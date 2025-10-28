@@ -12,6 +12,15 @@
 
 namespace COMPILER {
 
+namespace {
+thread_local intx::uint256 Uint256ReturnBuffer;
+
+const intx::uint256 *storeUint256Result(const intx::uint256 &Value) {
+  Uint256ReturnBuffer = Value;
+  return &Uint256ReturnBuffer;
+}
+} // namespace
+
 const RuntimeFunctions &getRuntimeFunctionTable() {
   static const RuntimeFunctions Table = {
       .GetMul = &evmGetMul,
@@ -74,27 +83,27 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
   return Table;
 }
 
-intx::uint256 evmGetMul(zen::runtime::EVMInstance *Instance,
-                        const intx::uint256 &Multiplicand,
-                        const intx::uint256 &Multiplier) {
+const intx::uint256 *evmGetMul(zen::runtime::EVMInstance *Instance,
+                               const intx::uint256 &Multiplicand,
+                               const intx::uint256 &Multiplier) {
   // EVM: Multiplicand * Multiplier % (2^256)
-  return Multiplicand * Multiplier;
+  return storeUint256Result(Multiplicand * Multiplier);
 }
 
-intx::uint256 evmGetDiv(zen::runtime::EVMInstance *Instance,
-                        const intx::uint256 &Dividend,
-                        const intx::uint256 &Divisor) {
+const intx::uint256 *evmGetDiv(zen::runtime::EVMInstance *Instance,
+                               const intx::uint256 &Dividend,
+                               const intx::uint256 &Divisor) {
   if (Divisor == 0) {
-    return intx::uint256{0};
+    return storeUint256Result(intx::uint256{0});
   }
-  return Dividend / Divisor;
+  return storeUint256Result(Dividend / Divisor);
 }
 
-intx::uint256 evmGetSDiv(zen::runtime::EVMInstance *Instance,
-                         const intx::uint256 &Dividend,
-                         const intx::uint256 &Divisor) {
+const intx::uint256 *evmGetSDiv(zen::runtime::EVMInstance *Instance,
+                                const intx::uint256 &Dividend,
+                                const intx::uint256 &Divisor) {
   if (Divisor == 0) {
-    return intx::uint256{0};
+    return storeUint256Result(intx::uint256{0});
   }
 
   // Check if dividend is negative (MSB set)
@@ -111,23 +120,23 @@ intx::uint256 evmGetSDiv(zen::runtime::EVMInstance *Instance,
   // Apply sign: result is negative if signs differ
   bool isResultNegative = isDividendNegative != isDivisorNegative;
 
-  return isResultNegative ? (~absResult + 1) : absResult;
+  return storeUint256Result(isResultNegative ? (~absResult + 1) : absResult);
 }
 
-intx::uint256 evmGetMod(zen::runtime::EVMInstance *Instance,
-                        const intx::uint256 &Dividend,
-                        const intx::uint256 &Divisor) {
+const intx::uint256 *evmGetMod(zen::runtime::EVMInstance *Instance,
+                               const intx::uint256 &Dividend,
+                               const intx::uint256 &Divisor) {
   if (Divisor == 0) {
-    return intx::uint256{0};
+    return storeUint256Result(intx::uint256{0});
   }
-  return Dividend % Divisor;
+  return storeUint256Result(Dividend % Divisor);
 }
 
-intx::uint256 evmGetSMod(zen::runtime::EVMInstance *Instance,
-                         const intx::uint256 &Dividend,
-                         const intx::uint256 &Divisor) {
+const intx::uint256 *evmGetSMod(zen::runtime::EVMInstance *Instance,
+                                const intx::uint256 &Dividend,
+                                const intx::uint256 &Divisor) {
   if (Divisor == 0) {
-    return intx::uint256{0};
+    return storeUint256Result(intx::uint256{0});
   }
 
   // Check if dividend is negative (MSB set)
@@ -141,32 +150,32 @@ intx::uint256 evmGetSMod(zen::runtime::EVMInstance *Instance,
   intx::uint256 absResult = absDividend % absDivisor;
 
   // Apply sign: result has same sign as dividend
-  return isDividendNegative ? (~absResult + 1) : absResult;
+  return storeUint256Result(isDividendNegative ? (~absResult + 1) : absResult);
 }
 
-intx::uint256 evmGetAddMod(zen::runtime::EVMInstance *Instance,
-                           const intx::uint256 &Augend,
-                           const intx::uint256 &Addend,
-                           const intx::uint256 &Modulus) {
+const intx::uint256 *evmGetAddMod(zen::runtime::EVMInstance *Instance,
+                                  const intx::uint256 &Augend,
+                                  const intx::uint256 &Addend,
+                                  const intx::uint256 &Modulus) {
   // Handle edge case: modulo 0
   if (Modulus == 0) {
-    return intx::uint256{0};
+    return storeUint256Result(intx::uint256{0});
   }
 
   // (Augend + Addend) % Modulus
   // Use 512-bit intermediate to prevent overflow
   intx::uint512 Sum = intx::uint512(Augend) + intx::uint512(Addend);
   intx::uint256 Result = intx::uint256(Sum % Modulus);
-  return Result;
+  return storeUint256Result(Result);
 }
 
-intx::uint256 evmGetMulMod(zen::runtime::EVMInstance *Instance,
-                           const intx::uint256 &Multiplicand,
-                           const intx::uint256 &Multiplier,
-                           const intx::uint256 &Modulus) {
+const intx::uint256 *evmGetMulMod(zen::runtime::EVMInstance *Instance,
+                                  const intx::uint256 &Multiplicand,
+                                  const intx::uint256 &Multiplier,
+                                  const intx::uint256 &Modulus) {
   // Handle edge case: modulo 0
   if (Modulus == 0) {
-    return intx::uint256{0};
+    return storeUint256Result(intx::uint256{0});
   }
 
   // (Multiplicand * Multiplier) % Modulus
@@ -174,21 +183,21 @@ intx::uint256 evmGetMulMod(zen::runtime::EVMInstance *Instance,
   intx::uint512 Product =
       intx::uint512(Multiplicand) * intx::uint512(Multiplier);
   intx::uint256 Result = intx::uint256(Product % Modulus);
-  return Result;
+  return storeUint256Result(Result);
 }
 
-intx::uint256 evmGetExp(zen::runtime::EVMInstance *Instance,
-                        const intx::uint256 &Base,
-                        const intx::uint256 &Exponent) {
+const intx::uint256 *evmGetExp(zen::runtime::EVMInstance *Instance,
+                               const intx::uint256 &Base,
+                               const intx::uint256 &Exponent) {
   // Handle edge cases
   if (Exponent == 0) {
-    return intx::uint256{1};
+    return storeUint256Result(intx::uint256{1});
   }
   if (Base == 0) {
-    return intx::uint256{0};
+    return storeUint256Result(intx::uint256{0});
   }
   if (Exponent == 1) {
-    return Base;
+    return storeUint256Result(Base);
   }
 
   // EVM: (Base ^ Exponent) % (2^256)
@@ -204,7 +213,7 @@ intx::uint256 evmGetExp(zen::runtime::EVMInstance *Instance,
     ExponentCopy >>= 1;
   }
 
-  return Result;
+  return storeUint256Result(Result);
 }
 
 const uint8_t *evmGetAddress(zen::runtime::EVMInstance *Instance) {
@@ -213,8 +222,8 @@ const uint8_t *evmGetAddress(zen::runtime::EVMInstance *Instance) {
   return Msg->recipient.bytes;
 }
 
-intx::uint256 evmGetBalance(zen::runtime::EVMInstance *Instance,
-                            const uint8_t *Address) {
+const intx::uint256 *evmGetBalance(zen::runtime::EVMInstance *Instance,
+                                   const uint8_t *Address) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
@@ -223,7 +232,7 @@ intx::uint256 evmGetBalance(zen::runtime::EVMInstance *Instance,
 
   evmc::bytes32 BalanceBytes = Module->Host->get_balance(Addr);
   intx::uint256 Balance = intx::be::load<intx::uint256>(BalanceBytes);
-  return Balance;
+  return storeUint256Result(Balance);
 }
 
 const uint8_t *evmGetOrigin(zen::runtime::EVMInstance *Instance) {
@@ -270,11 +279,11 @@ const uint8_t *evmGetCallDataLoad(zen::runtime::EVMInstance *Instance,
   return It->second.bytes;
 }
 
-intx::uint256 evmGetGasPrice(zen::runtime::EVMInstance *Instance) {
+const intx::uint256 *evmGetGasPrice(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   evmc_tx_context TxContext = Module->Host->get_tx_context();
-  return intx::be::load<intx::uint256>(TxContext.tx_gas_price);
+  return storeUint256Result(intx::be::load<intx::uint256>(TxContext.tx_gas_price));
 }
 
 uint64_t evmGetExtCodeSize(zen::runtime::EVMInstance *Instance,
@@ -349,18 +358,18 @@ const uint8_t *evmGetCoinBase(zen::runtime::EVMInstance *Instance) {
   return Cache.TxContext.block_coinbase.bytes;
 }
 
-intx::uint256 evmGetTimestamp(zen::runtime::EVMInstance *Instance) {
+const intx::uint256 *evmGetTimestamp(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   evmc_tx_context TxContext = Module->Host->get_tx_context();
-  return intx::uint256(TxContext.block_timestamp);
+  return storeUint256Result(intx::uint256(TxContext.block_timestamp));
 }
 
-intx::uint256 evmGetNumber(zen::runtime::EVMInstance *Instance) {
+const intx::uint256 *evmGetNumber(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   evmc_tx_context TxContext = Module->Host->get_tx_context();
-  return intx::uint256(TxContext.block_number);
+  return storeUint256Result(intx::uint256(TxContext.block_number));
 }
 
 const uint8_t *evmGetPrevRandao(zen::runtime::EVMInstance *Instance) {
@@ -375,11 +384,11 @@ const uint8_t *evmGetPrevRandao(zen::runtime::EVMInstance *Instance) {
   return Cache.TxContext.block_prev_randao.bytes;
 }
 
-intx::uint256 evmGetGasLimit(zen::runtime::EVMInstance *Instance) {
+const intx::uint256 *evmGetGasLimit(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   evmc_tx_context TxContext = Module->Host->get_tx_context();
-  return intx::uint256(TxContext.block_gas_limit);
+  return storeUint256Result(intx::uint256(TxContext.block_gas_limit));
 }
 
 const uint8_t *evmGetChainId(zen::runtime::EVMInstance *Instance) {
@@ -394,20 +403,21 @@ const uint8_t *evmGetChainId(zen::runtime::EVMInstance *Instance) {
   return Cache.TxContext.chain_id.bytes;
 }
 
-intx::uint256 evmGetSelfBalance(zen::runtime::EVMInstance *Instance) {
+const intx::uint256 *evmGetSelfBalance(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
   evmc::bytes32 Balance = Module->Host->get_balance(Msg->recipient);
-  return intx::be::load<intx::uint256>(Balance);
+  return storeUint256Result(intx::be::load<intx::uint256>(Balance));
 }
 
-intx::uint256 evmGetBaseFee(zen::runtime::EVMInstance *Instance) {
+const intx::uint256 *evmGetBaseFee(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   evmc_tx_context TxContext = Module->Host->get_tx_context();
-  return intx::be::load<intx::uint256>(TxContext.block_base_fee);
+  return storeUint256Result(
+      intx::be::load<intx::uint256>(TxContext.block_base_fee));
 }
 
 const uint8_t *evmGetBlobHash(zen::runtime::EVMInstance *Instance,
@@ -432,18 +442,19 @@ const uint8_t *evmGetBlobHash(zen::runtime::EVMInstance *Instance,
   return It->second.bytes;
 }
 
-intx::uint256 evmGetBlobBaseFee(zen::runtime::EVMInstance *Instance) {
+const intx::uint256 *evmGetBlobBaseFee(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   evmc_tx_context TxContext = Module->Host->get_tx_context();
-  return intx::be::load<intx::uint256>(TxContext.blob_base_fee);
+  return storeUint256Result(
+      intx::be::load<intx::uint256>(TxContext.blob_base_fee));
 }
 
 uint64_t evmGetMSize(zen::runtime::EVMInstance *Instance) {
   return Instance->getMemorySize();
 }
-intx::uint256 evmGetMLoad(zen::runtime::EVMInstance *Instance,
-                          uint64_t Offset) {
+const intx::uint256 *evmGetMLoad(zen::runtime::EVMInstance *Instance,
+                                 uint64_t Offset) {
   uint64_t RequiredSize = Offset + 32;
   Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
@@ -453,7 +464,7 @@ intx::uint256 evmGetMLoad(zen::runtime::EVMInstance *Instance,
   std::memcpy(ValueBytes, Memory.data() + Offset, 32);
 
   intx::uint256 Result = intx::be::load<intx::uint256>(ValueBytes);
-  return Result;
+  return storeUint256Result(Result);
 }
 void evmSetMStore(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                   const intx::uint256 &Value) {
@@ -902,8 +913,8 @@ const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,
 
   return Cache.Keccak256Results.back().bytes;
 }
-intx::uint256 evmGetSLoad(zen::runtime::EVMInstance *Instance,
-                          const intx::uint256 &Index) {
+const intx::uint256 *evmGetSLoad(zen::runtime::EVMInstance *Instance,
+                                 const intx::uint256 &Index) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   const evmc_message *Msg = Instance->getCurrentMessage();
@@ -915,7 +926,7 @@ intx::uint256 evmGetSLoad(zen::runtime::EVMInstance *Instance,
     Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
   }
   const auto Value = Module->Host->get_storage(Msg->recipient, Key);
-  return intx::be::load<intx::uint256>(Value);
+  return storeUint256Result(intx::be::load<intx::uint256>(Value));
 }
 void evmSetSStore(zen::runtime::EVMInstance *Instance,
                   const intx::uint256 &Index, const intx::uint256 &Value) {
@@ -947,14 +958,14 @@ uint64_t evmGetGas(zen::runtime::EVMInstance *Instance) {
   return Instance->getGas();
 }
 
-intx::uint256 evmGetTLoad(zen::runtime::EVMInstance *Instance,
-                          const intx::uint256 &Index) {
+const intx::uint256 *evmGetTLoad(zen::runtime::EVMInstance *Instance,
+                                 const intx::uint256 &Index) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   const evmc_message *Msg = Instance->getCurrentMessage();
   const auto Key = intx::be::store<evmc::bytes32>(Index);
   const auto Value = Module->Host->get_transient_storage(Msg->recipient, Key);
-  return intx::be::load<intx::uint256>(Value);
+  return storeUint256Result(intx::be::load<intx::uint256>(Value));
 }
 void evmSetTStore(zen::runtime::EVMInstance *Instance,
                   const intx::uint256 &Index, const intx::uint256 &Value) {
