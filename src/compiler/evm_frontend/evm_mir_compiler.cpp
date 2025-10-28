@@ -1694,7 +1694,8 @@ Opcode EVMMirBuilder::getMirOpcode(BinaryOperator BinOpr) {
 
 // Helper template functions for runtime call type mapping
 template <typename RetType> MType *EVMMirBuilder::getMIRReturnType() {
-  if constexpr (std::is_same_v<RetType, intx::uint256>) {
+  if constexpr (std::is_same_v<RetType, intx::uint256> ||
+                std::is_same_v<RetType, const intx::uint256 *>) {
     return MPointerType::create(Ctx, Ctx.I64Type);
   } else if constexpr (std::is_same_v<RetType, const uint8_t *>) {
     return EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
@@ -1709,7 +1710,8 @@ template <typename RetType> MType *EVMMirBuilder::getMIRReturnType() {
 template <typename RetType>
 typename EVMMirBuilder::Operand
 EVMMirBuilder::convertCallResult(MInstruction *CallInstr) {
-  if constexpr (std::is_same_v<RetType, intx::uint256>) {
+  if constexpr (std::is_same_v<RetType, intx::uint256> ||
+                std::is_same_v<RetType, const intx::uint256 *>) {
     return convertU256InstrToU256Operand(CallInstr);
   } else if constexpr (std::is_same_v<RetType, const uint8_t *>) {
     Variable *PtrVar = storeInstructionInTemp(CallInstr, CallInstr->getType());
@@ -1792,9 +1794,10 @@ EVMMirBuilder::callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *)) {
   MInstruction *InstancePtr = getCurrentInstancePointer();
 
   MType *ReturnType = getMIRReturnType<RetType>();
+  constexpr bool IS_VOID_RET = std::is_same_v<RetType, void>;
 
   MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      true, ReturnType, FuncAddrInst,
+      IS_VOID_RET, ReturnType, FuncAddrInst,
       llvm::ArrayRef<MInstruction *>(InstancePtr));
 
   return convertCallResult<RetType>(CallInstr);
@@ -1922,16 +1925,16 @@ void EVMMirBuilder::appendRuntimeArg(std::vector<MInstruction *> &Args,
     Args.push_back(Ptr);
   } else {
     auto Insts = convertOperandToInstruction<ArgType>(Param);
-    constexpr size_t WordBytes = sizeof(uint64_t);
-    constexpr size_t RequiredWords =
-        (sizeof(BaseT) + WordBytes - 1) / WordBytes;
-    constexpr size_t NormalizedWords =
-        RequiredWords == 0 ? size_t{1} : RequiredWords;
-    constexpr size_t MaxWords = NormalizedWords > EVM_ELEMENTS_COUNT
+    constexpr size_t WORD_BYTES = sizeof(uint64_t);
+    constexpr size_t REQUIRED_WORDS =
+        (sizeof(BaseT) + WORD_BYTES - 1) / WORD_BYTES;
+    constexpr size_t NORMALIZED_WORDS =
+        REQUIRED_WORDS == 0 ? size_t{1} : REQUIRED_WORDS;
+    constexpr size_t MAX_WORDS = NORMALIZED_WORDS > EVM_ELEMENTS_COUNT
                                     ? EVM_ELEMENTS_COUNT
-                                    : NormalizedWords;
+                                    : NORMALIZED_WORDS;
 
-    for (size_t Index = 0; Index < MaxWords; ++Index) {
+    for (size_t Index = 0; Index < MAX_WORDS; ++Index) {
       if (Insts[Index] != nullptr) {
         Args.push_back(Insts[Index]);
       }
@@ -1970,8 +1973,10 @@ EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
   PushAll(PushAll, std::integral_constant<std::size_t, 0>{});
 
   MType *ReturnType = getMIRReturnType<RetType>();
+  constexpr bool IS_VOID_RET = std::is_same_v<RetType, void>;
   MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      true, ReturnType, FuncAddrInst, llvm::ArrayRef<MInstruction *>{Args});
+      IS_VOID_RET, ReturnType, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>{Args});
 
   return convertCallResult<RetType>(CallInstr);
 }
