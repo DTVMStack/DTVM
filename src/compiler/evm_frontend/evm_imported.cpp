@@ -283,7 +283,8 @@ const intx::uint256 *evmGetGasPrice(zen::runtime::EVMInstance *Instance) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   evmc_tx_context TxContext = Module->Host->get_tx_context();
-  return storeUint256Result(intx::be::load<intx::uint256>(TxContext.tx_gas_price));
+  return storeUint256Result(
+      intx::be::load<intx::uint256>(TxContext.tx_gas_price));
 }
 
 uint64_t evmGetExtCodeSize(zen::runtime::EVMInstance *Instance,

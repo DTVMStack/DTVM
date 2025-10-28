@@ -25,9 +25,9 @@ using Bytes32WithBytes32Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
 using SizeWithBytes32Fn = uint64_t (*)(zen::runtime::EVMInstance *,
                                        const uint8_t *);
 using U256WithBytes32Fn = const intx::uint256 *(*)(zen::runtime::EVMInstance *,
-                                            const uint8_t *);
+                                                   const uint8_t *);
 using U256WithUInt64Fn = const intx::uint256 *(*)(zen::runtime::EVMInstance *,
-                                           uint64_t);
+                                                  uint64_t);
 using VoidWithUInt64U256Fn = void (*)(zen::runtime::EVMInstance *, uint64_t,
                                       const intx::uint256 &);
 using VoidWithUInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *, uint64_t,
@@ -40,19 +40,18 @@ using Bytes32WithUInt64UInt64Fn =
     const uint8_t *(*)(zen::runtime::EVMInstance *, uint64_t, uint64_t);
 using VoidFn = void (*)(zen::runtime::EVMInstance *);
 using U256WithU256Fn = const intx::uint256 *(*)(zen::runtime::EVMInstance *,
-                                         const intx::uint256 &);
+                                                const intx::uint256 &);
 using VoidWithU256U256Fn = void (*)(zen::runtime::EVMInstance *,
                                     const intx::uint256 &,
                                     const intx::uint256 &);
 using VoidWithBytes32Fn = void (*)(zen::runtime::EVMInstance *,
                                    const uint8_t *);
 using U256WithU256U256Fn = const intx::uint256 *(*)(zen::runtime::EVMInstance *,
-                                            const intx::uint256 &,
-                                            const intx::uint256 &);
-using U256WithU256U256U256Fn = const intx::uint256 *(*)(zen::runtime::EVMInstance *,
-                                                 const intx::uint256 &,
-                                                 const intx::uint256 &,
-                                                 const intx::uint256 &);
+                                                    const intx::uint256 &,
+                                                    const intx::uint256 &);
+using U256WithU256U256U256Fn =
+    const intx::uint256 *(*)(zen::runtime::EVMInstance *, const intx::uint256 &,
+                             const intx::uint256 &, const intx::uint256 &);
 using LogNFn = void (*)(zen::runtime::EVMInstance *, uint64_t, uint64_t,
                         const uint8_t *, const uint8_t *, const uint8_t *,
                         const uint8_t *);

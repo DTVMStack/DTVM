@@ -1931,8 +1931,8 @@ void EVMMirBuilder::appendRuntimeArg(std::vector<MInstruction *> &Args,
     constexpr size_t NORMALIZED_WORDS =
         REQUIRED_WORDS == 0 ? size_t{1} : REQUIRED_WORDS;
     constexpr size_t MAX_WORDS = NORMALIZED_WORDS > EVM_ELEMENTS_COUNT
-                                    ? EVM_ELEMENTS_COUNT
-                                    : NORMALIZED_WORDS;
+                                     ? EVM_ELEMENTS_COUNT
+                                     : NORMALIZED_WORDS;
 
     for (size_t Index = 0; Index < MAX_WORDS; ++Index) {
       if (Insts[Index] != nullptr) {
@@ -1974,9 +1974,9 @@ EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
 
   MType *ReturnType = getMIRReturnType<RetType>();
   constexpr bool IS_VOID_RET = std::is_same_v<RetType, void>;
-  MInstruction *CallInstr = createInstruction<ICallInstruction>(
-      IS_VOID_RET, ReturnType, FuncAddrInst,
-      llvm::ArrayRef<MInstruction *>{Args});
+  MInstruction *CallInstr =
+      createInstruction<ICallInstruction>(IS_VOID_RET, ReturnType, FuncAddrInst,
+                                          llvm::ArrayRef<MInstruction *>{Args});
 
   return convertCallResult<RetType>(CallInstr);
 }
