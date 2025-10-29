@@ -362,6 +362,26 @@ void X86LLVMWorkaround::copyPhysReg(const TargetInstrInfo &TII,
   unsigned Opc = 0;
   if (X86::GR64RegClass.contains(DestReg, SrcReg)) {
     Opc = X86::MOV64rr;
+  } else if (X86::GR64RegClass.contains(DestReg) &&
+             X86::GR32RegClass.contains(SrcReg)) {
+    unsigned Dest32 = TRI.getSubReg(DestReg, X86::sub_32bit);
+    if (!Dest32)
+      Dest32 = DestReg;
+    SmallVector<CgOperand, 2> Operands{
+        CgOperand::createRegOperand(Dest32, true),
+        CgOperand::createRegOperand(SrcReg, false)};
+    MF.createCgInstruction(MBB, MI, TII.get(X86::MOV32rr), Operands);
+    return;
+  } else if (X86::GR32RegClass.contains(DestReg) &&
+             X86::GR64RegClass.contains(SrcReg)) {
+    unsigned Src32 = TRI.getSubReg(SrcReg, X86::sub_32bit);
+    if (!Src32)
+      Src32 = SrcReg;
+    SmallVector<CgOperand, 2> Operands{
+        CgOperand::createRegOperand(DestReg, true),
+        CgOperand::createRegOperand(Src32, false)};
+    MF.createCgInstruction(MBB, MI, TII.get(X86::MOV32rr), Operands);
+    return;
   } else if (X86::GR32RegClass.contains(DestReg, SrcReg)) {
     Opc = X86::MOV32rr;
   } else if (X86::GR16RegClass.contains(DestReg, SrcReg)) {
@@ -433,7 +453,8 @@ void X86LLVMWorkaround::copyPhysReg(const TargetInstrInfo &TII,
     report_fatal_error("Unable to copy EFLAGS physical register!");
   }
 
-  report_fatal_error("Cannot emit physreg copy instruction");
+  report_fatal_error(Twine("Cannot emit physreg copy instruction (dest=") +
+                     Twine(DestReg) + ", src=" + Twine(SrcReg) + ")");
 }
 
 void X86LLVMWorkaround::storeRegToStackSlot(

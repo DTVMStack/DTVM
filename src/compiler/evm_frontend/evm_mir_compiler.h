@@ -230,10 +230,8 @@ public:
           MInstruction *Borrow2 = createInstruction<CmpInstruction>(
               false, LTPredicate, &Ctx.I64Type, Diff1, Borrow);
           // NOLINTBEGIN(readability-identifier-naming)
-          MInstruction *Borrow1_64 = createInstruction<ConversionInstruction>(
-              false, OP_uext, MirI64Type, Borrow1);
-          MInstruction *Borrow2_64 = createInstruction<ConversionInstruction>(
-              false, OP_uext, MirI64Type, Borrow2);
+          MInstruction *Borrow1_64 = zeroExtendToI64(Borrow1);
+          MInstruction *Borrow2_64 = zeroExtendToI64(Borrow2);
           // NOLINTEND(readability-identifier-naming)
 
           Borrow = createInstruction<BinaryInstruction>(
@@ -443,6 +441,8 @@ private:
   }
 
   // ==================== EVMU256 Helper Methods ====================
+
+  MInstruction *zeroExtendToI64(MInstruction *Value);
 
   void extractU256ComponentsExplicit(uint64_t *Components,
                                      const intx::uint256 &Value,

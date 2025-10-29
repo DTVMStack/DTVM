@@ -1554,6 +1554,19 @@ EVMMirBuilder::U256Inst EVMMirBuilder::extractU256Operand(const Operand &Opnd) {
 
 // ==================== EVMU256 Helper Methods ====================
 
+MInstruction *EVMMirBuilder::zeroExtendToI64(MInstruction *Value) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *ValueType = Value->getType();
+
+  if (ValueType->isI64()) {
+    return Value;
+  }
+
+  ZEN_ASSERT(ValueType->isI8() || ValueType->isI16() || ValueType->isI32());
+  return createInstruction<ConversionInstruction>(false, OP_uext, I64Type,
+                                                  Value);
+}
+
 EVMMirBuilder::U256Value EVMMirBuilder::bytesToU256(const Bytes &Data) {
   return createU256FromBytes(Data.data(), Data.size());
 }
@@ -1565,8 +1578,7 @@ EVMMirBuilder::convertSingleInstrToU256Operand(MInstruction *SingleInstr) {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
   // Convert the single instruction result to I64 and place it in low component
-  Result[0] = createInstruction<ConversionInstruction>(false, OP_uext, I64Type,
-                                                       SingleInstr);
+  Result[0] = zeroExtendToI64(SingleInstr);
 
   // Fill the remaining components with zeros
   MInstruction *Zero = createIntConstInstruction(I64Type, 0);
