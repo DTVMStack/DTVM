@@ -85,8 +85,18 @@ export PATH=$PATH:$PWD/build
 CMAKE_OPTIONS_ORIGIN="$CMAKE_OPTIONS"
 
 ./tools/easm2bytecode.sh ./tests/evm_asm ./tests/evm_asm
+
+if ! python3 -c "import ensurepip" 2>/dev/null; then
+    echo "Installing python3-venv package..."
+    sudo apt-get update && sudo apt-get install -y python3-venv
+fi
+
+python3 -m venv /tmp/solc_env
+source /tmp/solc_env/bin/activate
 pip install solc-select
 ./tools/solc_batch_compile.sh
+deactivate
+rm -rf /tmp/solc_env
 
 for STACK_TYPE in ${STACK_TYPES[@]}; do
     rm -rf build

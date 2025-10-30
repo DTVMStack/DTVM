@@ -812,8 +812,6 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
 
       entrypoint::callNativeGeneral(&Inst, FuncPtr, this->getMemAllocator());
       Result = std::move(const_cast<evmc::Result &>(Inst.getExeResult()));
-      // Normal execution - set status to success (0)
-      Result.status_code = EVMC_SUCCESS;
 
 #ifdef ZEN_ENABLE_CPU_EXCEPTION
     } else { // When cpu-exception
@@ -897,9 +895,6 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
     }
   };
   CallEVMFnWrapper();
-#else
-  // No CPU exception handling - assume success
-  Result.status_code = EVMC_SUCCESS;
 #endif // ZEN_ENABLE_CPU_EXCEPTION
 }
 #endif // ZEN_ENABLE_JIT

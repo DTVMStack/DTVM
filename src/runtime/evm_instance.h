@@ -232,7 +232,6 @@ private:
   // Instance-level cache storage (shared across all messages in execution)
   ExecutionCache InstanceExecutionCache;
 
-  // exit code set by Instance.exit(ExitCode)
   static constexpr size_t ALIGNMENT = 8;
   alignas(16) std::array<uint8_t, HostArgScratchSize> HostArgScratch{};
 };

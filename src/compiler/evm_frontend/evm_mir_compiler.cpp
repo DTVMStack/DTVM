@@ -149,7 +149,6 @@ void EVMMirBuilder::finalizeEVMBase() {
   // No need to worry about underflow
   bool HasPureSoftException =
       ExceptionSetBBs.size() -
-          ExceptionSetBBs.count(ErrorCode::IntegerDivByZero) -
           ExceptionSetBBs.count(ErrorCode::OutOfBoundsMemory) >
       0;
 
@@ -494,8 +493,7 @@ EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQZ(const U256Inst &LHS,
       false, Predicate, ResultType, OrResult, Zero);
 
   // Convert to u256: result[0] = CmpResult extended to i64, others = 0
-  Result[0] = createInstruction<ConversionInstruction>(false, OP_uext,
-                                                       MirI64Type, CmpResult);
+  Result[0] = CmpResult;
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
     Result[I] = Zero;
   }
@@ -525,8 +523,7 @@ EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQ(const U256Inst &LHS,
 
   MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  Result[0] = createInstruction<ConversionInstruction>(false, OP_uext,
-                                                       MirI64Type, AndResult);
+  Result[0] = AndResult;
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
     Result[I] = Zero;
@@ -593,8 +590,7 @@ EVMMirBuilder::handleCompareGT_LT(const U256Inst &LHS, const U256Inst &RHS,
   }
 
   ZEN_ASSERT(FinalResult);
-  Result[0] = createInstruction<ConversionInstruction>(false, OP_uext,
-                                                       MirI64Type, FinalResult);
+  Result[0] = FinalResult;
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
     Result[I] = Zero;
   }
