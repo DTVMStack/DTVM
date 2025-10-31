@@ -1931,6 +1931,31 @@ void EVMMirBuilder::appendRuntimeArg(std::vector<MInstruction *> &Args,
     MInstruction *Ptr = packU256Argument(Param, ScratchCursor);
     ++ScratchCursor;
     Args.push_back(Ptr);
+  } else if constexpr (std::is_pointer_v<BaseT>) {
+    bool NeedsScratch = Param.isConstant() || Param.isU256MultiComponent() ||
+                        Param.getInstr() == nullptr;
+
+    if (!NeedsScratch) {
+      switch (Param.getType()) {
+      case EVMType::UINT256:
+      case EVMType::BYTES32:
+      case EVMType::ADDRESS:
+        NeedsScratch = true;
+        break;
+      default:
+        break;
+      }
+    }
+
+    if (NeedsScratch) {
+      ZEN_ASSERT(ScratchCursor <
+                 zen::runtime::EVMInstance::HostArgScratchSlots);
+      MInstruction *Ptr = packU256Argument(Param, ScratchCursor);
+      ++ScratchCursor;
+      Args.push_back(Ptr);
+    } else {
+      Args.push_back(Param.getInstr());
+    }
   } else {
     auto Insts = convertOperandToInstruction<ArgType>(Param);
     constexpr size_t WORD_BYTES = sizeof(uint64_t);

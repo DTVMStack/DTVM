@@ -223,7 +223,7 @@ private:
   // memory
   std::vector<uint8_t> Memory;
   std::vector<uint8_t> ReturnData;
-  evmc::Result ExeResult;
+  evmc::Result ExeResult{EVMC_SUCCESS, 0, 0};
 
   // Message stack for call hierarchy tracking
   std::vector<evmc_message *> MessageStack;
