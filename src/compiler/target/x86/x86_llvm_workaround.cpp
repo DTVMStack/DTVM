@@ -362,6 +362,7 @@ void X86LLVMWorkaround::copyPhysReg(const TargetInstrInfo &TII,
   unsigned Opc = 0;
   if (X86::GR64RegClass.contains(DestReg, SrcReg)) {
     Opc = X86::MOV64rr;
+#ifdef ZEN_ENABLE_EVM
   } else if (X86::GR64RegClass.contains(DestReg) &&
              X86::GR32RegClass.contains(SrcReg)) {
     unsigned Dest32 = TRI.getSubReg(DestReg, X86::sub_32bit);
@@ -382,6 +383,7 @@ void X86LLVMWorkaround::copyPhysReg(const TargetInstrInfo &TII,
         CgOperand::createRegOperand(Src32, false)};
     MF.createCgInstruction(MBB, MI, TII.get(X86::MOV32rr), Operands);
     return;
+#endif
   } else if (X86::GR32RegClass.contains(DestReg, SrcReg)) {
     Opc = X86::MOV32rr;
   } else if (X86::GR16RegClass.contains(DestReg, SrcReg)) {

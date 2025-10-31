@@ -1,8 +1,10 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #include "utils/others.h"
+#ifdef ZEN_ENABLE_EVM
 #include <evmc/evmc.hpp>
+#endif // ZEN_ENABLE_EVM
 
 #include <cinttypes>
 #include <cstdio>
@@ -110,6 +112,7 @@ void trimString(std::string &Str) {
   Str.erase(Str.find_last_not_of(" \n\r\t") + 1);
 }
 
+#ifdef ZEN_ENABLE_EVM
 std::optional<std::vector<uint8_t>> fromHex(std::string_view HexStr) {
   if (auto decoded = evmc::from_hex(HexStr)) {
     return std::vector<uint8_t>(decoded->begin(), decoded->end());
@@ -117,5 +120,6 @@ std::optional<std::vector<uint8_t>> fromHex(std::string_view HexStr) {
     return std::nullopt;
   }
 }
+#endif // ZEN_ENABLE_EVM
 
 } // namespace zen::utils

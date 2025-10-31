@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+# Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 if(ZEN_BUILD_PLATFORM_LINUX)
@@ -59,6 +59,10 @@ endif()
 
 if(ZEN_ENABLE_SPDLOG)
   add_definitions(-DZEN_ENABLE_SPDLOG)
+endif()
+
+if(ZEN_ENABLE_EVM)
+  add_definitions(-DZEN_ENABLE_EVM)
 endif()
 
 if(ZEN_ENABLE_CPU_EXCEPTION)
@@ -134,20 +138,24 @@ add_subdirectory(action)
 add_subdirectory(entrypoint)
 add_subdirectory(runtime)
 add_subdirectory(utils)
-add_subdirectory(evm)
+if(ZEN_ENABLE_EVM)
+  add_subdirectory(evm)
+endif()
 
 add_library(
   dtvmcore STATIC
+  $<$<BOOL:${ZEN_ENABLE_EVM}>:$<TARGET_OBJECTS:evm>>
   $<TARGET_OBJECTS:action>
   $<TARGET_OBJECTS:common>
   $<TARGET_OBJECTS:entrypoint>
-  $<TARGET_OBJECTS:evm>
   $<TARGET_OBJECTS:platform>
   $<TARGET_OBJECTS:runtime>
   $<TARGET_OBJECTS:utils>
   zetaengine-c.cpp
 )
-target_link_libraries(dtvmcore PRIVATE evmc::instructions)
+if(ZEN_ENABLE_EVM)
+  target_link_libraries(dtvmcore PRIVATE evmc::instructions)
+endif()
 if(NOT ZEN_ENABLE_SGX)
   target_link_libraries(dtvmcore PRIVATE Threads::Threads)
 endif()

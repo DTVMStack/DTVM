@@ -9,7 +9,9 @@
 #include "common/errors.h"
 #include "common/mem_pool.h"
 #include "common/type.h"
+#ifdef ZEN_ENABLE_EVM
 #include "evmc/evmc.hpp"
+#endif // ZEN_ENABLE_EVM
 #include "runtime/config.h"
 #include "runtime/destroyer.h"
 #include "runtime/vnmi.h"
@@ -75,6 +77,7 @@ public:
     return RT;
   }
 
+#ifdef ZEN_ENABLE_EVM
   static std::unique_ptr<Runtime>
   newEVMRuntime(RuntimeConfig Config = {},
                 evmc::Host *EVMHost = nullptr) noexcept {
@@ -87,6 +90,7 @@ public:
 
     return RT;
   }
+#endif // ZEN_ENABLE_EVM
 
   // ==================== Runtime Base Methods ====================
 
@@ -315,9 +319,10 @@ public:
       Instance &Inst, uint32_t FuncIdx, const std::vector<TypedValue> &Args,
       std::vector<common::TypedValue> &Results) noexcept;
 
+#ifdef ZEN_ENABLE_EVM
   void callEVMMain(EVMInstance &Inst, evmc_message &Msg, evmc::Result &Result);
-
   evmc::Host *getEVMHost() const { return EVMHost; }
+#endif // ZEN_ENABLE_EVM
 
   /* **************** [End] Runtime Tool Methods  **************** */
 private:
@@ -337,17 +342,22 @@ private:
                                     const std::vector<TypedValue> &Args,
                                     std::vector<common::TypedValue> &Results);
 
+#ifdef ZEN_ENABLE_EVM
   void callEVMInInterpMode(EVMInstance &Inst, evmc_message &Msg,
                            evmc::Result &Result);
+#endif // ZEN_ENABLE_EVM
 
 #ifdef ZEN_ENABLE_JIT
   void callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
                                  const std::vector<TypedValue> &Args,
                                  std::vector<common::TypedValue> &Results);
 
+#ifdef ZEN_ENABLE_EVM
   void callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
                         evmc::Result &Result);
-#endif
+#endif // ZEN_ENABLE_EVM
+
+#endif // ZEN_ENABLE_JIT
 
   common::Mutex Mtx;
 
@@ -355,14 +365,18 @@ private:
 
   ConstStringPool SymbolPool;
 
+#ifdef ZEN_ENABLE_EVM
   evmc::Host *EVMHost = nullptr;
+#endif // ZEN_ENABLE_EVM
 
   // supplementary module, libc, wasi, and other user defined native modules
   std::unordered_map<WASMSymbol, HostModuleUniquePtr> HostModulePool;
   // multiple module mode
   std::unordered_map<WASMSymbol, ModuleUniquePtr> ModulePool;
 
+#ifdef ZEN_ENABLE_EVM
   std::unordered_map<EVMSymbol, EVMModuleUniquePtr> EVMModulePool;
+#endif // ZEN_ENABLE_EVM
 
   std::unordered_map<Isolation *, IsolationUniquePtr> Isolations;
 

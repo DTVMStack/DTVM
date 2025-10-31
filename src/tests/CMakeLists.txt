@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+# Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 function(PROCESS_SPEC_FILES SPEC_CATEGORY_DIR)
@@ -51,18 +51,20 @@ if(ZEN_ENABLE_SPEC_TEST)
 
   add_custom_target(spec_jsons DEPENDS ${SPEC_JSONS})
 
-  add_subdirectory(mpt)
-
   add_executable(specUnitTests spec_unit_tests.cpp spectest.cpp test_utils.cpp)
   add_executable(mempoolTests mempool_tests.cpp)
   add_executable(cAPITests c_api_tests.cpp)
-  add_executable(evmInterpTests evm_interp_tests.cpp)
-  add_executable(solidityContractTests solidity_contract_tests.cpp)
-  add_executable(
-    evmStateTests evm_state_tests.cpp evm_test_fixtures.cpp
-                  evm_test_helpers.cpp
-  )
-  add_executable(mptCompareCpp mpt_compare_cpp.cpp)
+
+  if(ZEN_ENABLE_EVM)
+    add_subdirectory(mpt)
+    add_executable(evmInterpTests evm_interp_tests.cpp)
+    add_executable(solidityContractTests solidity_contract_tests.cpp)
+    add_executable(
+      evmStateTests evm_state_tests.cpp evm_test_fixtures.cpp
+                    evm_test_helpers.cpp
+    )
+    add_executable(mptCompareCpp mpt_compare_cpp.cpp)
+  endif()
 
   target_link_libraries(
     specUnitTests
@@ -76,9 +78,12 @@ if(ZEN_ENABLE_SPEC_TEST)
   if(ZEN_ENABLE_ASAN)
     target_compile_options(mempoolTests PRIVATE -fsanitize=address)
     target_compile_options(cAPITests PRIVATE -fsanitize=address)
-    target_compile_options(evmInterpTests PRIVATE -fsanitize=address)
-    target_compile_options(solidityContractTests PRIVATE -fsanitize=address)
-    target_compile_options(mptCompareCpp PRIVATE -fsanitize=address)
+
+    if(ZEN_ENABLE_EVM)
+      target_compile_options(evmInterpTests PRIVATE -fsanitize=address)
+      target_compile_options(solidityContractTests PRIVATE -fsanitize=address)
+      target_compile_options(mptCompareCpp PRIVATE -fsanitize=address)
+    endif()
 
     if(ZEN_BUILD_PLATFORM_DARWIN)
       target_link_libraries(
@@ -91,29 +96,27 @@ if(ZEN_ENABLE_SPEC_TEST)
         PRIVATE dtvmcore gtest_main -fsanitize=address
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
-      target_link_libraries(
-        evmInterpTests
-        PRIVATE dtvmcore rapidjson yaml-cpp gtest_main -fsanitize=address
-        PUBLIC ${GTEST_BOTH_LIBRARIES}
-      )
-      target_link_libraries(
-        solidityContractTests
-        PRIVATE dtvmcore rapidjson mpt gtest_main -fsanitize=address
-        PUBLIC ${GTEST_BOTH_LIBRARIES}
-      )
-      target_link_libraries(
-        solidityContractTests
-        PRIVATE dtvmcore rapidjson mpt gtest_main -fsanitize=address
-        PUBLIC ${GTEST_BOTH_LIBRARIES}
-      )
-      target_link_libraries(
-        evmStateTests
-        PRIVATE dtvmcore rapidjson mpt gtest_main -fsanitize=address
-        PUBLIC ${GTEST_BOTH_LIBRARIES}
-      )
-      target_link_libraries(
-        mptCompareCpp PRIVATE dtvmcore rapidjson mpt -fsanitize=address
-      )
+
+      if(ZEN_ENABLE_EVM)
+        target_link_libraries(
+          evmInterpTests
+          PRIVATE dtvmcore rapidjson yaml-cpp gtest_main -fsanitize=address
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          solidityContractTests
+          PRIVATE dtvmcore rapidjson mpt gtest_main -fsanitize=address
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          evmStateTests
+          PRIVATE dtvmcore rapidjson mpt gtest_main -fsanitize=address
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          mptCompareCpp PRIVATE dtvmcore rapidjson mpt -fsanitize=address
+        )
+      endif()
     else()
       target_link_libraries(
         mempoolTests
@@ -125,40 +128,43 @@ if(ZEN_ENABLE_SPEC_TEST)
         PRIVATE dtvmcore gtest_main -fsanitize=address -static-libasan
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
-      target_link_libraries(
-        evmInterpTests
-        PRIVATE dtvmcore
-                rapidjson
-                yaml-cpp
-                gtest_main
-                -fsanitize=address
-                -static-libasan
-        PUBLIC ${GTEST_BOTH_LIBRARIES}
-      )
-      target_link_libraries(
-        solidityContractTests
-        PRIVATE dtvmcore
-                rapidjson
-                mpt
-                gtest_main
-                -fsanitize=address
-                -static-libasan
-        PUBLIC ${GTEST_BOTH_LIBRARIES}
-      )
-      target_link_libraries(
-        evmStateTests
-        PRIVATE dtvmcore
-                rapidjson
-                mpt
-                gtest_main
-                -fsanitize=address
-                -static-libasan
-        PUBLIC ${GTEST_BOTH_LIBRARIES}
-      )
-      target_link_libraries(
-        mptCompareCpp PRIVATE dtvmcore rapidjson mpt -fsanitize=address
-                              -static-libasan
-      )
+
+      if(ZEN_ENABLE_EVM)
+        target_link_libraries(
+          evmInterpTests
+          PRIVATE dtvmcore
+                  rapidjson
+                  yaml-cpp
+                  gtest_main
+                  -fsanitize=address
+                  -static-libasan
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          solidityContractTests
+          PRIVATE dtvmcore
+                  rapidjson
+                  mpt
+                  gtest_main
+                  -fsanitize=address
+                  -static-libasan
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          evmStateTests
+          PRIVATE dtvmcore
+                  rapidjson
+                  mpt
+                  gtest_main
+                  -fsanitize=address
+                  -static-libasan
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          mptCompareCpp PRIVATE dtvmcore rapidjson mpt -fsanitize=address
+                                -static-libasan
+        )
+      endif()
     endif()
   else()
     target_link_libraries(
@@ -171,22 +177,25 @@ if(ZEN_ENABLE_SPEC_TEST)
       PRIVATE dtvmcore gtest_main
       PUBLIC ${GTEST_BOTH_LIBRARIES}
     )
-    target_link_libraries(
-      evmInterpTests
-      PRIVATE dtvmcore rapidjson yaml-cpp gtest_main
-      PUBLIC ${GTEST_BOTH_LIBRARIES}
-    )
-    target_link_libraries(
-      solidityContractTests
-      PRIVATE dtvmcore rapidjson mpt gtest_main
-      PUBLIC ${GTEST_BOTH_LIBRARIES}
-    )
-    target_link_libraries(
-      evmStateTests
-      PRIVATE dtvmcore rapidjson mpt gtest_main
-      PUBLIC ${GTEST_BOTH_LIBRARIES}
-    )
-    target_link_libraries(mptCompareCpp PRIVATE dtvmcore rapidjson mpt)
+
+    if(ZEN_ENABLE_EVM)
+      target_link_libraries(
+        evmInterpTests
+        PRIVATE dtvmcore rapidjson yaml-cpp gtest_main
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+      target_link_libraries(
+        solidityContractTests
+        PRIVATE dtvmcore rapidjson mpt gtest_main
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+      target_link_libraries(
+        evmStateTests
+        PRIVATE dtvmcore rapidjson mpt gtest_main
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+      target_link_libraries(mptCompareCpp PRIVATE dtvmcore rapidjson mpt)
+    endif()
   endif()
 
   add_dependencies(specUnitTests spec_jsons)
@@ -198,7 +207,10 @@ if(ZEN_ENABLE_SPEC_TEST)
   )
   add_test(NAME mempoolTests COMMAND mempoolTests)
   add_test(NAME cAPITests COMMAND cAPITests)
-  add_test(NAME evmInterpTests COMMAND evmInterpTests)
-  add_test(NAME solidityContractTests COMMAND solidityContractTests)
-  add_test(NAME evmStateTests COMMAND evmStateTests)
+
+  if(ZEN_ENABLE_EVM)
+    add_test(NAME evmInterpTests COMMAND evmInterpTests)
+    add_test(NAME solidityContractTests COMMAND solidityContractTests)
+    add_test(NAME evmStateTests COMMAND evmStateTests)
+  endif()
 endif()

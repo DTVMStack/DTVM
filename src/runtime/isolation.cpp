@@ -1,10 +1,12 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #include "runtime/isolation.h"
-
-#include "runtime/evm_instance.h"
 #include "runtime/instance.h"
+
+#ifdef ZEN_ENABLE_EVM
+#include "runtime/evm_instance.h"
+#endif // ZEN_ENABLE_EVM
 
 extern struct WNINativeInterface_ *wni_functions();
 namespace zen::runtime {
@@ -61,6 +63,11 @@ Isolation::createInstance(Module &Mod, uint64_t GasLimit) noexcept {
   return RawInst;
 }
 
+bool Isolation::deleteInstance(Instance *Inst) noexcept {
+  return InstancePool.erase(Inst) != 0;
+}
+
+#ifdef ZEN_ENABLE_EVM
 common::MayBe<EVMInstance *>
 Isolation::createEVMInstance(EVMModule &Mod, uint64_t GasLimit) noexcept {
   ZEN_ASSERT(GasLimit <= INT64_MAX && "EVM gas limit overflow");
@@ -89,13 +96,10 @@ Isolation::createEVMInstance(EVMModule &Mod, uint64_t GasLimit) noexcept {
   return RawInst;
 }
 
-bool Isolation::deleteInstance(Instance *Inst) noexcept {
-  return InstancePool.erase(Inst) != 0;
-}
-
 bool Isolation::deleteEVMInstance(EVMInstance *Inst) noexcept {
   return EVMInstancePool.erase(Inst) != 0;
 }
+#endif // ZEN_ENABLE_EVM
 
 bool Isolation::initWasi() {
   return initNativeModuleCtx(common::WASM_SYMBOL_wasi_snapshot_preview1);

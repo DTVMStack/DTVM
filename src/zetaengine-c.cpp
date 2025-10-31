@@ -1,8 +1,10 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #include "zetaengine-c.h"
+#ifdef ZEN_ENABLE_EVM
 #include "evmc/evmc.hpp"
+#endif
 #include "zetaengine.h"
 
 static inline zen::common::WASMType getWASMType(ZenType Type) {
@@ -112,12 +114,16 @@ static void nop() {}
 
 DEFINE_CONVERSION_FUNCTIONS(zen::runtime::Runtime, ZenRuntimeRef)
 DEFINE_CONVERSION_FUNCTIONS(zen::runtime::Module, ZenModuleRef)
+#ifdef ZEN_ENABLE_EVM
 DEFINE_CONVERSION_FUNCTIONS(zen::runtime::EVMModule, ZenEVMModuleRef)
+#endif
 DEFINE_CONVERSION_FUNCTIONS(zen::runtime::HostModule, ZenHostModuleRef)
 DEFINE_CONVERSION_FUNCTIONS(BuiltinModuleDesc, ZenHostModuleDescRef)
 DEFINE_CONVERSION_FUNCTIONS(zen::runtime::Isolation, ZenIsolationRef)
 DEFINE_CONVERSION_FUNCTIONS(zen::runtime::Instance, ZenInstanceRef)
+#ifdef ZEN_ENABLE_EVM
 DEFINE_CONVERSION_FUNCTIONS(evmc::Host, ZenEVMHostRef)
+#endif
 
 // ==================== Runtime ====================
 
@@ -172,6 +178,7 @@ ZenRuntimeRef ZenCreateRuntime(ZenRuntimeConfig *Config) {
   return wrap(RT.release());
 }
 
+#ifdef ZEN_ENABLE_EVM
 ZenRuntimeRef ZenCreateEVMRuntime(ZenRuntimeConfig *Config,
                                   ZenEVMHostRef EVMHost) {
   zen::runtime::RuntimeConfig NewConfig;
@@ -201,6 +208,7 @@ ZenRuntimeRef ZenCreateEVMRuntime(ZenRuntimeConfig *Config,
   auto RT = zen::runtime::Runtime::newEVMRuntime(NewConfig, unwrap(EVMHost));
   return wrap(RT.release());
 }
+#endif
 
 void ZenDeleteRuntime(ZenRuntimeRef Runtime) {
   ZEN_ASSERT(Runtime);
@@ -398,6 +406,7 @@ ZenModuleRef ZenLoadModuleFromBuffer(ZenRuntimeRef Runtime,
   return wrap(*ModuleOrErr);
 }
 
+#ifdef ZEN_ENABLE_EVM
 ZenEVMModuleRef ZenLoadEVMModuleFromBuffer(ZenRuntimeRef Runtime,
                                            const char *ModuleName,
                                            const uint8_t *Code,
@@ -413,6 +422,7 @@ ZenEVMModuleRef ZenLoadEVMModuleFromBuffer(ZenRuntimeRef Runtime,
   }
   return wrap(*ModuleOrErr);
 }
+#endif
 
 bool ZenDeleteModule(ZenRuntimeRef Runtime, ZenModuleRef Module) {
   ZEN_ASSERT(Runtime);

@@ -12,11 +12,14 @@ namespace zen::runtime {
 class CodeHolder;
 class HostModule;
 class Module;
-class EVMModule;
 class Instance;
-class EVMInstance;
 class Isolation;
 class SymbolWrapper;
+
+#ifdef ZEN_ENABLE_EVM
+class EVMModule;
+class EVMInstance;
+#endif // ZEN_ENABLE_EVM
 
 class RuntimeObjectDestroyer {
 public:
@@ -29,11 +32,13 @@ using RuntimeObjectUniquePtr = std::unique_ptr<T, RuntimeObjectDestroyer>;
 using CodeHolderUniquePtr = RuntimeObjectUniquePtr<CodeHolder>;
 using HostModuleUniquePtr = RuntimeObjectUniquePtr<HostModule>;
 using ModuleUniquePtr = RuntimeObjectUniquePtr<Module>;
-using EVMModuleUniquePtr = RuntimeObjectUniquePtr<EVMModule>;
 using InstanceUniquePtr = RuntimeObjectUniquePtr<Instance>;
-using EVMInstanceUniquePtr = RuntimeObjectUniquePtr<EVMInstance>;
 using IsolationUniquePtr = RuntimeObjectUniquePtr<Isolation>;
 using SymbolWrapperUniquePtr = RuntimeObjectUniquePtr<SymbolWrapper>;
+#ifdef ZEN_ENABLE_EVM
+using EVMModuleUniquePtr = RuntimeObjectUniquePtr<EVMModule>;
+using EVMInstanceUniquePtr = RuntimeObjectUniquePtr<EVMInstance>;
+#endif // ZEN_ENABLE_EVM
 
 } // namespace zen::runtime
 

@@ -7,12 +7,14 @@ set(RUNTIME_SRCS
     runtime.cpp
     isolation.cpp
     module.cpp
-    evm_module.cpp
     instance.cpp
-    evm_instance.cpp
     codeholder.cpp
     destroyer.cpp
     memory.cpp
 )
+
+if(ZEN_ENABLE_EVM)
+  list(APPEND RUNTIME_SRCS evm_module.cpp evm_instance.cpp)
+endif()
 
 add_library(runtime OBJECT ${RUNTIME_SRCS})

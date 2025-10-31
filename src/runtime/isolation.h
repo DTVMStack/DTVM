@@ -34,13 +34,13 @@ public:
 
   common::MayBe<Instance *> createInstance(Module &Mod,
                                            uint64_t GasLimit = 0) noexcept;
-
-  common::MayBe<EVMInstance *>
-  createEVMInstance(EVMModule &Mod, uint64_t GasLimit = 0) noexcept;
-
   bool deleteInstance(Instance *Inst) noexcept;
 
+#ifdef ZEN_ENABLE_EVM
+  common::MayBe<EVMInstance *>
+  createEVMInstance(EVMModule &Mod, uint64_t GasLimit = 0) noexcept;
   bool deleteEVMInstance(EVMInstance *Inst) noexcept;
+#endif // ZEN_ENABLE_EVM
 
   bool initWasi();
   bool initNativeModuleCtx(WASMSymbol ModName);
@@ -51,7 +51,9 @@ private:
   WNIEnvInternal WniEnv;
 
   std::unordered_map<Instance *, InstanceUniquePtr> InstancePool;
+#ifdef ZEN_ENABLE_EVM
   std::unordered_map<EVMInstance *, EVMInstanceUniquePtr> EVMInstancePool;
+#endif // ZEN_ENABLE_EVM
 };
 
 } // namespace zen::runtime

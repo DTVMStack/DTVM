@@ -120,7 +120,7 @@ class TestRunner:
             if not file_path.endswith('.evm.hex'):
                 print(f"Error: Single test file must end with .evm.hex: {file_path}")
                 sys.exit(1)
-            
+
             test_case = TestCase(file_path)
             test_case.is_ignored = os.path.basename(file_path) in self.IGNORE_CASES
             if test_case.is_ignored:

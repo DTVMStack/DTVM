@@ -1,3 +1,5 @@
+# Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
 if(LLVM_ENABLE_SHARED_LIBS)
@@ -31,9 +33,6 @@ set(COMPILER_SRCS
     compiler.cpp
     context.cpp
     common/llvm_workaround.cpp
-    evm_compiler.cpp
-    evm_frontend/evm_imported.cpp
-    evm_frontend/evm_mir_compiler.cpp
     frontend/parser.cpp
     frontend/lexer.cpp
     wasm_frontend/wasm_mir_compiler.cpp
@@ -93,6 +92,12 @@ set(COMPILER_SRCS
     stub/stub_builder.cpp
     cgir/pass/llvm_utils.cpp
 )
+
+if(ZEN_ENABLE_EVM)
+  list(APPEND COMPILER_SRCS evm_compiler.cpp evm_frontend/evm_imported.cpp
+       evm_frontend/evm_mir_compiler.cpp
+  )
+endif()
 
 if(ZEN_ENABLE_JIT_LOGGING)
   list(APPEND COMPILER_SRCS utils/asm_dump.cpp)

@@ -7,7 +7,9 @@
 #include "entrypoint/entrypoint.h"
 #include "common/errors.h"
 #include "common/type.h"
+#ifdef ZEN_ENABLE_EVM
 #include "runtime/evm_instance.h"
+#endif // ZEN_ENABLE_EVM
 #include "runtime/instance.h"
 
 namespace zen::entrypoint {
@@ -133,6 +135,7 @@ void callNativeGeneral(Instance *Instance, GenericFunctionPointer FuncPtr,
   }
 }
 
+#ifdef ZEN_ENABLE_EVM
 void callNativeGeneral(EVMInstance *Instance, GenericFunctionPointer FuncPtr,
                        SysMemPool *MPool, bool SkipInstanceProcessing) {
 
@@ -171,5 +174,6 @@ void callNativeGeneral(EVMInstance *Instance, GenericFunctionPointer FuncPtr,
     MPool->deallocate(ArgvNative);
   }
 }
+#endif // ZEN_ENABLE_EVM
 
 } // namespace zen::entrypoint

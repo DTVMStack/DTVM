@@ -45,6 +45,12 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
+config_setting(
+    name = "enable_evm",
+    values = {"define": "ZEN_ENABLE_EVM=ON"},
+    visibility = ["//visibility:public"],
+)
+
 cc_library(
     name = "evmc",
     hdrs = glob([
@@ -82,7 +88,10 @@ PROJECT_DEFINES = select({
     "ZEN_ENABLE_DWASM",
     "ZEN_ENABLE_VIRTUAL_STACK",
     "ZEN_ENABLE_CHECKED_ARITHMETIC",
-]
+] + select({
+    ":enable_evm": ["ZEN_ENABLE_EVM"],
+    "//conditions:default": [],
+})
 
 PROJECT_COPTS = [
     "-Wall",
@@ -112,15 +121,14 @@ cc_library(
         "src/common/**/*.def",
         "src/common/*.h",
         "src/entrypoint/*.h",
-        "src/evm/*.h",
-        "src/host/evm/*.h",
-        "src/host/evm/keccak/*.h",
-        "src/host/evm/keccak/*.hpp",
         "src/platform/*.h",
         "src/runtime/*.h",
         "src/singlepass/common/*.h",
         "src/singlepass/*.h",
         "src/wni/*.h",
+    ], exclude=[
+        "src/runtime/evm_module.h",
+        "src/runtime/evm_instance.h",
     ]) + [
         "src/zetaengine.h",
         "src/zetaengine-c.h",
@@ -139,6 +147,17 @@ cc_library(
             "src/common/libcxx/type_traits.h",
             "src/common/libcxx/utility.h",
         ],
+    }) + select({
+        ":enable_evm": glob([
+            "src/evm/*.h",
+            "src/host/evm/*.h",
+            "src/host/evm/keccak/*.h",
+            "src/host/evm/keccak/*.hpp",
+        ]) + [
+            "src/runtime/evm_module.h",
+            "src/runtime/evm_instance.h"
+        ],
+        "//conditions:default": [],
     }),
     strip_include_prefix = "src",
 )
@@ -164,10 +183,12 @@ cc_library(
     strip_include_prefix = "src",
     visibility = ["//visibility:public"],
     deps = [
-        ":evmc",
         ":zetaengine_headers",
         "@zen_deps_spdlog//:spdlog",
-    ],
+    ] + select({
+        ":enable_evm": [":evmc"],
+        "//conditions:default": [],
+    }),
 )
 
 cc_library(
@@ -177,13 +198,15 @@ cc_library(
             "src/action/*.cpp",
             "src/common/*.cpp",
             "src/entrypoint/*.cpp",
-            "src/evm/*.cpp",
-            "src/host/evm/*.cpp",
-            "src/host/evm/keccak/*.c",
             "src/runtime/*.cpp",
             "src/singlepass/*.cpp",
             "src/log/*.cpp",
             "src/zetaengine-c.cpp",
+        ],
+        exclude=[
+            "src/runtime/evm_module.cpp",
+            "src/runtime/evm_instance.cpp",
+            "src/common/evm_traphandler.cpp",
         ],
     ) + select({
         ":linux": glob(["src/platform/posix/*.cpp"]),
@@ -197,6 +220,16 @@ cc_library(
             "src/entrypoint/arch/callNative_aarch64.S",
             "src/singlepass/a64/asm/register.cpp",
         ],
+    }) + select({
+        ":enable_evm": [
+            "src/evm/*.cpp",
+            "src/host/evm/*.cpp",
+            "src/host/evm/keccak/*.c",
+            "src/runtime/evm_module.cpp",
+            "src/runtime/evm_instance.cpp",
+            "src/common/evm_traphandler.cpp",
+        ],
+        "//conditions:default": [],
     }),
     hdrs = [
         "src/wni/boilerplate.cpp",

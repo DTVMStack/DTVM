@@ -1,12 +1,14 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #include "runtime/destroyer.h"
 
 #include "action/interpreter.h"
-#include "evm/interpreter.h"
 #include "runtime/codeholder.h"
+#ifdef ZEN_ENABLE_EVM
+#include "evm/interpreter.h"
 #include "runtime/evm_instance.h"
+#endif // ZEN_ENABLE_EVM
 #include "runtime/instance.h"
 #include "runtime/isolation.h"
 #include "runtime/module.h"
@@ -32,11 +34,19 @@ template <> void RuntimeObjectDestroyer::operator()(Module *Ptr) {
   RT->deallocate(Ptr);
 }
 
+#ifdef ZEN_ENABLE_EVM
 template <> void RuntimeObjectDestroyer::operator()(EVMModule *Ptr) {
   Runtime *RT = Ptr->getRuntime();
   Ptr->~EVMModule();
   RT->deallocate(Ptr);
 }
+
+template <> void RuntimeObjectDestroyer::operator()(EVMInstance *Ptr) {
+  Runtime *RT = Ptr->getRuntime();
+  Ptr->~EVMInstance();
+  RT->deallocate(Ptr);
+}
+#endif // ZEN_ENABLE_EVM
 
 template <> void RuntimeObjectDestroyer::operator()(HostModule *Ptr) {
   Runtime *RT = Ptr->getRuntime();
@@ -47,12 +57,6 @@ template <> void RuntimeObjectDestroyer::operator()(HostModule *Ptr) {
 template <> void RuntimeObjectDestroyer::operator()(Instance *Ptr) {
   Runtime *RT = Ptr->getRuntime();
   Ptr->~Instance();
-  RT->deallocate(Ptr);
-}
-
-template <> void RuntimeObjectDestroyer::operator()(EVMInstance *Ptr) {
-  Runtime *RT = Ptr->getRuntime();
-  Ptr->~EVMInstance();
   RT->deallocate(Ptr);
 }
 

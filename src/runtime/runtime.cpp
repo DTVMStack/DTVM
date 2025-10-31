@@ -4,7 +4,9 @@
 #include "runtime/runtime.h"
 
 #ifdef ZEN_ENABLE_CPU_EXCEPTION
+#ifdef ZEN_ENABLE_EVM
 #include "common/evm_traphandler.h"
+#endif // ZEN_ENABLE_EVM
 #include <csetjmp>
 #include <csignal>
 #include <pthread.h>
@@ -13,9 +15,12 @@
 #include "action/interpreter.h"
 #include "common/type.h"
 #include "entrypoint/entrypoint.h"
+#ifdef ZEN_ENABLE_EVM
 #include "evm/interpreter.h"
-#include "runtime/codeholder.h"
 #include "runtime/evm_instance.h"
+#include <evmc/hex.hpp>
+#endif // ZEN_ENABLE_EVM
+#include "runtime/codeholder.h"
 #include "runtime/instance.h"
 #include "runtime/isolation.h"
 #include "runtime/module.h"
@@ -25,8 +30,7 @@
 #include "utils/statistics.h"
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
 #include "utils/virtual_stack.h"
-#endif
-#include <evmc/hex.hpp>
+#endif // ZEN_ENABLE_VIRTUAL_STACK
 #include <fstream>
 #include <string_view>
 #include <unistd.h>
@@ -44,7 +48,9 @@ void Runtime::cleanRuntime() {
 
   ModulePool.clear();
 
+#ifdef ZEN_ENABLE_EVM
   EVMModulePool.clear();
+#endif // ZEN_ENABLE_EVM
 
   SymbolPool.destroyPool();
 
@@ -219,6 +225,7 @@ Module *Runtime::loadModule(WASMSymbol Name, CodeHolderUniquePtr CodeHolder,
   return ModulePtr;
 }
 
+#ifdef ZEN_ENABLE_EVM
 MayBe<EVMModule *>
 Runtime::loadEVMModule(const std::string &Filename) noexcept {
   if (Filename.empty()) {
@@ -310,14 +317,15 @@ EVMModule *Runtime::loadEVMModule(EVMSymbol Name,
   return ModulePtr;
 }
 
-bool Runtime::unloadModule(const Module *Mod) noexcept {
-  WASMSymbol Name = Mod->getName();
-  return ModulePool.erase(Name) != 0;
-}
-
 bool Runtime::unloadEVMModule(const EVMModule *Mod) noexcept {
   EVMSymbol Name = Mod->getName();
   return EVMModulePool.erase(Name) != 0;
+}
+#endif // ZEN_ENABLE_EVM
+
+bool Runtime::unloadModule(const Module *Mod) noexcept {
+  WASMSymbol Name = Mod->getName();
+  return ModulePool.erase(Name) != 0;
 }
 
 Isolation *Runtime::createManagedIsolation() noexcept {
@@ -652,6 +660,7 @@ void Runtime::callWasmFunctionInInterpMode(Instance &Inst, uint32_t FuncIdx,
   }
 }
 
+#ifdef ZEN_ENABLE_EVM
 void Runtime::callEVMInInterpMode(EVMInstance &Inst, evmc_message &Msg,
                                   evmc::Result &Result) {
   evm::InterpreterExecContext Ctx(&Inst);
@@ -683,6 +692,7 @@ void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
     ZEN_LOG_INFO("output: 0x%s", output.c_str());
   }
 }
+#endif // ZEN_ENABLE_EVM
 
 #ifdef ZEN_ENABLE_JIT
 void Runtime::callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
@@ -792,6 +802,7 @@ void Runtime::callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
 #endif // ZEN_ENABLE_CPU_EXCEPTION
 }
 
+#ifdef ZEN_ENABLE_EVM
 void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
                                evmc::Result &Result) {
   EVMModule *Module = const_cast<EVMModule *>(Inst.getModule());
@@ -897,6 +908,7 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
   CallEVMFnWrapper();
 #endif // ZEN_ENABLE_CPU_EXCEPTION
 }
+#endif // ZEN_ENABLE_EVM
 #endif // ZEN_ENABLE_JIT
 
 void Runtime::startCPUTracing() {

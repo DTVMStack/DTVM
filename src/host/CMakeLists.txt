@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+# Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 if(ZEN_ENABLE_BUILTIN_WASI)
@@ -21,8 +21,10 @@ if(ZEN_ENABLE_EVMABI_TEST)
   list(APPEND HOST_OBJECTS $<TARGET_OBJECTS:host_evmabimock>)
 endif()
 
-add_subdirectory(evm)
-list(APPEND HOST_OBJECTS $<TARGET_OBJECTS:host_evm>)
+if(ZEN_ENABLE_EVM)
+  add_subdirectory(evm)
+  list(APPEND HOST_OBJECTS $<TARGET_OBJECTS:host_evm>)
+endif()
 
 if(HOST_OBJECTS)
   add_library(host STATIC ${HOST_OBJECTS})

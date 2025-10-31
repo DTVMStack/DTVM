@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+// Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 #include "runtime/codeholder.h"
@@ -7,9 +7,11 @@
 #include "utils/statistics.h"
 #include "zetaengine.h"
 #include <CLI/CLI.hpp>
+#ifdef ZEN_ENABLE_EVM
 #include <evmc/evmc.h>
 #include <evmc/evmc.hpp>
 #include <evmc/mocked_host.hpp>
+#endif // ZEN_ENABLE_EVM
 #include <unistd.h>
 
 #ifdef ZEN_ENABLE_BUILTIN_WASI
@@ -143,10 +145,12 @@ int main(int argc, char *argv[]) {
     CLIParser->add_flag("--enable-multipass-lazy", Config.EnableMultipassLazy,
                         "Enable multipass lazy mode(on request compile)");
     CLIParser->add_option("--entry-hint", EntryHint, "Entry function hint");
+#ifdef ZEN_ENABLE_EVM
     CLIParser->add_flag_function(
         "--enable-evm-gas",
         [&](std::int64_t) { Config.EnableEvmGasMetering = true; },
         "Enable EVM gas metering when compiling EVM bytecode");
+#endif // ZEN_ENABLE_EVM
 #endif // ZEN_ENABLE_MULTIPASS_JIT
 
     CLI11_PARSE(*CLIParser, argc, argv);
@@ -163,7 +167,7 @@ int main(int argc, char *argv[]) {
   }
 
   /// ================ EVM mode ================
-
+#ifdef ZEN_ENABLE_EVM
   if (Format == InputFormat::EVM) {
     std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
     std::unique_ptr<Runtime> RT = Runtime::newEVMRuntime(Config, Host.get());
@@ -231,6 +235,7 @@ int main(int argc, char *argv[]) {
 
     return exitMain(ExitCode, RT.get());
   }
+#endif // ZEN_ENABLE_EVM
 
   /// ================ Create ZetaEngine runtime ================
 

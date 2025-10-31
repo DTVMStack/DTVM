@@ -15,6 +15,7 @@ find_package(Threads REQUIRED)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
 # Component options
+option(ZEN_ENABLE_EVM "Enable EVM support" OFF)
 option(ZEN_ENABLE_SINGLEPASS_JIT "Enable singlepass JIT" ON)
 option(ZEN_ENABLE_MULTIPASS_JIT "Enable multipass JIT" OFF)
 option(ZEN_ENABLE_CLI "Enable command line interface" ON)
@@ -112,6 +113,10 @@ if(ZEN_ENABLE_EVMABI_TEST)
   set(ZEN_ENABLE_EVMABI_TEST ON)
 endif()
 
+if(ZEN_ENABLE_EVM AND ZEN_ENABLE_SINGLEPASS_JIT)
+  message(FATAL_ERROR "EVM does not support singlepass JIT mode.")
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/third_party")
 
 include(AddDeps)
@@ -131,7 +136,11 @@ if(ZEN_ENABLE_SPEC_TEST)
 endif()
 
 include_directories(src)
-include_directories(${PROJECT_SOURCE_DIR}/evmc/include)
+if(ZEN_ENABLE_EVM)
+  include_directories(${PROJECT_SOURCE_DIR}/evmc/include)
+endif()
 
 add_subdirectory(src)
-add_subdirectory(evmc)
+if(ZEN_ENABLE_EVM)
+  add_subdirectory(evmc)
+endif()

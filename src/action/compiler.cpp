@@ -9,7 +9,9 @@
 #endif
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
 #include "compiler/compiler.h"
+#ifdef ZEN_ENABLE_EVM
 #include "compiler/evm_compiler.h"
+#endif // ZEN_ENABLE_EVM
 #endif
 
 namespace zen::action {
@@ -39,6 +41,7 @@ void performJITCompile(runtime::Module &Mod) {
   }
 }
 
+#ifdef ZEN_ENABLE_EVM
 void performEVMJITCompile(runtime::EVMModule &Mod) {
   switch (Mod.getRuntime()->getConfig().Mode) {
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
@@ -57,5 +60,6 @@ void performEVMJITCompile(runtime::EVMModule &Mod) {
     break;
   }
 }
+#endif // ZEN_ENABLE_EVM
 
 } // namespace zen::action
