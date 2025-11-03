@@ -1721,8 +1721,8 @@ EVMMirBuilder::convertBytes32ToU256Operand(const Operand &Bytes32Op) {
     // Component 3 corresponds to bytes 0-7 (most significant 64 bits)
     int BaseOffset = (3 - Component) * 8;
 
-    MInstruction *Offset = createIntConstInstruction(
-        I64Type, static_cast<uint64_t>(BaseOffset));
+    MInstruction *Offset =
+        createIntConstInstruction(I64Type, static_cast<uint64_t>(BaseOffset));
     MInstruction *Addr = createInstruction<BinaryInstruction>(
         false, OP_add, &Ctx.I64Type, BaseAddr, Offset);
     MInstruction *ComponentPtr = createInstruction<ConversionInstruction>(
