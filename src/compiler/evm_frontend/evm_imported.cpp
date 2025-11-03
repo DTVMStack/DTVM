@@ -457,7 +457,6 @@ uint64_t evmGetMSize(zen::runtime::EVMInstance *Instance) {
 const intx::uint256 *evmGetMLoad(zen::runtime::EVMInstance *Instance,
                                  uint64_t Offset) {
   uint64_t RequiredSize = Offset + 32;
-  Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
   auto &Memory = Instance->getMemory();
 
@@ -470,7 +469,6 @@ const intx::uint256 *evmGetMLoad(zen::runtime::EVMInstance *Instance,
 void evmSetMStore(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                   const intx::uint256 &Value) {
   uint64_t RequiredSize = Offset + 32;
-  Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
 
   auto &Memory = Instance->getMemory();
@@ -483,7 +481,6 @@ void evmSetMStore8(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                    const intx::uint256 &Value) {
   uint64_t RequiredSize = Offset + 1;
 
-  Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
 
   auto &Memory = Instance->getMemory();
@@ -498,7 +495,6 @@ void evmSetMCopy(zen::runtime::EVMInstance *Instance, uint64_t Dest,
   }
   uint64_t RequiredSize = std::max(Dest + Len, Src + Len);
 
-  Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
 
   auto &Memory = Instance->getMemory();
@@ -521,7 +517,6 @@ void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t Offset,
 void evmSetCallDataCopy(zen::runtime::EVMInstance *Instance,
                         uint64_t DestOffset, uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
-  Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
 
   const evmc_message *Msg = Instance->getCurrentMessage();
@@ -553,7 +548,6 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
                        const uint8_t *Address, uint64_t DestOffset,
                        uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
-  Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
 
   const zen::runtime::EVMModule *Module = Instance->getModule();
@@ -584,7 +578,6 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
 void evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance,
                           uint64_t DestOffset, uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
-  Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
 
   const auto &ReturnData = Instance->getReturnData();
@@ -621,7 +614,6 @@ void evmEmitLog(zen::runtime::EVMInstance *Instance, uint64_t Offset,
 
   // Calculate required memory size and charge gas
   uint64_t RequiredSize = Offset + Size;
-  Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
 
   auto &Memory = Instance->getMemory();
@@ -664,7 +656,6 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
 
   // Calculate required memory size and charge gas
   uint64_t RequiredSize = Offset + Size;
-  Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
 
   auto &Memory = Instance->getMemory();
@@ -737,7 +728,6 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   uint64_t MaxRequiredSize = std::max(InputRequiredSize, OutputRequiredSize);
 
   // Expand memory and charge gas
-  Instance->consumeMemoryExpansionGas(MaxRequiredSize);
   Instance->expandMemory(MaxRequiredSize);
 
   auto &Memory = Instance->getMemory();
@@ -875,7 +865,6 @@ void evmSetRevert(zen::runtime::EVMInstance *Instance, uint64_t Offset,
 void evmSetCodeCopy(zen::runtime::EVMInstance *Instance, uint64_t DestOffset,
                     uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
-  Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
 
   const zen::runtime::EVMModule *Module = Instance->getModule();
@@ -901,7 +890,6 @@ void evmSetCodeCopy(zen::runtime::EVMInstance *Instance, uint64_t DestOffset,
 const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,
                                uint64_t Offset, uint64_t Length) {
   uint64_t RequiredSize = Offset + Length;
-  Instance->consumeMemoryExpansionGas(RequiredSize);
   Instance->expandMemory(RequiredSize);
 
   auto &Memory = Instance->getMemory();

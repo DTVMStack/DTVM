@@ -121,8 +121,10 @@ void EVMInstance::consumeMemoryExpansionGas(uint64_t RequiredSize) {
   chargeGas(ExpansionCost);
 }
 void EVMInstance::expandMemory(uint64_t RequiredSize) {
-  if (RequiredSize > Memory.size()) {
-    Memory.resize(RequiredSize, 0);
+  auto NewSize = (RequiredSize + 31) / 32 * 32;
+  consumeMemoryExpansionGas(NewSize);
+  if (NewSize > Memory.size()) {
+    Memory.resize(NewSize, 0);
   }
 }
 void EVMInstance::chargeGas(uint64_t GasCost) {

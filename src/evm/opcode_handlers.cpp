@@ -208,6 +208,7 @@ bool expandMemoryAndChargeGas(EVMFrame *Frame, uint64_t RequiredSize) {
   uint64_t CurrentSize = Frame->Memory.size();
 
   // Calculate and charge memory expansion gas
+  RequiredSize = (RequiredSize + 31) / 32 * 32; // align to 32 bytes
   uint64_t MemoryExpansionCost =
       calculateMemoryExpansionCost(CurrentSize, RequiredSize);
   if (!chargeGas(Frame, MemoryExpansionCost)) {
