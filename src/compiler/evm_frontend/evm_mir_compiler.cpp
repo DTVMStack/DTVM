@@ -1662,30 +1662,75 @@ EVMMirBuilder::convertBytes32ToU256Operand(const Operand &Bytes32Op) {
   U256Inst Result = {};
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MInstruction *Bytes32Ptr = Bytes32Op.getInstr();
-
-  // Load 32 bytes from memory pointer and convert to 4x64-bit components
-  // Each component loads 8 bytes (64 bits) with big-endian byte ordering (EVM
-  // standard)
   MPointerType *U64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
+
+  // Materialize the base address as an integer for pointer arithmetic
   MInstruction *BaseAddr = Bytes32Ptr;
   if (Bytes32Ptr->getType()->isPointer()) {
     BaseAddr = createInstruction<ConversionInstruction>(
         false, OP_ptrtoint, &Ctx.I64Type, Bytes32Ptr);
   }
 
-  for (int I = 0; I < 4; ++I) {
-    // Calculate offset for each 8-byte component (EVM uses big-endian: high
-    // bytes first) Component 0 gets bytes 24-31 (low 64 bits), Component 3 gets
-    // bytes 0-7 (high 64 bits)
-    MInstruction *Offset = createIntConstInstruction(I64Type, (3 - I) * 8);
-    MInstruction *ComponentAddr = createInstruction<BinaryInstruction>(
+  // Precompute constants used for 64-bit byte swap
+  MInstruction *Shift8 = createIntConstInstruction(I64Type, 8);
+  MInstruction *Shift16 = createIntConstInstruction(I64Type, 16);
+  MInstruction *Shift32 = createIntConstInstruction(I64Type, 32);
+  MInstruction *MaskFF00FF00FF00FF00 =
+      createIntConstInstruction(I64Type, 0xFF00FF00FF00FF00ULL);
+  MInstruction *Mask00FF00FF00FF00FF =
+      createIntConstInstruction(I64Type, 0x00FF00FF00FF00FFULL);
+  MInstruction *MaskFFFF0000FFFF0000 =
+      createIntConstInstruction(I64Type, 0xFFFF0000FFFF0000ULL);
+  MInstruction *Mask0000FFFF0000FFFF =
+      createIntConstInstruction(I64Type, 0x0000FFFF0000FFFFULL);
+
+  auto ByteSwap64 = [&](MInstruction *Value) -> MInstruction * {
+    // Perform 64-bit byte swap using standard mask/shift cascades
+    MInstruction *LoShift = createInstruction<BinaryInstruction>(
+        false, OP_shl, I64Type, Value, Shift8);
+    MInstruction *HiShift = createInstruction<BinaryInstruction>(
+        false, OP_ushr, I64Type, Value, Shift8);
+    MInstruction *LowMasked = createInstruction<BinaryInstruction>(
+        false, OP_and, I64Type, LoShift, MaskFF00FF00FF00FF00);
+    MInstruction *HighMasked = createInstruction<BinaryInstruction>(
+        false, OP_and, I64Type, HiShift, Mask00FF00FF00FF00FF);
+    MInstruction *Stage1 = createInstruction<BinaryInstruction>(
+        false, OP_or, I64Type, LowMasked, HighMasked);
+
+    MInstruction *LowShift16 = createInstruction<BinaryInstruction>(
+        false, OP_shl, I64Type, Stage1, Shift16);
+    MInstruction *HighShift16 = createInstruction<BinaryInstruction>(
+        false, OP_ushr, I64Type, Stage1, Shift16);
+    MInstruction *LowMasked16 = createInstruction<BinaryInstruction>(
+        false, OP_and, I64Type, LowShift16, MaskFFFF0000FFFF0000);
+    MInstruction *HighMasked16 = createInstruction<BinaryInstruction>(
+        false, OP_and, I64Type, HighShift16, Mask0000FFFF0000FFFF);
+    MInstruction *Stage2 = createInstruction<BinaryInstruction>(
+        false, OP_or, I64Type, LowMasked16, HighMasked16);
+
+    MInstruction *LowShift32 = createInstruction<BinaryInstruction>(
+        false, OP_shl, I64Type, Stage2, Shift32);
+    MInstruction *HighShift32 = createInstruction<BinaryInstruction>(
+        false, OP_ushr, I64Type, Stage2, Shift32);
+    return createInstruction<BinaryInstruction>(false, OP_or, I64Type,
+                                                LowShift32, HighShift32);
+  };
+
+  for (int Component = 0; Component < 4; ++Component) {
+    // Component 0 corresponds to bytes 24-31 (least significant 64 bits)
+    // Component 3 corresponds to bytes 0-7 (most significant 64 bits)
+    int BaseOffset = (3 - Component) * 8;
+
+    MInstruction *Offset = createIntConstInstruction(
+        I64Type, static_cast<uint64_t>(BaseOffset));
+    MInstruction *Addr = createInstruction<BinaryInstruction>(
         false, OP_add, &Ctx.I64Type, BaseAddr, Offset);
     MInstruction *ComponentPtr = createInstruction<ConversionInstruction>(
-        false, OP_inttoptr, U64PtrType, ComponentAddr);
-
-    // Load 8 bytes as I64 (needs endianness handling for EVM big-endian format)
-    Result[I] =
+        false, OP_inttoptr, U64PtrType, Addr);
+    MInstruction *RawValue =
         createInstruction<LoadInstruction>(false, I64Type, ComponentPtr);
+
+    Result[Component] = ByteSwap64(RawValue);
   }
 
   return Operand(Result, EVMType::UINT256);
