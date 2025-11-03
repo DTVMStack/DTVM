@@ -1611,11 +1611,24 @@ EVMMirBuilder::convertU256InstrToU256Operand(MInstruction *U256Instr) {
 
   Variable *PtrVar = storeInstructionInTemp(U256Instr, PtrType);
   const int32_t Offsets[] = {0, 8, 16, 24};
+  MPointerType *U64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
 
   for (int I = 0; I < static_cast<int>(EVM_ELEMENTS_COUNT); ++I) {
-    MInstruction *BasePtr = loadVariable(PtrVar);
-    Result[I] =
-        createInstruction<LoadInstruction>(false, I64Type, BasePtr, Offsets[I]);
+    MInstruction *BaseValue = loadVariable(PtrVar);
+    MInstruction *BaseAddr = BaseValue;
+
+    if (BaseValue->getType()->isPointer()) {
+      BaseAddr = createInstruction<ConversionInstruction>(
+          false, OP_ptrtoint, &Ctx.I64Type, BaseValue);
+    }
+
+    MInstruction *OffsetValue = createIntConstInstruction(I64Type, Offsets[I]);
+    MInstruction *IndexedAddr = createInstruction<BinaryInstruction>(
+        false, OP_add, &Ctx.I64Type, BaseAddr, OffsetValue);
+    MInstruction *IndexedPtr = createInstruction<ConversionInstruction>(
+        false, OP_inttoptr, U64PtrType, IndexedAddr);
+
+    Result[I] = createInstruction<LoadInstruction>(false, I64Type, IndexedPtr);
   }
 
   return Operand(Result, EVMType::UINT256);
@@ -1634,13 +1647,22 @@ EVMMirBuilder::convertBytes32ToU256Operand(const Operand &Bytes32Op) {
   // Load 32 bytes from memory pointer and convert to 4x64-bit components
   // Each component loads 8 bytes (64 bits) with big-endian byte ordering (EVM
   // standard)
+  MPointerType *U64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
+  MInstruction *BaseAddr = Bytes32Ptr;
+  if (Bytes32Ptr->getType()->isPointer()) {
+    BaseAddr = createInstruction<ConversionInstruction>(
+        false, OP_ptrtoint, &Ctx.I64Type, Bytes32Ptr);
+  }
+
   for (int I = 0; I < 4; ++I) {
     // Calculate offset for each 8-byte component (EVM uses big-endian: high
     // bytes first) Component 0 gets bytes 24-31 (low 64 bits), Component 3 gets
     // bytes 0-7 (high 64 bits)
     MInstruction *Offset = createIntConstInstruction(I64Type, (3 - I) * 8);
-    MInstruction *ComponentPtr = createInstruction<BinaryInstruction>(
-        false, OP_add, Bytes32Ptr->getType(), Bytes32Ptr, Offset);
+    MInstruction *ComponentAddr = createInstruction<BinaryInstruction>(
+        false, OP_add, &Ctx.I64Type, BaseAddr, Offset);
+    MInstruction *ComponentPtr = createInstruction<ConversionInstruction>(
+        false, OP_inttoptr, U64PtrType, ComponentAddr);
 
     // Load 8 bytes as I64 (needs endianness handling for EVM big-endian format)
     Result[I] =
