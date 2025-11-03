@@ -545,23 +545,25 @@ EVMMirBuilder::handleCompareGT_LT(const U256Inst &LHS, const U256Inst &RHS,
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
   MInstruction *One = createIntConstInstruction(ResultType, 1);
 
+  CmpInstruction::Predicate LTPredicate;
+  if (Operator == CompareOperator::CO_LT) {
+    LTPredicate = CmpInstruction::Predicate::ICMP_ULT;
+  } else if (Operator == CompareOperator::CO_LT_S) {
+    LTPredicate = CmpInstruction::Predicate::ICMP_SLT;
+  } else if (Operator == CompareOperator::CO_GT) {
+    LTPredicate = CmpInstruction::Predicate::ICMP_UGT;
+  } else if (Operator == CompareOperator::CO_GT_S) {
+    LTPredicate = CmpInstruction::Predicate::ICMP_SGT;
+  } else {
+    ZEN_ASSERT_TODO();
+  }
+  auto EQPredicate = CmpInstruction::Predicate::ICMP_EQ;
+
+  // Track if all higher components are equal
+  MInstruction *AllEqual = nullptr;
+
   for (int I = EVM_ELEMENTS_COUNT - 1; I >= 0; --I) {
     ZEN_ASSERT(LHS[I] && RHS[I]);
-
-    CmpInstruction::Predicate LTPredicate;
-    if (Operator == CompareOperator::CO_LT) {
-      LTPredicate = CmpInstruction::Predicate::ICMP_ULT;
-    } else if (Operator == CompareOperator::CO_LT_S) {
-      LTPredicate = CmpInstruction::Predicate::ICMP_SLT;
-    } else if (Operator == CompareOperator::CO_GT) {
-      LTPredicate = CmpInstruction::Predicate::ICMP_UGT;
-    } else if (Operator == CompareOperator::CO_GT_S) {
-      LTPredicate = CmpInstruction::Predicate::ICMP_SGT;
-    } else {
-      ZEN_ASSERT_TODO();
-    }
-
-    auto EQPredicate = CmpInstruction::Predicate::ICMP_EQ;
 
     MInstruction *CompResult = createInstruction<CmpInstruction>(
         false, LTPredicate, ResultType, LHS[I], RHS[I]);
@@ -570,22 +572,14 @@ EVMMirBuilder::handleCompareGT_LT(const U256Inst &LHS, const U256Inst &RHS,
 
     if (FinalResult == nullptr) {
       FinalResult = CompResult;
+      AllEqual = EqResult;
     } else {
       // FinalResult = EqResult_prev ? CompResult : FinalResult
       FinalResult = createInstruction<SelectInstruction>(
-          false, ResultType, EqResult, CompResult, FinalResult);
-    }
-
-    // Update equality check for next iteration
-    if (I > 0) {
-      MInstruction *NotEq = createInstruction<BinaryInstruction>(
-          false, OP_xor, ResultType, EqResult, One);
-      // Skip remaining iterations by breaking the loop if not equal
-      MInstruction *IsNotEqual = createInstruction<BinaryInstruction>(
-          false, OP_and, ResultType, NotEq, One);
-      // Use select to keep current result if not equal, continue if equal
-      FinalResult = createInstruction<SelectInstruction>(
-          false, ResultType, IsNotEqual, CompResult, FinalResult);
+          false, ResultType, AllEqual, CompResult, FinalResult);
+      // Update AllEqual: AllEqual = AllEqual_prev && EqResult
+      AllEqual = createInstruction<BinaryInstruction>(false, OP_and, ResultType,
+                                                      AllEqual, EqResult);
     }
   }
 
