@@ -1059,51 +1059,76 @@ EVMMirBuilder::handleSignextend(Operand IndexOp, Operand ValueOp) {
   MInstruction *SignBitPos = createInstruction<BinaryInstruction>(
       false, OP_add, MirI64Type, ByteBitPos, Const7);
 
-  // Extract sign bit
+  // ComponentIndex = (index * 8 + 7) / 64
   MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
   MInstruction *ComponentIndex = createInstruction<BinaryInstruction>(
       false, OP_udiv, MirI64Type, SignBitPos, Const64);
+  // BitOffset = (index * 8 + 7) % 64
   MInstruction *BitOffset = createInstruction<BinaryInstruction>(
       false, OP_urem, MirI64Type, SignBitPos, Const64);
 
-  // Select appropriate component for sign bit
-  MInstruction *SignComponent = ValueComponents[0];
-  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
-    MInstruction *IsThisComponent = createInstruction<CmpInstruction>(
-        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, ComponentIndex,
-        createIntConstInstruction(MirI64Type, I));
-    SignComponent = createInstruction<SelectInstruction>(
-        false, MirI64Type, IsThisComponent, ValueComponents[I], SignComponent);
-  }
+  // Calculate sign extension mask
+  // FullMask = (1 << (BitOffset + 1)) - 1
+  // InvMask = ~FullMask = FullMask ^ AllOnes
+  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+  MInstruction *AllOnes = createIntConstInstruction(MirI64Type, ~0ULL);
+  MInstruction *MaskBits = createInstruction<BinaryInstruction>(
+      false, OP_add, MirI64Type, BitOffset, One);
+  MInstruction *Mask = createInstruction<BinaryInstruction>(
+      false, OP_shl, MirI64Type, One, MaskBits);
+  MInstruction *FullMask = createInstruction<BinaryInstruction>(
+      false, OP_sub, MirI64Type, Mask, One);
+  MInstruction *InvMask = createInstruction<BinaryInstruction>(
+      false, OP_xor, MirI64Type, FullMask, AllOnes);
 
   // Extract sign bit
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
-  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
-  MInstruction *SignMask = createInstruction<BinaryInstruction>(
-      false, OP_shl, MirI64Type, One, BitOffset);
-  MInstruction *SignBitValue = createInstruction<BinaryInstruction>(
-      false, OP_and, MirI64Type, SignComponent, SignMask);
-  MInstruction *IsNegative = createInstruction<CmpInstruction>(
-      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, SignBitValue,
-      Zero);
+  MInstruction *SignBit = Zero;
+  for (int I = 0; I < 4; I++) {
+    MInstruction *IsComp = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, ComponentIndex,
+        createIntConstInstruction(MirI64Type, I));
+    // Shifted = ValueComponents[I] >> BitOffset
+    MInstruction *Shifted = createInstruction<BinaryInstruction>(
+        false, OP_ushr, MirI64Type, ValueComponents[I], BitOffset);
+    // Bit = Shifted & 1
+    MInstruction *Bit = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, Shifted, One);
+    // SignBit = IsComp ? Bit : SignBit
+    SignBit = createInstruction<SelectInstruction>(false, MirI64Type, IsComp,
+                                                   Bit, SignBit);
+  }
 
-  // Create mask for sign extension
-  MInstruction *LowMask = createInstruction<BinaryInstruction>(
-      false, OP_sub, MirI64Type, SignMask, One);
-  MInstruction *HighMask =
-      createInstruction<NotInstruction>(false, MirI64Type, LowMask);
-
+  // Create sign extension for each component
   U256Inst ResultComponents = {};
-  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-    // Apply sign extension mask if negative
-    MInstruction *ExtendedValue = createInstruction<BinaryInstruction>(
-        false, OP_or, MirI64Type, ValueComponents[I], HighMask);
+  for (int I = 0; I < 4; I++) {
+    MInstruction *CompIdx = createIntConstInstruction(MirI64Type, I);
+    MInstruction *IsAbove = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGT, &Ctx.I64Type, CompIdx,
+        ComponentIndex);
+    MInstruction *IsEqual = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, CompIdx,
+        ComponentIndex);
 
-    // Select between original and extended value
+    // For components above sign bit: all 1s if negative, all 0s if positive
+    MInstruction *HighValue = createInstruction<SelectInstruction>(
+        false, MirI64Type, SignBit, AllOnes, Zero);
+
+    // For sign component: apply mask and sign extension
+    MInstruction *SignCompValue = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, ValueComponents[I], FullMask);
+    MInstruction *SignExtBits = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, InvMask, HighValue);
+    MInstruction *ExtendedSignComp = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, SignCompValue, SignExtBits);
+
+    // Select appropriate value based on position relative to sign bit
     MInstruction *ComponentResult = createInstruction<SelectInstruction>(
-        false, MirI64Type, IsNegative, ExtendedValue, ValueComponents[I]);
+        false, MirI64Type, IsAbove, HighValue,
+        createInstruction<SelectInstruction>(
+            false, MirI64Type, IsEqual, ExtendedSignComp, ValueComponents[I]));
 
-    // Select between result and original based on NoExtension flag
+    // If index >= 31, use original value; otherwise use sign-extended value
     ResultComponents[I] = createInstruction<SelectInstruction>(
         false, MirI64Type, NoExtension, ValueComponents[I], ComponentResult);
   }
