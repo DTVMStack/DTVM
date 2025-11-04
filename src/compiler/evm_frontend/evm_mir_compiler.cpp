@@ -89,6 +89,10 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   createJumpTable();
   ReturnBB = createBasicBlock();
   loadEVMInstanceAttr();
+
+  if (Ctx.isGasMeteringEnabled()) {
+    meterGas(zen::evm::BASIC_EXECUTION_COST);
+  }
 }
 
 void EVMMirBuilder::finalizeEVMBase() {
