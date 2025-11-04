@@ -502,6 +502,7 @@ void evmSetMCopy(zen::runtime::EVMInstance *Instance, uint64_t Dest,
 }
 void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                   uint64_t Len) {
+  Instance->expandMemory(Offset + Len);
   auto &Memory = Instance->getMemory();
   std::vector<uint8_t> ReturnData(Memory.begin() + Offset,
                                   Memory.begin() + Offset + Len);

@@ -370,16 +370,16 @@ class TestRunner:
 
             print("=" * 70)
         #print all succeeded test cases
-        if self.success_cases:
-            print()
-            print("=" * 70)
-            print("SUCCEEDED TEST CASES:")
-            print("=" * 70)
+        # if self.success_cases:
+        #     print()
+        #     print("=" * 70)
+        #     print("SUCCEEDED TEST CASES:")
+        #     print("=" * 70)
 
-            for test_case in self.success_cases:
-                print(test_case.file_path)
+        #     for test_case in self.success_cases:
+        #         print(test_case.file_path)
 
-            print("=" * 70)
+        #     print("=" * 70)
 
     def runAllSuites(self) -> int:
         """Run all tests"""
