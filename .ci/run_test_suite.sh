@@ -139,6 +139,8 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                     [ -n "$line" ] && ! grep -qF "$line" tests/evm_asm/mir_gas_meter_dmir_output.ir && echo "❌ Missing: $line" && exit 1
                 done < tests/evm_asm/mir_gas_meter.ir
                 echo "✅ MIR gas metering validation passed"
+
+                python3 tools/run_evm_tests.py -r build/dtvm -m multipass --format evm  --gas-limit 0xFFFFFFFFFFFF --single-case tests/evm_asm/keccak_abc.evm.hex
             else
                 python3 tools/run_evm_tests.py -r build/dtvm $EXTRA_EXE_OPTIONS
             fi
