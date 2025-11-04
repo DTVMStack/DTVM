@@ -1,0 +1,9 @@
+status: success
+error_code: 0
+stack: []
+memory: '002030bde3d4cf89919649775cd71875c4d0ab1708a380e03fefc3a28aa24831'
+storage: {}
+transient_storage: {}
+return: '002030BDE3D4CF89919649775CD71875C4D0AB1708A380E03FEFC3A28AA24831'
+events: []
+
