@@ -546,7 +546,7 @@ private:
 
         // Environment operations
         case OP_PC: {
-          Operand Result = Builder.handlePC();
+          Operand Result = Builder.handlePC(PC);
           push(Result);
           break;
         }

@@ -85,7 +85,6 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   InstructionMetrics =
       evmc_get_instruction_metrics_table(zen::evm::DEFAULT_REVISION);
 
-  PC = 0;
   createJumpTable();
   ReturnBB = createBasicBlock();
   loadEVMInstanceAttr();
@@ -1142,11 +1141,10 @@ EVMMirBuilder::handleSignextend(Operand IndexOp, Operand ValueOp) {
 
 // ==================== Environment Instruction Handlers ====================
 
-typename EVMMirBuilder::Operand EVMMirBuilder::handlePC() {
+typename EVMMirBuilder::Operand EVMMirBuilder::handlePC(const uint64_t &PC) {
   MType *UInt64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MInstruction *PCInst =
-      createInstruction<DreadInstruction>(false, UInt64Type, PC);
+  MInstruction *PCInst = createIntConstInstruction(UInt64Type, PC);
 
   // Convert the 64-bit PC value to U256 format (EVM specification)
   return convertSingleInstrToU256Operand(PCInst);

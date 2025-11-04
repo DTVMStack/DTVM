@@ -307,7 +307,7 @@ public:
 
   // ==================== Environment Instruction Handlers ====================
 
-  Operand handlePC();
+  Operand handlePC(const uint64_t &PC);
   Operand handleGas();
   Operand handleAddress();
   Operand handleBalance(Operand Address);
@@ -560,9 +560,6 @@ private:
   // exit when has exception
   MBasicBlock *ExceptionReturnBB = nullptr;
   const evmc_instruction_metrics *InstructionMetrics = nullptr;
-
-  // Program counter for current instruction
-  uint64_t PC = 0;
 
   // Jump table for dynamic jumps
   std::map<uint64_t, MBasicBlock *> JumpDestTable;
