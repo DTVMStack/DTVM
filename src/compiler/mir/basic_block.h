@@ -71,6 +71,10 @@ public:
   void addPredecessor(MBasicBlock *Pred);
   void removePredecessor(MBasicBlock *Pred);
   void replaceSuccessor(MBasicBlock *Old, MBasicBlock *New);
+#ifdef ZEN_ENABLE_EVM
+  void setJumpDestBB(const bool &IsJumpDest) { JumpDestBBFlag = IsJumpDest; }
+  bool isJumpDestBB() const { return JumpDestBBFlag; }
+#endif // ZEN_ENABLE_EVM
 
 private:
   uint32_t BBIdx = 0;
@@ -78,6 +82,9 @@ private:
   CompileList<MInstruction *> Statements;
   CompileVector<MBasicBlock *> Predecessors;
   CompileVector<MBasicBlock *> Successors;
+#ifdef ZEN_ENABLE_EVM
+  bool JumpDestBBFlag = false;
+#endif // ZEN_ENABLE_EVM
 };
 
 } // namespace COMPILER

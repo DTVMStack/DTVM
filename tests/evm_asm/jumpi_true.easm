@@ -1,0 +1,17 @@
+PUSH1 0x33
+PUSH1 0x00
+MSTORE     // MSTORE(0x00, 0x33)
+PUSH1 0x01 // cond = true
+PUSH1 0x0F // dest PC = 0x0F
+JUMPI
+
+// jump true, skip start
+PUSH1 0x44
+PUSH1 0x00
+MSTORE     // MSTORE(0x00, 0x44)
+// jump true, skip end
+
+JUMPDEST   // dest PC = 0x0F
+PUSH1 0x20
+PUSH1 0x00
+RETURN     // RETURN(0x00, 0x20) = 0x33

@@ -262,6 +262,7 @@ void EVMMirBuilder::createJumpTable() {
   for (size_t PC = 0; PC < BytecodeSize; ++PC) {
     if (Bytecode[PC] == static_cast<Byte>(evmc_opcode::OP_JUMPDEST)) {
       MBasicBlock *DestBB = createBasicBlock();
+      DestBB->setJumpDestBB(true);
       JumpDestTable[PC] = DestBB;
     } else if (static_cast<Byte>(evmc_opcode::OP_PUSH0) <= Bytecode[PC] &&
                Bytecode[PC] <= static_cast<Byte>(evmc_opcode::OP_PUSH32)) {
@@ -378,6 +379,7 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
                                                    One, Zero);
 
   MBasicBlock *FallThroughBB = createBasicBlock();
+  FallThroughBB->setJumpDestBB(true);
   MBasicBlock *InvalidJumpBB =
       getOrCreateExceptionSetBB(ErrorCode::EVMBadJumpDestination);
 
@@ -401,6 +403,10 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
 
 void EVMMirBuilder::handleJumpDest(const uint64_t &PC) {
   MBasicBlock *DestBB = JumpDestTable.at(PC);
+  if (CurBB->isJumpDestBB()) {
+    CurBB->addSuccessor(DestBB);
+    createInstruction<BrInstruction>(true, Ctx, DestBB);
+  }
   setInsertBlock(DestBB);
 }
 
