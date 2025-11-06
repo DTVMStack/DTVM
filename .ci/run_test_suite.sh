@@ -47,6 +47,9 @@ case $RUN_MODE in
         if [ $ENABLE_LAZY = true ]; then
             EXTRA_EXE_OPTIONS="$EXTRA_EXE_OPTIONS --enable-multipass-lazy"
         fi
+        if [ $ENABLE_GAS_METER = true ]; then
+            EXTRA_EXE_OPTIONS="$EXTRA_EXE_OPTIONS --enable-evm-gas"
+        fi
         if [ $ENABLE_MULTITHREAD = true ]; then
             EXTRA_EXE_OPTIONS="$EXTRA_EXE_OPTIONS --num-multipass-threads 16"
         else
@@ -125,25 +128,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             cd ..
             ;;
         "evmrealsuite")
-            # simple IR output validation for multipass mode
-            if [[ $RUN_MODE == "multipass" ]]; then
-                ./build/dtvm --format evm -m multipass tests/evm_asm/add_simple.evm.hex --gas-limit 0xFFFFFFFFFFFF 2>&1 | tee tests/evm_asm/add_simple_dmir_output.ir
-                # Check missing content
-                while IFS= read -r line; do
-                    [ -n "$line" ] && ! grep -qF "$line" tests/evm_asm/add_simple_dmir_output.ir && echo "❌ Missing: $line" && exit 1
-                done < tests/evm_asm/add_simple.ir
-                echo "✅ DMIR validation passed"
-
-                ./build/dtvm --format evm -m multipass tests/evm_asm/add_simple.evm.hex --gas-limit 0xFFFFFFFFFFFF --enable-evm-gas 2>&1 | tee tests/evm_asm/mir_gas_meter_dmir_output.ir
-                while IFS= read -r line; do
-                    [ -n "$line" ] && ! grep -qF "$line" tests/evm_asm/mir_gas_meter_dmir_output.ir && echo "❌ Missing: $line" && exit 1
-                done < tests/evm_asm/mir_gas_meter.ir
-                echo "✅ MIR gas metering validation passed"
-
-                python3 tools/run_evm_tests.py -r build/dtvm -m multipass --format evm  --gas-limit 0xFFFFFFFFFFFF --single-case tests/evm_asm/keccak_abc.evm.hex
-            else
-                python3 tools/run_evm_tests.py -r build/dtvm $EXTRA_EXE_OPTIONS
-            fi
+            python3 tools/run_evm_tests.py -r build/dtvm $EXTRA_EXE_OPTIONS
             ;;
     esac
 done

@@ -1,4 +1,4 @@
-name: DTVM evm test CI in x86-64
+name: DTVM-EVM test CI in x86-64
 
 on:
   push:
@@ -17,8 +17,8 @@ permissions:
     contents: read
 
 jobs:
-  build_test_interp_on_x86:
-    name: Build and test DTVM-EVM interpreter on x86-64
+  build_test_evm_interpreter_x86_ctest:
+    name: Test DTVM-EVM interpreter with ctest on x86-64
     runs-on: ubuntu-latest
     container:
       image: dtvmdev1/dtvm-dev-x64:main
@@ -30,10 +30,10 @@ jobs:
       - name: Code Format Check
         run: |
           ./tools/format.sh check
-      - name: Test Git clone
+      - name: Clone asmjit
         run: |
           git clone https://github.com/asmjit/asmjit.git
-      - name: Install llvm
+      - name: Build and Test
         run: |
           echo "current home is $HOME"
           export CUR_PROJECT=$(pwd)
@@ -55,11 +55,12 @@ jobs:
           export ENABLE_MULTITHREAD=true
           export TestSuite=evmtestsuite
           export CPU_EXCEPTION_TYPE='check'
+          export ENABLE_GAS_METER=false
 
           bash .ci/run_test_suite.sh
 
-  build_real_test_interp_on_x86:
-    name: Build and test DTVM-EVM interpreter on x86-64
+  build_test_evm_interpreter_x86_cli:
+    name: Test DTVM-EVM interpreter with CLI on x86-64
     runs-on: ubuntu-latest
     container:
       image: dtvmdev1/dtvm-dev-x64:main
@@ -71,7 +72,7 @@ jobs:
       - name: Code Format Check
         run: |
           ./tools/format.sh check
-      - name: Install llvm
+      - name: Build and Test
         run: |
           echo "current home is $HOME"
           export CUR_PROJECT=$(pwd)
@@ -93,11 +94,12 @@ jobs:
           export ENABLE_MULTITHREAD=true
           export TestSuite=evmrealsuite
           export CPU_EXCEPTION_TYPE='check'
+          export ENABLE_GAS_METER=false
 
           bash .ci/run_test_suite.sh
 
   build_test_debug_multipass_lazy_evmtestsuite_on_x86:
-    name: Build and test DTVM-EVM multipass on x86-64
+    name: Test DTVM-EVM multipass in debug mode on x86-64
     runs-on: ubuntu-latest
     container:
       image: dtvmdev1/dtvm-dev-x64:main
@@ -109,7 +111,7 @@ jobs:
       - name: Code Format Check
         run: |
           ./tools/format.sh check
-      - name: Install llvm
+      - name: Build and Test
         run: |
           echo "current home is $HOME"
           export CUR_PROJECT=$(pwd)
@@ -131,5 +133,6 @@ jobs:
           export ENABLE_MULTITHREAD=true
           export TestSuite=evmrealsuite
           export CPU_EXCEPTION_TYPE='check'
+          export ENABLE_GAS_METER=true
 
           bash .ci/run_test_suite.sh
