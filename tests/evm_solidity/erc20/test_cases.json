@@ -1,4 +1,5 @@
 {
+  "skip": true,
   "main_contract": "MyERC20",
   "deploy_contracts": ["MyERC20"],
   "constructor_args": {

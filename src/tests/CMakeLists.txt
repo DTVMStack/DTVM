@@ -54,11 +54,15 @@ if(ZEN_ENABLE_SPEC_TEST)
   add_executable(specUnitTests spec_unit_tests.cpp spectest.cpp test_utils.cpp)
   add_executable(mempoolTests mempool_tests.cpp)
   add_executable(cAPITests c_api_tests.cpp)
+  target_include_directories(
+    mempoolTests PRIVATE ${googletest_SOURCE_DIR}/googletest/include
+  )
 
   if(ZEN_ENABLE_EVM)
     add_subdirectory(mpt)
     add_executable(evmInterpTests evm_interp_tests.cpp)
     add_executable(solidityContractTests solidity_contract_tests.cpp)
+    add_executable(solidityJitTests solidity_jit_tests.cpp)
     add_executable(
       evmStateTests evm_state_tests.cpp evm_test_fixtures.cpp
                     evm_test_helpers.cpp
@@ -82,6 +86,7 @@ if(ZEN_ENABLE_SPEC_TEST)
     if(ZEN_ENABLE_EVM)
       target_compile_options(evmInterpTests PRIVATE -fsanitize=address)
       target_compile_options(solidityContractTests PRIVATE -fsanitize=address)
+      target_compile_options(solidityJitTests PRIVATE -fsanitize=address)
       target_compile_options(mptCompareCpp PRIVATE -fsanitize=address)
     endif()
 
@@ -105,6 +110,11 @@ if(ZEN_ENABLE_SPEC_TEST)
         )
         target_link_libraries(
           solidityContractTests
+          PRIVATE dtvmcore rapidjson mpt gtest_main -fsanitize=address
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          solidityJitTests
           PRIVATE dtvmcore rapidjson mpt gtest_main -fsanitize=address
           PUBLIC ${GTEST_BOTH_LIBRARIES}
         )
@@ -142,6 +152,16 @@ if(ZEN_ENABLE_SPEC_TEST)
         )
         target_link_libraries(
           solidityContractTests
+          PRIVATE dtvmcore
+                  rapidjson
+                  mpt
+                  gtest_main
+                  -fsanitize=address
+                  -static-libasan
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          solidityJitTests
           PRIVATE dtvmcore
                   rapidjson
                   mpt
@@ -190,6 +210,11 @@ if(ZEN_ENABLE_SPEC_TEST)
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
       target_link_libraries(
+        solidityJitTests
+        PRIVATE dtvmcore rapidjson mpt gtest_main
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+      target_link_libraries(
         evmStateTests
         PRIVATE dtvmcore rapidjson mpt gtest_main
         PUBLIC ${GTEST_BOTH_LIBRARIES}
@@ -211,6 +236,7 @@ if(ZEN_ENABLE_SPEC_TEST)
   if(ZEN_ENABLE_EVM)
     add_test(NAME evmInterpTests COMMAND evmInterpTests)
     add_test(NAME solidityContractTests COMMAND solidityContractTests)
+    add_test(NAME solidityJitTests COMMAND solidityJitTests)
     add_test(NAME evmStateTests COMMAND evmStateTests)
   endif()
 endif()
