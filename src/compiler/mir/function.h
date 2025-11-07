@@ -157,12 +157,6 @@ public:
     T *Inst = T::create(Ctx.MemPool, std::forward<Arguments>(Args)...);
     Instructions.emplace_back(Inst);
 
-    // TODO: move to dmir->cgir pass
-#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
-    Inst->print(llvm::outs());
-    llvm::outs() << "\n";
-#endif
-
     if (IsStmt) {
       BB.addStatement(Inst);
     }

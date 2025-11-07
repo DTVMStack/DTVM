@@ -1,3 +1,0 @@
-br_if cmp iult (load (base = $0, offset = 176), const.i64 3)
-store (value = sub (load (base = $0, offset = 176), const.i64 3), base = $0, offset = 176)
-const.i32 126

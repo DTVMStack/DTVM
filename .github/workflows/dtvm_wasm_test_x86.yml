@@ -1,4 +1,4 @@
-name: DTVM development test CI in x86-64
+name: DTVM-WASM test CI in x86-64
 
 on:
   push:
@@ -55,6 +55,7 @@ jobs:
           export ENABLE_MULTITHREAD=true
           export TestSuite=microsuite
           export CPU_EXCEPTION_TYPE='check'
+          export ENABLE_GAS_METER=false
 
           bash .ci/run_test_suite.sh
 
@@ -96,6 +97,7 @@ jobs:
           export ENABLE_MULTITHREAD=true
           export TestSuite=microsuite
           export CPU_EXCEPTION_TYPE='check'
+          export ENABLE_GAS_METER=false
 
           bash .ci/run_test_suite.sh
 
@@ -137,6 +139,7 @@ jobs:
           export ENABLE_MULTITHREAD=true
           export TestSuite=microsuite
           export CPU_EXCEPTION_TYPE='check'
+          export ENABLE_GAS_METER=false
 
           bash .ci/run_test_suite.sh
 
