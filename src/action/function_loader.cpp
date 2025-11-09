@@ -372,7 +372,10 @@ void FunctionLoader::load() {
         Block.EndPtr = Ptr - 1;
         popBlock();
         ZEN_ASSERT(!ControlBlocks.empty());
-        setStackPolymorphic(false);
+        // Do not reset StackPolymorphic here. If the outer block is already
+        // unreachable (e.g., after an unreachable instruction), it should
+        // remain unreachable after an inner block ends. This matches the
+        // WebAssembly spec's stack polymorphism behavior.
       }
 
       break;
