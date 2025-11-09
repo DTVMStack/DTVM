@@ -246,10 +246,16 @@ void EVMMirBuilder::handleStop() {
   createInstruction<BrInstruction>(true, Ctx, ReturnBB);
   addSuccessor(ReturnBB);
   setInsertBlock(ReturnBB);
-  createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
+  handleVoidReturn();
 }
 
 void EVMMirBuilder::handleVoidReturn() {
+  if (!CurBB->empty()) {
+    MInstruction *LastInst = *std::prev(CurBB->end());
+    if (LastInst->isTerminator()) {
+      return;
+    }
+  }
   createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
 }
 
@@ -352,6 +358,7 @@ void EVMMirBuilder::handleJump(Operand Dest) {
   implementIndirectJump(JumpTarget, InvalidJumpBB);
 
   MBasicBlock *SkipBB = createBasicBlock();
+  SkipBB->setJumpDestBB(true);
   setInsertBlock(SkipBB);
 }
 
@@ -403,9 +410,12 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
 
 void EVMMirBuilder::handleJumpDest(const uint64_t &PC) {
   MBasicBlock *DestBB = JumpDestTable.at(PC);
-  if (CurBB->isJumpDestBB()) {
-    CurBB->addSuccessor(DestBB);
-    createInstruction<BrInstruction>(true, Ctx, DestBB);
+  if (!CurBB->empty()) {
+    MInstruction *LastInst = *std::prev(CurBB->end());
+    if (!LastInst->isTerminator()) {
+      CurBB->addSuccessor(DestBB);
+      createInstruction<BrInstruction>(true, Ctx, DestBB);
+    }
   }
   setInsertBlock(DestBB);
 }
@@ -1419,6 +1429,17 @@ void EVMMirBuilder::handleReturn(Operand MemOffsetComponents,
   normalizeOperandU64(LengthComponents);
   callRuntimeFor<void, uint64_t, uint64_t>(
       RuntimeFunctions.SetReturn, MemOffsetComponents, LengthComponents);
+
+  createInstruction<BrInstruction>(true, Ctx, ReturnBB);
+  addSuccessor(ReturnBB);
+
+  if (ReturnBB->empty()) {
+    setInsertBlock(ReturnBB);
+    handleVoidReturn();
+  }
+
+  MBasicBlock *PostReturnBB = createBasicBlock();
+  setInsertBlock(PostReturnBB);
 }
 
 typename EVMMirBuilder::Operand

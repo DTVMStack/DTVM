@@ -19,6 +19,7 @@
 #include "evm/interpreter.h"
 #include "runtime/evm_instance.h"
 #include <evmc/hex.hpp>
+#include <evmc/evmc.h>
 #endif // ZEN_ENABLE_EVM
 #include "runtime/codeholder.h"
 #include "runtime/instance.h"
@@ -38,6 +39,33 @@
 namespace zen::runtime {
 
 using namespace common;
+
+#ifdef ZEN_ENABLE_EVM
+namespace {
+evmc_status_code mapEvmErrorToStatus(ErrorCode Err) {
+  switch (Err) {
+  case ErrorCode::EVMBadJumpDestination:
+    return EVMC_BAD_JUMP_DESTINATION;
+  case ErrorCode::EVMStackOverflow:
+    return EVMC_STACK_OVERFLOW;
+  case ErrorCode::EVMStackUnderflow:
+    return EVMC_STACK_UNDERFLOW;
+  case ErrorCode::GasLimitExceeded:
+  case ErrorCode::EVMOutOfGas:
+    return EVMC_OUT_OF_GAS;
+  case ErrorCode::EVMInvalidInstruction:
+    return EVMC_INVALID_INSTRUCTION;
+  case ErrorCode::EVMStaticModeViolation:
+    return EVMC_STATIC_MODE_VIOLATION;
+  case ErrorCode::OutOfBoundsMemory:
+  case ErrorCode::EVMTooLargeRequiredMemory:
+    return EVMC_INVALID_MEMORY_ACCESS;
+  default:
+    return EVMC_FAILURE;
+  }
+}
+} // namespace
+#endif // ZEN_ENABLE_EVM
 using namespace utils;
 
 void Runtime::cleanRuntime() {
@@ -899,6 +927,15 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
         const auto &TrapState = TLS.getTrapState();
         Inst.setExecutionError(common::getError(CapturedTapErrCode),
                                TrapState.NumIgnoredFrames, TrapState);
+      }
+
+      if (StatusCode == EVMC_INTERNAL_ERROR || StatusCode == EVMC_SUCCESS) {
+        const Error &InstErr = Inst.getError();
+        ErrorCode InstErrCode = InstErr.getCode();
+        if (InstErrCode != ErrorCode::NoError &&
+            InstErrCode != ErrorCode::InstanceExit) {
+          StatusCode = mapEvmErrorToStatus(InstErrCode);
+        }
       }
 
       // Set error status code
