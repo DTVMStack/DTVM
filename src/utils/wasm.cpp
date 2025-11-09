@@ -305,8 +305,13 @@ const char *getWASMTypeString(WASMType Type) {
 #include "common/wasm_defs/valtype.def"
 #undef DEFINE_BLOCK_TYPE
 #undef DEFINE_VALUE_TYPE
+  case WASMType::ANY:
+    return "any";
+  case WASMType::ERROR_TYPE:
+    return "error";
   default:
-    ZEN_UNREACHABLE();
+    // ZEN_UNREACHABLE();
+    return "unknown";
   }
 }
 
