@@ -70,8 +70,7 @@ private:
           // No immediate bytes to skip.
         } else if (Opcode >= OP_PUSH1 && Opcode <= OP_PUSH32) {
           uint8_t NumBytes =
-              static_cast<uint8_t>(Opcode) -
-              static_cast<uint8_t>(OP_PUSH1) + 1;
+              static_cast<uint8_t>(Opcode) - static_cast<uint8_t>(OP_PUSH1) + 1;
           Ip += NumBytes;
         }
         PC++;
@@ -594,11 +593,11 @@ private:
 
       default:
         throw getErrorWithExtraMessage(ErrorCode::UnsupportedOpcode,
-                                        std::to_string(Opcode));
+                                       std::to_string(Opcode));
       }
       PC++; // offset 1 byte for opcode
     }
-  return true;
+    return true;
   }
 
   void handleStop() { Builder.handleStop(); }
