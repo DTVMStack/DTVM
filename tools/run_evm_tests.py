@@ -55,7 +55,6 @@ class TestRunner:
         "add_stack_underflow.evm.hex", # stack exception handle
         "invalid_jump.evm.hex",        # exception handle
         "invalid_jumpi.evm.hex",       # exception handle
-        "jump_stack.evm.hex",          # result error
         "stack_overflow.evm.hex",      # stack exception handle
     }
 
