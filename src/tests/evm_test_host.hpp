@@ -146,33 +146,34 @@ public:
     }
     EVMInstance *Inst = *InstRet;
 
-    InterpreterExecContext Ctx(Inst);
-    BaseInterpreter Interpreter(Ctx);
-
     evmc_message Msg = Config.Message;
-    Ctx.allocTopFrame(&Msg);
     uint64_t OriginalGas = static_cast<uint64_t>(Inst->getGas());
-    auto *Frame = Ctx.getCurFrame();
-    Frame->Host = this;
 
     if (!applyPreExecutionState(Msg, Result)) {
       return Result;
     }
 
+    evmc::Result ExecResult{};
     try {
-      Interpreter.interpret();
+      RT->callEVMMain(*Inst, Msg, ExecResult);
     } catch (const std::exception &E) {
       Result.ErrorMessage = E.what();
-      Result.Status = Ctx.getStatus();
+      Result.Success = false;
+      Result.Status = EVMC_INTERNAL_ERROR;
       Result.RemainingGas = Inst->getGas();
-      ReturnData = Ctx.getReturnData();
+      ReturnData.clear();
       return Result;
     }
 
-    Result.Status = Ctx.getStatus();
+    Result.Status = ExecResult.status_code;
     Result.Success = true;
     Result.RemainingGas = Inst->getGas();
-    ReturnData = Ctx.getReturnData();
+    if (ExecResult.output_data && ExecResult.output_size > 0) {
+      ReturnData.assign(ExecResult.output_data,
+                        ExecResult.output_data + ExecResult.output_size);
+    } else {
+      ReturnData.clear();
+    }
 
     if (OriginalGas >= static_cast<uint64_t>(Result.RemainingGas)) {
       Result.GasUsed =
@@ -261,26 +262,25 @@ public:
 
       EVMInstance *Inst = *InstRet;
 
-      // Create interpreter context and execute
-      InterpreterExecContext Ctx(Inst);
-      BaseInterpreter Interpreter(Ctx);
-
       evmc_message CallMsg = Msg;
-      Ctx.allocTopFrame(&CallMsg);
+      evmc::Result ExecResult{};
 
-      // Set the host for the execution frame
-      auto *Frame = Ctx.getCurFrame();
-      Frame->Host = this;
+      try {
+        RT->callEVMMain(*Inst, CallMsg, ExecResult);
+      } catch (const std::exception &E) {
+        ZEN_LOG_ERROR("Error in recursive call: {}", E.what());
+        return ParentResult;
+      }
 
-      // Execute the interpreter
-      Interpreter.interpret();
-
-      // Calculate gas consumed and remaining
-      int64_t RemainingGas = Inst->getGas();
-      int64_t GasRefund = Ctx.getInstance()->getGasRefund();
-      ReturnData = Ctx.getReturnData();
-
-      return evmc::Result(Ctx.getStatus(), RemainingGas, GasRefund,
+      if (ExecResult.output_data && ExecResult.output_size > 0) {
+        ReturnData.assign(ExecResult.output_data,
+                          ExecResult.output_data + ExecResult.output_size);
+      } else {
+        ReturnData.clear();
+      }
+      int64_t RemainingGas = static_cast<int64_t>(Inst->getGas());
+      int64_t GasRefund = static_cast<int64_t>(Inst->getGasRefund());
+      return evmc::Result(ExecResult.status_code, RemainingGas, GasRefund,
                           ReturnData.empty() ? nullptr : ReturnData.data(),
                           ReturnData.size());
 
@@ -443,30 +443,40 @@ public:
       SenderAcc.balance = intx::be::store<evmc::bytes32>(SenderBalance);
       NewAcc.balance = intx::be::store<evmc::bytes32>(NewAccBalance);
 
-      // 5 Execute the contract creation code
-      InterpreterExecContext Ctx(Inst);
-      BaseInterpreter Interp(Ctx);
-
       evmc_message CallMsg = Msg;
-      Ctx.allocTopFrame(&CallMsg);
-      auto *Frame = Ctx.getCurFrame();
-      Frame->Host = this;
-      Interp.interpret();
+      evmc::Result ExecResult{};
+      try {
+        RT->callEVMMain(*Inst, CallMsg, ExecResult);
+      } catch (const std::exception &E) {
+        accounts.erase(NewAddr);
+        ZEN_LOG_ERROR("Error in handleCreate execution: {}", E.what());
+        return evmc::Result{EVMC_FAILURE, Msg.gas, 0, evmc::address{}};
+      }
 
-      // Calculate gas consumed and remaining
-      const int64_t RemainingGas = Inst->getGas();
-      const auto Status = Ctx.getStatus();
-      ReturnData = Ctx.getReturnData();
+      if (ExecResult.output_data && ExecResult.output_size > 0) {
+        ReturnData.assign(ExecResult.output_data,
+                          ExecResult.output_data + ExecResult.output_size);
+      } else {
+        ReturnData.clear();
+      }
+
+      const int64_t RemainingGas = static_cast<int64_t>(Inst->getGas());
+      const int64_t GasRefund =
+          static_cast<int64_t>(Inst->getGasRefund());
 
       // 6 Deploy the contract code (the output is the runtime code)
-      if (Status != EVMC_SUCCESS) {
+      if (ExecResult.status_code != EVMC_SUCCESS) {
         accounts.erase(NewAddr);
-        return evmc::Result{Status, RemainingGas, 0, NewAddr};
+        evmc::Result Failure(ExecResult.status_code, RemainingGas, GasRefund);
+        Failure.create_address = NewAddr;
+        return Failure;
       }
       if (!ReturnData.empty()) {
         if (ReturnData.size() > MAX_CODE_SIZE) {
           accounts.erase(NewAddr);
-          return evmc::Result{EVMC_FAILURE, RemainingGas, 0, NewAddr};
+          evmc::Result Failure(EVMC_FAILURE, RemainingGas, GasRefund);
+          Failure.create_address = NewAddr;
+          return Failure;
         }
         NewAcc.code = evmc::bytes(ReturnData.data(), ReturnData.size());
         const std::vector<uint8_t> CodeHashVec =
@@ -481,7 +491,7 @@ public:
         SenderAcc.nonce++;
       }
 
-      evmc::Result CreateResult(EVMC_SUCCESS, RemainingGas, 0,
+      evmc::Result CreateResult(EVMC_SUCCESS, RemainingGas, GasRefund,
                                 NewAcc.code.empty() ? nullptr
                                                     : NewAcc.code.data(),
                                 NewAcc.code.size());

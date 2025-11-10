@@ -124,7 +124,8 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     ExecConfig.BytecodeSize = TargetAccount->Account.code.size();
     ExecConfig.Message = *PT.Message;
     ExecConfig.GasLimit =
-        static_cast<uint64_t>(std::max<int64_t>(0, PT.Message->gas)) * 100;
+        static_cast<uint64_t>(std::max<int64_t>(0, PT.Message->gas));
+    ExecConfig.Message.gas = static_cast<int64_t>(ExecConfig.GasLimit);
 
     if (Fixture.Transaction && Fixture.Transaction->HasMember("maxPriorityFeePerGas") &&
         (*Fixture.Transaction)["maxPriorityFeePerGas"].IsString()) {
