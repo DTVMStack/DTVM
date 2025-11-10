@@ -94,25 +94,20 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
       return {true, {}};
     }
 
-    // Convert code to hex string and create temp file using RAII
-    std::string HexCode =
-        "0x" + zen::utils::toHex(TargetAccount->Account.code.data(),
-                                 TargetAccount->Account.code.size());
-    TempHexFile TempFile(HexCode);
-    if (!TempFile.isValid()) {
-      return MakeFailure("Failed to materialize temp bytecode file for " +
-                         Fixture.TestName + " (" + Fork + ")");
-    }
-
     RuntimeConfig Config;
     Config.Mode = common::RunMode::InterpMode;
 
     auto HostPtr = std::make_unique<ZenMockedEVMHost>();
-    HostPtr->tx_context = Fixture.Environment;
 
+    std::vector<ZenMockedEVMHost::AccountInitEntry> InitialAccounts;
+    InitialAccounts.reserve(Fixture.PreState.size());
     for (const auto &PA : Fixture.PreState) {
-      addAccountToMockedHost(*HostPtr, PA.Address, PA.Account);
+      ZenMockedEVMHost::AccountInitEntry Entry;
+      Entry.Address = PA.Address;
+      Entry.Account = PA.Account;
+      InitialAccounts.push_back(Entry);
     }
+    HostPtr->loadInitialState(Fixture.Environment, InitialAccounts, true);
 
     auto RT = Runtime::newEVMRuntime(Config, HostPtr.get());
     if (!RT) {
@@ -123,158 +118,36 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     HostPtr->setRuntime(RT.get());
     ZenMockedEVMHost *MockedHost = HostPtr.get();
 
-    auto ModRet = RT->loadEVMModule(TempFile.getPath());
-    if (!ModRet) {
-      return MakeFailure("Failed to load module for " + Fixture.TestName +
-                         " (" + Fork + ")");
+    ZenMockedEVMHost::TransactionExecutionConfig ExecConfig;
+    ExecConfig.ModuleName = Fixture.TestName;
+    ExecConfig.Bytecode = TargetAccount->Account.code.data();
+    ExecConfig.BytecodeSize = TargetAccount->Account.code.size();
+    ExecConfig.Message = *PT.Message;
+    ExecConfig.GasLimit =
+        static_cast<uint64_t>(std::max<int64_t>(0, PT.Message->gas)) * 100;
+
+    if (Fixture.Transaction && Fixture.Transaction->HasMember("maxPriorityFeePerGas") &&
+        (*Fixture.Transaction)["maxPriorityFeePerGas"].IsString()) {
+      ExecConfig.MaxPriorityFeePerGas =
+          parseUint256((*Fixture.Transaction)["maxPriorityFeePerGas"]
+                           .GetString());
     }
 
-    EVMModule *Mod = *ModRet;
-
-    Isolation *Iso = RT->createManagedIsolation();
-    if (!Iso) {
-      return MakeFailure("Failed to create execution isolation for " +
-                         Fixture.TestName + " (" + Fork + ")");
-    }
-
-    uint64_t GasLimit = static_cast<uint64_t>(PT.Message->gas) * 100;
-    auto InstRet = Iso->createEVMInstance(*Mod, GasLimit);
-    if (!InstRet) {
-      return MakeFailure("Failed to create interpreter instance for " +
-                         Fixture.TestName + " (" + Fork + ")");
-    }
-
-    EVMInstance *Inst = *InstRet;
-
-    InterpreterExecContext Ctx(Inst);
-    BaseInterpreter Interpreter(Ctx);
-
-    evmc_message Msg = *PT.Message;
-    Ctx.allocTopFrame(&Msg);
-    uint64_t OriginalGas = Inst->getGas();
-    // Set the host for the execution frame
-    auto *Frame = Ctx.getCurFrame();
-    Frame->Host = MockedHost;
-
-    // Update transaction-level state before execution
-    evmc::address Sender = Msg.sender;
-    auto &SenderAccount = MockedHost->accounts[Sender];
-
-    // 1. Increment nonce
-    SenderAccount.nonce++;
-
-    // 2. Handle value transfer manually (MockedHost doesn't do this
-    // automatically)
-    intx::uint256 TransferValue = intx::be::load<intx::uint256>(Msg.value);
-    if (TransferValue != 0) {
-      // Subtract value from sender balance using intx arithmetic
-      intx::uint256 SenderBalance =
-          intx::be::load<intx::uint256>(SenderAccount.balance);
-      intx::uint256 NewSenderBalance = SenderBalance - TransferValue;
-      SenderAccount.balance = intx::be::store<evmc::bytes32>(NewSenderBalance);
-
-      // Add value to recipient balance using intx arithmetic
-      evmc::address Recipient = Msg.recipient;
-      auto &RecipientAccount = MockedHost->accounts[Recipient];
-      intx::uint256 RecipientBalance =
-          intx::be::load<intx::uint256>(RecipientAccount.balance);
-      intx::uint256 NewRecipientBalance = RecipientBalance + TransferValue;
-      RecipientAccount.balance =
-          intx::be::store<evmc::bytes32>(NewRecipientBalance);
-    }
-
-    bool ExecutionSucceeded = true;
-    uint64_t ExecutionGasUsed = 0;
-    std::string ExecutionError;
-
-    try {
-      Interpreter.interpret();
-      ExecutionGasUsed = OriginalGas - Inst->getGas();
-    } catch (const std::exception &E) {
-      ExecutionSucceeded = false;
-      ExecutionError = E.what();
-      std::cout << "Execution failed for " << Fixture.TestName << ": "
-                << E.what() << std::endl;
-    }
+    auto ExecResult = MockedHost->executeTransaction(ExecConfig);
 
     if (DEBUG) {
-      std::cout << "ExecutionSucceeded: " << ExecutionSucceeded << std::endl;
-      std::cout << "ExecutionGasUsed: " << ExecutionGasUsed << std::endl;
-    }
-    // 3. Deduct gas cost after execution (gas_used * gas_price)
-    if (ExecutionSucceeded) {
-      intx::uint256 GasPrice256 =
-          intx::be::load<intx::uint256>(MockedHost->tx_context.tx_gas_price);
-      uint64_t GasPrice =
-          static_cast<uint64_t>(GasPrice256 & 0xFFFFFFFFFFFFFFFFULL);
-
-      // Get base fee from tx_context
-      intx::uint256 BaseFee256 =
-          intx::be::load<intx::uint256>(MockedHost->tx_context.block_base_fee);
-      uint64_t BaseFee =
-          static_cast<uint64_t>(BaseFee256 & 0xFFFFFFFFFFFFFFFFULL);
-
-      // EIP-1559: Calculate priority fee (tip) for coinbase
-      // Priority fee = min(maxPriorityFeePerGas, maxFeePerGas - baseFee)
-      uint64_t PriorityFee = 0;
-
-      // Check if this is an EIP-1559 transaction by looking for
-      // maxPriorityFeePerGas
-      const rapidjson::Value &Transaction = *Fixture.Transaction;
-      if (Transaction.HasMember("maxPriorityFeePerGas") &&
-          Transaction["maxPriorityFeePerGas"].IsString()) {
-        // EIP-1559 transaction
-        evmc::uint256be MaxPriorityFee256be =
-            parseUint256(Transaction["maxPriorityFeePerGas"].GetString());
-        intx::uint256 MaxPriorityFee256 =
-            intx::be::load<intx::uint256>(MaxPriorityFee256be);
-        uint64_t MaxPriorityFeePerGas =
-            static_cast<uint64_t>(MaxPriorityFee256 & 0xFFFFFFFFFFFFFFFFULL);
-        uint64_t MaxFeeMinusBase = GasPrice > BaseFee ? GasPrice - BaseFee : 0;
-        PriorityFee = std::min(MaxPriorityFeePerGas, MaxFeeMinusBase);
-      } else {
-        // Legacy transaction: all gas price goes to miner minus base fee
-        PriorityFee = GasPrice > BaseFee ? GasPrice - BaseFee : 0;
+      std::cout << "ExecutionSucceeded: " << ExecResult.Success << std::endl;
+      std::cout << "ExecutionGasUsed: " << ExecResult.GasUsed << std::endl;
+      std::cout << "ExecutionGasCharged: " << ExecResult.GasCharged
+                << std::endl;
+      std::cout << "ExecutionStatus: " << ExecResult.Status << std::endl;
+      if (!ExecResult.ErrorMessage.empty()) {
+        std::cout << "ExecutionError: " << ExecResult.ErrorMessage << std::endl;
       }
-
-      // Apply gas refund with EIP-3529 limit (London: max_refund = gas_used /
-      // 5)
-      uint64_t GasRefund = Inst->getGasRefund();
-      // For now, assume London or later (max_refund = gas_used / 5)
-      // TODO: get actual revision from the fork name
-      uint64_t RefundLimit = ExecutionGasUsed / 5;
-      uint64_t EffectiveRefund = std::min(GasRefund, RefundLimit);
-      uint64_t GasCharged = ExecutionGasUsed - EffectiveRefund;
-
-      uint64_t TotalGasCost = GasCharged * GasPrice;
-      uint64_t CoinBaseGas = GasCharged * PriorityFee;
-
-      // Subtract gas cost from sender balance using intx arithmetic
-      intx::uint256 SenderBalance =
-          intx::be::load<intx::uint256>(SenderAccount.balance);
-      intx::uint256 NewSenderBalance =
-          SenderBalance - intx::uint256(TotalGasCost);
-      SenderAccount.balance = intx::be::store<evmc::bytes32>(NewSenderBalance);
-
-      // Add gas cost to coinbase balance
-      evmc::address Coinbase = MockedHost->tx_context.block_coinbase;
-      auto &CoinbaseAccount = MockedHost->accounts[Coinbase];
-
-      // Set correct codehash for newly created coinbase account (empty code
-      // hash)
-      std::vector<uint8_t> EmptyCode;
-      auto EmptyCodeHash = zen::host::evm::crypto::keccak256(EmptyCode);
-      std::memcpy(CoinbaseAccount.codehash.bytes, EmptyCodeHash.data(), 32);
-
-      // Add coinbase gas to coinbase balance using intx arithmetic
-      intx::uint256 CurrentBalance =
-          intx::be::load<intx::uint256>(CoinbaseAccount.balance);
-      intx::uint256 NewBalance = CurrentBalance + intx::uint256(CoinBaseGas);
-      CoinbaseAccount.balance = intx::be::store<evmc::bytes32>(NewBalance);
     }
 
     if (!ExpectedResult.ExpectedException.empty()) {
-      if (ExecutionSucceeded) {
+      if (ExecResult.Status == EVMC_SUCCESS) {
         return MakeFailure("Expected exception '" +
                            ExpectedResult.ExpectedException + "' for " +
                            Fixture.TestName + " (" + Fork +
@@ -283,9 +156,13 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
       return {true, {}};
     }
 
-    if (!ExecutionSucceeded) {
-      return MakeFailure("Execution threw exception for " + Fixture.TestName +
-                         " (" + Fork + "): " + ExecutionError);
+    if (!ExecResult.Success) {
+      std::string ErrorMsg = "Execution infrastructure failure for " +
+                             Fixture.TestName + " (" + Fork + ")";
+      if (!ExecResult.ErrorMessage.empty()) {
+        ErrorMsg += ": " + ExecResult.ErrorMessage;
+      }
+      return MakeFailure(ErrorMsg);
     }
 
     std::vector<std::string> AllErrors;
