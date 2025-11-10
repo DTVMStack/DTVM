@@ -68,8 +68,8 @@ private:
         bool IsDeadInstruction = InDeadCode && Opcode != OP_JUMPDEST;
         if (IsDeadInstruction) {
           if (Opcode >= OP_PUSH0 && Opcode <= OP_PUSH32) {
-            uint8_t NumBytes = static_cast<uint8_t>(Opcode) -
-                               static_cast<uint8_t>(OP_PUSH0);
+            uint8_t NumBytes =
+                static_cast<uint8_t>(Opcode) - static_cast<uint8_t>(OP_PUSH0);
             Ip += NumBytes;
           }
           continue;
