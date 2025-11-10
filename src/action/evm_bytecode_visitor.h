@@ -67,14 +67,11 @@ private:
 
         bool IsDeadInstruction = InDeadCode && Opcode != OP_JUMPDEST;
         if (IsDeadInstruction) {
-          if (Opcode == OP_PUSH0) {
-            // No immediate bytes to skip.
-          } else if (Opcode >= OP_PUSH1 && Opcode <= OP_PUSH32) {
+          if (Opcode >= OP_PUSH0 && Opcode <= OP_PUSH32) {
             uint8_t NumBytes = static_cast<uint8_t>(Opcode) -
-                               static_cast<uint8_t>(OP_PUSH1) + 1;
+                               static_cast<uint8_t>(OP_PUSH0);
             Ip += NumBytes;
           }
-          PC++;
           continue;
         }
 
