@@ -127,11 +127,11 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
         static_cast<uint64_t>(std::max<int64_t>(0, PT.Message->gas));
     ExecConfig.Message.gas = static_cast<int64_t>(ExecConfig.GasLimit);
 
-    if (Fixture.Transaction && Fixture.Transaction->HasMember("maxPriorityFeePerGas") &&
+    if (Fixture.Transaction &&
+        Fixture.Transaction->HasMember("maxPriorityFeePerGas") &&
         (*Fixture.Transaction)["maxPriorityFeePerGas"].IsString()) {
-      ExecConfig.MaxPriorityFeePerGas =
-          parseUint256((*Fixture.Transaction)["maxPriorityFeePerGas"]
-                           .GetString());
+      ExecConfig.MaxPriorityFeePerGas = parseUint256(
+          (*Fixture.Transaction)["maxPriorityFeePerGas"].GetString());
     }
 
     auto ExecResult = MockedHost->executeTransaction(ExecConfig);
