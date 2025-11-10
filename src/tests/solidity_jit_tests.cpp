@@ -488,22 +488,12 @@ TEST_P(SolidityContractTest, ExecuteContractSequence) {
 
   RuntimeConfig Config;
   Config.Mode = common::RunMode::MultipassMode;
-  // Create temporary MockedHost first for Runtime creation
-  auto TempMockedHost = std::make_unique<evmc::MockedHost>();
-  auto RT = Runtime::newEVMRuntime(Config, TempMockedHost.get());
+  auto HostPtr = std::make_unique<ZenMockedEVMHost>();
+  auto RT = Runtime::newEVMRuntime(Config, HostPtr.get());
   ASSERT_TRUE(RT != nullptr) << "Failed to create runtime";
 
-  // Create Isolation for recursive host
-  Isolation *IsoForRecursive = RT->createManagedIsolation();
-  ASSERT_TRUE(IsoForRecursive != nullptr)
-      << "Failed to create Isolation for recursive host";
-  // Now create ZenMockedEVMHost with Runtime and Isolation references
-  auto HostPtr = std::make_unique<ZenMockedEVMHost>(RT.get(), IsoForRecursive);
+  HostPtr->setRuntime(RT.get());
   ZenMockedEVMHost *MockedHost = HostPtr.get();
-
-  // Copy accounts and context from temporary host
-  MockedHost->accounts = TempMockedHost->accounts;
-  MockedHost->tx_context = TempMockedHost->tx_context;
 
   // Switch to using ZenMockedEVMHost
   std::unique_ptr<evmc::Host> Host = std::move(HostPtr);

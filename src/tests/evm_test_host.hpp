@@ -15,6 +15,7 @@
 #include "utils/logging.h"
 #include "utils/others.h"
 #include <iostream>
+#include <memory>
 
 using namespace zen;
 using namespace zen::runtime;
@@ -25,15 +26,31 @@ namespace zen::evm {
 /// interpreters
 class ZenMockedEVMHost : public evmc::MockedHost {
 private:
+  struct IsolationDeleter {
+    Runtime *RT = nullptr;
+    void operator()(Isolation *Iso) const {
+      if (Iso && RT) {
+        RT->deleteManagedIsolation(Iso);
+      }
+    }
+  };
+  using IsolationPtr = std::unique_ptr<Isolation, IsolationDeleter>;
+
   Runtime *RT = nullptr;
-  Isolation *Iso = nullptr;
   std::vector<uint8_t> ReturnData;
   static inline std::atomic<uint64_t> ModuleCounter = 0;
 
 public:
-  ZenMockedEVMHost(Runtime *RT, Isolation *Iso) : RT(RT), Iso(Iso) {}
+  ZenMockedEVMHost() = default;
+
+  void setRuntime(Runtime *NewRT) { RT = NewRT; }
+  Runtime *getRuntime() const { return RT; }
 
   evmc::Result call(const evmc_message &Msg) noexcept override {
+    if (!RT) {
+      ZEN_LOG_ERROR("Runtime is not attached to ZenMockedEVMHost");
+      return evmc::MockedHost::call(Msg);
+    }
     if (Msg.kind == EVMC_CREATE || Msg.kind == EVMC_CREATE2) {
       return handleCreate(Msg);
     }
@@ -77,6 +94,14 @@ public:
       }
 
       EVMModule *Mod = *ModRet;
+
+      IsolationPtr Iso(nullptr, IsolationDeleter{RT});
+      Iso.reset(RT->createManagedIsolation());
+      if (!Iso) {
+        ZEN_LOG_ERROR("Failed to create isolation for module: {}",
+                      ModName.c_str());
+        return ParentResult;
+      }
 
       // Create EVM instance
       auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
@@ -199,6 +224,10 @@ public:
   }
   evmc::Result handleCreate(const evmc_message &OrigMsg) noexcept {
     // 1 Calculate the contract address
+    if (!RT) {
+      ZEN_LOG_ERROR("Runtime is not attached to ZenMockedEVMHost");
+      return evmc::Result{EVMC_FAILURE, OrigMsg.gas, 0, evmc::address{}};
+    }
     evmc_message Msg = prepareMessage(OrigMsg);
     try {
       // 2 Check for address conflicts (if the address already exists and is not
@@ -223,7 +252,24 @@ public:
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
       }
       EVMModule *Mod = *ModRet;
+
+      IsolationPtr Iso(nullptr, IsolationDeleter{RT});
+      Iso.reset(RT->createManagedIsolation());
+      if (!Iso) {
+        accounts.erase(NewAddr);
+        ZEN_LOG_ERROR("Failed to create isolation for module: {}",
+                      ModName.c_str());
+        return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
+      }
+
       auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
+      if (!InstRet) {
+        accounts.erase(NewAddr);
+        ZEN_LOG_ERROR("Failed to create EVM instance for module: {}",
+                      ModName.c_str());
+        return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
+      }
+
       EVMInstance *Inst = *InstRet;
       // 3 Create new account status
       auto &NewAcc = accounts[NewAddr];

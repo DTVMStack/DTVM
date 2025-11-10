@@ -107,35 +107,21 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     RuntimeConfig Config;
     Config.Mode = common::RunMode::InterpMode;
 
-    // Create temporary MockedHost first for Runtime creation
-    auto TempMockedHost = std::make_unique<evmc::MockedHost>();
-    TempMockedHost->tx_context = Fixture.Environment;
+    auto HostPtr = std::make_unique<ZenMockedEVMHost>();
+    HostPtr->tx_context = Fixture.Environment;
 
     for (const auto &PA : Fixture.PreState) {
-      addAccountToMockedHost(*TempMockedHost, PA.Address, PA.Account);
+      addAccountToMockedHost(*HostPtr, PA.Address, PA.Account);
     }
 
-    auto RT = Runtime::newEVMRuntime(Config, TempMockedHost.get());
+    auto RT = Runtime::newEVMRuntime(Config, HostPtr.get());
     if (!RT) {
       return MakeFailure("Failed to create EVM runtime for " +
                          Fixture.TestName + " (" + Fork + ")");
     }
 
-    // Create Isolation for the mocked host
-    Isolation *IsoForRecursive = RT->createManagedIsolation();
-    if (!IsoForRecursive) {
-      return MakeFailure("Failed to create isolation for recursive host in " +
-                         Fixture.TestName + " (" + Fork + ")");
-    }
-
-    // Now create ZenMockedEVMHost with Runtime and Isolation references
-    auto HostPtr =
-        std::make_unique<ZenMockedEVMHost>(RT.get(), IsoForRecursive);
+    HostPtr->setRuntime(RT.get());
     ZenMockedEVMHost *MockedHost = HostPtr.get();
-
-    // Copy accounts and context from temporary host
-    MockedHost->accounts = TempMockedHost->accounts;
-    MockedHost->tx_context = TempMockedHost->tx_context;
 
     auto ModRet = RT->loadEVMModule(TempFile.getPath());
     if (!ModRet) {
