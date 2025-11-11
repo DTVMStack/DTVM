@@ -297,7 +297,7 @@ void FunctionLoader::load() {
     }
     case ELSE: {
       ControlBlock &Block = ControlBlocks.back();
-      if (Block.LabelType != LABEL_IF) {
+      if (Block.LabelType != LABEL_IF || Block.ElsePtr != nullptr) {
         throw getError(ErrorCode::ElseMismatchIf);
       }
       checkBlockStack();
