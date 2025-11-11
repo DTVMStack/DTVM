@@ -81,7 +81,9 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
   ZEN_ASSERT(RT.getEVMHost());
   Mod->Host = RT.getEVMHost();
 
-  action::performEVMJITCompile(*Mod);
+  if (RT.getConfig().Mode != common::RunMode::InterpMode) {
+    action::performEVMJITCompile(*Mod);
+  }
 
   return Mod;
 }

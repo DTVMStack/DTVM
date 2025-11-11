@@ -123,7 +123,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 n=2
             fi
             for i in {1..$n}; do
-                SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose -R "evmInterpTests"
+                SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose -E solidityJitTests
             done
             cd ..
             ;;
