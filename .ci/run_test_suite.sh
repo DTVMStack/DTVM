@@ -21,6 +21,9 @@
 
 set -e
 
+# Convert INPUT_FORMAT to lowercase for case-insensitive comparison
+INPUT_FORMAT=${INPUT_FORMAT,,}
+
 CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TARGET"
 
 if [[ ${CMAKE_BUILD_TARGET} != "Release" && ${RUN_MODE} != "interpreter" && ${INPUT_FORMAT} == "evm" ]]; then
@@ -87,9 +90,10 @@ fi
 export PATH=$PATH:$PWD/build
 CMAKE_OPTIONS_ORIGIN="$CMAKE_OPTIONS"
 
-./tools/easm2bytecode.sh ./tests/evm_asm ./tests/evm_asm
-pip install solc-select
-./tools/solc_batch_compile.sh
+if [[ ${INPUT_FORMAT} == "evm" ]]; then
+    ./tools/easm2bytecode.sh ./tests/evm_asm ./tests/evm_asm
+    ./tools/solc_batch_compile.sh
+fi
 
 for STACK_TYPE in ${STACK_TYPES[@]}; do
     rm -rf build
