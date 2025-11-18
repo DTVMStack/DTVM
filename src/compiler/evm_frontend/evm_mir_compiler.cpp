@@ -175,6 +175,12 @@ void EVMMirBuilder::finalizeEVMBase() {
   setInsertBlock(ExceptionReturnBB);
   handleVoidReturn();
 #endif
+
+  if (ReturnBB &&
+      std::find(CurFunc->begin(), CurFunc->end(), ReturnBB) == CurFunc->end()) {
+    CurFunc->deleteMBasicBlock(ReturnBB);
+    ReturnBB = nullptr;
+  }
 }
 
 LoadInstruction *EVMMirBuilder::getInstanceElement(MType *ValueType,
