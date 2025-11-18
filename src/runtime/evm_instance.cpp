@@ -74,7 +74,8 @@ void EVMInstance::setExecutionError(const Error &NewErr, uint32_t IgnoredDepth,
   ZEN_ASSERT(NewErr.getPhase() == common::ErrorPhase::Execution);
   setError(NewErr);
 
-  if (NewErr.getCode() == ErrorCode::GasLimitExceeded) {
+  if (NewErr.getCode() == ErrorCode::GasLimitExceeded ||
+      NewErr.getCode() == ErrorCode::EVMOutOfGas) {
     setGas(0); // gas left
   }
 }
@@ -130,11 +131,14 @@ void EVMInstance::expandMemory(uint64_t RequiredSize) {
 void EVMInstance::chargeGas(uint64_t GasCost) {
   evmc_message *Msg = getCurrentMessage();
   ZEN_ASSERT(Msg && "Active message required for gas accounting");
-  if ((uint64_t)Msg->gas < GasCost) {
+
+  uint64_t GasLeft = getGas();
+  if (GasLeft < GasCost) {
     throw common::getError(common::ErrorCode::EVMOutOfGas);
   }
-  Msg->gas -= static_cast<int64_t>(GasCost);
-  setGas(static_cast<uint64_t>(Msg->gas));
+  uint64_t NewGas = GasLeft - GasCost;
+  setGas(NewGas);
+  Msg->gas = static_cast<int64_t>(NewGas);
 }
 
 } // namespace zen::runtime

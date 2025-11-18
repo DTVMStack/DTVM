@@ -215,37 +215,14 @@ void EVMMirBuilder::meterOpcode(evmc_opcode Opcode) {
 }
 
 void EVMMirBuilder::meterGas(uint64_t GasCost) {
-  if (GasCost == 0) {
+  if (!Ctx.isGasMeteringEnabled() || GasCost == 0) {
     return;
   }
 
-  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  const int32_t GasOffset = zen::runtime::EVMInstance::getGasFieldOffset();
-
-  MInstruction *GasLeft = getInstanceElement(I64Type, GasOffset);
-  MInstruction *CostValue = createIntConstInstruction(I64Type, GasCost);
-
-  MInstruction *IsExhausted = createInstruction<CmpInstruction>(
-      false, CmpInstruction::ICMP_ULT, &Ctx.I64Type, GasLeft, CostValue);
-
-  MBasicBlock *OutOfGasBB =
-      CurFunc->getOrCreateExceptionSetBB(common::ErrorCode::EVMOutOfGas);
-  MBasicBlock *ChargeBB = createBasicBlock();
-  MBasicBlock *PostBB = createBasicBlock();
-
-  createInstruction<BrIfInstruction>(true, Ctx, IsExhausted, OutOfGasBB,
-                                     ChargeBB);
-  addUniqueSuccessor(OutOfGasBB);
-  addSuccessor(ChargeBB);
-
-  setInsertBlock(ChargeBB);
-  MInstruction *NewGas = createInstruction<BinaryInstruction>(
-      false, OP_sub, I64Type, GasLeft, CostValue);
-  setInstanceElement(I64Type, NewGas, GasOffset);
-  createInstruction<BrInstruction>(true, Ctx, PostBB);
-  addSuccessor(PostBB);
-
-  setInsertBlock(PostBB);
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  U256Value GasValue = {GasCost, 0, 0, 0};
+  Operand GasOperand(GasValue);
+  callRuntimeFor<void, uint64_t>(RuntimeFunctions.MeterGas, GasOperand);
 }
 
 void EVMMirBuilder::handleStop() {
