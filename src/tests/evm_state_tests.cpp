@@ -15,14 +15,15 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cstdlib>
-#include <evmc/evmc.hpp>
-#include <evmc/mocked_host.hpp>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
-#include <rapidjson/document.h>
 #include <string>
 #include <vector>
+
+#include <evmc/evmc.hpp>
+#include <evmc/mocked_host.hpp>
+#include <rapidjson/document.h>
 
 using namespace zen;
 using namespace zen::evm;
@@ -32,6 +33,42 @@ using namespace zen::evm_test_utils;
 namespace {
 
 const bool DEBUG = false;
+const bool PRINT_FAILURE_DETAILS = true;
+// TODO: RunMode selection logic will be refactored in the future.
+constexpr common::RunMode STATE_TEST_RUN_MODE = common::RunMode::MultipassMode;
+
+RuntimeConfig buildRuntimeConfig() {
+  RuntimeConfig Config;
+
+  const bool MultipassSupported =
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+      true;
+#else
+      false;
+#endif
+
+  if (STATE_TEST_RUN_MODE == common::RunMode::MultipassMode &&
+      !MultipassSupported) {
+    std::cerr << "Multipass requested but not built, falling back to "
+                 "interpreter"
+              << std::endl;
+    Config.Mode = common::RunMode::InterpMode;
+  } else {
+    Config.Mode = STATE_TEST_RUN_MODE;
+    if (Config.Mode == common::RunMode::UnknownMode) {
+      Config.Mode = MultipassSupported ? common::RunMode::MultipassMode
+                                       : common::RunMode::InterpMode;
+    }
+  }
+
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+  if (Config.Mode == common::RunMode::MultipassMode) {
+    Config.EnableEvmGasMetering = true;
+  }
+#endif
+
+  return Config;
+}
 
 std::string getDefaultTestDir() {
   std::filesystem::path DirPath =
@@ -94,8 +131,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
       return {true, {}};
     }
 
-    RuntimeConfig Config;
-    Config.Mode = common::RunMode::InterpMode;
+    RuntimeConfig Config = buildRuntimeConfig();
 
     auto HostPtr = std::make_unique<ZenMockedEVMHost>();
 
@@ -353,6 +389,11 @@ TEST_P(EVMStateTest, ExecutesStateTest) {
       executeStateTest(*Param.Fixture, Param.ForkName, Param.Expected);
 
   if (!Result.Passed) {
+    if (!PRINT_FAILURE_DETAILS) {
+      EXPECT_TRUE(Result.Passed);
+      return;
+    }
+
     std::string CombinedErrors = "\n";
     CombinedErrors += "=================================================\n";
     CombinedErrors +=
