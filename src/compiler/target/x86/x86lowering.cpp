@@ -594,6 +594,7 @@ CgRegister X86CgLowering::X86MaterializeInt(const MConstantInt &IntConstant,
 }
 
 CgRegister X86CgLowering::X86MaterializeInt(uint64_t Imm, MVT VT) {
+#ifndef ZEN_ENABLE_EVM
   if (Imm == 0) {
     CgRegister SrcReg = fastEmitInst_(X86::MOV32r0, &X86::GR32RegClass);
     switch (VT.SimpleTy) {
@@ -611,6 +612,7 @@ CgRegister X86CgLowering::X86MaterializeInt(uint64_t Imm, MVT VT) {
     }
     }
   }
+#endif // ZEN_ENABLE_EVM
 
   unsigned Opc = 0;
   switch (VT.SimpleTy) {
