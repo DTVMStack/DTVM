@@ -68,7 +68,6 @@ using DelegateCallFn = uint64_t (*)(zen::runtime::EVMInstance *, uint64_t,
                                     const uint8_t *, uint64_t, uint64_t,
                                     uint64_t,
                                     uint64_t); // DELEGATECALL, STATICCALL
-using VoidWithUInt64Fn = void (*)(zen::runtime::EVMInstance *, uint64_t);
 
 struct RuntimeFunctions {
   U256WithU256U256Fn GetMul;
@@ -109,7 +108,6 @@ struct RuntimeFunctions {
   U256WithU256Fn GetSLoad;
   VoidWithU256U256Fn SetSStore;
   SizeFn GetGas;
-  VoidWithUInt64Fn MeterGas;
   U256WithU256Fn GetTLoad;
   VoidWithU256U256Fn SetTStore;
   VoidWithUInt64UInt64UInt64Fn SetMCopy;
@@ -247,7 +245,6 @@ const intx::uint256 *evmGetSLoad(zen::runtime::EVMInstance *Instance,
 void evmSetSStore(zen::runtime::EVMInstance *Instance,
                   const intx::uint256 &Index, const intx::uint256 &Value);
 uint64_t evmGetGas(zen::runtime::EVMInstance *Instance);
-void evmMeterGas(zen::runtime::EVMInstance *Instance, uint64_t GasCost);
 const intx::uint256 *evmGetTLoad(zen::runtime::EVMInstance *Instance,
                                  const intx::uint256 &Index);
 void evmSetTStore(zen::runtime::EVMInstance *Instance,

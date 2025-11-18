@@ -61,7 +61,6 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
       .GetSLoad = &evmGetSLoad,
       .SetSStore = &evmSetSStore,
       .GetGas = &evmGetGas,
-      .MeterGas = &evmMeterGas,
       .GetTLoad = &evmGetTLoad,
       .SetTStore = &evmSetTStore,
       .SetMCopy = &evmSetMCopy,
@@ -947,18 +946,6 @@ void evmSetSStore(zen::runtime::EVMInstance *Instance,
 
 uint64_t evmGetGas(zen::runtime::EVMInstance *Instance) {
   return Instance->getGas();
-}
-
-void evmMeterGas(zen::runtime::EVMInstance *Instance, uint64_t GasCost) {
-  evmc_message *Msg = Instance->getCurrentMessage();
-  ZEN_ASSERT(Msg && "Active message required for gas metering");
-  if ((uint64_t)Msg->gas < GasCost) {
-    zen::runtime::EVMInstance::triggerInstanceExceptionOnJIT(
-        Instance, zen::common::ErrorCode::EVMOutOfGas);
-    return;
-  }
-  Msg->gas -= static_cast<int64_t>(GasCost);
-  Instance->setGas(static_cast<uint64_t>(Msg->gas));
 }
 
 const intx::uint256 *evmGetTLoad(zen::runtime::EVMInstance *Instance,

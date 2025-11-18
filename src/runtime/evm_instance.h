@@ -68,9 +68,7 @@ public:
 
   void pushMessage(evmc_message *Msg);
   void popMessage();
-  evmc_message *getCurrentMessage() const {
-    return MessageStack.empty() ? nullptr : MessageStack.back();
-  }
+  evmc_message *getCurrentMessage() const { return CurrentMessage; }
   bool isStaticMode() const {
     const evmc_message *Msg = getCurrentMessage();
     return Msg && (Msg->flags & EVMC_STATIC) != 0;
@@ -141,6 +139,20 @@ public:
                       std::numeric_limits<int32_t>::max(),
                   "EVMInstance offsets should fit in 32-bit signed range");
     return static_cast<int32_t>(offsetof(EVMInstance, Gas));
+  }
+
+  static constexpr int32_t getCurrentMessagePointerOffset() {
+    static_assert(offsetof(EVMInstance, CurrentMessage) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "EVMInstance offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(EVMInstance, CurrentMessage));
+  }
+
+  static constexpr int32_t getMessageGasOffset() {
+    static_assert(offsetof(evmc_message, gas) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "evmc_message offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(evmc_message, gas));
   }
 
   static constexpr size_t getHostArgScratchSlotSize() {
@@ -226,6 +238,7 @@ private:
   evmc::Result ExeResult{EVMC_SUCCESS, 0, 0};
 
   // Message stack for call hierarchy tracking
+  evmc_message *CurrentMessage = nullptr;
   std::vector<evmc_message *> MessageStack;
   evmc_revision Rev = zen::evm::DEFAULT_REVISION;
 

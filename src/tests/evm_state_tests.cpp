@@ -32,7 +32,7 @@ using namespace zen::evm_test_utils;
 
 namespace {
 
-const bool DEBUG = true;
+const bool DEBUG = false;
 const bool PRINT_FAILURE_DETAILS = true;
 // TODO: RunMode selection logic will be refactored in the future.
 constexpr common::RunMode STATE_TEST_RUN_MODE = common::RunMode::MultipassMode;

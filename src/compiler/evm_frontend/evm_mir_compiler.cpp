@@ -219,10 +219,50 @@ void EVMMirBuilder::meterGas(uint64_t GasCost) {
     return;
   }
 
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  U256Value GasValue = {GasCost, 0, 0, 0};
-  Operand GasOperand(GasValue);
-  callRuntimeFor<void, uint64_t>(RuntimeFunctions.MeterGas, GasOperand);
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MPointerType *VoidPtrType = createVoidPtrType();
+  MPointerType *I64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
+
+  MInstruction *MsgPtr = getInstanceElement(
+      VoidPtrType, zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
+  MInstruction *MsgPtrInt = createInstruction<ConversionInstruction>(
+      false, OP_ptrtoint, I64Type, MsgPtr);
+
+  MInstruction *MsgGasOffsetValue = createIntConstInstruction(
+      I64Type, zen::runtime::EVMInstance::getMessageGasOffset());
+  MInstruction *MsgGasAddrInt = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, MsgPtrInt, MsgGasOffsetValue);
+  MInstruction *MsgGasPtr = createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, I64PtrType, MsgGasAddrInt);
+
+  MInstruction *MsgGasValue =
+      createInstruction<LoadInstruction>(false, I64Type, MsgGasPtr);
+
+  MInstruction *GasCostValue = createIntConstInstruction(I64Type, GasCost);
+  MInstruction *IsOutOfGas = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, MsgGasValue,
+      GasCostValue);
+
+  MBasicBlock *ContinueBB = createBasicBlock();
+  MBasicBlock *OutOfGasBB = getOrCreateExceptionSetBB(ErrorCode::EVMOutOfGas);
+  createInstruction<BrIfInstruction>(true, Ctx, IsOutOfGas, OutOfGasBB,
+                                     ContinueBB);
+  addUniqueSuccessor(OutOfGasBB);
+  addSuccessor(ContinueBB);
+  setInsertBlock(ContinueBB);
+
+  MInstruction *NewGas = createInstruction<BinaryInstruction>(
+      false, OP_sub, I64Type, MsgGasValue, GasCostValue);
+
+  MInstruction *GasOffsetValue = createIntConstInstruction(
+      I64Type, zen::runtime::EVMInstance::getGasFieldOffset());
+  MInstruction *GasAddrInt = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, InstanceAddr, GasOffsetValue);
+  MInstruction *GasPtr = createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, I64PtrType, GasAddrInt);
+
+  createInstruction<StoreInstruction>(true, &Ctx.VoidType, NewGas, GasPtr);
+  createInstruction<StoreInstruction>(true, &Ctx.VoidType, NewGas, MsgGasPtr);
 }
 
 void EVMMirBuilder::handleStop() {

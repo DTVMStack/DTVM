@@ -43,14 +43,16 @@ void EVMInstance::setGas(uint64_t NewGas) { Gas = NewGas; }
 
 void EVMInstance::pushMessage(evmc_message *Msg) {
   MessageStack.push_back(Msg);
-  Gas = MessageStack.back()->gas;
+  CurrentMessage = Msg;
+  Gas = Msg ? Msg->gas : 0;
 }
 
 void EVMInstance::popMessage() {
   if (!MessageStack.empty()) {
     MessageStack.pop_back();
   }
-  Gas = MessageStack.empty() ? 0 : MessageStack.back()->gas;
+  CurrentMessage = MessageStack.empty() ? nullptr : MessageStack.back();
+  Gas = CurrentMessage ? CurrentMessage->gas : 0;
 }
 
 uint64_t EVMInstance::calculateMemoryExpansionCost(uint64_t CurrentSize,
