@@ -55,8 +55,8 @@ for dir in "$BASE_DIR"/*/; do
         if [ -f "$sol_file" ]; then
             echo "Compiling $sol_file..."
             # Compile the Solidity file and format JSON
-            if solc --combined-json abi,bin,bin-runtime "$dir$dirname.sol" | jq --indent 2 '.' > "$dir$dirname.json"; then
-                echo "✓ Successfully compiled $dirname.sol to $dirname.json"
+            if solc --evm-version cancun --combined-json abi,bin,bin-runtime "$dir$dirname.sol" | jq --indent 2 '.' > "$dir$dirname.json"; then
+                echo "✓ Successfully compiled $dirname.sol to $dirname.json (cancun EVM)"
             else
                 echo "✗ Failed to compile $dirname.sol"
             fi

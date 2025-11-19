@@ -7,11 +7,10 @@
 #include "evmc/mocked_host.hpp"
 #include "mpt/rlp_encoding.h"
 
+#include "utils/others.h"
 #include <filesystem>
 #include <fstream>
 #include <rapidjson/document.h>
-#include <string>
-#include <vector>
 
 namespace zen::evm_test_utils {
 
@@ -110,6 +109,76 @@ std::vector<std::string> verifyPostState(evmc::MockedHost &Host,
                                          const rapidjson::Value &ExpectedState,
                                          const std::string &TestName,
                                          const std::string &Fork);
+
+inline std::string toLowerHex(const std::string &Hex) {
+  std::string Result = Hex;
+  for (char &C : Result) {
+    C = std::tolower(static_cast<unsigned char>(C));
+  }
+  return Result;
+}
+
+inline bool hexEquals(const std::string &Hex1, const std::string &Hex2) {
+  return toLowerHex(Hex1) == toLowerHex(Hex2);
+}
+
+inline std::string paddingLeft(const std::string &Input, size_t TargetLength,
+                               char PadChar) {
+  if (Input.size() >= TargetLength) {
+    return Input;
+  }
+  return std::string(TargetLength - Input.size(), PadChar) + Input;
+}
+
+inline std::string padAddressTo32Bytes(const evmc::address &Addr) {
+  return "000000000000000000000000" + zen::utils::toHex(Addr.bytes, 20);
+}
+
+inline std::string decimalToHex(const std::string &DecimalStr) {
+  std::string TrimmedStr = DecimalStr;
+  zen::utils::trimString(TrimmedStr);
+  if (TrimmedStr.empty() || TrimmedStr == "0") {
+    return "0";
+  }
+  if (TrimmedStr[0] == '-') {
+    ZEN_LOG_ERROR("Negative values are not supported. Value: {}",
+                  DecimalStr.c_str());
+    return "0";
+  }
+  for (char C : TrimmedStr) {
+    if (!std::isdigit(C)) {
+      ZEN_LOG_ERROR(
+          "Invalid decimal string (contains non-digit characters). Value: {}",
+          DecimalStr.c_str());
+      return "0";
+    }
+  }
+  uint64_t Value;
+  try {
+    Value = std::stoull(TrimmedStr);
+  } catch (const std::out_of_range &E) {
+    ZEN_LOG_ERROR("Value exceeds uint64_t range. Value: {}",
+                  DecimalStr.c_str());
+    return "0";
+  } catch (const std::invalid_argument &E) {
+    ZEN_LOG_ERROR("Invalid decimal string (parsing failed). Value: {}",
+                  DecimalStr.c_str());
+    return "0";
+  }
+  std::stringstream S;
+  S << std::uppercase << std::hex << Value;
+  std::string HexStr = S.str();
+  if (HexStr.size() > 64) {
+    ZEN_LOG_ERROR(
+        "Hex value exceeds 64 characters (uint256 max). Length: {}, Value: {}",
+        HexStr.size(), HexStr.c_str());
+    HexStr = HexStr.substr(HexStr.size() - 64);
+  }
+  if (HexStr.size() % 2 != 0) {
+    HexStr = "0" + HexStr;
+  }
+  return HexStr;
+}
 
 } // namespace zen::evm_test_utils
 

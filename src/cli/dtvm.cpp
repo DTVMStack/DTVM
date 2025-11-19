@@ -81,7 +81,6 @@ int main(int argc, char *argv[]) {
   uint32_t NumExtraCompilations = 0;
   uint32_t NumExtraExecutions = 0;
   RuntimeConfig Config;
-  InputFormat Format = InputFormat::WASM;
   bool EnableBenchmark = false;
 
   const std::unordered_map<std::string, InputFormat> FormatMap = {
@@ -90,7 +89,9 @@ int main(int argc, char *argv[]) {
   };
   const std::unordered_map<std::string, RunMode> ModeMap = {
       {"interpreter", RunMode::InterpMode},
+#ifndef ZEN_ENABLE_EVM
       {"singlepass", RunMode::SinglepassMode},
+#endif // ZEN_ENABLE_EVM
       {"multipass", RunMode::MultipassMode},
   };
   const std::unordered_map<std::string, LoggerLevel> LogMap = {
@@ -102,7 +103,7 @@ int main(int argc, char *argv[]) {
 
   try {
     CLIParser->add_option("INPUT_FILE", Filename, "input filename")->required();
-    CLIParser->add_option("--format", Format, "Input format")
+    CLIParser->add_option("--format", Config.Format, "Input format")
         ->transform(CLI::CheckedTransformer(FormatMap, CLI::ignore_case));
     CLIParser->add_option("-m,--mode", Config.Mode, "Running mode")
         ->transform(CLI::CheckedTransformer(ModeMap, CLI::ignore_case));
@@ -146,10 +147,8 @@ int main(int argc, char *argv[]) {
                         "Enable multipass lazy mode(on request compile)");
     CLIParser->add_option("--entry-hint", EntryHint, "Entry function hint");
 #ifdef ZEN_ENABLE_EVM
-    CLIParser->add_flag_function(
-        "--enable-evm-gas",
-        [&](std::int64_t) { Config.EnableEvmGasMetering = true; },
-        "Enable EVM gas metering when compiling EVM bytecode");
+    CLIParser->add_flag("--enable-evm-gas", Config.EnableEvmGasMetering,
+                        "Enable EVM gas metering when compiling EVM bytecode");
 #endif // ZEN_ENABLE_EVM
 #endif // ZEN_ENABLE_MULTIPASS_JIT
 
@@ -168,7 +167,7 @@ int main(int argc, char *argv[]) {
 
   /// ================ EVM mode ================
 #ifdef ZEN_ENABLE_EVM
-  if (Format == InputFormat::EVM) {
+  if (Config.Format == InputFormat::EVM) {
     std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
     std::unique_ptr<Runtime> RT = Runtime::newEVMRuntime(Config, Host.get());
     if (!RT) {

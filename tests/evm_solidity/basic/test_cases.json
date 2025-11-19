@@ -1,4 +1,6 @@
 {
+  "main_contract": "Counter",
+  "deploy_contracts": ["Counter"],
   "test_cases": [
     {
       "name": "get_initial_value",

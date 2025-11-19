@@ -56,7 +56,7 @@ void performEVMJITCompile(runtime::EVMModule &Mod) {
   }
 #endif
   default:
-    ZEN_LOG_WARN("EVMJIT does not support singlepass mode");
+    ZEN_LOG_ERROR("EVMJIT does not support singlepass mode");
     break;
   }
 }

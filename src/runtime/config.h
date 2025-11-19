@@ -10,6 +10,8 @@
 namespace zen::runtime {
 
 struct RuntimeConfig {
+  // Run time Format
+  common::InputFormat Format = common::InputFormat::WASM;
   // Run mode
   common::RunMode Mode = common::RunMode::SinglepassMode;
   // Disable mmap to allocate wasm memory

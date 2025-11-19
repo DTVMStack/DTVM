@@ -162,6 +162,7 @@ DEFINE_ERROR(Execution,     None,   CustomHostError,            "")
 DEFINE_ERROR(Unspecified,   None,   UnexpectedType,             "unexpected type")
 DEFINE_ERROR(Unspecified,   None,   MmapFailed,                 "failed to mmap(allocate execution memory)")
 
+#ifdef ZEN_ENABLE_EVM
 // EVM Error: About EVMFrame stack handling
 DEFINE_ERROR(Execution,     None,   EVMStackOverflow,         "EVM stack overflow")
 DEFINE_ERROR(Execution,     None,   EVMStackUnderflow,        "EVM stack underflow")
@@ -182,7 +183,9 @@ DEFINE_ERROR(Execution,     None,   EVMTooLargeRequiredMemory, "EVM Required Mem
 // EVM Error: About Storage
 DEFINE_ERROR(Execution,     None,   EVMStaticModeViolation, "Prohibit modification of the storage")
 
-#endif
+#endif // ZEN_ENABLE_EVM
+
+#endif // DEFINE_ERROR
 
 #ifdef DEFINE_DWASM_ERROR
 // If you want to add/delete/adjust new dwasm error, please ensure `FirstDWasmError` and `LastDWasmError` are correct.
@@ -209,4 +212,4 @@ DEFINE_DWASM_ERROR(DWasmUnreachable,                    Execution,      90012,  
 DEFINE_DWASM_ERROR(DWasmOutOfGas,                       Execution,      90099,  0,      "OutOfGas")
 DEFINE_DWASM_ERROR(DWasmInvalidHostApiCallWasm,         Execution,      90100,  0,      "InvalidHostApiCallWasm")
 
-#endif
+#endif // DEFINE_DWASM_ERROR

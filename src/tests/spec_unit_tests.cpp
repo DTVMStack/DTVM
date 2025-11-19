@@ -128,7 +128,6 @@ GTEST_API_ int main(int argc, char *argv[]) {
   std::string TestCategory;
   LoggerLevel LogLevel = LoggerLevel::Info;
   RuntimeConfig Config;
-  InputFormat Format = InputFormat::WASM;
 
   const std::unordered_map<std::string, InputFormat> FormatMap = {
       {"wasm", InputFormat::WASM},
@@ -148,7 +147,7 @@ GTEST_API_ int main(int argc, char *argv[]) {
   };
 
   CLIParser.add_option("TEST_UNIT", TestUnit, "Test Unit");
-  CLIParser.add_option("--format", Format, "Input format")
+  CLIParser.add_option("--format", Config.Format, "Input format")
       ->transform(CLI::CheckedTransformer(FormatMap, CLI::ignore_case));
   CLIParser.add_option("-m,--mode", Config.Mode, "Running mode")
       ->transform(CLI::CheckedTransformer(ModeMap, CLI::ignore_case));
