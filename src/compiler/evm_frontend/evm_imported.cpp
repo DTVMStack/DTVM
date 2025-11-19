@@ -723,6 +723,44 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   const evmc_message *CurrentMsg = Instance->getCurrentMessage();
   ZEN_ASSERT(CurrentMsg && "No current message set in EVMInstance");
 
+  evmc::address TargetAddr;
+  std::memcpy(TargetAddr.bytes, ToAddr, 20);
+
+  evmc_revision Rev = Instance->getRevision();
+  if (Rev >= EVMC_BERLIN &&
+      Module->Host->access_account(TargetAddr) == EVMC_ACCESS_COLD) {
+    Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
+  }
+
+  const bool TransfersValue =
+      (CallKind == EVMC_CALL || CallKind == EVMC_CALLCODE) && Value != 0;
+  if (TransfersValue && Instance->isStaticMode()) {
+    throw zen::common::getError(zen::common::ErrorCode::EVMStaticModeViolation);
+  }
+
+  bool HasEnoughBalance = true;
+  if (TransfersValue) {
+    const auto CallerBalance =
+        Module->Host->get_balance(CurrentMsg->recipient);
+    const intx::uint256 CallerValue =
+        intx::be::load<intx::uint256>(CallerBalance);
+    HasEnoughBalance = CallerValue >= intx::uint256(Value);
+    uint64_t ValueCost = zen::evm::CALL_VALUE_COST;
+    if (!HasEnoughBalance) {
+      ValueCost -= zen::evm::CALL_GAS_STIPEND;
+    }
+    Instance->chargeGas(ValueCost);
+    if (CallKind == EVMC_CALL && HasEnoughBalance &&
+        !Module->Host->account_exists(TargetAddr)) {
+      Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
+    }
+  }
+
+  if (TransfersValue && !HasEnoughBalance) {
+    Instance->setReturnData({});
+    return 0;
+  }
+
   // Calculate required memory sizes for input and output
   uint64_t InputRequiredSize = ArgsOffset + ArgsSize;
   uint64_t OutputRequiredSize = RetOffset + RetSize;
@@ -734,10 +772,6 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   auto &Memory = Instance->getMemory();
   const uint8_t *InputData =
       (ArgsSize > 0) ? Memory.data() + ArgsOffset : nullptr;
-
-  // Create target address
-  evmc::address TargetAddr;
-  std::memcpy(TargetAddr.bytes, ToAddr, 20);
 
   // Create message for call
   evmc_message CallMsg = {};

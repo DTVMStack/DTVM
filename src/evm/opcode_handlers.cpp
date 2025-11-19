@@ -1267,18 +1267,12 @@ void CallHandler::doExecute() {
     return;
   }
 
-  if (NeedValue and intx::be::load<intx::uint256>(Frame->Host->get_balance(
-                        Frame->Msg->recipient)) < Value) {
-    Context->setStatus(EVMC_SUCCESS); // "Light" failure
-    return;
-  }
-
-  if (!expandMemoryAndChargeGas(Frame,
-                                uint256ToUint64(InputOffset + InputSize)) or
-      !expandMemoryAndChargeGas(Frame,
-                                uint256ToUint64(OutputOffset + OutputSize))) {
-    Context->setStatus(EVMC_OUT_OF_GAS);
-    return;
+  const bool TransfersValue = NeedValue && Value != 0;
+  bool HasEnoughBalance = true;
+  if (TransfersValue) {
+    const auto CallerBalance = intx::be::load<intx::uint256>(
+        Frame->Host->get_balance(Frame->Msg->recipient));
+    HasEnoughBalance = CallerBalance >= Value;
   }
 
   // Map opcode to evmc_call_kind
@@ -1298,6 +1292,45 @@ void CallHandler::doExecute() {
     break;
   default:
     throw common::getError(common::ErrorCode::EVMInvalidInstruction);
+  }
+
+  if ((OpCode == OP_CALL || OpCode == OP_CALLCODE) && TransfersValue &&
+      Frame->isStaticMode()) {
+    Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
+    return;
+  }
+
+  // Charge CALL_VALUE_COST only if actually transferring value (EIP-150)
+  int64_t Cost = TransfersValue ? CALL_VALUE_COST : 0;
+  if (TransfersValue && !HasEnoughBalance) {
+    Cost -= CALL_GAS_STIPEND;
+  }
+
+  if (OpCode == OP_CALL || OpCode == OP_CALLCODE) {
+    if (OpCode == OP_CALL && TransfersValue && HasEnoughBalance &&
+        !Frame->Host->account_exists(Dest)) {
+      Cost += ACCOUNT_CREATION_COST;
+    }
+  }
+
+  if (!chargeGas(Frame, Cost)) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    // Frame->push(0);// We have already pushed(0) when "assuming failure", so
+    // any subsequent failed branches should not push(0) again.
+    return;
+  }
+
+  if (TransfersValue && !HasEnoughBalance) {
+    Context->setStatus(EVMC_SUCCESS); // "Light" failure
+    return;
+  }
+
+  if (!expandMemoryAndChargeGas(Frame,
+                                uint256ToUint64(InputOffset + InputSize)) or
+      !expandMemoryAndChargeGas(Frame,
+                                uint256ToUint64(OutputOffset + OutputSize))) {
+    Context->setStatus(EVMC_OUT_OF_GAS);
+    return;
   }
 
   evmc_message NewMsg{
@@ -1329,28 +1362,7 @@ void CallHandler::doExecute() {
     return;
   }
 
-  // Charge CALL_VALUE_COST only if actually transferring value (EIP-150)
-  int64_t Cost = (NeedValue && Value != 0) ? CALL_VALUE_COST : 0;
-
-  if (OpCode == OP_CALL || OpCode == OP_CALLCODE) {
-    if (Value != 0 && Frame->isStaticMode()) {
-      Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
-      return;
-    }
-    if (OpCode == OP_CALL && Value != 0 && !Frame->Host->account_exists(Dest)) {
-      Cost += ACCOUNT_CREATION_COST;
-    }
-  }
-
-  if (!chargeGas(Frame, Cost)) {
-    Context->setStatus(EVMC_OUT_OF_GAS);
-    // Frame->push(0);// We have already pushed(0) when "assuming failure", so
-    // any subsequent failed branches should not push(0) again.
-    return;
-  }
-
-  // EIP-150: Add stipend only if actually transferring value
-  if (NeedValue && Value != 0) {
+  if (TransfersValue) {
     NewMsg.gas += CALL_GAS_STIPEND;
   }
 
