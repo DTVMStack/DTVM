@@ -740,8 +740,7 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
 
   bool HasEnoughBalance = true;
   if (TransfersValue) {
-    const auto CallerBalance =
-        Module->Host->get_balance(CurrentMsg->recipient);
+    const auto CallerBalance = Module->Host->get_balance(CurrentMsg->recipient);
     const intx::uint256 CallerValue =
         intx::be::load<intx::uint256>(CallerBalance);
     HasEnoughBalance = CallerValue >= intx::uint256(Value);
