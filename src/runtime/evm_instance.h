@@ -53,7 +53,6 @@ public:
   void consumeMemoryExpansionGas(uint64_t RequiredSize);
   void expandMemory(uint64_t RequiredSize);
   void chargeGas(uint64_t GasCost);
-  void copyCodeChargeGas(uint64_t Size);
 
   void addGasRefund(uint64_t Amount) { GasRefund += Amount; }
   void setGasRefund(uint64_t Amount) { GasRefund = Amount; }

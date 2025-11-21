@@ -19,6 +19,14 @@ const intx::uint256 *storeUint256Result(const intx::uint256 &Value) {
   Uint256ReturnBuffer = Value;
   return &Uint256ReturnBuffer;
 }
+inline uint64_t calculateWordCopyGas(uint64_t Size) {
+  if (Size == 0) {
+    return 0;
+  }
+  constexpr uint64_t WordBytes = 32;
+  uint64_t Words = (Size + (WordBytes - 1)) / WordBytes;
+  return Words * static_cast<uint64_t>(zen::evm::WORD_COPY_COST);
+}
 } // namespace
 
 const RuntimeFunctions &getRuntimeFunctionTable() {
@@ -493,7 +501,9 @@ void evmSetMCopy(zen::runtime::EVMInstance *Instance, uint64_t Dest,
   if (Len == 0) {
     return;
   }
-  Instance->copyCodeChargeGas(Len);
+  if (uint64_t CopyGas = calculateWordCopyGas(Len)) {
+    Instance->chargeGas(CopyGas);
+  }
   uint64_t RequiredSize = std::max(Dest + Len, Src + Len);
 
   Instance->expandMemory(RequiredSize);
@@ -520,7 +530,9 @@ void evmSetCallDataCopy(zen::runtime::EVMInstance *Instance,
                         uint64_t DestOffset, uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
   Instance->expandMemory(RequiredSize);
-  Instance->copyCodeChargeGas(Size);
+  if (uint64_t CopyGas = calculateWordCopyGas(Size)) {
+    Instance->chargeGas(CopyGas);
+  }
 
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
@@ -552,7 +564,9 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
                        uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
   Instance->expandMemory(RequiredSize);
-  Instance->copyCodeChargeGas(Size);
+  if (uint64_t CopyGas = calculateWordCopyGas(Size)) {
+    Instance->chargeGas(CopyGas);
+  }
 
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
@@ -583,7 +597,9 @@ void evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance,
                           uint64_t DestOffset, uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
   Instance->expandMemory(RequiredSize);
-  Instance->copyCodeChargeGas(Size);
+  if (uint64_t CopyGas = calculateWordCopyGas(Size)) {
+    Instance->chargeGas(CopyGas);
+  }
 
   const auto &ReturnData = Instance->getReturnData();
   auto &Memory = Instance->getMemory();
@@ -908,7 +924,9 @@ void evmSetCodeCopy(zen::runtime::EVMInstance *Instance, uint64_t DestOffset,
                     uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
   Instance->expandMemory(RequiredSize);
-  Instance->copyCodeChargeGas(Size);
+  if (uint64_t CopyGas = calculateWordCopyGas(Size)) {
+    Instance->chargeGas(CopyGas);
+  }
 
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module);
