@@ -493,6 +493,7 @@ void evmSetMCopy(zen::runtime::EVMInstance *Instance, uint64_t Dest,
   if (Len == 0) {
     return;
   }
+  Instance->copyCodeChargeGas(Len);
   uint64_t RequiredSize = std::max(Dest + Len, Src + Len);
 
   Instance->expandMemory(RequiredSize);
@@ -519,6 +520,7 @@ void evmSetCallDataCopy(zen::runtime::EVMInstance *Instance,
                         uint64_t DestOffset, uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
   Instance->expandMemory(RequiredSize);
+  Instance->copyCodeChargeGas(Size);
 
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
@@ -550,6 +552,7 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
                        uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
   Instance->expandMemory(RequiredSize);
+  Instance->copyCodeChargeGas(Size);
 
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
@@ -580,6 +583,7 @@ void evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance,
                           uint64_t DestOffset, uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
   Instance->expandMemory(RequiredSize);
+  Instance->copyCodeChargeGas(Size);
 
   const auto &ReturnData = Instance->getReturnData();
   auto &Memory = Instance->getMemory();
@@ -716,16 +720,20 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
                                       const uint8_t *ToAddr,
                                       intx::uint128 Value, uint64_t ArgsOffset,
                                       uint64_t ArgsSize, uint64_t RetOffset,
-                                      uint64_t RetSize) {
+                                      uint64_t RetSize, bool ForceStatic) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
   const evmc_message *CurrentMsg = Instance->getCurrentMessage();
   ZEN_ASSERT(CurrentMsg && "No current message set in EVMInstance");
-
-  evmc::address TargetAddr;
-  std::memcpy(TargetAddr.bytes, ToAddr, 20);
-
+  evmc::address TargetAddr{};
+  if (ToAddr) {
+    constexpr size_t AddrSize = sizeof(TargetAddr.bytes);
+    for (size_t I = 0; I < AddrSize; ++I) {
+      // Copy the low 20 bytes and reverse to produce the big-endian address.
+      TargetAddr.bytes[I] = ToAddr[AddrSize - 1 - I];
+    }
+  }
   evmc_revision Rev = Instance->getRevision();
   if (Rev >= EVMC_BERLIN &&
       Module->Host->access_account(TargetAddr) == EVMC_ACCESS_COLD) {
@@ -773,48 +781,48 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
       (ArgsSize > 0) ? Memory.data() + ArgsOffset : nullptr;
 
   // Create message for call
-  evmc_message CallMsg = {};
-  CallMsg.kind = CallKind;
-  CallMsg.flags = CurrentMsg->flags;
-  CallMsg.depth = CurrentMsg->depth + 1;
-  CallMsg.gas = static_cast<int64_t>(Gas);
-  CallMsg.recipient = TargetAddr;
-  CallMsg.input_data = InputData;
-  CallMsg.input_size = ArgsSize;
-
-  // Set context-specific parameters
-  switch (CallKind) {
-  case EVMC_CALL:
-    CallMsg.sender = CurrentMsg->recipient;
-    // Check if this is a STATICCALL based on flags
-    if (CurrentMsg->flags & EVMC_STATIC) {
-      CallMsg.flags |= EVMC_STATIC; // Ensure static mode
-                                    // value is zero by default for STATICCALL
-    } else {
-      std::memcpy(CallMsg.value.bytes, &Value, 32);
-    }
-    break;
-
-  case EVMC_CALLCODE:
-    CallMsg.sender = CurrentMsg->recipient;
-    CallMsg.recipient = CurrentMsg->recipient; // Execute in current context
-    std::memcpy(CallMsg.value.bytes, &Value, 32);
-    break;
-
-  case EVMC_DELEGATECALL:
-    CallMsg.sender = CurrentMsg->sender;       // Preserve original sender
-    CallMsg.recipient = CurrentMsg->recipient; // Execute in current context
-    CallMsg.value = CurrentMsg->value;         // Preserve original value
-    break;
-
-  default:
-    ZEN_ASSERT(false && "Unknown call kind");
-    return 0;
-  }
+  evmc_message CallMsg{
+      .kind = CallKind,
+      .flags = (CallKind == EVMC_CALL && ForceStatic) ? uint32_t{EVMC_STATIC}
+                                                      : CurrentMsg->flags,
+      .depth = CurrentMsg->depth + 1,
+      .gas = static_cast<int64_t>(Gas),
+      .recipient = (CallKind == EVMC_CALL || ForceStatic)
+                       ? TargetAddr
+                       : CurrentMsg->recipient,
+      .sender = (CallKind == EVMC_DELEGATECALL) ? CurrentMsg->sender
+                                                : CurrentMsg->recipient,
+      .input_data = Memory.data() + ArgsOffset,
+      .input_size = ArgsSize,
+      .value = (CallKind == EVMC_DELEGATECALL)
+                   ? CurrentMsg->value
+                   : intx::be::store<evmc::bytes32>(intx::uint256{Value}),
+      .create2_salt = {},
+      .code_address = TargetAddr,
+      .code = nullptr,
+      .code_size = 0,
+  };
 
   Instance->pushMessage(&CallMsg);
   evmc::Result Result = Module->Host->call(CallMsg);
   Instance->popMessage();
+
+  // Charge the caller for the gas actually consumed by the callee.
+  uint64_t CallGas = Gas;
+  uint64_t GasLeft =
+      Result.gas_left > 0 ? static_cast<uint64_t>(Result.gas_left) : 0;
+  uint64_t GasUsed = CallGas > GasLeft ? CallGas - GasLeft : 0;
+  if (GasUsed >= zen::evm::BASIC_EXECUTION_COST) {
+    GasUsed -= zen::evm::BASIC_EXECUTION_COST;
+  } else {
+    GasUsed = 0;
+  }
+  if (GasUsed > 0) {
+    Instance->chargeGas(GasUsed);
+  }
+  if (Result.gas_refund > 0) {
+    Instance->addGasRefund(Result.gas_refund);
+  }
 
   // Copy return data to memory if output area is specified
   if (RetSize > 0 && Result.output_size > 0) {
@@ -844,7 +852,7 @@ uint64_t evmHandleCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
                        uint64_t ArgsOffset, uint64_t ArgsSize,
                        uint64_t RetOffset, uint64_t RetSize) {
   return evmHandleCallInternal(Instance, EVMC_CALL, Gas, ToAddr, Value,
-                               ArgsOffset, ArgsSize, RetOffset, RetSize);
+                               ArgsOffset, ArgsSize, RetOffset, RetSize, false);
 }
 
 uint64_t evmHandleCallCode(zen::runtime::EVMInstance *Instance, uint64_t Gas,
@@ -852,7 +860,7 @@ uint64_t evmHandleCallCode(zen::runtime::EVMInstance *Instance, uint64_t Gas,
                            uint64_t ArgsOffset, uint64_t ArgsSize,
                            uint64_t RetOffset, uint64_t RetSize) {
   return evmHandleCallInternal(Instance, EVMC_CALLCODE, Gas, ToAddr, Value,
-                               ArgsOffset, ArgsSize, RetOffset, RetSize);
+                               ArgsOffset, ArgsSize, RetOffset, RetSize, false);
 }
 
 void evmHandleInvalid(zen::runtime::EVMInstance *Instance) {
@@ -870,7 +878,7 @@ uint64_t evmHandleDelegateCall(zen::runtime::EVMInstance *Instance,
                                uint64_t RetOffset, uint64_t RetSize) {
   return evmHandleCallInternal(Instance, EVMC_DELEGATECALL, Gas, ToAddr,
                                intx::uint128{0}, ArgsOffset, ArgsSize,
-                               RetOffset, RetSize);
+                               RetOffset, RetSize, false);
 }
 
 uint64_t evmHandleStaticCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
@@ -879,7 +887,7 @@ uint64_t evmHandleStaticCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
                              uint64_t RetSize) {
   return evmHandleCallInternal(Instance, EVMC_CALL, Gas, ToAddr,
                                intx::uint128{0}, ArgsOffset, ArgsSize,
-                               RetOffset, RetSize);
+                               RetOffset, RetSize, true);
 }
 
 void evmSetRevert(zen::runtime::EVMInstance *Instance, uint64_t Offset,
@@ -900,6 +908,7 @@ void evmSetCodeCopy(zen::runtime::EVMInstance *Instance, uint64_t DestOffset,
                     uint64_t Offset, uint64_t Size) {
   uint64_t RequiredSize = DestOffset + Size;
   Instance->expandMemory(RequiredSize);
+  Instance->copyCodeChargeGas(Size);
 
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module);

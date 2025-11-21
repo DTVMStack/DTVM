@@ -142,5 +142,13 @@ void EVMInstance::chargeGas(uint64_t GasCost) {
   setGas(NewGas);
   Msg->gas = static_cast<int64_t>(NewGas);
 }
+void EVMInstance::copyCodeChargeGas(uint64_t Size) {
+  if (Size == 0) {
+    return;
+  }
+  constexpr uint64_t WordBytes = 32;
+  uint64_t Words = (Size + (WordBytes - 1)) / WordBytes;
+  chargeGas(Words * static_cast<uint64_t>(zen::evm::WORD_COPY_COST));
+}
 
 } // namespace zen::runtime
