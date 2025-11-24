@@ -1018,11 +1018,18 @@ void evmSetSStore(zen::runtime::EVMInstance *Instance,
        Module->Host->access_storage(Msg->recipient, Key) == EVMC_ACCESS_COLD)
           ? zen::evm::COLD_SLOAD_COST
           : 0;
+  const auto PrevValue = Module->Host->get_storage(Msg->recipient, Key);
   const auto Status = Module->Host->set_storage(Msg->recipient, Key, Val);
 
   const auto [GasCostWarm, GasReFund] = zen::evm::SSTORE_COSTS[Rev][Status];
 
   const auto GasCost = GasCostCold + GasCostWarm;
+  if ((uint64_t)GasCost > Instance->getGas()) {
+    // Roll back storage mutation on out-of-gas
+    Module->Host->set_storage(Msg->recipient, Key, PrevValue);
+    zen::runtime::EVMInstance::triggerInstanceExceptionOnJIT(
+        Instance, zen::common::ErrorCode::EVMOutOfGas);
+  }
   Instance->chargeGas(GasCost);
   Instance->addGasRefund(GasReFund);
 }

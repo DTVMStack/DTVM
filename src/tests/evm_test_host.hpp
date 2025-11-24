@@ -126,7 +126,10 @@ public:
     // Process access list (EIP-2930): calculate intrinsic gas first
     constexpr uint64_t ACCESS_LIST_ADDRESS_COST = 2400;
     constexpr uint64_t ACCESS_LIST_STORAGE_KEY_COST = 1900;
+    constexpr uint64_t TX_DATA_ZERO_GAS = 4;
+    constexpr uint64_t TX_DATA_NON_ZERO_GAS = 16;
     uint64_t AccessListIntrinsicGas = 0;
+    uint64_t TxDataIntrinsicGas = 0;
 
     for (const auto &AccessEntry : Config.AccessList) {
       AccessListIntrinsicGas += ACCESS_LIST_ADDRESS_COST;
@@ -134,12 +137,22 @@ public:
           ACCESS_LIST_STORAGE_KEY_COST * AccessEntry.StorageKeys.size();
     }
 
+    if (Config.Message.input_data && Config.Message.input_size > 0) {
+      const uint8_t *Data = static_cast<const uint8_t *>(Config.Message.input_data);
+      for (size_t I = 0; I < Config.Message.input_size; ++I) {
+        TxDataIntrinsicGas += Data[I] == 0 ? TX_DATA_ZERO_GAS
+                                            : TX_DATA_NON_ZERO_GAS;
+      }
+    }
+
+    const uint64_t TotalIntrinsicGas = AccessListIntrinsicGas + TxDataIntrinsicGas;
+
     // Deduct access list intrinsic gas from available gas
-    if (GasLimit < AccessListIntrinsicGas) {
-      Result.ErrorMessage = "Insufficient gas for access list intrinsic cost";
+    if (GasLimit < TotalIntrinsicGas) {
+      Result.ErrorMessage = "Insufficient gas for intrinsic transaction costs";
       return Result;
     }
-    uint64_t AvailableGas = GasLimit - AccessListIntrinsicGas;
+    uint64_t AvailableGas = GasLimit - TotalIntrinsicGas;
 
     uint64_t Counter = ModuleCounter++;
     std::string ModuleName = Config.ModuleName.empty()
@@ -219,7 +232,7 @@ public:
     }
 
     // Add access list intrinsic gas to GasUsed (EIP-2930)
-    Result.GasUsed += AccessListIntrinsicGas;
+    Result.GasUsed += AccessListIntrinsicGas + TxDataIntrinsicGas;
 
     uint64_t GasRefund =
         static_cast<uint64_t>(std::max<int64_t>(0, Inst->getGasRefund()));
@@ -628,11 +641,14 @@ private:
     SenderBalance -= TotalGasCost;
     SenderAccount.balance = toBytes32(SenderBalance);
 
-    auto &CoinbaseAccount = accounts[tx_context.block_coinbase];
-    ensureAccountHasCodeHash(CoinbaseAccount);
-    intx::uint256 CoinbaseBalance = toUint256Bytes(CoinbaseAccount.balance);
-    CoinbaseBalance += CoinbaseReward;
-    CoinbaseAccount.balance = toBytes32(CoinbaseBalance);
+    if (CoinbaseReward != 0 ||
+        accounts.find(tx_context.block_coinbase) != accounts.end()) {
+      auto &CoinbaseAccount = accounts[tx_context.block_coinbase];
+      ensureAccountHasCodeHash(CoinbaseAccount);
+      intx::uint256 CoinbaseBalance = toUint256Bytes(CoinbaseAccount.balance);
+      CoinbaseBalance += CoinbaseReward;
+      CoinbaseAccount.balance = toBytes32(CoinbaseBalance);
+    }
   }
 };
 

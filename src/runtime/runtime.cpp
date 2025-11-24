@@ -891,6 +891,9 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
       if (Inst.getError().getCode() == ErrorCode::GasLimitExceeded) {
         Inst.setGas(0);
         StatusCode = EVMC_OUT_OF_GAS;
+      } else if (Inst.getError().getCode() == ErrorCode::EVMOutOfGas) {
+        Inst.setGas(0);
+        StatusCode = EVMC_OUT_OF_GAS;
       } else if (Config.Mode == RunMode::SinglepassMode) {
         // restore gas left from register when trap in singlepass JIT mode
         Inst.setGas(TLS.getGasRegisterValue());

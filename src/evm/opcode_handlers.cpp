@@ -769,6 +769,7 @@ void SStoreHandler::doExecute() {
                                 Frame->Msg->recipient, Key) == EVMC_ACCESS_COLD)
                                ? COLD_SLOAD_COST
                                : 0;
+  const auto PrevValue = Frame->Host->get_storage(Frame->Msg->recipient, Key);
   const auto Status =
       Frame->Host->set_storage(Frame->Msg->recipient, Key, Value);
 
@@ -776,6 +777,7 @@ void SStoreHandler::doExecute() {
 
   const auto GasCost = GasCostCold + GasCostWarm;
   if (Frame->Msg->gas < GasCost) {
+    Frame->Host->set_storage(Frame->Msg->recipient, Key, PrevValue);
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
