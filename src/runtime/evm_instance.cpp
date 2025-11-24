@@ -129,8 +129,6 @@ void EVMInstance::chargeGas(uint64_t GasCost) {
   uint64_t GasLeft = getGas();
   if (GasLeft < GasCost) {
 #if defined(ZEN_ENABLE_JIT) && defined(ZEN_ENABLE_CPU_EXCEPTION)
-    // See comment in consumeMemoryExpansionGas: surface out-of-gas via the
-    // JIT trap mechanism instead of a raw C++ exception.
     triggerInstanceExceptionOnJIT(this, common::ErrorCode::EVMOutOfGas);
 #else
     throw common::getError(common::ErrorCode::EVMOutOfGas);
