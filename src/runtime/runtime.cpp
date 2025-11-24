@@ -888,7 +888,8 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
         break;
       }
       }
-      if (Inst.getError().getCode() == ErrorCode::GasLimitExceeded) {
+      if (Inst.getError().getCode() == ErrorCode::GasLimitExceeded ||
+          Inst.getError().getCode() == ErrorCode::EVMOutOfGas) {
         Inst.setGas(0);
         StatusCode = EVMC_OUT_OF_GAS;
 #ifdef ZEN_ENABLE_EVM
