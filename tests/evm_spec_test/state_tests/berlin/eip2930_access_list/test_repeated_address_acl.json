@@ -1,0 +1,692 @@
+{
+    "tests/berlin/eip2930_access_list/test_acl.py::test_repeated_address_acl[fork_Berlin-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x055d4a80",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000"
+        },
+        "pre": {
+            "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                [
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        ]
+                    },
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000001"
+                        ]
+                    }
+                ]
+            ],
+            "sender": "0xf7e89272be947560f09d73c2cd1e8a388d017593",
+            "secretKey": "0x7b127d0bbd53364404833b228cdf9cd5727230f7cf60842520379509cfa50825"
+        },
+        "post": {
+            "Berlin": [
+                {
+                    "hash": "0x9b79a9f4f4f374bc475acdb85846f05de936130205ea0865206eeb284bd7352f",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x01f8d301800a8307a120948cdf9cd5727230f7cf60842520379509cfa508258080f870f7948cdf9cd5727230f7cf60842520379509cfa50825e1a00000000000000000000000000000000000000000000000000000000000000000f7948cdf9cd5727230f7cf60842520379509cfa50825e1a0000000000000000000000000000000000000000000000000000000000000000180a0a8d412d7ef346948f2541965a0d16a5cf3e38385f3bfa41ca9e45ff9d2075195a04305f95428e06fc531341fffc20f96e444717c3d3a15e6d4e40d2bcd332cbeac",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de955718",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                            "storage": {
+                                "0x00": "0x64",
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0aa8e8",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xc98a960a8a865044249db66743468dd0f6b62b62db6084057f8b0f1d20db5a24",
+            "comment": "`execution-spec-tests` generated test",
+            "filling-transition-tool": "ethereum-spec-evm-resolver 0.0.5",
+            "description": "Tests that slots are warmed correctly in an access list that has the same\n    address repeated more than once, each time with different slots.\n\n    Difference with other ACL tests is that we actually try to\n    access both slots at runtime. We also measure the gas cost\n    of each access in order to make debugging easier.",
+            "url": "https://github.com/ethereum/execution-spec-tests/tree/v5.3.0/tests/berlin/eip2930_access_list/test_acl.py#L258",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2930.md",
+            "reference-spec-version": "c9db53a936c5c9cbe2db32ba0d1b86c4c6e73534",
+            "eels-resolution": {
+                "git-url": "https://github.com/ethereum/execution-specs.git",
+                "branch": "forks/bpos",
+                "commit": "7aacb2c54111391af5e98c505d5010b5698a770f"
+            }
+        }
+    },
+    "tests/berlin/eip2930_access_list/test_acl.py::test_repeated_address_acl[fork_Cancun-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x055d4a80",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                [
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        ]
+                    },
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000001"
+                        ]
+                    }
+                ]
+            ],
+            "sender": "0xf7e89272be947560f09d73c2cd1e8a388d017593",
+            "secretKey": "0x7b127d0bbd53364404833b228cdf9cd5727230f7cf60842520379509cfa50825"
+        },
+        "post": {
+            "Cancun": [
+                {
+                    "hash": "0x53bdb93ff74b2faaa13bcb4b8b53838473cbe898472fb6f49425df0851a0893d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x01f8d301800a8307a120948cdf9cd5727230f7cf60842520379509cfa508258080f870f7948cdf9cd5727230f7cf60842520379509cfa50825e1a00000000000000000000000000000000000000000000000000000000000000000f7948cdf9cd5727230f7cf60842520379509cfa50825e1a0000000000000000000000000000000000000000000000000000000000000000180a0a8d412d7ef346948f2541965a0d16a5cf3e38385f3bfa41ca9e45ff9d2075195a04305f95428e06fc531341fffc20f96e444717c3d3a15e6d4e40d2bcd332cbeac",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de955718",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                            "storage": {
+                                "0x00": "0x64",
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0332ac",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0xfc433ae2859d223ec69b7526ffb94c4217d86087a5baee2faf5ba91e4cc80ca1",
+            "comment": "`execution-spec-tests` generated test",
+            "filling-transition-tool": "ethereum-spec-evm-resolver 0.0.5",
+            "description": "Tests that slots are warmed correctly in an access list that has the same\n    address repeated more than once, each time with different slots.\n\n    Difference with other ACL tests is that we actually try to\n    access both slots at runtime. We also measure the gas cost\n    of each access in order to make debugging easier.",
+            "url": "https://github.com/ethereum/execution-spec-tests/tree/v5.3.0/tests/berlin/eip2930_access_list/test_acl.py#L258",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2930.md",
+            "reference-spec-version": "c9db53a936c5c9cbe2db32ba0d1b86c4c6e73534",
+            "eels-resolution": {
+                "git-url": "https://github.com/ethereum/execution-specs.git",
+                "branch": "forks/bpos",
+                "commit": "7aacb2c54111391af5e98c505d5010b5698a770f"
+            }
+        }
+    },
+    "tests/berlin/eip2930_access_list/test_acl.py::test_repeated_address_acl[fork_London-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x055d4a80",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentDifficulty": "0x020000",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                [
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        ]
+                    },
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000001"
+                        ]
+                    }
+                ]
+            ],
+            "sender": "0xf7e89272be947560f09d73c2cd1e8a388d017593",
+            "secretKey": "0x7b127d0bbd53364404833b228cdf9cd5727230f7cf60842520379509cfa50825"
+        },
+        "post": {
+            "London": [
+                {
+                    "hash": "0x53bdb93ff74b2faaa13bcb4b8b53838473cbe898472fb6f49425df0851a0893d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x01f8d301800a8307a120948cdf9cd5727230f7cf60842520379509cfa508258080f870f7948cdf9cd5727230f7cf60842520379509cfa50825e1a00000000000000000000000000000000000000000000000000000000000000000f7948cdf9cd5727230f7cf60842520379509cfa50825e1a0000000000000000000000000000000000000000000000000000000000000000180a0a8d412d7ef346948f2541965a0d16a5cf3e38385f3bfa41ca9e45ff9d2075195a04305f95428e06fc531341fffc20f96e444717c3d3a15e6d4e40d2bcd332cbeac",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de955718",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                            "storage": {
+                                "0x00": "0x64",
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0332ac",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x63ccf5511c01670861811980618071f9bdcef8cd8ec83310421b08e060a99864",
+            "comment": "`execution-spec-tests` generated test",
+            "filling-transition-tool": "ethereum-spec-evm-resolver 0.0.5",
+            "description": "Tests that slots are warmed correctly in an access list that has the same\n    address repeated more than once, each time with different slots.\n\n    Difference with other ACL tests is that we actually try to\n    access both slots at runtime. We also measure the gas cost\n    of each access in order to make debugging easier.",
+            "url": "https://github.com/ethereum/execution-spec-tests/tree/v5.3.0/tests/berlin/eip2930_access_list/test_acl.py#L258",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2930.md",
+            "reference-spec-version": "c9db53a936c5c9cbe2db32ba0d1b86c4c6e73534",
+            "eels-resolution": {
+                "git-url": "https://github.com/ethereum/execution-specs.git",
+                "branch": "forks/bpos",
+                "commit": "7aacb2c54111391af5e98c505d5010b5698a770f"
+            }
+        }
+    },
+    "tests/berlin/eip2930_access_list/test_acl.py::test_repeated_address_acl[fork_Paris-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x055d4a80",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                [
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        ]
+                    },
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000001"
+                        ]
+                    }
+                ]
+            ],
+            "sender": "0xf7e89272be947560f09d73c2cd1e8a388d017593",
+            "secretKey": "0x7b127d0bbd53364404833b228cdf9cd5727230f7cf60842520379509cfa50825"
+        },
+        "post": {
+            "Paris": [
+                {
+                    "hash": "0x53bdb93ff74b2faaa13bcb4b8b53838473cbe898472fb6f49425df0851a0893d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x01f8d301800a8307a120948cdf9cd5727230f7cf60842520379509cfa508258080f870f7948cdf9cd5727230f7cf60842520379509cfa50825e1a00000000000000000000000000000000000000000000000000000000000000000f7948cdf9cd5727230f7cf60842520379509cfa50825e1a0000000000000000000000000000000000000000000000000000000000000000180a0a8d412d7ef346948f2541965a0d16a5cf3e38385f3bfa41ca9e45ff9d2075195a04305f95428e06fc531341fffc20f96e444717c3d3a15e6d4e40d2bcd332cbeac",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de955718",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                            "storage": {
+                                "0x00": "0x64",
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0332ac",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x97151f036304f61dca3339e85eb9c689d90489b26594f83751f74f076fdb6fbc",
+            "comment": "`execution-spec-tests` generated test",
+            "filling-transition-tool": "ethereum-spec-evm-resolver 0.0.5",
+            "description": "Tests that slots are warmed correctly in an access list that has the same\n    address repeated more than once, each time with different slots.\n\n    Difference with other ACL tests is that we actually try to\n    access both slots at runtime. We also measure the gas cost\n    of each access in order to make debugging easier.",
+            "url": "https://github.com/ethereum/execution-spec-tests/tree/v5.3.0/tests/berlin/eip2930_access_list/test_acl.py#L258",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2930.md",
+            "reference-spec-version": "c9db53a936c5c9cbe2db32ba0d1b86c4c6e73534",
+            "eels-resolution": {
+                "git-url": "https://github.com/ethereum/execution-specs.git",
+                "branch": "forks/bpos",
+                "commit": "7aacb2c54111391af5e98c505d5010b5698a770f"
+            }
+        }
+    },
+    "tests/berlin/eip2930_access_list/test_acl.py::test_repeated_address_acl[fork_Prague-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x055d4a80",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07",
+            "currentExcessBlobGas": "0x00"
+        },
+        "pre": {
+            "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                [
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        ]
+                    },
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000001"
+                        ]
+                    }
+                ]
+            ],
+            "sender": "0xf7e89272be947560f09d73c2cd1e8a388d017593",
+            "secretKey": "0x7b127d0bbd53364404833b228cdf9cd5727230f7cf60842520379509cfa50825"
+        },
+        "post": {
+            "Prague": [
+                {
+                    "hash": "0x53bdb93ff74b2faaa13bcb4b8b53838473cbe898472fb6f49425df0851a0893d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x01f8d301800a8307a120948cdf9cd5727230f7cf60842520379509cfa508258080f870f7948cdf9cd5727230f7cf60842520379509cfa50825e1a00000000000000000000000000000000000000000000000000000000000000000f7948cdf9cd5727230f7cf60842520379509cfa50825e1a0000000000000000000000000000000000000000000000000000000000000000180a0a8d412d7ef346948f2541965a0d16a5cf3e38385f3bfa41ca9e45ff9d2075195a04305f95428e06fc531341fffc20f96e444717c3d3a15e6d4e40d2bcd332cbeac",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de955718",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                            "storage": {
+                                "0x00": "0x64",
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0332ac",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "blobSchedule": {
+                "Cancun": {
+                    "target": "0x03",
+                    "max": "0x06",
+                    "baseFeeUpdateFraction": "0x32f0ed"
+                },
+                "Prague": {
+                    "target": "0x06",
+                    "max": "0x09",
+                    "baseFeeUpdateFraction": "0x4c6964"
+                }
+            },
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x1be2aee00e5f15551da534ab40c6f0a36ba57206c1be7a9e732b44931675c2ce",
+            "comment": "`execution-spec-tests` generated test",
+            "filling-transition-tool": "ethereum-spec-evm-resolver 0.0.5",
+            "description": "Tests that slots are warmed correctly in an access list that has the same\n    address repeated more than once, each time with different slots.\n\n    Difference with other ACL tests is that we actually try to\n    access both slots at runtime. We also measure the gas cost\n    of each access in order to make debugging easier.",
+            "url": "https://github.com/ethereum/execution-spec-tests/tree/v5.3.0/tests/berlin/eip2930_access_list/test_acl.py#L258",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2930.md",
+            "reference-spec-version": "c9db53a936c5c9cbe2db32ba0d1b86c4c6e73534",
+            "eels-resolution": {
+                "git-url": "https://github.com/ethereum/execution-specs.git",
+                "branch": "forks/bpos",
+                "commit": "7aacb2c54111391af5e98c505d5010b5698a770f"
+            }
+        }
+    },
+    "tests/berlin/eip2930_access_list/test_acl.py::test_repeated_address_acl[fork_Shanghai-state_test]": {
+        "env": {
+            "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentGasLimit": "0x055d4a80",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "currentDifficulty": "0x00",
+            "currentBaseFee": "0x07"
+        },
+        "pre": {
+            "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                "nonce": "0x00",
+                "balance": "0x3635c9adc5dea00000",
+                "code": "0x",
+                "storage": {}
+            },
+            "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                "nonce": "0x01",
+                "balance": "0x00",
+                "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                "storage": {}
+            }
+        },
+        "transaction": {
+            "nonce": "0x00",
+            "gasPrice": "0x0a",
+            "gasLimit": [
+                "0x07a120"
+            ],
+            "to": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+            "value": [
+                "0x00"
+            ],
+            "data": [
+                "0x"
+            ],
+            "accessLists": [
+                [
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        ]
+                    },
+                    {
+                        "address": "0x8cdf9cd5727230f7cf60842520379509cfa50825",
+                        "storageKeys": [
+                            "0x0000000000000000000000000000000000000000000000000000000000000001"
+                        ]
+                    }
+                ]
+            ],
+            "sender": "0xf7e89272be947560f09d73c2cd1e8a388d017593",
+            "secretKey": "0x7b127d0bbd53364404833b228cdf9cd5727230f7cf60842520379509cfa50825"
+        },
+        "post": {
+            "Shanghai": [
+                {
+                    "hash": "0x53bdb93ff74b2faaa13bcb4b8b53838473cbe898472fb6f49425df0851a0893d",
+                    "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                    "txbytes": "0x01f8d301800a8307a120948cdf9cd5727230f7cf60842520379509cfa508258080f870f7948cdf9cd5727230f7cf60842520379509cfa50825e1a00000000000000000000000000000000000000000000000000000000000000000f7948cdf9cd5727230f7cf60842520379509cfa50825e1a0000000000000000000000000000000000000000000000000000000000000000180a0a8d412d7ef346948f2541965a0d16a5cf3e38385f3bfa41ca9e45ff9d2075195a04305f95428e06fc531341fffc20f96e444717c3d3a15e6d4e40d2bcd332cbeac",
+                    "indexes": {
+                        "data": 0,
+                        "gas": 0,
+                        "value": 0
+                    },
+                    "state": {
+                        "0xf7e89272be947560f09d73c2cd1e8a388d017593": {
+                            "nonce": "0x01",
+                            "balance": "0x3635c9adc5de955718",
+                            "code": "0x",
+                            "storage": {}
+                        },
+                        "0x8cdf9cd5727230f7cf60842520379509cfa50825": {
+                            "nonce": "0x01",
+                            "balance": "0x00",
+                            "code": "0x5a6000545a90509003600590036000555a6001545a905090036005900360015500",
+                            "storage": {
+                                "0x00": "0x64",
+                                "0x01": "0x64"
+                            }
+                        },
+                        "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba": {
+                            "nonce": "0x00",
+                            "balance": "0x0332ac",
+                            "code": "0x",
+                            "storage": {}
+                        }
+                    }
+                }
+            ]
+        },
+        "config": {
+            "chainid": "0x01"
+        },
+        "_info": {
+            "hash": "0x526d037c59cb5bf733c5b81322bf2e722320bbeb7706e3567d0d93598d5268aa",
+            "comment": "`execution-spec-tests` generated test",
+            "filling-transition-tool": "ethereum-spec-evm-resolver 0.0.5",
+            "description": "Tests that slots are warmed correctly in an access list that has the same\n    address repeated more than once, each time with different slots.\n\n    Difference with other ACL tests is that we actually try to\n    access both slots at runtime. We also measure the gas cost\n    of each access in order to make debugging easier.",
+            "url": "https://github.com/ethereum/execution-spec-tests/tree/v5.3.0/tests/berlin/eip2930_access_list/test_acl.py#L258",
+            "fixture-format": "state_test",
+            "reference-spec": "https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2930.md",
+            "reference-spec-version": "c9db53a936c5c9cbe2db32ba0d1b86c4c6e73534",
+            "eels-resolution": {
+                "git-url": "https://github.com/ethereum/execution-specs.git",
+                "branch": "forks/bpos",
+                "commit": "7aacb2c54111391af5e98c505d5010b5698a770f"
+            }
+        }
+    }
+}
