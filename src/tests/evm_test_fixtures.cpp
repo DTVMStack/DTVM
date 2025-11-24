@@ -362,6 +362,41 @@ createTransactionFromIndex(const rapidjson::Document &Transaction,
   PT.Message->input_data = PT.CallData.data();
   PT.Message->input_size = PT.CallData.size();
 
+  if (Transaction.HasMember("accessLists") &&
+      Transaction["accessLists"].IsArray()) {
+    const rapidjson::Value &AccessListsArray = Transaction["accessLists"];
+    if (Result.Indexes.Data < AccessListsArray.Size()) {
+      const rapidjson::Value &AccessListForIndex =
+          AccessListsArray[Result.Indexes.Data];
+      if (AccessListForIndex.IsArray()) {
+        for (rapidjson::SizeType I = 0; I < AccessListForIndex.Size(); ++I) {
+          const rapidjson::Value &Entry = AccessListForIndex[I];
+          if (!Entry.IsObject()) {
+            continue;
+          }
+
+          AccessListEntry ALE;
+          if (Entry.HasMember("address") && Entry["address"].IsString()) {
+            ALE.Address = parseAddress(Entry["address"].GetString());
+          }
+
+          if (Entry.HasMember("storageKeys") &&
+              Entry["storageKeys"].IsArray()) {
+            const rapidjson::Value &StorageKeys = Entry["storageKeys"];
+            for (rapidjson::SizeType J = 0; J < StorageKeys.Size(); ++J) {
+              if (StorageKeys[J].IsString()) {
+                ALE.StorageKeys.push_back(
+                    parseBytes32(StorageKeys[J].GetString()));
+              }
+            }
+          }
+
+          PT.AccessList.push_back(std::move(ALE));
+        }
+      }
+    }
+  }
+
   return PT;
 }
 

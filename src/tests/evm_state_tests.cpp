@@ -145,6 +145,10 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     }
     HostPtr->loadInitialState(Fixture.Environment, InitialAccounts, true);
 
+    // Warm sender and recipient (required by EIP-2929)
+    HostPtr->access_account(PT.Message->sender);
+    HostPtr->access_account(PT.Message->recipient);
+
     auto RT = Runtime::newEVMRuntime(Config, HostPtr.get());
     if (!RT) {
       return MakeFailure("Failed to create EVM runtime for " +
@@ -159,9 +163,16 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     ExecConfig.Bytecode = TargetAccount->Account.code.data();
     ExecConfig.BytecodeSize = TargetAccount->Account.code.size();
     ExecConfig.Message = *PT.Message;
-    ExecConfig.GasLimit =
-        static_cast<uint64_t>(std::max<int64_t>(0, PT.Message->gas));
-    ExecConfig.Message.gas = static_cast<int64_t>(ExecConfig.GasLimit);
+
+    // Convert AccessList from ParsedTransaction to TransactionExecutionConfig
+    for (const auto &Entry : PT.AccessList) {
+      ZenMockedEVMHost::AccessListEntry ALE;
+      ALE.Address = Entry.Address;
+      ALE.StorageKeys = Entry.StorageKeys;
+      ExecConfig.AccessList.push_back(std::move(ALE));
+    }
+
+    ExecConfig.GasLimit = static_cast<uint64_t>(PT.Message->gas);
 
     if (Fixture.Transaction &&
         Fixture.Transaction->HasMember("maxPriorityFeePerGas") &&

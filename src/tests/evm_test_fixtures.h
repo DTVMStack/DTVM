@@ -18,10 +18,16 @@ struct ParsedAccount {
   evmc::MockedAccount Account;
 };
 
+struct AccessListEntry {
+  evmc::address Address;
+  std::vector<evmc::bytes32> StorageKeys;
+};
+
 struct ParsedTransaction {
   evmc_tx_context TxContext;
   std::unique_ptr<evmc_message> Message;
   std::vector<uint8_t> CallData;
+  std::vector<AccessListEntry> AccessList;
 };
 
 struct StateTestFixture {
