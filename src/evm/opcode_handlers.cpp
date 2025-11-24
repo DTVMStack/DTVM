@@ -743,11 +743,11 @@ void SLoadHandler::doExecute() {
   if (Rev >= EVMC_BERLIN &&
       Frame->Host->access_storage(Frame->Msg->recipient, KeyAddr) ==
           EVMC_ACCESS_COLD) {
-    if (Frame->Msg->gas < ADDITIONAL_COLD_ACCOUNT_ACCESS_COST) {
+    if (Frame->Msg->gas < ADDITIONAL_COLD_SLOAD_COST) {
       Context->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
-    Frame->Msg->gas -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
+    Frame->Msg->gas -= ADDITIONAL_COLD_SLOAD_COST;
   }
   intx::uint256 Value = intx::be::load<intx::uint256>(
       Frame->Host->get_storage(Frame->Msg->recipient, KeyAddr));

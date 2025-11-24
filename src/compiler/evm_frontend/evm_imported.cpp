@@ -19,6 +19,15 @@ const intx::uint256 *storeUint256Result(const intx::uint256 &Value) {
   Uint256ReturnBuffer = Value;
   return &Uint256ReturnBuffer;
 }
+
+evmc::address loadAddressFromLE(const uint8_t *AddressLE) {
+  evmc::address Addr{};
+  constexpr size_t AddrSize = sizeof(Addr.bytes);
+  for (size_t I = 0; I < AddrSize; ++I) {
+    Addr.bytes[I] = AddressLE[AddrSize - 1 - I];
+  }
+  return Addr;
+}
 inline uint64_t calculateWordCopyGas(uint64_t Size) {
   if (Size == 0) {
     return 0;
@@ -235,8 +244,13 @@ const intx::uint256 *evmGetBalance(zen::runtime::EVMInstance *Instance,
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
-  evmc::address Addr;
-  std::memcpy(Addr.bytes, Address, sizeof(Addr.bytes));
+  evmc::address Addr = loadAddressFromLE(Address);
+
+  evmc_revision Rev = Instance->getRevision();
+  if (Rev >= EVMC_BERLIN &&
+      Module->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
+    Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
+  }
 
   evmc::bytes32 BalanceBytes = Module->Host->get_balance(Addr);
   intx::uint256 Balance = intx::be::load<intx::uint256>(BalanceBytes);
@@ -300,8 +314,13 @@ uint64_t evmGetExtCodeSize(zen::runtime::EVMInstance *Instance,
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
-  evmc::address Addr;
-  std::memcpy(Addr.bytes, Address, sizeof(Addr.bytes));
+  evmc::address Addr = loadAddressFromLE(Address);
+
+  evmc_revision Rev = Instance->getRevision();
+  if (Rev >= EVMC_BERLIN &&
+      Module->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
+    Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
+  }
 
   uint64_t Size = Module->Host->get_code_size(Addr);
   return Size;
@@ -312,8 +331,13 @@ const uint8_t *evmGetExtCodeHash(zen::runtime::EVMInstance *Instance,
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
-  evmc::address Addr;
-  std::memcpy(Addr.bytes, Address, sizeof(Addr.bytes));
+  evmc::address Addr = loadAddressFromLE(Address);
+
+  evmc_revision Rev = Instance->getRevision();
+  if (Rev >= EVMC_BERLIN &&
+      Module->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
+    Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
+  }
 
   auto &Cache = Instance->getMessageCache();
   evmc::bytes32 Hash = Module->Host->get_code_hash(Addr);
@@ -570,8 +594,13 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
 
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
-  evmc::address Addr;
-  std::memcpy(Addr.bytes, Address, sizeof(Addr.bytes));
+  evmc::address Addr = loadAddressFromLE(Address);
+
+  evmc_revision Rev = Instance->getRevision();
+  if (Rev >= EVMC_BERLIN &&
+      Module->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
+    Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
+  }
 
   auto &Memory = Instance->getMemory();
   size_t CodeSize = Module->Host->get_code_size(Addr);
@@ -742,14 +771,8 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
 
   const evmc_message *CurrentMsg = Instance->getCurrentMessage();
   ZEN_ASSERT(CurrentMsg && "No current message set in EVMInstance");
-  evmc::address TargetAddr{};
-  if (ToAddr) {
-    constexpr size_t AddrSize = sizeof(TargetAddr.bytes);
-    for (size_t I = 0; I < AddrSize; ++I) {
-      // Copy the low 20 bytes and reverse to produce the big-endian address.
-      TargetAddr.bytes[I] = ToAddr[AddrSize - 1 - I];
-    }
-  }
+  evmc::address TargetAddr =
+      ToAddr ? loadAddressFromLE(ToAddr) : evmc::address{};
   evmc_revision Rev = Instance->getRevision();
   if (Rev >= EVMC_BERLIN &&
       Module->Host->access_account(TargetAddr) == EVMC_ACCESS_COLD) {
@@ -973,7 +996,7 @@ const intx::uint256 *evmGetSLoad(zen::runtime::EVMInstance *Instance,
   const auto Key = intx::be::store<evmc::bytes32>(Index);
   if (Rev >= EVMC_BERLIN &&
       Module->Host->access_storage(Msg->recipient, Key) == EVMC_ACCESS_COLD) {
-    Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
+    Instance->chargeGas(zen::evm::ADDITIONAL_COLD_SLOAD_COST);
   }
   const auto Value = Module->Host->get_storage(Msg->recipient, Key);
   return storeUint256Result(intx::be::load<intx::uint256>(Value));
@@ -1039,8 +1062,7 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
   const evmc_message *Msg = Instance->getCurrentMessage();
   evmc_revision Rev = Instance->getRevision();
 
-  evmc::address BenefAddr;
-  std::memcpy(BenefAddr.bytes, Beneficiary, sizeof(BenefAddr.bytes));
+  evmc::address BenefAddr = loadAddressFromLE(Beneficiary);
 
   // EIP-161: if target account does not exist, charge account creation cost
   if (Rev >= EVMC_SPURIOUS_DRAGON && !Module->Host->account_exists(BenefAddr)) {

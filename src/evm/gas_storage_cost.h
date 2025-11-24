@@ -10,6 +10,8 @@ namespace evm {
 
 constexpr auto COLD_SLOAD_COST = 2100;
 constexpr auto WARM_STORAGE_READ_COST = 100;
+constexpr auto ADDITIONAL_COLD_SLOAD_COST =
+    COLD_SLOAD_COST - WARM_STORAGE_READ_COST;
 constexpr auto WORD_COPY_COST = 3;
 
 struct StorageStoreCost {
