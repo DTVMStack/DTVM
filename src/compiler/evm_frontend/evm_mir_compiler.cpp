@@ -244,7 +244,8 @@ void EVMMirBuilder::meterGas(uint64_t GasCost) {
       GasCostValue);
 
   MBasicBlock *ContinueBB = createBasicBlock();
-  MBasicBlock *OutOfGasBB = getOrCreateExceptionSetBB(ErrorCode::EVMOutOfGas);
+  MBasicBlock *OutOfGasBB =
+      getOrCreateExceptionSetBB(ErrorCode::GasLimitExceeded);
   createInstruction<BrIfInstruction>(true, Ctx, IsOutOfGas, OutOfGasBB,
                                      ContinueBB);
   addUniqueSuccessor(OutOfGasBB);

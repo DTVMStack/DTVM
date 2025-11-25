@@ -171,9 +171,6 @@ DEFINE_ERROR(Execution,     None,   EVMStackUnderflow,        "EVM stack underfl
 DEFINE_ERROR(Execution,     None,   EVMBadJumpDestination,     "invalid jump destination")
 DEFINE_ERROR(Execution,     None,   EVMInvalidInstruction,     "invalid instruction")
 
-// EVM Error: About Gas
-DEFINE_ERROR(Execution,     None,   EVMOutOfGas,               "EVM out of gas")
-
 // EVM Error: About EVMFrame
 DEFINE_ERROR(Execution,     None,   EVMFrameNotFound,          "EVMFrame is nullptr")
 

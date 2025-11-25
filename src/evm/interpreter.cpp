@@ -17,7 +17,7 @@ EVMFrame *InterpreterExecContext::allocTopFrame(evmc_message *Msg) {
   const bool IsTopLevel = (Msg->depth == 0);
   const int64_t IntrinsicGas = IsTopLevel ? BASIC_EXECUTION_COST : 0;
 
-  EVM_REQUIRE(Msg->gas >= IntrinsicGas, EVMOutOfGas);
+  EVM_REQUIRE(Msg->gas >= IntrinsicGas, GasLimitExceeded);
 
   FrameStack.emplace_back();
 
