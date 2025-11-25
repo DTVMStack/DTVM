@@ -1028,7 +1028,7 @@ void evmSetSStore(zen::runtime::EVMInstance *Instance,
     // Roll back storage mutation on out-of-gas
     Module->Host->set_storage(Msg->recipient, Key, PrevValue);
     zen::runtime::EVMInstance::triggerInstanceExceptionOnJIT(
-        Instance, zen::common::ErrorCode::EVMOutOfGas);
+        Instance, zen::common::ErrorCode::GasLimitExceeded);
   }
   Instance->chargeGas(GasCost);
   Instance->addGasRefund(GasReFund);
