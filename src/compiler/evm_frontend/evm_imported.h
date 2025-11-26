@@ -52,7 +52,14 @@ using U256WithU256U256Fn = const intx::uint256 *(*)(zen::runtime::EVMInstance *,
 using U256WithU256U256U256Fn =
     const intx::uint256 *(*)(zen::runtime::EVMInstance *, const intx::uint256 &,
                              const intx::uint256 &, const intx::uint256 &);
-using LogNFn = void (*)(zen::runtime::EVMInstance *, uint64_t, uint64_t,
+using Log0Fn = void (*)(zen::runtime::EVMInstance *, uint64_t, uint64_t);
+using Log1Fn = void (*)(zen::runtime::EVMInstance *, uint64_t, uint64_t,
+                        const uint8_t *);
+using Log2Fn = void (*)(zen::runtime::EVMInstance *, uint64_t, uint64_t,
+                        const uint8_t *, const uint8_t *);
+using Log3Fn = void (*)(zen::runtime::EVMInstance *, uint64_t, uint64_t,
+                        const uint8_t *, const uint8_t *, const uint8_t *);
+using Log4Fn = void (*)(zen::runtime::EVMInstance *, uint64_t, uint64_t,
                         const uint8_t *, const uint8_t *, const uint8_t *,
                         const uint8_t *);
 using CreateFn = const uint8_t *(*)(zen::runtime::EVMInstance *, intx::uint128,
@@ -115,7 +122,11 @@ struct RuntimeFunctions {
   VoidWithBytes32UInt64UInt64UInt64Fn SetExtCodeCopy;
   VoidWithUInt64UInt64UInt64Fn SetReturnDataCopy;
   SizeFn GetReturnDataSize;
-  LogNFn EmitLog;
+  Log0Fn EmitLog0;
+  Log1Fn EmitLog1;
+  Log2Fn EmitLog2;
+  Log3Fn EmitLog3;
+  Log4Fn EmitLog4;
   CreateFn HandleCreate;
   Create2Fn HandleCreate2;
   CallFn HandleCall;
@@ -208,9 +219,18 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
 void evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance,
                           uint64_t DestOffset, uint64_t Offset, uint64_t Size);
 uint64_t evmGetReturnDataSize(zen::runtime::EVMInstance *Instance);
-void evmEmitLog(zen::runtime::EVMInstance *Instance, uint64_t Offset,
-                uint64_t Size, const uint8_t *Topic1, const uint8_t *Topic2,
-                const uint8_t *Topic3, const uint8_t *Topic4);
+void evmEmitLog0(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                 uint64_t Size);
+void evmEmitLog1(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                 uint64_t Size, const uint8_t *Topic1);
+void evmEmitLog2(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                 uint64_t Size, const uint8_t *Topic1, const uint8_t *Topic2);
+void evmEmitLog3(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                 uint64_t Size, const uint8_t *Topic1, const uint8_t *Topic2,
+                 const uint8_t *Topic3);
+void evmEmitLog4(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                 uint64_t Size, const uint8_t *Topic1, const uint8_t *Topic2,
+                 const uint8_t *Topic3, const uint8_t *Topic4);
 const uint8_t *evmHandleCreate(zen::runtime::EVMInstance *Instance,
                                intx::uint128 Value, uint64_t Offset,
                                uint64_t Size);

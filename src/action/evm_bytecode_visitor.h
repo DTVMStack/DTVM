@@ -835,19 +835,53 @@ private:
 
   // ==================== Environment Instruction Handlers ====================
 
-  // LOG0-LOG4: Emit log with 0-4 topics
-  void handleLog(uint8_t NumTopics) {
+  template <size_t NumTopics> void handleLogImpl() {
     Operand OffsetOp = pop();
     Operand SizeOp = pop();
-    std::array<Operand, 4> Topics{};
 
-    for (int i = 0; i < NumTopics && i < 4; ++i) {
-      Topics[i] = pop();
+    if constexpr (NumTopics == 0) {
+      Builder.template handleLogWithTopics<0>(OffsetOp, SizeOp);
+    } else {
+      std::array<Operand, NumTopics> Topics;
+      for (size_t i = 0; i < NumTopics; ++i) {
+        Topics[NumTopics - 1 - i] = pop();
+      }
+
+      if constexpr (NumTopics == 1) {
+        Builder.template handleLogWithTopics<1>(OffsetOp, SizeOp, Topics[0]);
+      } else if constexpr (NumTopics == 2) {
+        Builder.template handleLogWithTopics<2>(OffsetOp, SizeOp, Topics[0],
+                                                Topics[1]);
+      } else if constexpr (NumTopics == 3) {
+        Builder.template handleLogWithTopics<3>(OffsetOp, SizeOp, Topics[0],
+                                                Topics[1], Topics[2]);
+      } else if constexpr (NumTopics == 4) {
+        Builder.template handleLogWithTopics<4>(
+            OffsetOp, SizeOp, Topics[0], Topics[1], Topics[2], Topics[3]);
+      }
     }
+  }
 
-    // TODO: currently, LOG will crash in fibonacci test
-    // Builder.handleLog(OffsetOp, SizeOp, Topics[0], Topics[1], Topics[2],
-    //                   Topics[3], NumTopics);
+  void handleLog(uint8_t NumTopics) {
+    switch (NumTopics) {
+    case 0:
+      handleLogImpl<0>();
+      break;
+    case 1:
+      handleLogImpl<1>();
+      break;
+    case 2:
+      handleLogImpl<2>();
+      break;
+    case 3:
+      handleLogImpl<3>();
+      break;
+    case 4:
+      handleLogImpl<4>();
+      break;
+    default:
+      throw getError(ErrorCode::UnsupportedOpcode);
+    }
   }
 
   void handleCreate() {

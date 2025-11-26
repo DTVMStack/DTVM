@@ -200,11 +200,11 @@ public:
         EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
     if constexpr (Operator == BinaryOperator::BO_ADD) {
-      // u256 in little-endian order: [low64, med64_1, med64_2, high64]
+      // u256 in little-endian order: [low64, mid64_1, mid64_2, high64]
 
       // The carry here is only used for constructing the adc instruction.
       // We currently use adc only in bo_add, and since we can guarantee the
-      // instructions are consecutive, there’s no need to compute the carry
+      // instructions are consecutive, there's no need to compute the carry
       // in DMIR.
       MInstruction *Carry = createIntConstInstruction(MirI64Type, 0);
 
@@ -357,9 +357,9 @@ public:
   void handleReturnDataCopy(Operand DestOffsetComponents,
                             Operand OffsetComponents, Operand SizeComponents);
   Operand handleReturnDataSize();
-  void handleLog(Operand OffsetOp, Operand SizeOp, Operand Topic1,
-                 Operand Topic2, Operand Topic3, Operand Topic4,
-                 uint8_t NumTopics);
+  template <size_t NumTopics, typename... TopicArgs>
+  void handleLogWithTopics(Operand OffsetOp, Operand SizeOp,
+                           TopicArgs... Topics);
   Operand handleCreate(Operand ValueOp, Operand OffsetOp, Operand SizeOp);
   Operand handleCreate2(Operand ValueOp, Operand OffsetOp, Operand SizeOp,
                         Operand SaltOp);

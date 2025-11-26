@@ -85,7 +85,11 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
       .SetExtCodeCopy = &evmSetExtCodeCopy,
       .SetReturnDataCopy = &evmSetReturnDataCopy,
       .GetReturnDataSize = &evmGetReturnDataSize,
-      .EmitLog = &evmEmitLog,
+      .EmitLog0 = &evmEmitLog0,
+      .EmitLog1 = &evmEmitLog1,
+      .EmitLog2 = &evmEmitLog2,
+      .EmitLog3 = &evmEmitLog3,
+      .EmitLog4 = &evmEmitLog4,
       .HandleCreate = &evmHandleCreate,
       .HandleCreate2 = &evmHandleCreate2,
       .HandleCall = &evmHandleCall,
@@ -653,9 +657,10 @@ uint64_t evmGetReturnDataSize(zen::runtime::EVMInstance *Instance) {
   return ReturnData.size();
 }
 
-void evmEmitLog(zen::runtime::EVMInstance *Instance, uint64_t Offset,
-                uint64_t Size, const uint8_t *Topic1, const uint8_t *Topic2,
-                const uint8_t *Topic3, const uint8_t *Topic4) {
+template <size_t MaxTopics>
+static void evmEmitLogGeneric(zen::runtime::EVMInstance *Instance,
+                              uint64_t Offset, uint64_t Size,
+                              const uint8_t *TopicsData[]) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
@@ -670,27 +675,51 @@ void evmEmitLog(zen::runtime::EVMInstance *Instance, uint64_t Offset,
   const uint8_t *Data = Memory.data() + Offset;
 
   // Build topic array - only include non-null topics
-  evmc::bytes32 Topics[4] = {};
-  size_t NumTopics = 0;
+  evmc::bytes32 Topics[MaxTopics] = {};
+  size_t ActualNumTopics = 0;
 
-  if (Topic1) {
-    std::memcpy(Topics[NumTopics].bytes, Topic1, 32);
-    NumTopics++;
-  }
-  if (Topic2) {
-    std::memcpy(Topics[NumTopics].bytes, Topic2, 32);
-    NumTopics++;
-  }
-  if (Topic3) {
-    std::memcpy(Topics[NumTopics].bytes, Topic3, 32);
-    NumTopics++;
-  }
-  if (Topic4) {
-    std::memcpy(Topics[NumTopics].bytes, Topic4, 32);
-    NumTopics++;
+  for (size_t i = 0; i < MaxTopics; ++i) {
+    if (TopicsData[i]) {
+      std::memcpy(Topics[ActualNumTopics].bytes, TopicsData[i], 32);
+      ActualNumTopics++;
+    }
   }
 
-  Module->Host->emit_log(Msg->recipient, Data, Size, Topics, NumTopics);
+  Module->Host->emit_log(Msg->recipient, Data, Size,
+                         ActualNumTopics > 0 ? Topics : nullptr,
+                         ActualNumTopics);
+}
+
+void evmEmitLog0(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                 uint64_t Size) {
+  const uint8_t *Topics[0] = {};
+  evmEmitLogGeneric<0>(Instance, Offset, Size, Topics);
+}
+
+void evmEmitLog1(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                 uint64_t Size, const uint8_t *Topic1) {
+  const uint8_t *Topics[1] = {Topic1};
+  evmEmitLogGeneric<1>(Instance, Offset, Size, Topics);
+}
+
+void evmEmitLog2(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                 uint64_t Size, const uint8_t *Topic1, const uint8_t *Topic2) {
+  const uint8_t *Topics[2] = {Topic1, Topic2};
+  evmEmitLogGeneric<2>(Instance, Offset, Size, Topics);
+}
+
+void evmEmitLog3(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                 uint64_t Size, const uint8_t *Topic1, const uint8_t *Topic2,
+                 const uint8_t *Topic3) {
+  const uint8_t *Topics[3] = {Topic1, Topic2, Topic3};
+  evmEmitLogGeneric<3>(Instance, Offset, Size, Topics);
+}
+
+void evmEmitLog4(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                 uint64_t Size, const uint8_t *Topic1, const uint8_t *Topic2,
+                 const uint8_t *Topic3, const uint8_t *Topic4) {
+  const uint8_t *Topics[4] = {Topic1, Topic2, Topic3, Topic4};
+  evmEmitLogGeneric<4>(Instance, Offset, Size, Topics);
 }
 
 const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,

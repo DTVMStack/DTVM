@@ -1579,29 +1579,31 @@ void EVMMirBuilder::handleMCopy(Operand DestAddrComponents,
       LengthComponents);
 }
 
-void EVMMirBuilder::handleLog(Operand OffsetOp, Operand SizeOp, Operand Topic1,
-                              Operand Topic2, Operand Topic3, Operand Topic4,
-                              uint8_t NumTopics) {
+template <size_t NumTopics, typename... TopicArgs>
+void EVMMirBuilder::handleLogWithTopics(Operand OffsetOp, Operand SizeOp,
+                                        TopicArgs... Topics) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   normalizeOperandU64(OffsetOp);
   normalizeOperandU64(SizeOp);
 
-  // Create null operands for unused topics
-  MType *Bytes32Type =
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::BYTES32);
-  MInstruction *NullBytes32 = createInstruction<ConstantInstruction>(
-      false, Bytes32Type, *MConstantInt::get(Ctx, *Bytes32Type, 0));
-  Operand NullTopic(NullBytes32, EVMType::BYTES32);
-
-  // Use provided topics or null topics based on NumTopics
-  Operand T1 = (NumTopics >= 1) ? Topic1 : NullTopic;
-  Operand T2 = (NumTopics >= 2) ? Topic2 : NullTopic;
-  Operand T3 = (NumTopics >= 3) ? Topic3 : NullTopic;
-  Operand T4 = (NumTopics >= 4) ? Topic4 : NullTopic;
-
-  callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *, const uint8_t *,
-                 const uint8_t *, const uint8_t *>(
-      RuntimeFunctions.EmitLog, OffsetOp, SizeOp, T1, T2, T3, T4);
+  if constexpr (NumTopics == 0) {
+    callRuntimeFor<void, uint64_t, uint64_t>(RuntimeFunctions.EmitLog0,
+                                             OffsetOp, SizeOp);
+  } else if constexpr (NumTopics == 1) {
+    callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *>(
+        RuntimeFunctions.EmitLog1, OffsetOp, SizeOp, Topics...);
+  } else if constexpr (NumTopics == 2) {
+    callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *, const uint8_t *>(
+        RuntimeFunctions.EmitLog2, OffsetOp, SizeOp, Topics...);
+  } else if constexpr (NumTopics == 3) {
+    callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *, const uint8_t *,
+                   const uint8_t *>(RuntimeFunctions.EmitLog3, OffsetOp, SizeOp,
+                                    Topics...);
+  } else if constexpr (NumTopics == 4) {
+    callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *, const uint8_t *,
+                   const uint8_t *, const uint8_t *>(
+        RuntimeFunctions.EmitLog4, OffsetOp, SizeOp, Topics...);
+  }
 }
 
 typename EVMMirBuilder::Operand
