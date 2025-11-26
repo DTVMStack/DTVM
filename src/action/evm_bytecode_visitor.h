@@ -836,6 +836,7 @@ private:
   // ==================== Environment Instruction Handlers ====================
 
   template <size_t NumTopics> void handleLogImpl() {
+    ZEN_STATIC_ASSERT(NumTopics <= 4);
     Operand OffsetOp = pop();
     Operand SizeOp = pop();
 
@@ -855,7 +856,7 @@ private:
       } else if constexpr (NumTopics == 3) {
         Builder.template handleLogWithTopics<3>(OffsetOp, SizeOp, Topics[0],
                                                 Topics[1], Topics[2]);
-      } else if constexpr (NumTopics == 4) {
+      } else { // NumTopics == 4
         Builder.template handleLogWithTopics<4>(
             OffsetOp, SizeOp, Topics[0], Topics[1], Topics[2], Topics[3]);
       }

@@ -1582,6 +1582,7 @@ void EVMMirBuilder::handleMCopy(Operand DestAddrComponents,
 template <size_t NumTopics, typename... TopicArgs>
 void EVMMirBuilder::handleLogWithTopics(Operand OffsetOp, Operand SizeOp,
                                         TopicArgs... Topics) {
+  ZEN_STATIC_ASSERT(NumTopics <= 4);
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   normalizeOperandU64(OffsetOp);
   normalizeOperandU64(SizeOp);
@@ -1599,7 +1600,7 @@ void EVMMirBuilder::handleLogWithTopics(Operand OffsetOp, Operand SizeOp,
     callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *, const uint8_t *,
                    const uint8_t *>(RuntimeFunctions.EmitLog3, OffsetOp, SizeOp,
                                     Topics...);
-  } else if constexpr (NumTopics == 4) {
+  } else { // NumTopics == 4
     callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *, const uint8_t *,
                    const uint8_t *, const uint8_t *>(
         RuntimeFunctions.EmitLog4, OffsetOp, SizeOp, Topics...);
