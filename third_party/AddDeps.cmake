@@ -71,6 +71,19 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(intx)
 include_directories(${intx_SOURCE_DIR}/include)
 
+FetchContent_Declare(
+  boost
+  URL https://sourceforge.net/projects/boost/files/boost/1.84.0/boost_1_84_0.tar.bz2/download
+  DOWNLOAD_NAME boost_1_84_0.tar.bz2
+  URL_HASH
+    SHA256=cc4b893acf645c9d4b698e9a0f08ca8846aa5d6c68275c14c3e7949c24109454
+)
+FetchContent_GetProperties(boost)
+if(NOT boost_POPULATED)
+  FetchContent_Populate(boost)
+endif()
+include_directories(${boost_SOURCE_DIR})
+
 if(ZEN_ENABLE_SPEC_TEST)
   FetchContent_Declare(
     googletest
