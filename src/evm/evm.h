@@ -24,6 +24,7 @@ constexpr auto ADDITIONAL_COLD_ACCOUNT_ACCESS_COST =
 constexpr auto CALL_VALUE_COST = 9000;
 constexpr auto ACCOUNT_CREATION_COST = 25000;
 constexpr auto CALL_GAS_STIPEND = 2300;
+constexpr uint64_t LegacyModExpBaseGas = 600;
 /// The limit of the size of created contract
 /// defined by [EIP-170](https://eips.ethereum.org/EIPS/eip-170)
 constexpr auto MAX_CODE_SIZE = 0x6000;

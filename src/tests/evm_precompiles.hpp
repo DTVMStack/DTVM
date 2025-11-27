@@ -183,6 +183,7 @@ inline evmc::Result executeModExp(const evmc_message &Msg,
   } else {
     GasCost =
         multComplexityEIP198(MaxLen) * cpp_int(IterationCount) / cpp_int(20);
+    GasCost += cpp_int(LegacyModExpBaseGas);
   }
 
   uint64_t GasCost64 = 0;
@@ -244,4 +245,3 @@ inline evmc::Result executeModExp(const evmc_message &Msg,
 } // namespace zen::evm::precompile
 
 #endif // ZEN_TESTS_EVM_PRECOMPILES_HPP
-
