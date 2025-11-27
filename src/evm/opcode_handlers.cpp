@@ -1074,11 +1074,9 @@ void PushHandler::doExecute() {
   auto *Mod = Inst->getModule();
   auto *Code = Mod->Code;
   uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
-  size_t CodeSize = Mod->CodeSize;
   // PUSH1 ~ PUSH32
   uint32_t NumBytes =
       OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
-  EVM_REQUIRE(Frame->Pc + NumBytes < CodeSize, UnexpectedEnd);
   uint8_t ValueBytes[32];
   memset(ValueBytes, 0, sizeof(ValueBytes));
   std::memcpy(ValueBytes + (32 - NumBytes), Code + Frame->Pc + 1, NumBytes);
