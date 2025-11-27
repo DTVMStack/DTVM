@@ -31,20 +31,23 @@ evmc_revision currentRevision() {
 
 #define DEFINE_CALCULATE_GAS(OpName, OpCode)                                   \
   template <> uint64_t OpName##Handler::calculateGas() {                       \
-    static auto *Table = evmc_get_instruction_metrics_table(currentRevision()); \
-    return Table[OpCode].gas_cost;                                             \
+    static auto Table = evmc_get_instruction_metrics_table(DEFAULT_REVISION);  \
+    static const auto Cost = Table[OpCode].gas_cost;                           \
+    return Cost;                                                               \
   }
 
 #define DEFINE_NOT_TEMPLATE_CALCULATE_GAS(OpName, OpCode)                      \
   uint64_t OpName##Handler::calculateGas() {                                   \
-    static auto *Table = evmc_get_instruction_metrics_table(currentRevision()); \
-    return Table[OpCode].gas_cost;                                             \
+    static auto Table = evmc_get_instruction_metrics_table(DEFAULT_REVISION);  \
+    static const auto Cost = Table[OpCode].gas_cost;                           \
+    return Cost;                                                               \
   }
 
 #define DEFINE_MULTICODE_NOT_TEMPLATE_CALCULATE_GAS(OpName)                    \
   uint64_t OpName##Handler::calculateGas() {                                   \
-    static auto *Table = evmc_get_instruction_metrics_table(currentRevision()); \
-    return Table[OpCode].gas_cost;                                             \
+    static auto Table = evmc_get_instruction_metrics_table(DEFAULT_REVISION);  \
+    static const auto Cost = Table[OpCode].gas_cost;                           \
+    return Cost;                                                               \
   }
 
 /* ---------- Define gas cost macros end ---------- */

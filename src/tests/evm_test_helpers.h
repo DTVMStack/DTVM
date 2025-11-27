@@ -4,6 +4,7 @@
 #ifndef ZEN_TESTS_EVM_TEST_HELPERS_H
 #define ZEN_TESTS_EVM_TEST_HELPERS_H
 
+#include "evmc/evmc.hpp"
 #include "evmc/mocked_host.hpp"
 #include "mpt/rlp_encoding.h"
 
@@ -11,6 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <rapidjson/document.h>
+#include <string>
 
 namespace zen::evm_test_utils {
 
@@ -109,6 +111,8 @@ std::vector<std::string> verifyPostState(evmc::MockedHost &Host,
                                          const rapidjson::Value &ExpectedState,
                                          const std::string &TestName,
                                          const std::string &Fork);
+
+evmc_revision mapForkToRevision(const std::string &Fork);
 
 inline std::string toLowerHex(const std::string &Hex) {
   std::string Result = Hex;

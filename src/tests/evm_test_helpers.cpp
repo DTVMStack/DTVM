@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "evm_test_helpers.h"
+#include "evm/evm.h"
 #include "host/evm/crypto.h"
 #include "mpt/merkle_patricia_trie.h"
 #include "utils/others.h"
 
 #include <algorithm>
 #include <evmc/hex.hpp>
+#include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
 #include <iostream>
 #include <rapidjson/document.h>
@@ -370,6 +372,52 @@ std::vector<std::string> verifyPostState(evmc::MockedHost &Host,
   }
 
   return Errors;
+}
+
+evmc_revision mapForkToRevision(const std::string &Fork) {
+  if (Fork == "Frontier") {
+    return EVMC_FRONTIER;
+  }
+  if (Fork == "Homestead") {
+    return EVMC_HOMESTEAD;
+  }
+  if (Fork == "TangerineWhistle") {
+    return EVMC_TANGERINE_WHISTLE;
+  }
+  if (Fork == "SpuriousDragon") {
+    return EVMC_SPURIOUS_DRAGON;
+  }
+  if (Fork == "Byzantium") {
+    return EVMC_BYZANTIUM;
+  }
+  if (Fork == "Constantinople") {
+    return EVMC_CONSTANTINOPLE;
+  }
+  if (Fork == "ConstantinopleFix" || Fork == "Petersburg") {
+    return EVMC_PETERSBURG;
+  }
+  if (Fork == "Istanbul") {
+    return EVMC_ISTANBUL;
+  }
+  if (Fork == "Berlin") {
+    return EVMC_BERLIN;
+  }
+  if (Fork == "London") {
+    return EVMC_LONDON;
+  }
+  if (Fork == "Paris") {
+    return EVMC_PARIS;
+  }
+  if (Fork == "Shanghai") {
+    return EVMC_SHANGHAI;
+  }
+  if (Fork == "Cancun") {
+    return EVMC_CANCUN;
+  }
+  if (Fork == "Prague") {
+    return EVMC_PRAGUE;
+  }
+  return zen::evm::DEFAULT_REVISION;
 }
 
 } // namespace zen::evm_test_utils

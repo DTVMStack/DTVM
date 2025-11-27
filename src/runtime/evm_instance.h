@@ -57,6 +57,9 @@ public:
   void addGasRefund(uint64_t Amount) { GasRefund += Amount; }
   void setGasRefund(uint64_t Amount) { GasRefund = Amount; }
   uint64_t getGasRefund() const { return GasRefund; }
+  void setRevision(evmc_revision NewRev) {
+    Rev = NewRev;
+  }
 
   // ==================== Memory Methods ====================
   size_t getMemorySize() const { return Memory.size(); }

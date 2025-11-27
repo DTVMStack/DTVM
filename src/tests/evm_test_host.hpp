@@ -5,7 +5,9 @@
 
 #include "evm/evm.h"
 #include "evm/interpreter.h"
+#include "evm_precompiles.hpp"
 #include "evmc/mocked_host.hpp"
+#include "evmc/hex.hpp"
 #include "host/evm/crypto.h"
 #include "mpt/rlp_encoding.h"
 #include "runtime/evm_instance.h"
@@ -43,6 +45,7 @@ private:
   Runtime *RT = nullptr;
   std::vector<uint8_t> ReturnData;
   static inline std::atomic<uint64_t> ModuleCounter = 0;
+  evmc_revision Revision = zen::evm::DEFAULT_REVISION;
 
 public:
   struct AccountInitEntry {
@@ -64,6 +67,7 @@ public:
     uint64_t GasLimitMultiplier = 1;
     std::optional<evmc::uint256be> MaxPriorityFeePerGas;
     std::vector<AccessListEntry> AccessList;
+    evmc_revision Revision = zen::evm::DEFAULT_REVISION;
   };
 
   struct TransactionExecutionResult {
@@ -107,6 +111,8 @@ public:
     }
 
     uint64_t GasLimit = Config.GasLimit;
+    const evmc_revision ActiveRevision = Config.Revision;
+    Revision = ActiveRevision;
     if (GasLimit == 0) {
       if (Config.Message.gas <= 0) {
         Result.ErrorMessage = "Invalid gas provided in message";
@@ -127,21 +133,25 @@ public:
     constexpr uint64_t ACCESS_LIST_ADDRESS_COST = 2400;
     constexpr uint64_t ACCESS_LIST_STORAGE_KEY_COST = 1900;
     constexpr uint64_t TX_DATA_ZERO_GAS = 4;
-    constexpr uint64_t TX_DATA_NON_ZERO_GAS = 16;
+    const uint64_t TxDataNonZeroGas =
+        ActiveRevision >= EVMC_ISTANBUL ? 16 : 68;
     uint64_t AccessListIntrinsicGas = 0;
     uint64_t TxDataIntrinsicGas = 0;
 
-    for (const auto &AccessEntry : Config.AccessList) {
-      AccessListIntrinsicGas += ACCESS_LIST_ADDRESS_COST;
-      AccessListIntrinsicGas +=
-          ACCESS_LIST_STORAGE_KEY_COST * AccessEntry.StorageKeys.size();
+    if (ActiveRevision >= EVMC_BERLIN) {
+      for (const auto &AccessEntry : Config.AccessList) {
+        AccessListIntrinsicGas += ACCESS_LIST_ADDRESS_COST;
+        AccessListIntrinsicGas +=
+            ACCESS_LIST_STORAGE_KEY_COST * AccessEntry.StorageKeys.size();
+      }
     }
 
     if (Config.Message.input_data && Config.Message.input_size > 0) {
-      const uint8_t *Data = static_cast<const uint8_t *>(Config.Message.input_data);
+      const uint8_t *Data =
+          static_cast<const uint8_t *>(Config.Message.input_data);
       for (size_t I = 0; I < Config.Message.input_size; ++I) {
         TxDataIntrinsicGas += Data[I] == 0 ? TX_DATA_ZERO_GAS
-                                            : TX_DATA_NON_ZERO_GAS;
+                                            : TxDataNonZeroGas;
       }
     }
 
@@ -182,6 +192,7 @@ public:
       return Result;
     }
     EVMInstance *Inst = *InstRet;
+    Inst->setRevision(ActiveRevision);
 
     evmc_message Msg = Config.Message;
     Msg.gas = static_cast<int64_t>(AvailableGas);
@@ -268,6 +279,10 @@ public:
     }
     evmc::Result ParentResult = evmc::MockedHost::call(Msg);
 
+    if (precompile::isModExpPrecompile(Msg.recipient)) {
+      return precompile::executeModExp(Msg, Revision, ReturnData);
+    }
+
     // For CALLCODE and DELEGATECALL, code comes from code_address, not
     // recipient
     const evmc::address &CodeAddr =
@@ -325,6 +340,7 @@ public:
       }
 
       EVMInstance *Inst = *InstRet;
+      Inst->setRevision(Revision);
 
       evmc_message CallMsg = Msg;
       evmc::Result ExecResult{};
@@ -379,15 +395,13 @@ public:
     static constexpr auto ADDRESS_SIZE = sizeof(Sender);
 
     std::vector<uint8_t> SenderBytes(Sender.bytes, Sender.bytes + ADDRESS_SIZE);
-    auto EncodedSender = zen::evm::rlp::encodeString(SenderBytes);
 
     evmc_uint256be NonceUint256 = {};
     intx::be::store(NonceUint256.bytes, intx::uint256{SenderNonce});
     std::vector<uint8_t> NonceMinimalBytes = uint256beToBytes(NonceUint256);
-    auto EncodedNonce = zen::evm::rlp::encodeString(NonceMinimalBytes);
 
-    std::vector<std::vector<uint8_t>> RlpListItems = {EncodedSender,
-                                                      EncodedNonce};
+    std::vector<std::vector<uint8_t>> RlpListItems = {SenderBytes,
+                                                      NonceMinimalBytes};
     auto EncodedList = zen::evm::rlp::encodeList(RlpListItems);
 
     const auto BaseHash = zen::host::evm::crypto::keccak256(EncodedList);
@@ -489,11 +503,10 @@ public:
       }
 
       EVMInstance *Inst = *InstRet;
+      Inst->setRevision(Revision);
       // 3 Create new account status
       auto &NewAcc = accounts[NewAddr];
-      // TODO: Obtain Revision to initialize nounce
-      //  NewAcc.nonce = (Inst->getRevision() >= EVMC_SPURIOUS_DRAGON) ? 1 : 0;
-      NewAcc.nonce = 0;
+      NewAcc.nonce = Revision >= EVMC_SPURIOUS_DRAGON ? 1 : 0;
       NewAcc.balance = evmc::bytes32{0};
 
       // 4 Transfer the balance (from the sender to the new account)
@@ -531,7 +544,7 @@ public:
         ReturnData.clear();
       }
 
-      const int64_t RemainingGas = static_cast<int64_t>(Inst->getGas());
+      int64_t RemainingGas = static_cast<int64_t>(Inst->getGas());
       const int64_t GasRefund =
           static_cast<int64_t>(Inst->getGasRefund());
 
@@ -549,6 +562,16 @@ public:
           Failure.create_address = NewAddr;
           return Failure;
         }
+        constexpr uint64_t CODE_DEPOSIT_COST_PER_BYTE = 200;
+        const uint64_t CodeDepositCost =
+            CODE_DEPOSIT_COST_PER_BYTE * ReturnData.size();
+        if (RemainingGas < static_cast<int64_t>(CodeDepositCost)) {
+          accounts.erase(NewAddr);
+          evmc::Result Failure(EVMC_OUT_OF_GAS, 0, 0);
+          Failure.create_address = NewAddr;
+          return Failure;
+        }
+        RemainingGas -= static_cast<int64_t>(CodeDepositCost);
         NewAcc.code = evmc::bytes(ReturnData.data(), ReturnData.size());
         const std::vector<uint8_t> CodeHashVec =
             host::evm::crypto::keccak256(ReturnData);
@@ -556,6 +579,8 @@ public:
         evmc::bytes32 CodeHash;
         std::memcpy(CodeHash.bytes, CodeHashVec.data(), 32);
         NewAcc.codehash = CodeHash;
+      } else {
+        NewAcc.codehash = EMPTY_CODE_HASH;
       }
       // 7 Update the sender's nonce (for CREATE, the nonce must be incremented)
       if (Msg.kind == EVMC_CREATE) {
@@ -693,3 +718,4 @@ private:
 } // namespace zen::evm
 
 #endif // ZEN_TESTS_EVM_TEST_HOST_HPP
+

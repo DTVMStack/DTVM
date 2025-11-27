@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <evmc/evmc.hpp>
+#include <evmc/hex.hpp>
 #include <evmc/mocked_host.hpp>
 #include <rapidjson/document.h>
 
@@ -35,7 +36,7 @@ namespace {
 const bool DEBUG = false;
 const bool PRINT_FAILURE_DETAILS = true;
 // TODO: RunMode selection logic will be refactored in the future.
-constexpr common::RunMode STATE_TEST_RUN_MODE = common::RunMode::MultipassMode;
+constexpr common::RunMode STATE_TEST_RUN_MODE = common::RunMode::InterpMode;
 
 RuntimeConfig buildRuntimeConfig() {
   RuntimeConfig Config;
@@ -163,6 +164,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     ExecConfig.Bytecode = TargetAccount->Account.code.data();
     ExecConfig.BytecodeSize = TargetAccount->Account.code.size();
     ExecConfig.Message = *PT.Message;
+    ExecConfig.Revision = mapForkToRevision(Fork);
 
     // Convert AccessList from ParsedTransaction to TransactionExecutionConfig
     for (const auto &Entry : PT.AccessList) {
