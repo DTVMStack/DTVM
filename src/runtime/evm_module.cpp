@@ -73,6 +73,7 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
   auto Timer = Stats.startRecord(utils::StatisticPhase::Load);
 
   Loader.load();
+  Mod->CodeSize = CodeSize;
 
   Stats.stopRecord(Timer);
 
