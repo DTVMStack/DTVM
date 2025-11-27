@@ -4,9 +4,9 @@
 #define ZEN_TESTS_EVM_PRECOMPILES_HPP
 
 #include "evm/evm.h"
-#include <boost/multiprecision/cpp_int.hpp>
 #include <algorithm>
 #include <array>
+#include <boost/multiprecision/cpp_int.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -53,15 +53,14 @@ inline uint64_t bitLength(const intx::uint256 &Value) noexcept {
     if (Bytes[I] == 0) {
       continue;
     }
-    const unsigned MsBit =
-        31U - static_cast<unsigned>(__builtin_clz(Bytes[I]));
+    const unsigned MsBit = 31U - static_cast<unsigned>(__builtin_clz(Bytes[I]));
     return static_cast<uint64_t>((31 - I) * 8 + MsBit + 1);
   }
   return 0;
 }
 
-inline uint64_t
-adjustedExponentLength(uint64_t ExpLen, const intx::uint256 &ExpHead) noexcept {
+inline uint64_t adjustedExponentLength(uint64_t ExpLen,
+                                       const intx::uint256 &ExpHead) noexcept {
   const uint64_t HeadBits = bitLength(ExpHead);
   if (ExpLen <= 32) {
     return HeadBits == 0 ? 0 : (HeadBits - 1);
@@ -98,9 +97,8 @@ multComplexityEIP2565(uint64_t MaxLen) noexcept {
 
 inline bool toUint64(const boost::multiprecision::cpp_int &Value,
                      uint64_t &Out) noexcept {
-  if (Value < 0 ||
-      Value > boost::multiprecision::cpp_int(
-                  std::numeric_limits<uint64_t>::max())) {
+  if (Value < 0 || Value > boost::multiprecision::cpp_int(
+                               std::numeric_limits<uint64_t>::max())) {
     return false;
   }
   Out = static_cast<uint64_t>(Value);
@@ -128,19 +126,18 @@ inline std::vector<uint8_t> readSegment(const uint8_t *Data, size_t Size,
 inline evmc::Result executeModExp(const evmc_message &Msg,
                                   evmc_revision Revision,
                                   std::vector<uint8_t> &ReturnData) {
-  const uint8_t *Input =
-      Msg.input_size == 0
-          ? nullptr
-          : static_cast<const uint8_t *>(Msg.input_data);
+  const uint8_t *Input = Msg.input_size == 0
+                             ? nullptr
+                             : static_cast<const uint8_t *>(Msg.input_data);
   const size_t InputSize = Msg.input_size;
 
   bool LengthOverflow = false;
   const uint64_t BaseLen =
       toUint64Clamped(loadUint256Padded(Input, InputSize, 0), LengthOverflow);
-  const uint64_t ExpLen = toUint64Clamped(
-      loadUint256Padded(Input, InputSize, 32), LengthOverflow);
-  const uint64_t ModLen = toUint64Clamped(
-      loadUint256Padded(Input, InputSize, 64), LengthOverflow);
+  const uint64_t ExpLen =
+      toUint64Clamped(loadUint256Padded(Input, InputSize, 32), LengthOverflow);
+  const uint64_t ModLen =
+      toUint64Clamped(loadUint256Padded(Input, InputSize, 64), LengthOverflow);
   if (LengthOverflow) {
     return evmc::Result(EVMC_OUT_OF_GAS, 0, 0, nullptr, 0);
   }
@@ -215,12 +212,12 @@ inline evmc::Result executeModExp(const evmc_message &Msg,
                                        BaseBytes.end(), 8);
   }
   if (!ExpBytes.empty()) {
-    boost::multiprecision::import_bits(ExpInt, ExpBytes.begin(),
-                                       ExpBytes.end(), 8);
+    boost::multiprecision::import_bits(ExpInt, ExpBytes.begin(), ExpBytes.end(),
+                                       8);
   }
   if (!ModBytes.empty()) {
-    boost::multiprecision::import_bits(ModInt, ModBytes.begin(),
-                                       ModBytes.end(), 8);
+    boost::multiprecision::import_bits(ModInt, ModBytes.begin(), ModBytes.end(),
+                                       8);
   }
 
   std::vector<uint8_t> Output(static_cast<size_t>(ModLen), 0);
