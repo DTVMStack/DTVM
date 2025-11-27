@@ -8,8 +8,8 @@
 #include "utils/others.h"
 
 #include <algorithm>
-#include <evmc/hex.hpp>
 #include <evmc/evmc.hpp>
+#include <evmc/hex.hpp>
 #include <intx/intx.hpp>
 #include <iostream>
 #include <rapidjson/document.h>
