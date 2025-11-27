@@ -615,8 +615,13 @@ void BaseInterpreter::interpret() {
 
     Frame->Pc++;
   }
+  Context.freeBackFrame();
   const auto &ReturnData = Context.getReturnData();
-  evmc::Result ExeResult(Context.getStatus(), Frame ? Frame->Msg->gas : 0,
+  uint64_t GasLeft = Context.getInstance()->getGas();
+  if (auto *Cur = Context.getCurFrame()) {
+    GasLeft = static_cast<uint64_t>(Cur->Msg->gas);
+  }
+  evmc::Result ExeResult(Context.getStatus(), GasLeft,
                          Context.getInstance()->getGasRefund(),
                          ReturnData.data(), ReturnData.size());
   Context.setExeResult(std::move(ExeResult));

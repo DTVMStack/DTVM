@@ -5,6 +5,7 @@
 #include "common/errors.h"
 #include "evm/interpreter.h"
 #include "evmc/evmc.h"
+#include "evmc/hex.hpp"
 #include "evmc/instructions.h"
 #include "host/evm/crypto.h"
 #include "runtime/evm_instance.h"
@@ -17,27 +18,33 @@ using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
 
+evmc_revision currentRevision() {
+  auto *Context = EVMResource::getInterpreterExecContext();
+  if (!Context) {
+    return DEFAULT_REVISION;
+  }
+  auto *Instance = Context->getInstance();
+  return Instance ? Instance->getRevision() : DEFAULT_REVISION;
+}
+
 /* ---------- Define gas cost macros begin ---------- */
 
 #define DEFINE_CALCULATE_GAS(OpName, OpCode)                                   \
   template <> uint64_t OpName##Handler::calculateGas() {                       \
-    static auto Table = evmc_get_instruction_metrics_table(DEFAULT_REVISION);  \
-    static const auto Cost = Table[OpCode].gas_cost;                           \
-    return Cost;                                                               \
+    static auto *Table = evmc_get_instruction_metrics_table(currentRevision()); \
+    return Table[OpCode].gas_cost;                                             \
   }
 
 #define DEFINE_NOT_TEMPLATE_CALCULATE_GAS(OpName, OpCode)                      \
   uint64_t OpName##Handler::calculateGas() {                                   \
-    static auto Table = evmc_get_instruction_metrics_table(DEFAULT_REVISION);  \
-    static const auto Cost = Table[OpCode].gas_cost;                           \
-    return Cost;                                                               \
+    static auto *Table = evmc_get_instruction_metrics_table(currentRevision()); \
+    return Table[OpCode].gas_cost;                                             \
   }
 
 #define DEFINE_MULTICODE_NOT_TEMPLATE_CALCULATE_GAS(OpName)                    \
   uint64_t OpName##Handler::calculateGas() {                                   \
-    static auto Table = evmc_get_instruction_metrics_table(DEFAULT_REVISION);  \
-    static const auto Cost = Table[OpCode].gas_cost;                           \
-    return Cost;                                                               \
+    static auto *Table = evmc_get_instruction_metrics_table(currentRevision()); \
+    return Table[OpCode].gas_cost;                                             \
   }
 
 /* ---------- Define gas cost macros end ---------- */
@@ -246,15 +253,6 @@ bool checkMemoryExpandAndChargeGas(EVMFrame *Frame, const intx::uint256 &Offset,
 // Convert uint256 to uint64
 uint64_t uint256ToUint64(const intx::uint256 &Value) {
   return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
-}
-
-evmc_revision currentRevision() {
-  auto *Context = EVMResource::getInterpreterExecContext();
-  if (!Context) {
-    return DEFAULT_REVISION;
-  }
-  auto *Instance = Context->getInstance();
-  return Instance ? Instance->getRevision() : DEFAULT_REVISION;
 }
 
 } // anonymous namespace
@@ -1389,7 +1387,7 @@ void CallHandler::doExecute() {
 
   // Track subcall refund at Instance level
   Context->getInstance()->addGasRefund(Result.gas_refund);
-  Context->setStatus(Result.status_code);
+  Context->setStatus(EVMC_SUCCESS);
 }
 
 void LogHandler::doExecute() {
