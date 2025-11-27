@@ -200,7 +200,9 @@ public:
       }
     }
 
+    auto StateSnapshot = captureHostState();
     if (!applyPreExecutionState(Msg, Result)) {
+      restoreHostState(StateSnapshot);
       return Result;
     }
 
@@ -214,6 +216,13 @@ public:
       Result.RemainingGas = Inst->getGas();
       ReturnData.clear();
       return Result;
+    }
+
+    if (shouldRevertState(ExecResult.status_code)) {
+      restoreHostState(StateSnapshot);
+      auto &SenderAccount = accounts[Msg.sender];
+      ensureAccountHasCodeHash(SenderAccount);
+      SenderAccount.nonce++;
     }
 
     Result.Status = ExecResult.status_code;
@@ -275,6 +284,7 @@ public:
       return ParentResult;
     }
 
+    auto StateSnapshot = captureHostState();
     try {
       const auto &ContractCode = It->second.code;
       if (ContractCode.empty()) {
@@ -323,6 +333,7 @@ public:
         RT->callEVMMain(*Inst, CallMsg, ExecResult);
       } catch (const std::exception &E) {
         ZEN_LOG_ERROR("Error in recursive call: {}", E.what());
+        restoreHostState(StateSnapshot);
         return ParentResult;
       }
 
@@ -334,6 +345,9 @@ public:
       }
       int64_t RemainingGas = static_cast<int64_t>(Inst->getGas());
       int64_t GasRefund = static_cast<int64_t>(Inst->getGasRefund());
+      if (shouldRevertState(ExecResult.status_code)) {
+        restoreHostState(StateSnapshot);
+      }
       return evmc::Result(ExecResult.status_code, RemainingGas, GasRefund,
                           ReturnData.empty() ? nullptr : ReturnData.data(),
                           ReturnData.size());
@@ -341,6 +355,7 @@ public:
     } catch (const std::exception &E) {
       // On error, return parent result
       ZEN_LOG_ERROR("Error in recursive call: {}", E.what());
+      restoreHostState(StateSnapshot);
       return ParentResult;
     }
   }
@@ -431,6 +446,7 @@ public:
       return evmc::Result{EVMC_FAILURE, OrigMsg.gas, 0, evmc::address{}};
     }
     evmc_message Msg = prepareMessage(OrigMsg);
+    auto StateSnapshot = captureHostState();
     try {
       // 2 Check for address conflicts (if the address already exists and is not
       // empty, creation will fail)
@@ -449,7 +465,7 @@ public:
           std::to_string(Counter);
       auto ModRet = RT->loadEVMModule(ModName, Msg.input_data, Msg.input_size);
       if (!ModRet) {
-        accounts.erase(NewAddr);
+        restoreHostState(StateSnapshot);
         ZEN_LOG_ERROR("Failed to load EVM module: {}", ModName.c_str());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
       }
@@ -458,7 +474,7 @@ public:
       IsolationPtr Iso(nullptr, IsolationDeleter{RT});
       Iso.reset(RT->createManagedIsolation());
       if (!Iso) {
-        accounts.erase(NewAddr);
+        restoreHostState(StateSnapshot);
         ZEN_LOG_ERROR("Failed to create isolation for module: {}",
                       ModName.c_str());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
@@ -466,7 +482,7 @@ public:
 
       auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
       if (!InstRet) {
-        accounts.erase(NewAddr);
+        restoreHostState(StateSnapshot);
         ZEN_LOG_ERROR("Failed to create EVM instance for module: {}",
                       ModName.c_str());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
@@ -486,6 +502,7 @@ public:
       intx::uint256 SenderBalance =
           intx::be::load<intx::uint256>(SenderAcc.balance);
       if (SenderBalance < Value) {
+        restoreHostState(StateSnapshot);
         ZEN_LOG_ERROR("Insufficient balance for CREATE: have {}, need {}",
                       SenderBalance, Value);
         return evmc::Result{EVMC_INSUFFICIENT_BALANCE, Msg.gas, 0, NewAddr};
@@ -502,7 +519,7 @@ public:
       try {
         RT->callEVMMain(*Inst, CallMsg, ExecResult);
       } catch (const std::exception &E) {
-        accounts.erase(NewAddr);
+        restoreHostState(StateSnapshot);
         ZEN_LOG_ERROR("Error in handleCreate execution: {}", E.what());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, evmc::address{}};
       }
@@ -520,14 +537,14 @@ public:
 
       // 6 Deploy the contract code (the output is the runtime code)
       if (ExecResult.status_code != EVMC_SUCCESS) {
-        accounts.erase(NewAddr);
+        restoreHostState(StateSnapshot);
         evmc::Result Failure(ExecResult.status_code, RemainingGas, GasRefund);
         Failure.create_address = NewAddr;
         return Failure;
       }
       if (!ReturnData.empty()) {
         if (ReturnData.size() > MAX_CODE_SIZE) {
-          accounts.erase(NewAddr);
+          restoreHostState(StateSnapshot);
           evmc::Result Failure(EVMC_FAILURE, RemainingGas, GasRefund);
           Failure.create_address = NewAddr;
           return Failure;
@@ -553,11 +570,32 @@ public:
       return CreateResult;
     } catch (const std::exception &E) {
       ZEN_LOG_ERROR("Error in handleCreate: {}", E.what());
+      restoreHostState(StateSnapshot);
       return evmc::Result{EVMC_FAILURE, Msg.gas, 0, evmc::address{}};
     }
   }
 
 private:
+  struct HostStateSnapshot {
+    decltype(accounts) Accounts;
+    decltype(recorded_logs) Logs;
+    decltype(recorded_selfdestructs) Selfdestructs;
+  };
+
+  HostStateSnapshot captureHostState() const {
+    return HostStateSnapshot{accounts, recorded_logs, recorded_selfdestructs};
+  }
+
+  void restoreHostState(const HostStateSnapshot &Snapshot) {
+    accounts = Snapshot.Accounts;
+    recorded_logs = Snapshot.Logs;
+    recorded_selfdestructs = Snapshot.Selfdestructs;
+  }
+
+  static bool shouldRevertState(evmc_status_code Status) {
+    return Status != EVMC_SUCCESS;
+  }
+
   static intx::uint256 toUint256Bytes(const evmc::bytes32 &Value) {
     return intx::be::load<intx::uint256>(Value);
   }
