@@ -1079,7 +1079,12 @@ void PushHandler::doExecute() {
       OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
   uint8_t ValueBytes[32];
   memset(ValueBytes, 0, sizeof(ValueBytes));
-  std::memcpy(ValueBytes + (32 - NumBytes), Code + Frame->Pc + 1, NumBytes);
+  size_t Offset = Frame->Pc + 1;
+  size_t AvailableBytes = Offset < Mod->CodeSize ? (Mod->CodeSize - Offset) : 0;
+  size_t CopyBytes = std::min<uint32_t>(NumBytes, AvailableBytes);
+  if (CopyBytes > 0) {
+    std::memcpy(ValueBytes + (32 - NumBytes), Code + Offset, CopyBytes);
+  }
   intx::uint256 Val = intx::be::load<intx::uint256>(ValueBytes);
   EVM_REQUIRE_STACK_SPACE(Frame, 1);
   Frame->push(Val);
