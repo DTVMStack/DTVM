@@ -37,21 +37,6 @@ EVMModule::~EVMModule() {
   }
 }
 
-std::vector<uint8_t> padCode(const uint8_t *Code, size_t CodeSize) {
-  // We need at most 33 bytes of code padding: 32 for possible missing all data
-  // bytes of PUSH32 at the very end of the code; and one more byte for STOP to
-  // guarantee there is a terminating instruction at the code end.
-  constexpr auto Padding = 32 + 1;
-  constexpr uint8_t OP_STOP = 0x00;
-
-  std::vector<uint8_t> PaddedCode(CodeSize + Padding);
-
-  std::copy(Code, Code + CodeSize, PaddedCode.begin());
-  std::fill_n(PaddedCode.begin() + CodeSize, Padding, OP_STOP);
-
-  return PaddedCode;
-}
-
 EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
                                            CodeHolderUniquePtr CodeHolder) {
   void *ObjBuf = RT.allocate(sizeof(EVMModule));
@@ -63,17 +48,13 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
   const uint8_t *Data = static_cast<const uint8_t *>(CodeHolder->getData());
   size_t CodeSize = CodeHolder->getSize();
 
-  std::vector<uint8_t> PaddedCode = padCode(Data, CodeSize);
-
   action::EVMModuleLoader Loader(
-      *Mod, reinterpret_cast<const Byte *>(PaddedCode.data()),
-      PaddedCode.size());
+      *Mod, reinterpret_cast<const Byte *>(Data), CodeSize);
 
   auto &Stats = RT.getStatistics();
   auto Timer = Stats.startRecord(utils::StatisticPhase::Load);
 
   Loader.load();
-  Mod->CodeSize = CodeSize;
 
   Stats.stopRecord(Timer);
 
