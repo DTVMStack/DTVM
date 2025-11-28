@@ -2109,7 +2109,17 @@ void EVMMirBuilder::normalizeOperandU64Const(Operand &Param) {
   bool FitsU64 = (C[1] == 0 && C[2] == 0 && C[3] == 0);
 
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  uint64_t Selected = FitsU64 ? C[0] : UINT64_MAX; // sentinel for overflow
+  if (!FitsU64) {
+    MInstruction *TrueCond = createIntConstInstruction(I64Type, 1);
+    MBasicBlock *TrapBB =
+        getOrCreateExceptionSetBB(ErrorCode::GasLimitExceeded);
+    MBasicBlock *ContinueBB = createBasicBlock();
+    createInstruction<BrIfInstruction>(true, Ctx, TrueCond, TrapBB, ContinueBB);
+    addUniqueSuccessor(TrapBB);
+    addSuccessor(ContinueBB);
+    setInsertBlock(ContinueBB);
+  }
+  uint64_t Selected = C[0];
 
   // Rebuild Param as a normalized U256 with low64=Selected, others=0
   MInstruction *Low = createIntConstInstruction(I64Type, Selected);
@@ -2139,13 +2149,18 @@ void EVMMirBuilder::normalizeOperandU64NonConst(Operand &Param) {
   MInstruction *IsU64 = createInstruction<BinaryInstruction>(
       false, OP_and, I64Type, Cond12, IsZero3);
 
-  // Select: valid -> low part; invalid -> UINT64_MAX (sentinel)
-  MInstruction *AllOnes = createIntConstInstruction(I64Type, UINT64_MAX);
-  MInstruction *Selected = createInstruction<SelectInstruction>(
-      false, I64Type, IsU64, Parts[0], AllOnes);
+  MInstruction *ZeroCond = createIntConstInstruction(I64Type, 0);
+  MInstruction *IsInvalid = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, IsU64, ZeroCond);
+  MBasicBlock *TrapBB = getOrCreateExceptionSetBB(ErrorCode::GasLimitExceeded);
+  MBasicBlock *ContinueBB = createBasicBlock();
+  createInstruction<BrIfInstruction>(true, Ctx, IsInvalid, TrapBB, ContinueBB);
+  addUniqueSuccessor(TrapBB);
+  addSuccessor(ContinueBB);
+  setInsertBlock(ContinueBB);
 
   // Normalize Param to U256: [Selected, 0, 0, 0]
-  U256Inst NewVal = {Selected, Zero, Zero, Zero};
+  U256Inst NewVal = {Parts[0], Zero, Zero, Zero};
   Param = Operand(NewVal, EVMType::UINT256);
 }
 
