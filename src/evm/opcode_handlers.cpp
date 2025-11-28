@@ -956,9 +956,9 @@ void MCopyHandler::doExecute() {
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
 
-  // Ensure both the destination and the source ranges are covered in memory.
-  if (!checkMemoryExpandAndChargeGas(Frame, DestOffsetVal, SizeVal) ||
-      !checkMemoryExpandAndChargeGas(Frame, OffsetVal, SizeVal)) {
+  // Ensure memory is large enough
+  if (!checkMemoryExpandAndChargeGas(Frame, std::max(DestOffsetVal, OffsetVal),
+                                     SizeVal)) {
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
   }
