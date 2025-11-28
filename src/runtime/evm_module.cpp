@@ -48,8 +48,8 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
   const uint8_t *Data = static_cast<const uint8_t *>(CodeHolder->getData());
   size_t CodeSize = CodeHolder->getSize();
 
-  action::EVMModuleLoader Loader(
-      *Mod, reinterpret_cast<const Byte *>(Data), CodeSize);
+  action::EVMModuleLoader Loader(*Mod, reinterpret_cast<const Byte *>(Data),
+                                 CodeSize);
 
   auto &Stats = RT.getStatistics();
   auto Timer = Stats.startRecord(utils::StatisticPhase::Load);
