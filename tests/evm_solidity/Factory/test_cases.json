@@ -7,12 +7,12 @@
       "name": "Deploy Child with value=42",
       "function": "deployChild(uint256)",
       "calldata": "2fd7e73b000000000000000000000000000000000000000000000000000000000000002a",
-      "expected": "000000000000000000000000FA56EB83037C07AABBB89DCF870D2082C3043B29"
+      "expected": "000000000000000000000000568A95F77B047BECE6AA68843D2019332C46A585"
     },
     {
       "name": "Check lastChild is nonzero",
       "function": "lastChild()",
-      "expected": "000000000000000000000000FA56EB83037C07AABBB89DCF870D2082C3043B29"
+      "expected": "000000000000000000000000568A95F77B047BECE6AA68843D2019332C46A585"
     },
     {
       "name": "Read value() from deployed Child",
@@ -23,12 +23,12 @@
       "name": "Deploy Child with value=99",
       "function": "deployChild(uint256)",
       "calldata": "2fd7e73b0000000000000000000000000000000000000000000000000000000000000063",
-      "expected": "0000000000000000000000003D0C1B3A33C7152634F8643370B5AFDA13ABC921"
+      "expected": "000000000000000000000000EE0474A9FE21EC58A08C41193B6BD9E34F50EFDC"
     },
     {
       "name": "Check lastChild updated",
       "function": "lastChild()",
-      "expected": "0000000000000000000000003D0C1B3A33C7152634F8643370B5AFDA13ABC921"
+      "expected": "000000000000000000000000EE0474A9FE21EC58A08C41193B6BD9E34F50EFDC"
     },
     {
       "name": "Read value() from deployed Child",
