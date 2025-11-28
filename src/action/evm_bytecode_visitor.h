@@ -787,12 +787,15 @@ private:
   }
 
   Bytes readBytes(uint8_t Count) {
-    // offset 1 byte for opcode
-    if (PC + 1 + Count > Ctx->getBytecodeSize()) {
-      throw getError(common::ErrorCode::UnexpectedEnd);
-    }
     const Byte *Bytecode = Ctx->getBytecode();
-    Bytes Result(Bytecode + PC + 1, Count);
+    uint64_t Start = PC + 1;
+    uint64_t BytecodeSize = Ctx->getBytecodeSize();
+    uint64_t Available = (Start < BytecodeSize) ? (BytecodeSize - Start) : 0;
+    uint64_t ReadCount = (Count < Available) ? Count : Available;
+
+    Bytes Result = ReadCount > 0
+                       ? Bytes(Bytecode + Start, static_cast<size_t>(ReadCount))
+                       : Bytes();
     PC += Count;
     return Result;
   }
