@@ -73,10 +73,10 @@ include_directories(${intx_SOURCE_DIR}/include)
 
 FetchContent_Declare(
   boost
-  URL https://sourceforge.net/projects/boost/files/boost/1.84.0/boost_1_84_0.tar.bz2/download
-  DOWNLOAD_NAME boost_1_84_0.tar.bz2
+  URL https://sourceforge.net/projects/boost/files/boost/1.67.0/boost_1_67_0.tar.bz2/download
+  DOWNLOAD_NAME boost_1_67_0.tar.bz2
   URL_HASH
-    SHA256=cc4b893acf645c9d4b698e9a0f08ca8846aa5d6c68275c14c3e7949c24109454
+    SHA256=2684c972994ee57fc5632e03bf044746f6eb45d4920c343937a465fd67a5adba
 )
 FetchContent_GetProperties(boost)
 if(NOT boost_POPULATED)
