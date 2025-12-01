@@ -38,6 +38,62 @@ const bool PRINT_FAILURE_DETAILS = true;
 // TODO: RunMode selection logic will be refactored in the future.
 constexpr common::RunMode STATE_TEST_RUN_MODE = common::RunMode::MultipassMode;
 
+// Revision filter configuration
+// Set to EVMC_MAX_REVISION to run all tests, or a specific revision to filter
+evmc_revision getTargetRevision() {
+  const char *EnvRevision = std::getenv("DTVM_TEST_REVISION");
+  if (EnvRevision != nullptr) {
+    std::string RevisionStr = EnvRevision;
+    if (RevisionStr == "ALL") {
+      return EVMC_MAX_REVISION;
+    }
+    if (RevisionStr == "Frontier") {
+      return EVMC_FRONTIER;
+    }
+    if (RevisionStr == "Homestead") {
+      return EVMC_HOMESTEAD;
+    }
+    if (RevisionStr == "TangerineWhistle") {
+      return EVMC_TANGERINE_WHISTLE;
+    }
+    if (RevisionStr == "SpuriousDragon") {
+      return EVMC_SPURIOUS_DRAGON;
+    }
+    if (RevisionStr == "Byzantium") {
+      return EVMC_BYZANTIUM;
+    }
+    if (RevisionStr == "Constantinople") {
+      return EVMC_CONSTANTINOPLE;
+    }
+    if (RevisionStr == "Petersburg") {
+      return EVMC_PETERSBURG;
+    }
+    if (RevisionStr == "Istanbul") {
+      return EVMC_ISTANBUL;
+    }
+    if (RevisionStr == "Berlin") {
+      return EVMC_BERLIN;
+    }
+    if (RevisionStr == "London") {
+      return EVMC_LONDON;
+    }
+    if (RevisionStr == "Paris") {
+      return EVMC_PARIS;
+    }
+    if (RevisionStr == "Shanghai") {
+      return EVMC_SHANGHAI;
+    }
+    if (RevisionStr == "Cancun") {
+      return EVMC_CANCUN;
+    }
+    if (RevisionStr == "Prague") {
+      return EVMC_PRAGUE;
+    }
+  }
+  // Default: only test Cancun revision
+  return EVMC_CANCUN;
+}
+
 RuntimeConfig buildRuntimeConfig() {
   RuntimeConfig Config;
 
@@ -299,6 +355,7 @@ const std::vector<StateTestCaseParam> &getStateTestParams() {
     const auto &Fixtures = getStateFixtures();
 
     size_t CaseCounter = 0;
+    evmc_revision TargetRevision = getTargetRevision();
 
     for (const auto &Fixture : Fixtures) {
       if (!Fixture.Post || !Fixture.Post->IsObject()) {
@@ -315,6 +372,14 @@ const std::vector<StateTestCaseParam> &getStateTestParams() {
 
       for (const auto &Fork : Fixture.Post->GetObject()) {
         std::string ForkName = Fork.name.GetString();
+
+        // Filter by revision if not running all tests
+        if (TargetRevision != EVMC_MAX_REVISION) {
+          evmc_revision ForkRevision = mapForkToRevision(ForkName);
+          if (ForkRevision != TargetRevision) {
+            continue;
+          }
+        }
 
         const rapidjson::Value &ForkResults = Fork.value;
         if (!ForkResults.IsArray()) {
