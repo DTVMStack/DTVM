@@ -41,53 +41,30 @@ constexpr common::RunMode STATE_TEST_RUN_MODE = common::RunMode::MultipassMode;
 // Revision filter configuration
 // Set to EVMC_MAX_REVISION to run all tests, or a specific revision to filter
 evmc_revision getTargetRevision() {
+  static const std::unordered_map<std::string, evmc_revision> RevisionMap = {
+      {"ALL", EVMC_MAX_REVISION},
+      {"Frontier", EVMC_FRONTIER},
+      {"Homestead", EVMC_HOMESTEAD},
+      {"TangerineWhistle", EVMC_TANGERINE_WHISTLE},
+      {"SpuriousDragon", EVMC_SPURIOUS_DRAGON},
+      {"Byzantium", EVMC_BYZANTIUM},
+      {"Constantinople", EVMC_CONSTANTINOPLE},
+      {"Petersburg", EVMC_PETERSBURG},
+      {"Istanbul", EVMC_ISTANBUL},
+      {"Berlin", EVMC_BERLIN},
+      {"London", EVMC_LONDON},
+      {"Paris", EVMC_PARIS},
+      {"Shanghai", EVMC_SHANGHAI},
+      {"Cancun", EVMC_CANCUN},
+      {"Prague", EVMC_PRAGUE},
+  };
+
   const char *EnvRevision = std::getenv("DTVM_TEST_REVISION");
   if (EnvRevision != nullptr) {
     std::string RevisionStr = EnvRevision;
-    if (RevisionStr == "ALL") {
-      return EVMC_MAX_REVISION;
-    }
-    if (RevisionStr == "Frontier") {
-      return EVMC_FRONTIER;
-    }
-    if (RevisionStr == "Homestead") {
-      return EVMC_HOMESTEAD;
-    }
-    if (RevisionStr == "TangerineWhistle") {
-      return EVMC_TANGERINE_WHISTLE;
-    }
-    if (RevisionStr == "SpuriousDragon") {
-      return EVMC_SPURIOUS_DRAGON;
-    }
-    if (RevisionStr == "Byzantium") {
-      return EVMC_BYZANTIUM;
-    }
-    if (RevisionStr == "Constantinople") {
-      return EVMC_CONSTANTINOPLE;
-    }
-    if (RevisionStr == "Petersburg") {
-      return EVMC_PETERSBURG;
-    }
-    if (RevisionStr == "Istanbul") {
-      return EVMC_ISTANBUL;
-    }
-    if (RevisionStr == "Berlin") {
-      return EVMC_BERLIN;
-    }
-    if (RevisionStr == "London") {
-      return EVMC_LONDON;
-    }
-    if (RevisionStr == "Paris") {
-      return EVMC_PARIS;
-    }
-    if (RevisionStr == "Shanghai") {
-      return EVMC_SHANGHAI;
-    }
-    if (RevisionStr == "Cancun") {
-      return EVMC_CANCUN;
-    }
-    if (RevisionStr == "Prague") {
-      return EVMC_PRAGUE;
+    auto It = RevisionMap.find(RevisionStr);
+    if (It != RevisionMap.end()) {
+      return It->second;
     }
   }
   // Default: only test Cancun revision
