@@ -1571,12 +1571,65 @@ void EVMMirBuilder::handleMCopy(Operand DestAddrComponents,
                                 Operand SrcAddrComponents,
                                 Operand LengthComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
+
+  auto IsConstZero = [](const Operand &Op) -> bool {
+    if (!Op.isConstant()) {
+      return false;
+    }
+    const auto &Val = Op.getConstValue();
+    return Val[0] == 0 && Val[1] == 0 && Val[2] == 0 && Val[3] == 0;
+  };
+
+  if (IsConstZero(LengthComponents)) {
+    return;
+  }
+
+  MBasicBlock *SkipCopyBB = nullptr;
+  if (!LengthComponents.isConstant()) {
+    MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+    MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+    U256Inst Parts = extractU256Operand(LengthComponents);
+    MInstruction *IsZero0 = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Parts[0],
+        Zero);
+    MInstruction *IsZero1 = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Parts[1],
+        Zero);
+    MInstruction *IsZero2 = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Parts[2],
+        Zero);
+    MInstruction *IsZero3 = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Parts[3],
+        Zero);
+
+    MInstruction *Cond01 = createInstruction<BinaryInstruction>(
+        false, OP_and, I64Type, IsZero0, IsZero1);
+    MInstruction *Cond23 = createInstruction<BinaryInstruction>(
+        false, OP_and, I64Type, IsZero2, IsZero3);
+    MInstruction *IsAllZero = createInstruction<BinaryInstruction>(
+        false, OP_and, I64Type, Cond01, Cond23);
+
+    MBasicBlock *CopyBB = createBasicBlock();
+    SkipCopyBB = createBasicBlock();
+    createInstruction<BrIfInstruction>(true, Ctx, IsAllZero, SkipCopyBB,
+                                       CopyBB);
+    addSuccessor(SkipCopyBB);
+    addSuccessor(CopyBB);
+    setInsertBlock(CopyBB);
+  }
+
   normalizeOperandU64(DestAddrComponents);
   normalizeOperandU64(SrcAddrComponents);
   normalizeOperandU64(LengthComponents);
   callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
       RuntimeFunctions.SetMCopy, DestAddrComponents, SrcAddrComponents,
       LengthComponents);
+
+  if (SkipCopyBB != nullptr) {
+    createInstruction<BrInstruction>(true, Ctx, SkipCopyBB);
+    addSuccessor(SkipCopyBB);
+    setInsertBlock(SkipCopyBB);
+  }
 }
 
 template <size_t NumTopics, typename... TopicArgs>

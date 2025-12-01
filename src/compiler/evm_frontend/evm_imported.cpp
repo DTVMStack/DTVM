@@ -28,12 +28,16 @@ evmc::address loadAddressFromLE(const uint8_t *AddressLE) {
   }
   return Addr;
 }
+constexpr int64_t numWords(uint64_t Size) noexcept {
+  /// The size of the EVM 256-bit word.
+  constexpr auto WORD_SIZE = 32;
+  return static_cast<int64_t>((Size + (WORD_SIZE - 1)) / WORD_SIZE);
+}
 inline uint64_t calculateWordCopyGas(uint64_t Size) {
   if (Size == 0) {
     return 0;
   }
-  constexpr uint64_t WordBytes = 32;
-  uint64_t Words = (Size + (WordBytes - 1)) / WordBytes;
+  uint64_t Words = numWords(Size);
   return Words * static_cast<uint64_t>(zen::evm::WORD_COPY_COST);
 }
 } // namespace
@@ -1004,6 +1008,9 @@ const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,
                                uint64_t Offset, uint64_t Length) {
   uint64_t RequiredSize = Offset + Length;
   Instance->expandMemory(RequiredSize);
+  const uint64_t ExtraGas =
+      static_cast<uint64_t>(numWords(static_cast<uint64_t>(Length))) * 6;
+  Instance->chargeGas(ExtraGas);
 
   auto &Memory = Instance->getMemory();
   const uint8_t *InputData = Memory.data() + Offset;

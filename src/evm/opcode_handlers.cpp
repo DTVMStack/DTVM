@@ -802,6 +802,14 @@ void Keccak256Handler::doExecute() {
   const size_t MemOffset = static_cast<size_t>(Offset);
   const size_t DataLength = static_cast<size_t>(Length);
 
+  const uint64_t ExtraGas =
+      static_cast<uint64_t>(numWords(static_cast<uint64_t>(DataLength))) * 6;
+  // Calculate the gas cost of keccak itself based on word count
+  if (!chargeGas(Frame, ExtraGas)) {
+    getContext()->setStatus(EVMC_OUT_OF_GAS);
+    return;
+  }
+
   if (!checkMemoryExpandAndChargeGas(Frame, MemOffset, DataLength)) {
     getContext()->setStatus(EVMC_OUT_OF_GAS);
     return;
@@ -956,6 +964,10 @@ void MCopyHandler::doExecute() {
   intx::uint256 DestOffsetVal = Frame->pop();
   intx::uint256 OffsetVal = Frame->pop();
   intx::uint256 SizeVal = Frame->pop();
+
+  if (SizeVal == 0) {
+    return;
+  }
 
   // Ensure memory is large enough
   if (!checkMemoryExpandAndChargeGas(Frame, std::max(DestOffsetVal, OffsetVal),
