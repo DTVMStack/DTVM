@@ -84,8 +84,12 @@ TEST_P(SolidityContractTest, TestContract) {
   EXPECT_EQ(Result, EVMC_SUCCESS) << "Contract Test Failed: " << ContractName;
 }
 
-INSTANTIATE_TEST_SUITE_P(SolidityTests, SolidityContractTest,
-                         testing::ValuesIn(EnumerateSolidityTests("")));
+INSTANTIATE_TEST_SUITE_P(
+    SolidityTests, SolidityContractTest,
+    testing::ValuesIn(EnumerateSolidityTests("")),
+    [](const testing::TestParamInfo<SolidityTestPair> &info) {
+      return info.param.second;
+    });
 
 } // namespace zen::test
 

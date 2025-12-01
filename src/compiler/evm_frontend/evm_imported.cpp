@@ -244,7 +244,10 @@ const intx::uint256 *evmGetExp(zen::runtime::EVMInstance *Instance,
 const uint8_t *evmGetAddress(zen::runtime::EVMInstance *Instance) {
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-  return Msg->recipient.bytes;
+
+  static thread_local uint8_t PaddedAddress[32] = {0};
+  memcpy(PaddedAddress + 12, Msg->recipient.bytes, 20);
+  return PaddedAddress;
 }
 
 const intx::uint256 *evmGetBalance(zen::runtime::EVMInstance *Instance,
@@ -274,13 +277,19 @@ const uint8_t *evmGetOrigin(zen::runtime::EVMInstance *Instance) {
     Cache.TxContext = Module->Host->get_tx_context();
     Cache.TxContextCached = true;
   }
-  return Cache.TxContext.tx_origin.bytes;
+
+  static thread_local uint8_t PaddedAddress[32] = {0};
+  memcpy(PaddedAddress + 12, Cache.TxContext.tx_origin.bytes, 20);
+  return PaddedAddress;
 }
 
 const uint8_t *evmGetCaller(zen::runtime::EVMInstance *Instance) {
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-  return Msg->sender.bytes;
+
+  static thread_local uint8_t PaddedAddress[32] = {0};
+  memcpy(PaddedAddress + 12, Msg->sender.bytes, 20);
+  return PaddedAddress;
 }
 
 const uint8_t *evmGetCallValue(zen::runtime::EVMInstance *Instance) {
@@ -396,7 +405,10 @@ const uint8_t *evmGetCoinBase(zen::runtime::EVMInstance *Instance) {
     Cache.TxContext = Module->Host->get_tx_context();
     Cache.TxContextCached = true;
   }
-  return Cache.TxContext.block_coinbase.bytes;
+
+  static thread_local uint8_t PaddedAddress[32] = {0};
+  memcpy(PaddedAddress + 12, Cache.TxContext.block_coinbase.bytes, 20);
+  return PaddedAddress;
 }
 
 const intx::uint256 *evmGetTimestamp(zen::runtime::EVMInstance *Instance) {
@@ -751,7 +763,7 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   CreateMsg.depth = Msg->depth + 1;
   CreateMsg.gas = Msg->gas;
   CreateMsg.sender = Msg->recipient;
-  std::memcpy(CreateMsg.value.bytes, &Value, 32);
+  CreateMsg.value = intx::be::store<evmc::bytes32>(intx::uint256{Value});
   CreateMsg.input_data = InitCode;
   CreateMsg.input_size = Size;
 
@@ -769,13 +781,12 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
                                   Result.output_data + Result.output_size);
   Instance->setReturnData(std::move(ReturnData));
   if (Result.status_code == EVMC_SUCCESS) {
-    // Return created contract address
-    static evmc::address CreatedAddr = Result.create_address;
-    return CreatedAddr.bytes;
+    static thread_local uint8_t PaddedAddress[32] = {0};
+    memcpy(PaddedAddress + 12, Result.create_address.bytes, 20);
+    return PaddedAddress;
   } else {
-    // Return zero address on failure
-    static evmc::address ZeroAddr = {};
-    return ZeroAddr.bytes;
+    static thread_local uint8_t PaddedAddress[32] = {0};
+    return PaddedAddress;
   }
 }
 
