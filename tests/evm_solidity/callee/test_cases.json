@@ -3,7 +3,7 @@
   "deploy_contracts": ["CalleeContract"],
   "test_cases": [
     {
-      "name": "test_get_x_50",
+      "name": "test_get_x_0",
       "function": "getX()",
       "calldata": "5197c7aa",
       "expected": "0000000000000000000000000000000000000000000000000000000000000000"
@@ -27,7 +27,7 @@
       "expected": ""
     },
     {
-      "name": "test_get_x_50",
+      "name": "test_get_100",
       "function": "getX()",
       "calldata": "5197c7aa",
       "expected": "0000000000000000000000000000000000000000000000000000000000000064"
@@ -51,7 +51,7 @@
       "expected": ""
     },
     {
-      "name": "test_get_x_50",
+      "name": "test_get_x_101",
       "function": "getX()",
       "calldata": "5197c7aa",
       "expected": "0000000000000000000000000000000000000000000000000000000000000065"
