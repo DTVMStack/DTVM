@@ -583,7 +583,7 @@ public:
         NewAcc.codehash = EMPTY_CODE_HASH;
       }
       // 7 Update the sender's nonce (for CREATE, the nonce must be incremented)
-      if (Msg.kind == EVMC_CREATE) {
+      if (Msg.kind == EVMC_CREATE || Msg.kind == EVMC_CREATE2) {
         SenderAcc.nonce++;
       }
 
@@ -718,4 +718,3 @@ private:
 } // namespace zen::evm
 
 #endif // ZEN_TESTS_EVM_TEST_HOST_HPP
-

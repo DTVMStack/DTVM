@@ -1202,20 +1202,21 @@ void CreateHandler::doExecute() {
     return;
   }
 
-  evmc_message NewMsg{.kind = evmc_call_kind::EVMC_CREATE,
-                      .flags = 0u,
-                      .depth = Frame->Msg->depth + 1,
-                      .gas = Frame->Msg->gas,
-                      .recipient = {},
-                      .sender = Frame->Msg->recipient,
-                      .input_data =
-                          Frame->Memory.data() + uint256ToUint64(CodeOffset),
-                      .input_size = uint256ToUint64(CodeSizeVal),
-                      .value = intx::be::store<evmc::bytes32>(Value),
-                      .create2_salt = intx::be::store<evmc::bytes32>(Salt),
-                      .code_address = {},
-                      .code = nullptr,
-                      .code_size = 0};
+  evmc_message NewMsg{
+      .kind = (OpCode == OP_CREATE2 ? evmc_call_kind::EVMC_CREATE2
+                                    : evmc_call_kind::EVMC_CREATE),
+      .flags = 0u,
+      .depth = Frame->Msg->depth + 1,
+      .gas = Frame->Msg->gas,
+      .recipient = {},
+      .sender = Frame->Msg->recipient,
+      .input_data = Frame->Memory.data() + uint256ToUint64(CodeOffset),
+      .input_size = uint256ToUint64(CodeSizeVal),
+      .value = intx::be::store<evmc::bytes32>(Value),
+      .create2_salt = intx::be::store<evmc::bytes32>(Salt),
+      .code_address = {},
+      .code = nullptr,
+      .code_size = 0};
 
   // EIP-150
   if (Rev >= EVMC_TANGERINE_WHISTLE) {
