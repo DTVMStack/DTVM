@@ -158,7 +158,6 @@ public:
 
   void meterOpcode(evmc_opcode Opcode);
   void meterGas(uint64_t GasCost);
-  void meterBaseGasIfTopLevel();
 
   // Complete jump implementation with jump table
   void createJumpTable();
