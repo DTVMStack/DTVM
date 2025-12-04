@@ -530,6 +530,37 @@ void EVMMirBuilder::handleStop() {
   handleVoidReturn();
 }
 
+void EVMMirBuilder::drainGas() {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MPointerType *VoidPtrType = createVoidPtrType();
+  MPointerType *I64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
+
+  MInstruction *MsgPtr = getInstanceElement(
+      VoidPtrType, zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
+  MInstruction *MsgPtrInt =
+      createInstruction<ConversionInstruction>(false, OP_ptrtoint, I64Type,
+                                               MsgPtr);
+
+  MInstruction *MsgGasOffsetValue = createIntConstInstruction(
+      I64Type, zen::runtime::EVMInstance::getMessageGasOffset());
+  MInstruction *MsgGasAddrInt = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, MsgPtrInt, MsgGasOffsetValue);
+  MInstruction *MsgGasPtr = createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, I64PtrType, MsgGasAddrInt);
+
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+  createInstruction<StoreInstruction>(true, &Ctx.VoidType, Zero, MsgGasPtr);
+
+  MInstruction *GasOffsetValue = createIntConstInstruction(
+      I64Type, zen::runtime::EVMInstance::getGasFieldOffset());
+  MInstruction *GasAddrInt = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, InstanceAddr, GasOffsetValue);
+  MInstruction *GasPtr = createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, I64PtrType, GasAddrInt);
+
+  createInstruction<StoreInstruction>(true, &Ctx.VoidType, Zero, GasPtr);
+}
+
 void EVMMirBuilder::handleTrap(ErrorCode ErrCode) {
   MBasicBlock *TrapBB = getOrCreateExceptionSetBB(ErrCode);
 
@@ -541,6 +572,7 @@ void EVMMirBuilder::handleTrap(ErrorCode ErrCode) {
     }
   }
 
+  drainGas();
   createInstruction<BrInstruction>(true, Ctx, TrapBB);
   addSuccessor(TrapBB);
   setInsertBlock(TrapBB);

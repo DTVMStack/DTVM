@@ -426,6 +426,7 @@ private:
 
   MInstruction *getInstanceStackTopInt(MInstruction *StackSize);
   MInstruction *getInstanceStackPeekInt(int32_t IndexFromTop);
+  void drainGas();
 
   // Create a full U256 operand from intx::uint256 value
   Operand createU256ConstOperand(const intx::uint256 &V);

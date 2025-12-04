@@ -895,7 +895,26 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
         break;
       }
       }
-      if (Inst.getError().getCode() == ErrorCode::GasLimitExceeded) {
+      auto MapErrToStatus = [](ErrorCode Err) {
+        switch (Err) {
+        case ErrorCode::EVMStackOverflow:
+        case ErrorCode::CallStackExhausted:
+          return EVMC_STACK_OVERFLOW;
+        case ErrorCode::EVMStackUnderflow:
+          return EVMC_STACK_UNDERFLOW;
+        case ErrorCode::EVMBadJumpDestination:
+          return EVMC_BAD_JUMP_DESTINATION;
+        case ErrorCode::OutOfBoundsMemory:
+          return EVMC_INVALID_MEMORY_ACCESS;
+        case ErrorCode::EVMInvalidInstruction:
+          return EVMC_INVALID_INSTRUCTION;
+        default:
+          return EVMC_FAILURE;
+        }
+      };
+
+      ErrorCode InstErr = Inst.getError().getCode();
+      if (InstErr == ErrorCode::GasLimitExceeded) {
         Inst.setGas(0);
         StatusCode = EVMC_OUT_OF_GAS;
       } else if (Config.Mode == RunMode::SinglepassMode) {
@@ -906,6 +925,8 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
         const auto &TrapState = TLS.getTrapState();
         Inst.setExecutionError(common::getError(CapturedTapErrCode),
                                TrapState.NumIgnoredFrames, TrapState);
+      } else if (InstErr != ErrorCode::NoError) {
+        StatusCode = MapErrToStatus(InstErr);
       }
 
       // Set error status code

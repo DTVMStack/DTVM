@@ -38,7 +38,7 @@ private:
     CurStackOffset++;
     if (CurStackOffset > MaxStackOffset) {
       MaxStackOffset = CurStackOffset;
-      if (MaxStackOffset > EVM_MAX_STACK_SIZE) {
+      if (static_cast<size_t>(MaxStackOffset) > EVM_MAX_STACK_SIZE) {
         // Detect stack overflow within a block
         throw getError(common::ErrorCode::EVMStackOverflow);
       }
@@ -627,25 +627,18 @@ private:
         handleStop();
       }
     } catch (const common::Error &E) {
-      int32_t ExitCode;
       switch (E.getCode()) {
       case common::ErrorCode::EVMStackOverflow:
-        ExitCode = 6; // EVMC_STACK_OVERFLOW;
-        break;
+        Builder.handleTrap(common::ErrorCode::EVMStackOverflow);
+        InDeadCode = true;
+        return true;
       case common::ErrorCode::EVMStackUnderflow:
-        ExitCode = 7; // EVMC_STACK_UNDERFLOW;
-        break;
-      case common::ErrorCode::UnsupportedOpcode:
-        ExitCode = 4; // EVMC_INVALID_INSTRUCTION;
-        break;
-      case common::ErrorCode::UnexpectedEnd:
-        ExitCode = 4; // EVMC_INVALID_INSTRUCTION;
-        break;
+        Builder.handleTrap(common::ErrorCode::EVMStackUnderflow);
+        InDeadCode = true;
+        return true;
       default:
-        ExitCode = 1; // EVMC_FAILURE;
+        break;
       }
-      // TODO: Store the abnormal state in the evmc_status_code type
-      // for example, Ctx->setError(ExitCode);
       return false;
     }
     return true;
