@@ -749,6 +749,22 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
 
+  evmc_revision Rev = Instance->getRevision();
+  uint64_t InitCodeWordCost = 0;
+  if (CallKind == EVMC_CREATE2) {
+    InitCodeWordCost += 6;
+  }
+  if (Rev >= EVMC_SHANGHAI) {
+    InitCodeWordCost += 2;
+  }
+  if (InitCodeWordCost != 0 && Size != 0) {
+    uint64_t InitCodeWords = (Size + 31) / 32;
+    uint64_t InitCodeCost = InitCodeWordCost * InitCodeWords;
+    if (InitCodeCost != 0) {
+      Instance->chargeGas(InitCodeCost);
+    }
+  }
+
   // Calculate required memory size and charge gas
   uint64_t RequiredSize = Offset + Size;
   Instance->expandMemory(RequiredSize);
@@ -762,6 +778,10 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   CreateMsg.flags = Msg->flags;
   CreateMsg.depth = Msg->depth + 1;
   CreateMsg.gas = Msg->gas;
+  if (Rev >= EVMC_TANGERINE_WHISTLE && CreateMsg.gas > 0) {
+    int64_t Reduction = CreateMsg.gas / 64;
+    CreateMsg.gas -= Reduction;
+  }
   CreateMsg.sender = Msg->recipient;
   CreateMsg.value = intx::be::store<evmc::bytes32>(intx::uint256{Value});
   CreateMsg.input_data = InitCode;
@@ -776,7 +796,23 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   evmc::Result Result = Module->Host->call(CreateMsg);
   Instance->popMessage();
 
-  // Store return data
+  uint64_t ProvidedGas =
+      CreateMsg.gas > 0 ? static_cast<uint64_t>(CreateMsg.gas) : 0;
+  uint64_t GasLeft =
+      Result.gas_left > 0 ? static_cast<uint64_t>(Result.gas_left) : 0;
+  uint64_t GasUsed = ProvidedGas > GasLeft ? ProvidedGas - GasLeft : 0;
+  if (GasUsed >= zen::evm::BASIC_EXECUTION_COST) {
+    GasUsed -= zen::evm::BASIC_EXECUTION_COST;
+  } else {
+    GasUsed = 0;
+  }
+  if (GasUsed != 0) {
+    Instance->chargeGas(GasUsed);
+  }
+  if (Result.gas_refund > 0) {
+    Instance->addGasRefund(Result.gas_refund);
+  }
+
   std::vector<uint8_t> ReturnData(Result.output_data,
                                   Result.output_data + Result.output_size);
   Instance->setReturnData(std::move(ReturnData));
@@ -895,13 +931,14 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   uint64_t GasLeft =
       Result.gas_left > 0 ? static_cast<uint64_t>(Result.gas_left) : 0;
   uint64_t GasUsed = CallGas > GasLeft ? CallGas - GasLeft : 0;
-  if (GasUsed >= zen::evm::BASIC_EXECUTION_COST) {
-    GasUsed -= zen::evm::BASIC_EXECUTION_COST;
-  } else {
-    GasUsed = 0;
-  }
   if (GasUsed > 0) {
-    Instance->chargeGas(GasUsed);
+    if (Module->Host->get_code_size(CallMsg.code_address) > 0 &&
+        GasUsed >= zen::evm::BASIC_EXECUTION_COST) {
+      GasUsed -= zen::evm::BASIC_EXECUTION_COST;
+    }
+    if (GasUsed > 0) {
+      Instance->chargeGas(GasUsed);
+    }
   }
   if (Result.gas_refund > 0) {
     Instance->addGasRefund(Result.gas_refund);

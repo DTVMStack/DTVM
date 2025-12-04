@@ -266,6 +266,50 @@ void EVMMirBuilder::meterGas(uint64_t GasCost) {
   createInstruction<StoreInstruction>(true, &Ctx.VoidType, NewGas, MsgGasPtr);
 }
 
+void EVMMirBuilder::meterBaseGasIfTopLevel() {
+  if (!Ctx.isGasMeteringEnabled()) {
+    return;
+  }
+
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MPointerType *VoidPtrType = createVoidPtrType();
+  MPointerType *I32PtrType = MPointerType::create(Ctx, Ctx.I32Type);
+
+  MInstruction *MsgPtr = getInstanceElement(
+      VoidPtrType, zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
+  MInstruction *MsgPtrInt =
+      createInstruction<ConversionInstruction>(false, OP_ptrtoint, I64Type,
+                                               MsgPtr);
+
+  MInstruction *DepthOffsetValue = createIntConstInstruction(
+      I64Type, zen::runtime::EVMInstance::getMessageDepthOffset());
+  MInstruction *DepthAddrInt = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, MsgPtrInt, DepthOffsetValue);
+  MInstruction *DepthPtr = createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, I32PtrType, DepthAddrInt);
+  MInstruction *DepthValue =
+      createInstruction<LoadInstruction>(false, &Ctx.I32Type, DepthPtr);
+
+  MInstruction *ZeroDepth =
+      createIntConstInstruction(&Ctx.I32Type, static_cast<int32_t>(0));
+  MInstruction *IsTopLevel = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I32Type, DepthValue,
+      ZeroDepth);
+
+  MBasicBlock *ChargeBB = createBasicBlock();
+  MBasicBlock *ContinueBB = createBasicBlock();
+  createInstruction<BrIfInstruction>(true, Ctx, IsTopLevel, ChargeBB,
+                                     ContinueBB);
+  addSuccessor(ChargeBB);
+  addSuccessor(ContinueBB);
+
+  setInsertBlock(ChargeBB);
+  meterGas(zen::evm::BASIC_EXECUTION_COST);
+  createInstruction<BrInstruction>(true, Ctx, ContinueBB);
+  addSuccessor(ContinueBB);
+  setInsertBlock(ContinueBB);
+}
+
 void EVMMirBuilder::createStackCheckBlock() {
   // Create a new basic block for stack checking
 }
@@ -484,6 +528,22 @@ void EVMMirBuilder::handleStop() {
   addSuccessor(ReturnBB);
   setInsertBlock(ReturnBB);
   handleVoidReturn();
+}
+
+void EVMMirBuilder::handleTrap(ErrorCode ErrCode) {
+  MBasicBlock *TrapBB = getOrCreateExceptionSetBB(ErrCode);
+
+  if (CurBB && !CurBB->empty()) {
+    MInstruction *LastInst = *std::prev(CurBB->end());
+    if (LastInst->isTerminator()) {
+      setInsertBlock(TrapBB);
+      return;
+    }
+  }
+
+  createInstruction<BrInstruction>(true, Ctx, TrapBB);
+  addSuccessor(TrapBB);
+  setInsertBlock(TrapBB);
 }
 
 void EVMMirBuilder::handleVoidReturn() {

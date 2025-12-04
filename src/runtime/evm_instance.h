@@ -156,6 +156,13 @@ public:
     return static_cast<int32_t>(offsetof(evmc_message, gas));
   }
 
+  static constexpr int32_t getMessageDepthOffset() {
+    static_assert(offsetof(evmc_message, depth) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "evmc_message offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(evmc_message, depth));
+  }
+
   static constexpr size_t getHostArgScratchSlotSize() {
     return sizeof(intx::uint256);
   }

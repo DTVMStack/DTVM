@@ -158,6 +158,7 @@ public:
 
   void meterOpcode(evmc_opcode Opcode);
   void meterGas(uint64_t GasCost);
+  void meterBaseGasIfTopLevel();
 
   // Complete jump implementation with jump table
   void createJumpTable();
@@ -378,6 +379,7 @@ public:
                            Operand RetOffsetOp, Operand RetSizeOp);
   void handleRevert(Operand OffsetOp, Operand SizeOp);
   void handleInvalid();
+  void handleTrap(ErrorCode ErrCode);
   Operand handleKeccak256(Operand OffsetComponents, Operand LengthComponents);
   Operand handleSLoad(Operand KeyComponents);
   void handleSStore(Operand KeyComponents, Operand ValueComponents);
