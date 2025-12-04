@@ -277,9 +277,8 @@ void EVMMirBuilder::meterBaseGasIfTopLevel() {
 
   MInstruction *MsgPtr = getInstanceElement(
       VoidPtrType, zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
-  MInstruction *MsgPtrInt =
-      createInstruction<ConversionInstruction>(false, OP_ptrtoint, I64Type,
-                                               MsgPtr);
+  MInstruction *MsgPtrInt = createInstruction<ConversionInstruction>(
+      false, OP_ptrtoint, I64Type, MsgPtr);
 
   MInstruction *DepthOffsetValue = createIntConstInstruction(
       I64Type, zen::runtime::EVMInstance::getMessageDepthOffset());
@@ -537,9 +536,8 @@ void EVMMirBuilder::drainGas() {
 
   MInstruction *MsgPtr = getInstanceElement(
       VoidPtrType, zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
-  MInstruction *MsgPtrInt =
-      createInstruction<ConversionInstruction>(false, OP_ptrtoint, I64Type,
-                                               MsgPtr);
+  MInstruction *MsgPtrInt = createInstruction<ConversionInstruction>(
+      false, OP_ptrtoint, I64Type, MsgPtr);
 
   MInstruction *MsgGasOffsetValue = createIntConstInstruction(
       I64Type, zen::runtime::EVMInstance::getMessageGasOffset());
