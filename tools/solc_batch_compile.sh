@@ -27,6 +27,8 @@ if [ ! -d "$BASE_DIR" ]; then
 fi
 
 pip install solc-select
+solc-select install 0.8.30
+solc-select use 0.8.30
 
 # Check if solc is available
 if ! command -v solc &> /dev/null; then
