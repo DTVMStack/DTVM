@@ -51,7 +51,6 @@ if(ZEN_ENABLE_SPEC_TEST)
 
   add_custom_target(spec_jsons DEPENDS ${SPEC_JSONS})
 
-  add_executable(specUnitTests spec_unit_tests.cpp spectest.cpp test_utils.cpp)
   add_executable(mempoolTests mempool_tests.cpp)
   add_executable(cAPITests c_api_tests.cpp)
   target_include_directories(
@@ -70,15 +69,20 @@ if(ZEN_ENABLE_SPEC_TEST)
                     evm_test_fixtures.cpp evm_test_helpers.cpp
     )
     add_executable(mptCompareCpp mpt_compare_cpp.cpp)
-  endif()
+  else()
+    add_executable(
+      specUnitTests spec_unit_tests.cpp spectest.cpp test_utils.cpp
+    )
 
-  target_link_libraries(
-    specUnitTests
-    PRIVATE dtvmcore rapidjson gtest_main CLI11::CLI11
-    PUBLIC ${GTEST_BOTH_LIBRARIES}
-  )
-  if(ZEN_BUILD_PLATFORM_LINUX)
-    target_link_libraries(specUnitTests PRIVATE stdc++fs)
+    target_link_libraries(
+      specUnitTests
+      PRIVATE dtvmcore rapidjson gtest_main CLI11::CLI11
+      PUBLIC ${GTEST_BOTH_LIBRARIES}
+    )
+
+    if(ZEN_BUILD_PLATFORM_LINUX)
+      target_link_libraries(specUnitTests PRIVATE stdc++fs)
+    endif()
   endif()
 
   if(ZEN_ENABLE_ASAN)
@@ -205,13 +209,15 @@ if(ZEN_ENABLE_SPEC_TEST)
     endif()
   endif()
 
-  add_dependencies(specUnitTests spec_jsons)
+  if(NOT ZEN_ENABLE_EVM)
+    add_dependencies(specUnitTests spec_jsons)
 
-  add_test(
-    NAME specUnitTests
-    COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:specUnitTests> -P
-            ${CMAKE_CURRENT_SOURCE_DIR}/RunSpecTests.cmake
-  )
+    add_test(
+      NAME specUnitTests
+      COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:specUnitTests>
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/RunSpecTests.cmake
+    )
+  endif()
   add_test(NAME mempoolTests COMMAND mempoolTests)
   add_test(NAME cAPITests COMMAND cAPITests)
 

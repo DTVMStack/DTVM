@@ -226,6 +226,21 @@ GTEST_API_ int main(int argc, char **argv) {
   CLIParser.add_flag("--enable-evm-gas", Config.EnableEvmGasMetering,
                      "Enable EVM gas metering when compiling EVM bytecode");
 #endif // ZEN_ENABLE_EVM
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+  CLIParser.add_flag("--disable-multipass-greedyra",
+                     Config.DisableMultipassGreedyRA,
+                     "Disable greedy register allocation of multipass JIT");
+  auto *DMMOption = CLIParser.add_flag(
+      "--disable-multipass-multithread", Config.DisableMultipassMultithread,
+      "Disable multithread compilation of multipass JIT");
+  CLIParser
+      .add_option("--num-multipass-threads", Config.NumMultipassThreads,
+                  "Number of threads for multipass JIT(set 0 for automatic "
+                  "determination)")
+      ->excludes(DMMOption);
+  CLIParser.add_flag("--enable-multipass-lazy", Config.EnableMultipassLazy,
+                     "Enable multipass lazy mode(on request compile)");
+#endif // ZEN_ENABLE_MULTIPASS_JIT
   CLI11_PARSE(CLIParser, argc, argv);
 
   zen::setGlobalLogger(

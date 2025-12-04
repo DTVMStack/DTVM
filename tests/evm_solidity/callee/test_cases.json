@@ -27,7 +27,7 @@
       "expected": ""
     },
     {
-      "name": "test_get_100",
+      "name": "test_get_x_100",
       "function": "getX()",
       "calldata": "5197c7aa",
       "expected": "0000000000000000000000000000000000000000000000000000000000000064"

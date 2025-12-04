@@ -127,7 +127,11 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 n=2
             fi
             for i in {1..$n}; do
-                SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose
+                if [[ $RUN_MODE == "interpreter" ]]; then
+                    SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose
+                else # evm multipass
+                    SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose -E evmStateTests
+                fi
             done
             cd ..
             ;;

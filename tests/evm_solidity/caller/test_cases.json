@@ -3,7 +3,7 @@
   "deploy_contracts": ["CalleeContract", "CallerContract"],
   "constructor_args": {
     "CallerContract": [
-      {"type": "address", "value": "CalleeContract"}  
+      {"type": "address", "value": "CalleeContract"}
     ]
   },
   "test_cases": [

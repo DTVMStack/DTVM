@@ -36,17 +36,9 @@ jobs:
       - name: Build and Test
         run: |
           echo "current home is $HOME"
-          export CUR_PROJECT=$(pwd)
-          cd /opt
-          # ./install_llvm15.sh
-          # ./install_rust.sh
-          cd $CUR_PROJECT
           export LLVM_SYS_150_PREFIX=/opt/llvm15
           export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
           export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
-          cd tests/wast/spec
-          git apply ../spec.patch
-          cd $CUR_PROJECT
           export CMAKE_BUILD_TARGET=Debug
           export ENABLE_ASAN=true
           export RUN_MODE=interpreter
@@ -56,6 +48,37 @@ jobs:
           export TestSuite=evmtestsuite
           export CPU_EXCEPTION_TYPE='check'
           export ENABLE_GAS_METER=false
+
+          bash .ci/run_test_suite.sh
+
+  build_test_release_multipass_lazy_evmtestsuite_on_x86_ctest:
+    name: Test DTVM-EVM multipass in release mode with ctest on x86-64
+    runs-on: ubuntu-latest
+    container:
+      image: dtvmdev1/dtvm-dev-x64:main
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: Code Format Check
+        run: |
+          ./tools/format.sh check
+      - name: Build and Test
+        run: |
+          echo "current home is $HOME"
+          export LLVM_SYS_150_PREFIX=/opt/llvm15
+          export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
+          export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
+          export CMAKE_BUILD_TARGET=Release
+          export ENABLE_ASAN=true
+          export RUN_MODE=multipass
+          export INPUT_FORMAT=evm
+          export ENABLE_LAZY=false
+          export ENABLE_MULTITHREAD=true
+          export TestSuite=evmtestsuite
+          export CPU_EXCEPTION_TYPE='check'
+          export ENABLE_GAS_METER=true
 
           bash .ci/run_test_suite.sh
 
@@ -75,17 +98,9 @@ jobs:
       - name: Build and Test
         run: |
           echo "current home is $HOME"
-          export CUR_PROJECT=$(pwd)
-          cd /opt
-          # ./install_llvm15.sh
-          # ./install_rust.sh
-          cd $CUR_PROJECT
           export LLVM_SYS_150_PREFIX=/opt/llvm15
           export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
           export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
-          cd tests/wast/spec
-          git apply ../spec.patch
-          cd $CUR_PROJECT
           export CMAKE_BUILD_TARGET=Debug
           export ENABLE_ASAN=true
           export RUN_MODE=interpreter
@@ -114,17 +129,9 @@ jobs:
       - name: Build and Test
         run: |
           echo "current home is $HOME"
-          export CUR_PROJECT=$(pwd)
-          cd /opt
-          # ./install_llvm15.sh
-          # ./install_rust.sh
-          cd $CUR_PROJECT
           export LLVM_SYS_150_PREFIX=/opt/llvm15
           export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
           export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
-          cd tests/wast/spec
-          git apply ../spec.patch
-          cd $CUR_PROJECT
           export CMAKE_BUILD_TARGET=Debug
           export ENABLE_ASAN=true
           export RUN_MODE=multipass
