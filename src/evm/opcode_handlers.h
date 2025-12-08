@@ -4,7 +4,6 @@
 #ifndef ZEN_EVM_OPCODE_HANDLERS_H
 #define ZEN_EVM_OPCODE_HANDLERS_H
 
-#include "common/errors.h"
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
 #include <cstdint>
@@ -86,11 +85,11 @@ public:
   using Byte = common::Byte;
   void execute() {
     uint64_t GasCost = static_cast<Derived *>(this)->calculateGas();
-    if ((uint64_t)getFrame()->Msg->gas < GasCost) {
+    if ((uint64_t)getFrame()->Msg.gas < GasCost) {
       getContext()->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
-    getFrame()->Msg->gas -= GasCost;
+    getFrame()->Msg.gas -= GasCost;
     static_cast<Derived *>(this)->doExecute();
   };
 };

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "evm/interpreter.h"
-#include "common/errors.h"
 #include "evm/opcode_handlers.h"
 #include "evmc/instructions.h"
 #include "runtime/evm_instance.h"
@@ -23,10 +22,10 @@ EVMFrame *InterpreterExecContext::allocTopFrame(evmc_message *Msg) {
 
   EVMFrame &Frame = FrameStack.back();
 
-  Frame.Msg = std::make_unique<evmc_message>(*Msg);
-  Inst->pushMessage(Frame.Msg.get());
+  Frame.Msg = *Msg;
+  Inst->pushMessage(&Frame.Msg);
 
-  Frame.Msg->gas = Frame.Msg->gas - IntrinsicGas;
+  Frame.Msg.gas = Frame.Msg.gas - IntrinsicGas;
   return &Frame;
 }
 
@@ -38,7 +37,7 @@ void InterpreterExecContext::freeBackFrame() {
 
   EVMFrame &Frame = FrameStack.back();
 
-  Inst->setGas(static_cast<uint64_t>(Frame.Msg->gas));
+  Inst->setGas(static_cast<uint64_t>(Frame.Msg.gas));
 
   if (FrameStack.size() > 1) {
     Inst->popMessage();
@@ -51,8 +50,8 @@ void InterpreterExecContext::freeBackFrame() {
 void InterpreterExecContext::setCallData(const std::vector<uint8_t> &Data) {
   EVM_FRAME_CHECK(getCurFrame());
   getCurFrame()->CallData = Data;
-  getCurFrame()->Msg->input_data = getCurFrame()->CallData.data();
-  getCurFrame()->Msg->input_size = getCurFrame()->CallData.size();
+  getCurFrame()->Msg.input_data = getCurFrame()->CallData.data();
+  getCurFrame()->Msg.input_size = getCurFrame()->CallData.size();
 }
 
 void InterpreterExecContext::setTxContext(const evmc_tx_context &TxContext) {
@@ -579,7 +578,7 @@ void BaseInterpreter::interpret() {
       case EVMC_STATIC_MODE_VIOLATION:
       case EVMC_INSUFFICIENT_BALANCE:
         // Fatal errors: consume all remaining gas and clear return data
-        Frame->Msg->gas = 0;
+        Frame->Msg.gas = 0;
         Context.getInstance()->setGasRefund(0);
         Context.setReturnData(std::vector<uint8_t>());
         Context.freeBackFrame();
@@ -587,7 +586,7 @@ void BaseInterpreter::interpret() {
         if (!Frame) {
           const auto &ReturnData = Context.getReturnData();
           evmc::Result ExeResult(Context.getStatus(),
-                                 Frame ? Frame->Msg->gas : 0,
+                                 Frame ? Frame->Msg.gas : 0,
                                  Context.getInstance()->getGasRefund(),
                                  ReturnData.data(), ReturnData.size());
           Context.setExeResult(std::move(ExeResult));
@@ -598,7 +597,7 @@ void BaseInterpreter::interpret() {
       case EVMC_FAILURE:
       default:
         // Generic failure: consume all remaining gas and clear return data
-        Frame->Msg->gas = 0;
+        Frame->Msg.gas = 0;
         Context.getInstance()->setGasRefund(0);
         Context.setReturnData(std::vector<uint8_t>());
         Context.freeBackFrame();
@@ -606,7 +605,7 @@ void BaseInterpreter::interpret() {
         if (!Frame) {
           const auto &ReturnData = Context.getReturnData();
           evmc::Result ExeResult(Context.getStatus(),
-                                 Frame ? Frame->Msg->gas : 0,
+                                 Frame ? Frame->Msg.gas : 0,
                                  Context.getInstance()->getGasRefund(),
                                  ReturnData.data(), ReturnData.size());
           Context.setExeResult(std::move(ExeResult));
@@ -623,7 +622,7 @@ void BaseInterpreter::interpret() {
   const auto &ReturnData = Context.getReturnData();
   uint64_t GasLeft = Context.getInstance()->getGas();
   if (auto *Cur = Context.getCurFrame()) {
-    GasLeft = static_cast<uint64_t>(Cur->Msg->gas);
+    GasLeft = static_cast<uint64_t>(Cur->Msg.gas);
   }
   evmc::Result ExeResult(Context.getStatus(), GasLeft,
                          Context.getInstance()->getGasRefund(),

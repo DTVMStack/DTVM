@@ -6,12 +6,11 @@
 
 #include "common/errors.h"
 #include "evm/evm.h"
-#include "evm/gas_storage_cost.h"
 #include "evmc/evmc.hpp"
 #include "intx/intx.hpp"
 
 #include <array>
-#include <map>
+#include <deque>
 #include <vector>
 
 namespace zen {
@@ -28,7 +27,7 @@ struct EVMFrame {
   std::vector<uint8_t> Memory;
 
   std::vector<uint8_t> CallData;
-  std::unique_ptr<evmc_message> Msg;
+  evmc_message Msg = {};
   evmc::Host *Host = nullptr;
   evmc_tx_context MTx = {};
 
@@ -64,13 +63,13 @@ struct EVMFrame {
       MTx = Host->get_tx_context();
     return MTx;
   }
-  bool isStaticMode() const { return (Msg->flags & EVMC_STATIC) != 0; }
+  bool isStaticMode() const { return (Msg.flags & EVMC_STATIC) != 0; }
 };
 
 class InterpreterExecContext {
 private:
   runtime::EVMInstance *Inst;
-  std::vector<EVMFrame> FrameStack;
+  std::deque<EVMFrame> FrameStack;
   evmc_status_code Status = EVMC_SUCCESS;
   std::vector<uint8_t> ReturnData;
   evmc::Result ExeResult;
