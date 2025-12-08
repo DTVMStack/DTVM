@@ -771,11 +771,11 @@ void SStoreHandler::doExecute() {
   const auto Value = intx::be::store<evmc::bytes32>(Frame->pop());
 
   const auto Rev = currentRevision();
-  const auto GasCostCold = (Rev >= EVMC_BERLIN &&
-                            Frame->Host->access_storage(
-                                Frame->Msg.recipient, Key) == EVMC_ACCESS_COLD)
-                               ? COLD_SLOAD_COST
-                               : 0;
+  const auto GasCostCold =
+      (Rev >= EVMC_BERLIN && Frame->Host->access_storage(
+                                 Frame->Msg.recipient, Key) == EVMC_ACCESS_COLD)
+          ? COLD_SLOAD_COST
+          : 0;
   const auto PrevValue = Frame->Host->get_storage(Frame->Msg.recipient, Key);
   const auto Status =
       Frame->Host->set_storage(Frame->Msg.recipient, Key, Value);
