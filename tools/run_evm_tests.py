@@ -49,7 +49,6 @@ class TestCase:
 class TestRunner:
     """Main test runner class"""
 
-    # TODO: Failed cases in EVM multipass, temporarily ignored
     IGNORE_CASES = {
     }
 
