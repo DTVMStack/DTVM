@@ -132,7 +132,7 @@ jobs:
           export ENABLE_LAZY=false
           export ENABLE_MULTITHREAD=true
           export TestSuite=evmrealsuite
-          export CPU_EXCEPTION_TYPE='check'
+          export CPU_EXCEPTION_TYPE='cpu'
           export ENABLE_GAS_METER=true
 
           bash .ci/run_test_suite.sh
