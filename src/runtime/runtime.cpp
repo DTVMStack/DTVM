@@ -815,6 +815,23 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
                                evmc::Result &Result) {
   EVMModule *Module = const_cast<EVMModule *>(Inst.getModule());
   auto FuncPtr = GenericFunctionPointer(Module->getJITCode());
+  auto MapErrToStatus = [](ErrorCode Err) {
+    switch (Err) {
+    case ErrorCode::EVMStackOverflow:
+    case ErrorCode::CallStackExhausted:
+      return EVMC_STACK_OVERFLOW;
+    case ErrorCode::EVMStackUnderflow:
+      return EVMC_STACK_UNDERFLOW;
+    case ErrorCode::EVMBadJumpDestination:
+      return EVMC_BAD_JUMP_DESTINATION;
+    case ErrorCode::OutOfBoundsMemory:
+      return EVMC_INVALID_MEMORY_ACCESS;
+    case ErrorCode::EVMInvalidInstruction:
+      return EVMC_INVALID_INSTRUCTION;
+    default:
+      return EVMC_FAILURE;
+    }
+  };
 
 #ifdef ZEN_ENABLE_CPU_EXCEPTION
   jmp_buf JmpBuf;
@@ -831,6 +848,14 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
 
       entrypoint::callNativeGeneral(&Inst, FuncPtr, this->getMemAllocator());
       Result = std::move(const_cast<evmc::Result &>(Inst.getExeResult()));
+      ErrorCode InstErr = Inst.getError().getCode();
+      if (InstErr == ErrorCode::InstanceExit) {
+        // Normal EVM termination paths (RETURN/REVERT/INVALID) use
+        // EVMInstance::exit to stop JIT execution. Preserve the status set by
+        Inst.clearError();
+      } else if (InstErr != ErrorCode::NoError) {
+        Result.status_code = MapErrToStatus(InstErr);
+      }
 
 #ifdef ZEN_ENABLE_CPU_EXCEPTION
     } else { // When cpu-exception
@@ -896,24 +921,6 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
         break;
       }
       }
-      auto MapErrToStatus = [](ErrorCode Err) {
-        switch (Err) {
-        case ErrorCode::EVMStackOverflow:
-        case ErrorCode::CallStackExhausted:
-          return EVMC_STACK_OVERFLOW;
-        case ErrorCode::EVMStackUnderflow:
-          return EVMC_STACK_UNDERFLOW;
-        case ErrorCode::EVMBadJumpDestination:
-          return EVMC_BAD_JUMP_DESTINATION;
-        case ErrorCode::OutOfBoundsMemory:
-          return EVMC_INVALID_MEMORY_ACCESS;
-        case ErrorCode::EVMInvalidInstruction:
-          return EVMC_INVALID_INSTRUCTION;
-        default:
-          return EVMC_FAILURE;
-        }
-      };
-
       ErrorCode InstErr = Inst.getError().getCode();
       if (InstErr == ErrorCode::GasLimitExceeded) {
         Inst.setGas(0);
