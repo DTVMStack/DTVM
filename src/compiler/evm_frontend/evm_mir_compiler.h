@@ -212,13 +212,15 @@ public:
       for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
         if (I == 0) {
           // First component: use regular ADD without carry
-          Result[I] = createInstruction<BinaryInstruction>(
+          MInstruction *LocalResult = createInstruction<BinaryInstruction>(
               false, OP_add, MirI64Type, LHS[I], RHS[I]);
+          Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
         } else {
           // Subsequent components: use ADC (without carry)
           // The carry here is only used for constructing the adc instruction.
-          Result[I] = createInstruction<AdcInstruction>(false, MirI64Type,
-                                                        LHS[I], RHS[I], Carry);
+          MInstruction *LocalResult = createInstruction<AdcInstruction>(
+              false, MirI64Type, LHS[I], RHS[I], Carry);
+          Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
         }
       }
     } else if constexpr (Operator == BinaryOperator::BO_SUB) {
@@ -276,11 +278,12 @@ public:
     U256Inst Result = {};
     U256Inst LHS = extractU256Operand(LHSOp);
     U256Inst RHS = extractU256Operand(RHSOp);
+    MType *MirI64Type =
+        EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
     for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-      Result[I] = createInstruction<BinaryInstruction>(
-          false, getMirOpcode(Operator),
-          EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64), LHS[I],
-          RHS[I]);
+      MInstruction *LocalResult = createInstruction<BinaryInstruction>(
+          false, getMirOpcode(Operator), MirI64Type, LHS[I], RHS[I]);
+      Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
     }
     return Operand(Result, EVMType::UINT256);
   }
@@ -402,6 +405,7 @@ private:
 
   Variable *storeInstructionInTemp(MInstruction *Value, MType *Type);
   MInstruction *loadVariable(Variable *Var);
+  MInstruction *protectUnsafeValue(MInstruction *Value, MType *Type);
 
   template <class T, typename... Arguments>
   T *createInstruction(bool IsStmt, Arguments &&...Args) {

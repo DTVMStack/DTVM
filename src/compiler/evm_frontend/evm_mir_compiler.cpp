@@ -919,7 +919,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
   for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-    Result[I] = createInstruction<NotInstruction>(false, MirI64Type, LHS[I]);
+    MInstruction *LocalResult =
+        createInstruction<NotInstruction>(false, MirI64Type, LHS[I]);
+    Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
   }
 
   return Operand(Result, EVMType::UINT256);
@@ -2004,6 +2006,16 @@ Variable *EVMMirBuilder::storeInstructionInTemp(MInstruction *Value,
 MInstruction *EVMMirBuilder::loadVariable(Variable *Var) {
   return createInstruction<DreadInstruction>(false, Var->getType(),
                                              Var->getVarIdx());
+}
+
+MInstruction *EVMMirBuilder::protectUnsafeValue(MInstruction *Value,
+                                                MType *Type) {
+  Variable *ReusableVar = CurFunc->createVariable(Type);
+  VariableIdx ReusableVarIdx = ReusableVar->getVarIdx();
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), Value,
+                                        ReusableVarIdx);
+  return createInstruction<DreadInstruction>(false, ReusableVar->getType(),
+                                             ReusableVarIdx);
 }
 
 typename EVMMirBuilder::Operand
