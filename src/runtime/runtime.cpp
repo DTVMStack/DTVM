@@ -690,12 +690,6 @@ void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
     ZEN_UNREACHABLE();
 #endif
   }
-
-  if (Result.output_data && Result.output_size > 0) {
-    std::string output =
-        zen::utils::toHex(Result.output_data, Result.output_size);
-    ZEN_LOG_INFO("output: 0x%s", output.c_str());
-  }
 #ifdef ZEN_ENABLE_LINUX_PERF
   Stats.stopRecord(Timer);
 #endif

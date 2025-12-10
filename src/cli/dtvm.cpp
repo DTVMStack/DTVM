@@ -56,6 +56,75 @@ int exitMain(int ExitCode, Runtime *RT = nullptr) {
 #define SIMPLE_LOG_ERROR(...) ZEN_LOG_ERROR(__VA_ARGS__)
 #endif // ZEN_ENABLE_EVMABI_TEST
 
+#ifdef ZEN_ENABLE_EVM
+static evmc_message createEvmMessage(uint64_t GasLimit,
+                                     const std::string &Calldata) {
+  evmc_message Msg{
+      .kind = EVMC_CALL,
+      .flags = 0u,
+      .depth = 0,
+      .gas = static_cast<int64_t>(GasLimit),
+      .recipient = {},
+      .sender = {},
+      .input_data = nullptr,
+      .input_size = 0,
+      .value = {},
+      .create2_salt = {},
+      .code_address = {},
+      .code = {}, // code will load in callEVMMain
+      .code_size = 0,
+  };
+
+  auto CalldataBytes = zen::utils::fromHex(Calldata);
+  if (CalldataBytes.has_value()) {
+    Msg.input_data = CalldataBytes->data();
+    Msg.input_size = CalldataBytes->size();
+  }
+
+  return Msg;
+}
+
+static bool runEVMBenchmark(const std::string &Filename,
+                            uint32_t NumExtraCompilations,
+                            uint32_t NumExtraExecutions, Runtime *RT,
+                            EVMModule *Mod, uint64_t GasLimit,
+                            const std::string &Calldata) {
+  if (NumExtraCompilations + NumExtraExecutions == 0) {
+    return true;
+  }
+
+  std::vector<uint8_t> Bytecode;
+  if (!zen::utils::readBinaryFile(Filename, Bytecode)) {
+    SIMPLE_LOG_ERROR("failed to read EVM bytecode file %s", Filename.c_str());
+    return false;
+  }
+
+  for (uint32_t I = 0; I < NumExtraCompilations; ++I) {
+    std::string NewEvmName = Filename + std::to_string(I);
+    MayBe<EVMModule *> TestModRet =
+        RT->loadEVMModule(NewEvmName, Bytecode.data(), Bytecode.size());
+    ZEN_ASSERT(TestModRet);
+    RT->unloadEVMModule(*TestModRet);
+  }
+
+  for (uint32_t I = 0; I < NumExtraExecutions; ++I) {
+    IsolationUniquePtr TestIso = RT->createUnmanagedIsolation();
+    ZEN_ASSERT(TestIso);
+    MayBe<EVMInstance *> TestInstRet =
+        TestIso->createEVMInstance(*Mod, GasLimit);
+    ZEN_ASSERT(TestInstRet);
+    EVMInstance *TestInst = *TestInstRet;
+
+    evmc_message TestMsg = createEvmMessage(GasLimit, Calldata);
+
+    evmc::Result TestExeResult;
+    RT->callEVMMain(*TestInst, TestMsg, TestExeResult);
+  }
+
+  return true;
+}
+#endif // ZEN_ENABLE_EVM
+
 int main(int argc, char *argv[]) {
 #ifdef ZEN_ENABLE_PROFILER
   ProfilerStart("dtvm.prof");
@@ -204,81 +273,21 @@ int main(int argc, char *argv[]) {
     }
     EVMInstance *Inst = *InstRet;
 
-    evmc_message Msg{
-        .kind = EVMC_CALL,
-        .flags = 0u,
-        .depth = 0,
-        .gas = static_cast<int64_t>(GasLimit),
-        .recipient = {},
-        .sender = {},
-        .input_data = nullptr,
-        .input_size = 0,
-        .value = {},
-        .create2_salt = {},
-        .code_address = {},
-        .code = {}, // code will load in callEVMMain
-        .code_size = 0,
-    };
-    auto CalldataBytes = zen::utils::fromHex(Calldata);
-    if (CalldataBytes.has_value()) {
-      Msg.input_data = CalldataBytes->data();
-      Msg.input_size = CalldataBytes->size();
-    }
+    evmc_message Msg = createEvmMessage(GasLimit, Calldata);
     evmc::Result ExeResult;
     RT->callEVMMain(*Inst, Msg, ExeResult);
     // Use EVM status code directly as process exit code
     int ExitCode = static_cast<int>(ExeResult.status_code);
+    if (ExeResult.output_data && ExeResult.output_size > 0) {
+      std::string output =
+          zen::utils::toHex(ExeResult.output_data, ExeResult.output_size);
+      printf("output: 0x%s\n", output.c_str());
+    }
 
     /// ======= EVM Extra compilations and executions for benchmarking =======
-    if (NumExtraCompilations + NumExtraExecutions > 0) {
-      std::vector<uint8_t> Bytecode;
-      if (!zen::utils::readBinaryFile(Filename, Bytecode)) {
-        SIMPLE_LOG_ERROR("failed to read EVM bytecode file %s",
-                         Filename.c_str());
-        return exitMain(EXIT_FAILURE, RT.get());
-      }
-
-      for (uint32_t I = 0; I < NumExtraCompilations; ++I) {
-        std::string NewEvmName = Filename + std::to_string(I);
-        MayBe<EVMModule *> TestModRet =
-            RT->loadEVMModule(NewEvmName, Bytecode.data(), Bytecode.size());
-        ZEN_ASSERT(TestModRet);
-        RT->unloadEVMModule(*TestModRet);
-      }
-
-      for (uint32_t I = 0; I < NumExtraExecutions; ++I) {
-        IsolationUniquePtr TestIso = RT->createUnmanagedIsolation();
-        ZEN_ASSERT(TestIso);
-        MayBe<EVMInstance *> TestInstRet =
-            TestIso->createEVMInstance(*Mod, GasLimit);
-        ZEN_ASSERT(TestInstRet);
-        EVMInstance *TestInst = *TestInstRet;
-
-        evmc_message TestMsg{
-            .kind = EVMC_CALL,
-            .flags = 0u,
-            .depth = 0,
-            .gas = static_cast<int64_t>(GasLimit),
-            .recipient = {},
-            .sender = {},
-            .input_data = nullptr,
-            .input_size = 0,
-            .value = {},
-            .create2_salt = {},
-            .code_address = {},
-            .code = {}, // code will load in callEVMMain
-            .code_size = 0,
-        };
-
-        auto CalldataBytes = zen::utils::fromHex(Calldata);
-        if (CalldataBytes.has_value()) {
-          TestMsg.input_data = CalldataBytes->data();
-          TestMsg.input_size = CalldataBytes->size();
-        }
-
-        evmc::Result TestExeResult;
-        RT->callEVMMain(*TestInst, TestMsg, TestExeResult);
-      }
+    if (!runEVMBenchmark(Filename, NumExtraCompilations, NumExtraExecutions,
+                         RT.get(), Mod, GasLimit, Calldata)) {
+      return exitMain(EXIT_FAILURE, RT.get());
     }
 
 #ifdef NDEBUG
