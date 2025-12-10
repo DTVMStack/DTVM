@@ -3,6 +3,7 @@
 
 #include "solidity_test_helpers.h"
 #include "common/errors.h"
+#include "evm/evm.h"
 #include <iostream>
 
 using namespace zen::common;
@@ -23,11 +24,7 @@ EVMTestEnvironment::EVMTestEnvironment(const RuntimeConfig &Config) {
   Runtime->setEVMHost(MockedHost);
 
   // Set up deployer account
-  uint8_t DeployerBytes[20] = {0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                               0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                               0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-  std::copy(std::begin(DeployerBytes), std::end(DeployerBytes),
-            DeployerAddr.bytes);
+  DeployerAddr = zen::evm::DEFAULT_DEPLOYER_ADDRESS;
   auto &DeployerAccount = MockedHost->accounts[DeployerAddr];
   DeployerAccount.nonce = 0;
   DeployerAccount.set_balance(100000000UL);
@@ -162,8 +159,12 @@ DeployedContract deployContract(
   NewContractAccount.nonce = 1;
   Env.MockedHost->accounts[Env.DeployerAddr].nonce += 1;
 
-  std::cout << "✓ Contract " << ContractName << " deployed successfully"
+#ifndef NDEBUG
+  std::cout << "✓ Contract " << ContractName << " deployed at address 0x"
+            << zen::utils::toHex(NewContractAddr.bytes,
+                                 sizeof(NewContractAddr.bytes))
             << std::endl;
+#endif
 
   DeployedContract Result;
   Result.Instance = CallInst;
