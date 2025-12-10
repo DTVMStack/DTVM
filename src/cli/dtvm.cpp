@@ -229,6 +229,64 @@ int main(int argc, char *argv[]) {
     // Use EVM status code directly as process exit code
     int ExitCode = static_cast<int>(ExeResult.status_code);
 
+    /// ======= EVM Extra compilations and executions for benchmarking =======
+    if (NumExtraCompilations + NumExtraExecutions > 0) {
+      std::vector<uint8_t> Bytecode;
+      if (!zen::utils::readBinaryFile(Filename, Bytecode)) {
+        SIMPLE_LOG_ERROR("failed to read EVM bytecode file %s",
+                         Filename.c_str());
+        return exitMain(EXIT_FAILURE, RT.get());
+      }
+
+      for (uint32_t I = 0; I < NumExtraCompilations; ++I) {
+        std::string NewEvmName = Filename + std::to_string(I);
+        MayBe<EVMModule *> TestModRet =
+            RT->loadEVMModule(NewEvmName, Bytecode.data(), Bytecode.size());
+        ZEN_ASSERT(TestModRet);
+        RT->unloadEVMModule(*TestModRet);
+      }
+
+      for (uint32_t I = 0; I < NumExtraExecutions; ++I) {
+        IsolationUniquePtr TestIso = RT->createUnmanagedIsolation();
+        ZEN_ASSERT(TestIso);
+        MayBe<EVMInstance *> TestInstRet =
+            TestIso->createEVMInstance(*Mod, GasLimit);
+        ZEN_ASSERT(TestInstRet);
+        EVMInstance *TestInst = *TestInstRet;
+
+        evmc_message TestMsg{
+            .kind = EVMC_CALL,
+            .flags = 0u,
+            .depth = 0,
+            .gas = static_cast<int64_t>(GasLimit),
+            .recipient = {},
+            .sender = {},
+            .input_data = nullptr,
+            .input_size = 0,
+            .value = {},
+            .create2_salt = {},
+            .code_address = {},
+            .code = {}, // code will load in callEVMMain
+            .code_size = 0,
+        };
+
+        auto CalldataBytes = zen::utils::fromHex(Calldata);
+        if (CalldataBytes.has_value()) {
+          TestMsg.input_data = CalldataBytes->data();
+          TestMsg.input_size = CalldataBytes->size();
+        }
+
+        evmc::Result TestExeResult;
+        RT->callEVMMain(*TestInst, TestMsg, TestExeResult);
+      }
+    }
+
+#ifdef NDEBUG
+    if (EnableBenchmark) {
+      _exit(ExitCode);
+    }
+#endif
+
     if (!RT->unloadEVMModule(Mod)) {
       ZEN_LOG_ERROR("failed to unload EVM module");
       return exitMain(EXIT_FAILURE, RT.get());
