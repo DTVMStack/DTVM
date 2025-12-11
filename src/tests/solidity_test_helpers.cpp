@@ -3,7 +3,6 @@
 
 #include "solidity_test_helpers.h"
 #include "common/errors.h"
-#include "evm/evm.h"
 #include <iostream>
 
 using namespace zen::common;
@@ -24,7 +23,7 @@ EVMTestEnvironment::EVMTestEnvironment(const RuntimeConfig &Config) {
   Runtime->setEVMHost(MockedHost);
 
   // Set up deployer account
-  DeployerAddr = zen::evm::DEFAULT_DEPLOYER_ADDRESS;
+  DeployerAddr = DEFAULT_DEPLOYER_ADDRESS;
   auto &DeployerAccount = MockedHost->accounts[DeployerAddr];
   DeployerAccount.nonce = 0;
   DeployerAccount.set_balance(100000000UL);

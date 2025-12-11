@@ -37,9 +37,6 @@ constexpr auto MAX_SIZE_OF_INITCODE = 0xC000;
 /// code.
 static constexpr auto EMPTY_CODE_HASH =
     0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470_bytes32;
-
-constexpr auto DEFAULT_DEPLOYER_ADDRESS =
-    0x1000000000000000000000000000000000000000_address;
 } // namespace zen::evm
 
 #endif // ZEN_EVM_GAS_EVM_H

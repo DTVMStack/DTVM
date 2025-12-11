@@ -14,6 +14,10 @@ using namespace zen::common;
 
 namespace zen::evm_test_utils {
 
+constexpr evmc::address DEFAULT_DEPLOYER_ADDRESS =
+    evmc::literals::operator""_address(
+        "1000000000000000000000000000000000000000");
+
 // test_cases.json, single case in field "test_cases"
 struct SolidityTestCase {
   std::string Name;
