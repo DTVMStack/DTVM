@@ -109,6 +109,8 @@ void EVMMirBuilder::finalizeEVMBase() {
   auto GenExceptionSetBBs = [&]() {
     for (const auto [ErrCode, ExceptionSetBB] : ExceptionSetBBs) {
       setInsertBlock(ExceptionSetBB);
+      // Fatal EVM exceptions must burn all remaining gas before bubbling up.
+      drainGas();
       createInstruction<DassignInstruction>(
           true, &Ctx.VoidType,
           createIntConstInstruction(&Ctx.I32Type,
