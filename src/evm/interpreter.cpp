@@ -6,9 +6,27 @@
 #include "evmc/instructions.h"
 #include "runtime/evm_instance.h"
 
+#include <cstddef>
+
 using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
+
+namespace {
+
+inline __attribute__((always_inline)) bool
+chargeGas(zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
+          const evmc_instruction_metrics *MetricsTable, uint8_t Opcode) {
+  const uint64_t GasCost = MetricsTable[Opcode].gas_cost;
+  if ((uint64_t)Frame->Msg.gas < GasCost) {
+    Context.setStatus(EVMC_OUT_OF_GAS);
+    return false;
+  }
+  Frame->Msg.gas -= GasCost;
+  return true;
+}
+
+} // namespace
 
 EVMFrame *InterpreterExecContext::allocTopFrame(evmc_message *Msg) {
   // Only deduct intrinsic gas (BASIC_EXECUTION_COST) for top-level transactions
@@ -76,15 +94,44 @@ void BaseInterpreter::interpret() {
 
   size_t CodeSize = Mod->CodeSize;
   Byte *Code = Mod->Code;
+  static const auto *MetricsTable =
+      evmc_get_instruction_metrics_table(DEFAULT_REVISION);
+  std::vector<uint8_t> JumpDestMap;
+  bool HasJumpDestMap = false;
 
   if (!Frame->Host) {
     Frame->Host = Context.getInstance()->getRuntime()->getEVMHost();
   }
 
+  auto EnsureJumpDestMap = [&]() {
+    if (HasJumpDestMap) {
+      return;
+    }
+    JumpDestMap.assign(CodeSize, 0);
+    for (size_t Pc = 0; Pc < CodeSize; ++Pc) {
+      const Byte CurOpcode = Code[Pc];
+      if (CurOpcode == static_cast<Byte>(evmc_opcode::OP_JUMPDEST)) {
+        JumpDestMap[Pc] = 1;
+      }
+      const uint8_t CurOpcodeU8 = std::to_integer<uint8_t>(CurOpcode);
+      if (CurOpcodeU8 >= static_cast<uint8_t>(evmc_opcode::OP_PUSH1) &&
+          CurOpcodeU8 <= static_cast<uint8_t>(evmc_opcode::OP_PUSH32)) {
+        const size_t PushBytes =
+            CurOpcodeU8 - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
+        Pc += PushBytes;
+      }
+    }
+    HasJumpDestMap = true;
+  };
+
+  auto Uint256ToUint64 = [](const intx::uint256 &Value) -> uint64_t {
+    return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
+  };
+
   while (Frame->Pc < CodeSize) {
     Byte OpcodeByte = Code[Frame->Pc];
+    const uint8_t OpcodeU8 = std::to_integer<uint8_t>(OpcodeByte);
     evmc_opcode Op = static_cast<evmc_opcode>(OpcodeByte);
-    bool IsJumpSuccess = false;
 
     switch (Op) {
     case evmc_opcode::OP_STOP:
@@ -397,17 +444,58 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_JUMP: {
-      EVMOpcodeHandlerRegistry::getJumpHandler().execute();
-      IsJumpSuccess = Context.IsJump;
-      Context.IsJump = false;
-      break;
+      if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
+        break;
+      }
+      if (Frame->Sp < 1) {
+        Context.setStatus(EVMC_STACK_UNDERFLOW);
+        break;
+      }
+
+      --Frame->Sp;
+      const uint64_t Dest = Uint256ToUint64(Frame->Stack[Frame->Sp]);
+      if (Dest >= CodeSize) {
+        Context.setStatus(EVMC_BAD_JUMP_DESTINATION);
+        break;
+      }
+      EnsureJumpDestMap();
+      if (JumpDestMap[Dest] == 0) {
+        Context.setStatus(EVMC_BAD_JUMP_DESTINATION);
+        break;
+      }
+
+      Frame->Pc = Dest;
+      continue;
     }
 
     case evmc_opcode::OP_JUMPI: {
-      EVMOpcodeHandlerRegistry::getJumpIHandler().execute();
-      IsJumpSuccess = Context.IsJump;
-      Context.IsJump = false;
-      break;
+      if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
+        break;
+      }
+      if (Frame->Sp < 2) {
+        Context.setStatus(EVMC_STACK_UNDERFLOW);
+        break;
+      }
+
+      --Frame->Sp;
+      const uint64_t Dest = Uint256ToUint64(Frame->Stack[Frame->Sp]);
+      --Frame->Sp;
+      const intx::uint256 &Cond = Frame->Stack[Frame->Sp];
+      if (!Cond) {
+        break;
+      }
+      if (Dest >= CodeSize) {
+        Context.setStatus(EVMC_BAD_JUMP_DESTINATION);
+        break;
+      }
+      EnsureJumpDestMap();
+      if (JumpDestMap[Dest] == 0) {
+        Context.setStatus(EVMC_BAD_JUMP_DESTINATION);
+        break;
+      }
+
+      Frame->Pc = Dest;
+      continue;
     }
 
     case evmc_opcode::OP_PC: {
@@ -426,7 +514,9 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_JUMPDEST: {
-      EVMOpcodeHandlerRegistry::getJumpDestHandler().execute();
+      if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
+        break;
+      }
       break;
     }
 
@@ -551,10 +641,6 @@ void BaseInterpreter::interpret() {
       } else {
         Context.setStatus(EVMC_INVALID_INSTRUCTION);
       }
-    }
-
-    if (IsJumpSuccess) {
-      continue;
     }
 
     if (Context.getStatus() != EVMC_SUCCESS) {
