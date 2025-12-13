@@ -52,20 +52,18 @@ loadPushValue(const zen::common::Byte *Code, size_t CodeSize, size_t Pc,
 static ZEN_EVM_INTERP_HELPER void
 buildJumpDestMapAndPushCache(const zen::common::Byte *Code, size_t CodeSize,
                              std::vector<uint8_t> &JumpDestMap,
-                             std::vector<intx::uint256> &PushValueMap,
-                             std::vector<uint8_t> &PushBytesMap) {
+                             std::vector<intx::uint256> &PushValueMap) {
   for (size_t Pc = 0; Pc < CodeSize; ++Pc) {
     const zen::common::Byte CurOpcode = Code[Pc];
     if (CurOpcode == static_cast<zen::common::Byte>(evmc_opcode::OP_JUMPDEST)) {
       JumpDestMap[Pc] = 1;
       continue;
     }
-    const uint8_t CurOpcodeU8 = std::to_integer<uint8_t>(CurOpcode);
+    const uint8_t CurOpcodeU8 = static_cast<uint8_t>(CurOpcode);
     if (CurOpcodeU8 >= static_cast<uint8_t>(evmc_opcode::OP_PUSH1) &&
         CurOpcodeU8 <= static_cast<uint8_t>(evmc_opcode::OP_PUSH32)) {
       const uint8_t NumBytes =
           CurOpcodeU8 - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
-      PushBytesMap[Pc] = NumBytes;
       PushValueMap[Pc] = loadPushValue(Code, CodeSize, Pc, NumBytes);
       Pc += NumBytes;
     }
@@ -88,8 +86,7 @@ static ZEN_EVM_INTERP_HELPER void executePush0Opcode(
 static ZEN_EVM_INTERP_HELPER void executePushNOpcode(
     zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
     const evmc_instruction_metrics *MetricsTable, uint8_t OpcodeU8,
-    const std::vector<intx::uint256> &PushValueMap,
-    const std::vector<uint8_t> &PushBytesMap) {
+    const std::vector<intx::uint256> &PushValueMap) {
   if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
     return;
   }
@@ -98,8 +95,11 @@ static ZEN_EVM_INTERP_HELPER void executePushNOpcode(
     return;
   }
 
-  Frame->Stack[Frame->Sp++] = PushValueMap[Frame->Pc];
-  Frame->Pc += PushBytesMap[Frame->Pc];
+  const size_t Pc = static_cast<size_t>(Frame->Pc);
+  Frame->Stack[Frame->Sp++] = PushValueMap[Pc];
+  const uint8_t NumBytes =
+      OpcodeU8 - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
+  Frame->Pc += NumBytes;
 }
 
 static ZEN_EVM_INTERP_HELPER void executePopOpcode(
@@ -148,7 +148,11 @@ static ZEN_EVM_INTERP_HELPER void executeSwapOpcode(
 
   const size_t TopIndex = Frame->Sp - 1;
   const size_t NthIndex = Frame->Sp - 1 - N;
-  std::swap(Frame->Stack[TopIndex], Frame->Stack[NthIndex]);
+  auto &Top = Frame->Stack[TopIndex];
+  auto &Nth = Frame->Stack[NthIndex];
+  const intx::uint256 Tmp = Top;
+  Top = Nth;
+  Nth = Tmp;
 }
 
 } // namespace
@@ -223,14 +227,12 @@ void BaseInterpreter::interpret() {
       evmc_get_instruction_metrics_table(DEFAULT_REVISION);
   std::vector<uint8_t> JumpDestMap(CodeSize, 0);
   std::vector<intx::uint256> PushValueMap(CodeSize);
-  std::vector<uint8_t> PushBytesMap(CodeSize, 0);
 
   if (!Frame->Host) {
     Frame->Host = Context.getInstance()->getRuntime()->getEVMHost();
   }
 
-  buildJumpDestMapAndPushCache(Code, CodeSize, JumpDestMap, PushValueMap,
-                               PushBytesMap);
+  buildJumpDestMapAndPushCache(Code, CodeSize, JumpDestMap, PushValueMap);
 
   auto Uint256ToUint64 = [](const intx::uint256 &Value) -> uint64_t {
     return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
@@ -238,7 +240,6 @@ void BaseInterpreter::interpret() {
 
   while (Frame->Pc < CodeSize) {
     Byte OpcodeByte = Code[Frame->Pc];
-    const uint8_t OpcodeU8 = std::to_integer<uint8_t>(OpcodeByte);
     evmc_opcode Op = static_cast<evmc_opcode>(OpcodeByte);
 
     switch (Op) {
@@ -522,7 +523,8 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_POP: {
-      executePopOpcode(Frame, Context, MetricsTable, OpcodeU8);
+      executePopOpcode(Frame, Context, MetricsTable,
+                       static_cast<uint8_t>(OpcodeByte));
       break;
     }
 
@@ -552,7 +554,8 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_JUMP: {
-      if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
+      if (!chargeGas(Frame, Context, MetricsTable,
+                     static_cast<uint8_t>(OpcodeByte))) {
         break;
       }
       if (Frame->Sp < 1) {
@@ -576,7 +579,8 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_JUMPI: {
-      if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
+      if (!chargeGas(Frame, Context, MetricsTable,
+                     static_cast<uint8_t>(OpcodeByte))) {
         break;
       }
       if (Frame->Sp < 2) {
@@ -620,7 +624,8 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_JUMPDEST: {
-      if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
+      if (!chargeGas(Frame, Context, MetricsTable,
+                     static_cast<uint8_t>(OpcodeByte))) {
         break;
       }
       break;
@@ -642,7 +647,8 @@ void BaseInterpreter::interpret() {
     }
 
     case evmc_opcode::OP_PUSH0: { // PUSH0 (EIP-3855)
-      executePush0Opcode(Frame, Context, MetricsTable, OpcodeU8);
+      executePush0Opcode(Frame, Context, MetricsTable,
+                         static_cast<uint8_t>(OpcodeByte));
       break;
     }
 
@@ -711,18 +717,20 @@ void BaseInterpreter::interpret() {
       if (OpcodeByte >= static_cast<Byte>(evmc_opcode::OP_PUSH1) &&
           OpcodeByte <= static_cast<Byte>(evmc_opcode::OP_PUSH32)) {
         // PUSH1 ~ PUSH32
-        executePushNOpcode(Frame, Context, MetricsTable, OpcodeU8, PushValueMap,
-                           PushBytesMap);
+        executePushNOpcode(Frame, Context, MetricsTable,
+                           static_cast<uint8_t>(OpcodeByte), PushValueMap);
         break;
       } else if (OpcodeByte >= static_cast<Byte>(evmc_opcode::OP_DUP1) &&
                  OpcodeByte <= static_cast<Byte>(evmc_opcode::OP_DUP16)) {
         // DUP1 ~ DUP16
-        executeDupOpcode(Frame, Context, MetricsTable, OpcodeU8);
+        executeDupOpcode(Frame, Context, MetricsTable,
+                         static_cast<uint8_t>(OpcodeByte));
         break;
       } else if (OpcodeByte >= static_cast<Byte>(evmc_opcode::OP_SWAP1) &&
                  OpcodeByte <= static_cast<Byte>(evmc_opcode::OP_SWAP16)) {
         // SWAP1 ~ SWAP16
-        executeSwapOpcode(Frame, Context, MetricsTable, OpcodeU8);
+        executeSwapOpcode(Frame, Context, MetricsTable,
+                          static_cast<uint8_t>(OpcodeByte));
         break;
       } else if (OpcodeByte == static_cast<Byte>(evmc_opcode::OP_CREATE) ||
                  OpcodeByte == static_cast<Byte>(evmc_opcode::OP_CREATE2)) {
@@ -744,7 +752,7 @@ void BaseInterpreter::interpret() {
       }
     }
 
-    if (Context.getStatus() != EVMC_SUCCESS) {
+    if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS)) {
       // Handle execution errors according to EVM specification
       evmc_status_code Status = Context.getStatus();
 
