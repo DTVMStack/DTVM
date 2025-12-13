@@ -84,13 +84,15 @@ protected:
 public:
   using Byte = common::Byte;
   void execute() {
-    uint64_t GasCost = static_cast<Derived *>(this)->calculateGas();
-    if ((uint64_t)getFrame()->Msg.gas < GasCost) {
-      getContext()->setStatus(EVMC_OUT_OF_GAS);
+    auto *Frame = getFrame();
+    auto *Context = getContext();
+    uint64_t GasCost = Derived::calculateGas();
+    if ((uint64_t)Frame->Msg.gas < GasCost) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
-    getFrame()->Msg.gas -= GasCost;
-    static_cast<Derived *>(this)->doExecute();
+    Frame->Msg.gas -= GasCost;
+    Derived::doExecute();
   };
 };
 
@@ -105,10 +107,8 @@ public:
     auto *Frame = getFrame();
     EVM_STACK_CHECK(Frame, 1);
 
-    intx::uint256 A = Frame->pop();
-
-    intx::uint256 Result = UnaryOp{}(A);
-    Frame->push(Result);
+    auto &A = Frame->Stack[Frame->Sp - 1];
+    A = UnaryOp{}(A);
   }
   static uint64_t calculateGas();
 };
@@ -124,11 +124,10 @@ public:
     auto *Frame = getFrame();
     EVM_STACK_CHECK(Frame, 2);
 
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-
-    intx::uint256 Result = BinaryOp{}(A, B);
-    Frame->push(Result);
+    auto &A = Frame->Stack[Frame->Sp - 1];
+    auto &B = Frame->Stack[Frame->Sp - 2];
+    B = BinaryOp{}(A, B);
+    --Frame->Sp;
   }
   static uint64_t calculateGas();
 };
@@ -145,12 +144,11 @@ public:
     auto *Frame = getFrame();
     EVM_STACK_CHECK(Frame, 3);
 
-    intx::uint256 A = Frame->pop();
-    intx::uint256 B = Frame->pop();
-    intx::uint256 C = Frame->pop();
-
-    intx::uint256 Result = TernaryOp{}(A, B, C);
-    Frame->push(Result);
+    auto &A = Frame->Stack[Frame->Sp - 1];
+    auto &B = Frame->Stack[Frame->Sp - 2];
+    auto &C = Frame->Stack[Frame->Sp - 3];
+    C = TernaryOp{}(A, B, C);
+    Frame->Sp -= 2;
   }
   static uint64_t calculateGas();
 };
