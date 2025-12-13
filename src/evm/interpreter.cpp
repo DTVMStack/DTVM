@@ -14,9 +14,17 @@ using namespace zen;
 using namespace zen::evm;
 using namespace zen::runtime;
 
+#ifndef ZEN_EVM_INTERP_HELPER
+#ifdef ZEN_ENABLE_LINUX_PERF
+#define ZEN_EVM_INTERP_HELPER __attribute__((noinline))
+#else
+#define ZEN_EVM_INTERP_HELPER inline
+#endif
+#endif
+
 namespace {
 
-inline __attribute__((always_inline)) bool
+static ZEN_EVM_INTERP_HELPER bool
 chargeGas(zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
           const evmc_instruction_metrics *MetricsTable, uint8_t Opcode) {
   const uint64_t GasCost = MetricsTable[Opcode].gas_cost;
@@ -28,9 +36,9 @@ chargeGas(zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
   return true;
 }
 
-inline intx::uint256 loadPushValue(const zen::common::Byte *Code,
-                                   size_t CodeSize, size_t Pc,
-                                   uint8_t NumBytes) {
+static ZEN_EVM_INTERP_HELPER intx::uint256
+loadPushValue(const zen::common::Byte *Code, size_t CodeSize, size_t Pc,
+              uint8_t NumBytes) {
   uint8_t ValueBytes[32] = {};
   const size_t Offset = Pc + 1;
   const size_t AvailableBytes = Offset < CodeSize ? (CodeSize - Offset) : 0;
@@ -41,7 +49,7 @@ inline intx::uint256 loadPushValue(const zen::common::Byte *Code,
   return intx::be::load<intx::uint256>(ValueBytes);
 }
 
-static void __attribute__((noinline))
+static ZEN_EVM_INTERP_HELPER void
 buildJumpDestMapAndPushCache(const zen::common::Byte *Code, size_t CodeSize,
                              std::vector<uint8_t> &JumpDestMap,
                              std::vector<intx::uint256> &PushValueMap,
@@ -64,11 +72,9 @@ buildJumpDestMapAndPushCache(const zen::common::Byte *Code, size_t CodeSize,
   }
 }
 
-static void __attribute__((noinline))
-executePush0Opcode(zen::evm::EVMFrame *Frame,
-                   zen::evm::InterpreterExecContext &Context,
-                   const evmc_instruction_metrics *MetricsTable,
-                   uint8_t OpcodeU8) {
+static ZEN_EVM_INTERP_HELPER void executePush0Opcode(
+    zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
+    const evmc_instruction_metrics *MetricsTable, uint8_t OpcodeU8) {
   if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
     return;
   }
@@ -79,13 +85,11 @@ executePush0Opcode(zen::evm::EVMFrame *Frame,
   Frame->Stack[Frame->Sp++] = 0;
 }
 
-static void __attribute__((noinline))
-executePushNOpcode(zen::evm::EVMFrame *Frame,
-                   zen::evm::InterpreterExecContext &Context,
-                   const evmc_instruction_metrics *MetricsTable,
-                   uint8_t OpcodeU8,
-                   const std::vector<intx::uint256> &PushValueMap,
-                   const std::vector<uint8_t> &PushBytesMap) {
+static ZEN_EVM_INTERP_HELPER void executePushNOpcode(
+    zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
+    const evmc_instruction_metrics *MetricsTable, uint8_t OpcodeU8,
+    const std::vector<intx::uint256> &PushValueMap,
+    const std::vector<uint8_t> &PushBytesMap) {
   if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
     return;
   }
@@ -98,11 +102,9 @@ executePushNOpcode(zen::evm::EVMFrame *Frame,
   Frame->Pc += PushBytesMap[Frame->Pc];
 }
 
-static void __attribute__((noinline))
-executePopOpcode(zen::evm::EVMFrame *Frame,
-                 zen::evm::InterpreterExecContext &Context,
-                 const evmc_instruction_metrics *MetricsTable,
-                 uint8_t OpcodeU8) {
+static ZEN_EVM_INTERP_HELPER void executePopOpcode(
+    zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
+    const evmc_instruction_metrics *MetricsTable, uint8_t OpcodeU8) {
   if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
     return;
   }
@@ -113,11 +115,9 @@ executePopOpcode(zen::evm::EVMFrame *Frame,
   --Frame->Sp;
 }
 
-static void __attribute__((noinline))
-executeDupOpcode(zen::evm::EVMFrame *Frame,
-                 zen::evm::InterpreterExecContext &Context,
-                 const evmc_instruction_metrics *MetricsTable,
-                 uint8_t OpcodeU8) {
+static ZEN_EVM_INTERP_HELPER void executeDupOpcode(
+    zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
+    const evmc_instruction_metrics *MetricsTable, uint8_t OpcodeU8) {
   if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
     return;
   }
@@ -134,11 +134,9 @@ executeDupOpcode(zen::evm::EVMFrame *Frame,
   ++Frame->Sp;
 }
 
-static void __attribute__((noinline))
-executeSwapOpcode(zen::evm::EVMFrame *Frame,
-                  zen::evm::InterpreterExecContext &Context,
-                  const evmc_instruction_metrics *MetricsTable,
-                  uint8_t OpcodeU8) {
+static ZEN_EVM_INTERP_HELPER void executeSwapOpcode(
+    zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
+    const evmc_instruction_metrics *MetricsTable, uint8_t OpcodeU8) {
   if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
     return;
   }
