@@ -42,19 +42,6 @@
     return;                                                                    \
   }
 
-#define EVM_REGISTRY_GET(OpName)                                               \
-  static OpName##Handler get##OpName##Handler() {                              \
-    static OpName##Handler OpName;                                             \
-    return OpName;                                                             \
-  }
-
-#define EVM_REGISTRY_GET_MULTIOPCODE(OpName)                                   \
-  static OpName##Handler get##OpName##Handler(evmc_opcode OpCode) {            \
-    static OpName##Handler OpName;                                             \
-    OpName.OpCode = OpCode;                                                    \
-    return OpName;                                                             \
-  }
-
 namespace zen::evm {
 class EVMResource {
 public:
@@ -83,7 +70,7 @@ protected:
 
 public:
   using Byte = common::Byte;
-  void execute() {
+  static void execute() {
     auto *Frame = getFrame();
     auto *Context = getContext();
     uint64_t GasCost = Derived::calculateGas();
@@ -93,7 +80,7 @@ public:
     }
     Frame->Msg.gas -= GasCost;
     Derived::doExecute();
-  };
+  }
 };
 
 template <typename UnaryOp>
@@ -315,106 +302,6 @@ DEFINE_UNIMPLEMENT_HANDLER(Keccak256);
 
 // Self-destruct operation
 DEFINE_UNIMPLEMENT_HANDLER(SelfDestruct);
-
-// Registry class to manage execution context
-class EVMOpcodeHandlerRegistry {
-public:
-  // Arithmetic operations
-  EVM_REGISTRY_GET(Add);
-  EVM_REGISTRY_GET(Sub);
-  EVM_REGISTRY_GET(Mul);
-  EVM_REGISTRY_GET(Div);
-  EVM_REGISTRY_GET(Mod);
-  EVM_REGISTRY_GET(Exp);
-  EVM_REGISTRY_GET(SDiv);
-  EVM_REGISTRY_GET(SMod);
-  EVM_REGISTRY_GET(SignExtend);
-  // Modular arithmetic operations
-  EVM_REGISTRY_GET(Addmod);
-  EVM_REGISTRY_GET(Mulmod);
-  // Unary operations
-  EVM_REGISTRY_GET(Not);
-  EVM_REGISTRY_GET(IsZero);
-  // Bitwise operations
-  EVM_REGISTRY_GET(And);
-  EVM_REGISTRY_GET(Or);
-  EVM_REGISTRY_GET(Xor);
-  EVM_REGISTRY_GET(Shl);
-  EVM_REGISTRY_GET(Shr);
-  EVM_REGISTRY_GET(Eq);
-  EVM_REGISTRY_GET(Lt);
-  EVM_REGISTRY_GET(Gt);
-  EVM_REGISTRY_GET(Slt);
-  EVM_REGISTRY_GET(Sgt);
-  EVM_REGISTRY_GET(Byte);
-  EVM_REGISTRY_GET(Sar);
-  // Environmental information
-  EVM_REGISTRY_GET(Address);
-  EVM_REGISTRY_GET(Balance);
-  EVM_REGISTRY_GET(Origin);
-  EVM_REGISTRY_GET(Caller);
-  EVM_REGISTRY_GET(CallValue);
-  EVM_REGISTRY_GET(CallDataLoad);
-  EVM_REGISTRY_GET(CallDataSize);
-  EVM_REGISTRY_GET(CodeSize);
-  EVM_REGISTRY_GET(CallDataCopy);
-  EVM_REGISTRY_GET(CodeCopy);
-  EVM_REGISTRY_GET(GasPrice);
-  EVM_REGISTRY_GET(ExtCodeSize);
-  EVM_REGISTRY_GET(ExtCodeCopy);
-  EVM_REGISTRY_GET(ReturnDataSize);
-  EVM_REGISTRY_GET(ReturnDataCopy);
-  EVM_REGISTRY_GET(ExtCodeHash);
-  // Block message
-  EVM_REGISTRY_GET(BlockHash);
-  EVM_REGISTRY_GET(CoinBase);
-  EVM_REGISTRY_GET(TimeStamp);
-  EVM_REGISTRY_GET(Number);
-  EVM_REGISTRY_GET(PrevRanDao);
-  EVM_REGISTRY_GET(ChainId);
-  EVM_REGISTRY_GET(SelfBalance);
-  EVM_REGISTRY_GET(BaseFee);
-  EVM_REGISTRY_GET(BlobHash);
-  EVM_REGISTRY_GET(BlobBaseFee);
-  // storage operations
-  EVM_REGISTRY_GET(SLoad);
-  EVM_REGISTRY_GET(SStore);
-  // Memory operations
-  EVM_REGISTRY_GET(MStore);
-  EVM_REGISTRY_GET(MStore8);
-  EVM_REGISTRY_GET(MLoad);
-  // Control flow operations
-  EVM_REGISTRY_GET(Jump);
-  EVM_REGISTRY_GET(JumpI);
-  EVM_REGISTRY_GET(JumpDest);
-  // Temporary Storage
-  EVM_REGISTRY_GET(TLoad);
-  EVM_REGISTRY_GET(TStore);
-  EVM_REGISTRY_GET(MCopy);
-  // Environment operations
-  EVM_REGISTRY_GET(PC);
-  EVM_REGISTRY_GET(MSize);
-  EVM_REGISTRY_GET(Gas);
-  EVM_REGISTRY_GET(GasLimit);
-  // Return operations
-  EVM_REGISTRY_GET(Return);
-  EVM_REGISTRY_GET(Revert);
-  // Stack operations
-  EVM_REGISTRY_GET(Pop);
-  EVM_REGISTRY_GET_MULTIOPCODE(Push);
-  EVM_REGISTRY_GET(Push0);
-  EVM_REGISTRY_GET_MULTIOPCODE(Dup);
-  EVM_REGISTRY_GET_MULTIOPCODE(Swap);
-  // Call operations
-  EVM_REGISTRY_GET_MULTIOPCODE(Create);
-  EVM_REGISTRY_GET_MULTIOPCODE(Call);
-  // Logging operations
-  EVM_REGISTRY_GET_MULTIOPCODE(Log);
-  // Crypto operations
-  EVM_REGISTRY_GET(Keccak256);
-  // Self-destruct operation
-  EVM_REGISTRY_GET(SelfDestruct);
-};
 
 } // namespace zen::evm
 
