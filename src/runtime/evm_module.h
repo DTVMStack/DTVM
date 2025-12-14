@@ -3,6 +3,7 @@
 #ifndef ZEN_RUNTIME_EVM_MODULE_H
 #define ZEN_RUNTIME_EVM_MODULE_H
 
+#include "evm/evm_cache.h"
 #include "evmc/evmc.hpp"
 #include "runtime/module.h"
 
@@ -31,6 +32,8 @@ public:
   size_t CodeSize;
   evmc::Host *Host;
 
+  const evm::EVMInterpreterCache &getInterpreterCache() const;
+
 #ifdef ZEN_ENABLE_JIT
   common::CodeMemPool &getJITCodeMemPool() { return JITCodeMemPool; }
 
@@ -51,6 +54,10 @@ private:
   CodeHolderUniquePtr CodeHolder;
 
   Byte *initCode(size_t Size) { return (Byte *)allocateZeros(Size); }
+
+  void initInterpreterCache() const;
+  mutable bool InterpreterCacheInitialized = false;
+  mutable evm::EVMInterpreterCache InterpCache;
 
 #ifdef ZEN_ENABLE_JIT
   common::CodeMemPool JITCodeMemPool;

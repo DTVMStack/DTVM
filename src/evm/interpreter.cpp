@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "evm/interpreter.h"
+#include "evm/evm_cache.h"
 #include "evm/opcode_handlers.h"
 #include "evmc/instructions.h"
 #include "runtime/evm_instance.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstring>
 
@@ -47,98 +47,6 @@ chargeGas(zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
   return true;
 }
 
-static ZEN_EVM_INTERP_HELPER intx::uint256
-loadPushValue(const zen::common::Byte *Code, size_t CodeSize, size_t Pc,
-              uint8_t NumBytes) {
-  uint8_t ValueBytes[32] = {};
-  const size_t Offset = Pc + 1;
-  const size_t AvailableBytes = Offset < CodeSize ? (CodeSize - Offset) : 0;
-  const size_t CopyBytes = std::min<size_t>(NumBytes, AvailableBytes);
-  if (CopyBytes > 0) {
-    std::memcpy(ValueBytes + (32 - NumBytes), Code + Offset, CopyBytes);
-  }
-  return intx::be::load<intx::uint256>(ValueBytes);
-}
-
-static ZEN_EVM_INTERP_HELPER uint8_t opcodeLen(uint8_t OpcodeU8) {
-  if (OpcodeU8 >= static_cast<uint8_t>(evmc_opcode::OP_PUSH1) &&
-      OpcodeU8 <= static_cast<uint8_t>(evmc_opcode::OP_PUSH32)) {
-    return static_cast<uint8_t>(
-        OpcodeU8 - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 2);
-  }
-  return 1;
-}
-
-static ZEN_EVM_INTERP_HELPER bool isGasChunkTerminator(uint8_t OpcodeU8) {
-  switch (static_cast<evmc_opcode>(OpcodeU8)) {
-  case evmc_opcode::OP_STOP:
-  case evmc_opcode::OP_RETURN:
-  case evmc_opcode::OP_REVERT:
-  case evmc_opcode::OP_SELFDESTRUCT:
-  case evmc_opcode::OP_INVALID:
-  case evmc_opcode::OP_JUMP:
-  case evmc_opcode::OP_JUMPI:
-  case evmc_opcode::OP_GAS:
-  case evmc_opcode::OP_CREATE:
-  case evmc_opcode::OP_CREATE2:
-  case evmc_opcode::OP_CALL:
-  case evmc_opcode::OP_CALLCODE:
-  case evmc_opcode::OP_DELEGATECALL:
-  case evmc_opcode::OP_STATICCALL:
-    return true;
-  default:
-    return false;
-  }
-}
-
-static ZEN_EVM_INTERP_HELPER void
-buildJumpDestMapAndPushCache(const zen::common::Byte *Code, size_t CodeSize,
-                             std::vector<uint8_t> &JumpDestMap,
-                             std::vector<intx::uint256> &PushValueMap) {
-  for (size_t Pc = 0; Pc < CodeSize; ++Pc) {
-    const zen::common::Byte CurOpcode = Code[Pc];
-    if (CurOpcode == static_cast<zen::common::Byte>(evmc_opcode::OP_JUMPDEST)) {
-      JumpDestMap[Pc] = 1;
-      continue;
-    }
-    const uint8_t CurOpcodeU8 = static_cast<uint8_t>(CurOpcode);
-    if (CurOpcodeU8 >= static_cast<uint8_t>(evmc_opcode::OP_PUSH1) &&
-        CurOpcodeU8 <= static_cast<uint8_t>(evmc_opcode::OP_PUSH32)) {
-      const uint8_t NumBytes =
-          CurOpcodeU8 - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
-      PushValueMap[Pc] = loadPushValue(Code, CodeSize, Pc, NumBytes);
-      Pc += NumBytes;
-    }
-  }
-}
-
-static ZEN_EVM_INTERP_HELPER void
-buildGasChunks(const zen::common::Byte *Code, size_t CodeSize,
-               const evmc_instruction_metrics *MetricsTable,
-               std::vector<uint32_t> &GasChunkEnd,
-               std::vector<uint64_t> &GasChunkCost) {
-  size_t Pc = 0;
-  while (Pc < CodeSize) {
-    const size_t ChunkStart = Pc;
-    uint64_t GasCost = 0;
-    while (Pc < CodeSize) {
-      const uint8_t CurOpcodeU8 = static_cast<uint8_t>(Code[Pc]);
-      if (Pc != ChunkStart &&
-          CurOpcodeU8 == static_cast<uint8_t>(evmc_opcode::OP_JUMPDEST)) {
-        break;
-      }
-      GasCost += MetricsTable[CurOpcodeU8].gas_cost;
-      Pc += opcodeLen(CurOpcodeU8);
-      if (isGasChunkTerminator(CurOpcodeU8)) {
-        break;
-      }
-    }
-
-    GasChunkEnd[ChunkStart] = static_cast<uint32_t>(Pc);
-    GasChunkCost[ChunkStart] = GasCost;
-  }
-}
-
 static ZEN_EVM_INTERP_HELPER void executePush0Opcode(
     zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
     const evmc_instruction_metrics *MetricsTable, uint8_t OpcodeU8) {
@@ -165,7 +73,7 @@ executePush0OpcodeNoGas(zen::evm::EVMFrame *Frame,
 static ZEN_EVM_INTERP_HELPER void executePushNOpcode(
     zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
     const evmc_instruction_metrics *MetricsTable, uint8_t OpcodeU8,
-    const std::vector<intx::uint256> &PushValueMap) {
+    const intx::uint256 *__restrict PushValueMap) {
   if (!chargeGas(Frame, Context, MetricsTable, OpcodeU8)) {
     return;
   }
@@ -183,7 +91,7 @@ static ZEN_EVM_INTERP_HELPER void executePushNOpcode(
 
 static ZEN_EVM_INTERP_HELPER void executePushNOpcodeNoGas(
     zen::evm::EVMFrame *Frame, zen::evm::InterpreterExecContext &Context,
-    uint8_t OpcodeU8, const std::vector<intx::uint256> &PushValueMap) {
+    uint8_t OpcodeU8, const intx::uint256 *__restrict PushValueMap) {
   if (Frame->Sp >= MAXSTACK) {
     Context.setStatus(EVMC_STACK_OVERFLOW);
     return;
@@ -422,17 +330,15 @@ void BaseInterpreter::interpret() {
   Byte *Code = Mod->Code;
   static const auto *MetricsTable =
       evmc_get_instruction_metrics_table(DEFAULT_REVISION);
-  std::vector<uint8_t> JumpDestMap(CodeSize, 0);
-  std::vector<intx::uint256> PushValueMap(CodeSize);
-  std::vector<uint32_t> GasChunkEnd(CodeSize, 0);
-  std::vector<uint64_t> GasChunkCost(CodeSize, 0);
+  const auto &Cache = Mod->getInterpreterCache();
+  const uint8_t *__restrict JumpDestMap = Cache.JumpDestMap.data();
+  const intx::uint256 *__restrict PushValueMap = Cache.PushValueMap.data();
+  const uint32_t *__restrict GasChunkEnd = Cache.GasChunkEnd.data();
+  const uint64_t *__restrict GasChunkCost = Cache.GasChunkCost.data();
 
   if (!Frame->Host) {
     Frame->Host = Context.getInstance()->getRuntime()->getEVMHost();
   }
-
-  buildJumpDestMapAndPushCache(Code, CodeSize, JumpDestMap, PushValueMap);
-  buildGasChunks(Code, CodeSize, MetricsTable, GasChunkEnd, GasChunkCost);
 
   auto Uint256ToUint64 = [](const intx::uint256 &Value) -> uint64_t {
     return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);

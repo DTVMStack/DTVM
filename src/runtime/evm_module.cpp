@@ -11,7 +11,7 @@
 #include "runtime/symbol_wrapper.h"
 #include "utils/statistics.h"
 #include "utils/wasm.h"
-#include <algorithm>
+
 #include <memory>
 #include <string>
 
@@ -68,6 +68,18 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
   }
 
   return Mod;
+}
+
+const evm::EVMInterpreterCache &EVMModule::getInterpreterCache() const {
+  if (!InterpreterCacheInitialized) {
+    initInterpreterCache();
+    InterpreterCacheInitialized = true;
+  }
+  return InterpCache;
+}
+
+void EVMModule::initInterpreterCache() const {
+  evm::buildInterpreterCache(InterpCache, Code, CodeSize);
 }
 
 } // namespace zen::runtime
