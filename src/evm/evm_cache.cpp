@@ -13,8 +13,20 @@
 
 namespace zen::evm {
 
+// - Cache entries are indexed by EVM PC (byte offset into `Code`).
+// - `JumpDestMap[pc]` marks valid JUMP destinations (JUMPDEST outside PUSH
+//   data).
+// - `PushValueMap[pc]` stores decoded PUSHn immediates (big-endian,
+//   zero-padded).
+// - `GasChunkEnd/Cost[pc]` describe straight-line chunks whose EVMC base gas
+//   can be charged once, then executed via no-gas handlers until
+//   `GasChunkEnd[pc]`.
+//   Chunks stop at JUMPDEST boundaries and control/host opcodes; dynamic/extra
+//   gas remains charged inside opcode handlers.
+
 namespace {
 
+// Returns the total byte length of an opcode (including PUSH immediate bytes).
 static uint8_t opcodeLen(uint8_t OpcodeU8) {
   if (OpcodeU8 >= static_cast<uint8_t>(evmc_opcode::OP_PUSH1) &&
       OpcodeU8 <= static_cast<uint8_t>(evmc_opcode::OP_PUSH32)) {
@@ -89,6 +101,7 @@ static intx::uint256 loadBeUint256(const zen::common::Byte *Src, size_t Len) {
   return Value;
 }
 
+// Decodes the PUSH immediate at `Pc` and zero-pads if the code ends early.
 static intx::uint256 loadPushValue(const zen::common::Byte *Code,
                                    size_t CodeSize, size_t Pc,
                                    uint8_t NumBytes) {
@@ -132,6 +145,7 @@ buildJumpDestMapAndPushCache(const zen::common::Byte *Code, size_t CodeSize,
   }
 }
 
+// Precomputes straight-line chunks where EVMC base gas can be charged once.
 static void buildGasChunks(const zen::common::Byte *Code, size_t CodeSize,
                            const evmc_instruction_metrics *MetricsTable,
                            std::vector<uint32_t> &GasChunkEnd,
