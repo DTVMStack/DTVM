@@ -346,14 +346,10 @@ void BaseInterpreter::interpret() {
 
   while (Frame->Pc < CodeSize) {
     const size_t ChunkStartPc = static_cast<size_t>(Frame->Pc);
-    if (ChunkStartPc < CodeSize && GasChunkEnd[ChunkStartPc] > ChunkStartPc) {
+    if (ChunkStartPc < CodeSize && GasChunkEnd[ChunkStartPc] > ChunkStartPc &&
+        (uint64_t)Frame->Msg.gas >= GasChunkCost[ChunkStartPc]) {
       const uint32_t ChunkEnd = GasChunkEnd[ChunkStartPc];
-      if (!chargeGas(Frame, Context, GasChunkCost[ChunkStartPc])) {
-        if (handleExecutionStatus(Frame, Context)) {
-          return;
-        }
-        break;
-      }
+      Frame->Msg.gas -= GasChunkCost[ChunkStartPc];
       bool RestartDispatch = false;
       while (Frame->Pc < ChunkEnd) {
         const Byte OpcodeByte = Code[Frame->Pc];
