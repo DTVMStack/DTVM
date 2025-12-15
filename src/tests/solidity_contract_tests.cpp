@@ -3,13 +3,10 @@
 
 #include "solidity_test_helpers.h"
 #include <CLI/CLI.hpp>
+#include <filesystem>
 #include <gtest/gtest.h>
 
-using namespace zen;
-using namespace zen::common;
-using namespace zen::evm;
 using namespace zen::utils;
-using namespace zen::runtime;
 using namespace zen::evm_test_utils;
 
 namespace zen::test {
@@ -178,6 +175,16 @@ evmc_status_code executeSingleContractTest(const RuntimeConfig &Config,
       AllCasePassed = false;
     }
   }
+
+#ifndef NDEBUG
+  std::string StateFileName = TestContract + "_state.json";
+  std::filesystem::path StateFilePath = ContractDir / StateFileName;
+
+  if (!zen::utils::saveState(*TestEnv.MockedHost, StateFilePath.string())) {
+    std::cerr << "Failed to save debug state to: " << StateFilePath
+              << std::endl;
+  }
+#endif // NDEBUG
 
   return AllCasePassed ? EVMC_SUCCESS : EVMC_FAILURE;
 }

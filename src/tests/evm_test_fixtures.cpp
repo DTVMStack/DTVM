@@ -3,80 +3,15 @@
 
 #include "evm_test_fixtures.h"
 #include "host/evm/crypto.h"
-#include "utils/others.h"
+#include "utils/evm.h"
 
-#include <algorithm>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
-#include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <stdexcept>
 
 namespace zen::evm_test_utils {
-
-namespace {
-static std::string stripHexPrefix(const std::string &HexStr) {
-  if (HexStr.size() >= 2 &&
-      (HexStr.substr(0, 2) == "0x" || HexStr.substr(0, 2) == "0X")) {
-    return HexStr.substr(2);
-  }
-  return HexStr;
-}
-} // namespace
-
-evmc::address parseAddress(const std::string &HexAddr) {
-  auto Data = zen::utils::fromHex(HexAddr);
-  if (!Data || Data->size() != 20) {
-    throw std::invalid_argument("Invalid address: " + HexAddr);
-  }
-
-  evmc::address Addr{};
-  std::memcpy(Addr.bytes, Data->data(), 20);
-  return Addr;
-}
-
-evmc::bytes32 parseBytes32(const std::string &HexStr) {
-  auto Data = zen::utils::fromHex(HexStr);
-  if (!Data) {
-    throw std::invalid_argument("Invalid hex string: " + HexStr);
-  }
-
-  if (Data->size() > 32) {
-    throw std::invalid_argument("Bytes32 hex string too long");
-  }
-
-  evmc::bytes32 Result{};
-  std::memcpy(Result.bytes + (32 - Data->size()), Data->data(), Data->size());
-  return Result;
-}
-
-evmc::uint256be parseUint256(const std::string &HexStr) {
-  auto Data = zen::utils::fromHex(HexStr);
-  if (!Data) {
-    throw std::invalid_argument("Invalid hex string: " + HexStr);
-  }
-
-  if (Data->size() > 32) {
-    throw std::invalid_argument("Uint256 hex string too long");
-  }
-
-  evmc::uint256be Result{};
-  std::memcpy(Result.bytes + (32 - Data->size()), Data->data(), Data->size());
-  return Result;
-}
-
-std::vector<uint8_t> parseHexData(const std::string &HexStr) {
-  if (HexStr.empty()) {
-    return {};
-  }
-
-  auto Result = zen::utils::fromHex(HexStr);
-  if (!Result) {
-    throw std::invalid_argument("Invalid hex string: " + HexStr);
-  }
-  return *Result;
-}
+using namespace zen::utils;
 
 std::vector<ParsedAccount> parsePreAccounts(const rapidjson::Value &Pre) {
   std::vector<ParsedAccount> Accounts;

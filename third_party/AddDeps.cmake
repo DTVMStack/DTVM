@@ -84,6 +84,21 @@ if(NOT boost_POPULATED)
 endif()
 include_directories(${boost_SOURCE_DIR})
 
+FetchContent_Declare(
+  rapidjson
+  URL https://github.com/Tencent/rapidjson/archive/06d58b9e848c650114556a23294d0b6440078c61.zip
+  URL_HASH
+    SHA256=05562af69b62d0a203ae1ecd914bf8e501cde630078bf82384485e9b85e7bf55
+)
+set(RAPIDJSON_BUILD_DOC OFF)
+set(RAPIDJSON_BUILD_EXAMPLES OFF)
+set(RAPIDJSON_BUILD_TESTS OFF)
+set(RAPIDJSON_BUILD_CXX11 OFF)
+set(RAPIDJSON_BUILD_CXX17 ON)
+FetchContent_MakeAvailable(rapidjson)
+add_library(rapidjson INTERFACE)
+target_include_directories(rapidjson INTERFACE ${rapidjson_SOURCE_DIR}/include)
+
 if(ZEN_ENABLE_SPEC_TEST)
   FetchContent_Declare(
     googletest
@@ -94,25 +109,6 @@ if(ZEN_ENABLE_SPEC_TEST)
   set(BUILD_GMOCK OFF)
   set(INSTALL_GTEST OFF)
   FetchContent_MakeAvailable(googletest)
-
-  FetchContent_Declare(
-    rapidjson
-    URL https://github.com/Tencent/rapidjson/archive/06d58b9e848c650114556a23294d0b6440078c61.zip
-    URL_HASH
-      SHA256=05562af69b62d0a203ae1ecd914bf8e501cde630078bf82384485e9b85e7bf55
-    # GIT_REPOSITORY https://github.com/Tencent/rapidjson.git GIT_COMMIT
-    # 06d58b9e848c650114556a23294d0b6440078c61 GIT_SHALLOW TRUE
-  )
-  set(RAPIDJSON_BUILD_DOC OFF)
-  set(RAPIDJSON_BUILD_EXAMPLES OFF)
-  set(RAPIDJSON_BUILD_TESTS OFF)
-  set(RAPIDJSON_BUILD_CXX11 OFF)
-  set(RAPIDJSON_BUILD_CXX17 ON)
-  FetchContent_MakeAvailable(rapidjson)
-  add_library(rapidjson INTERFACE)
-  target_include_directories(
-    rapidjson INTERFACE ${rapidjson_SOURCE_DIR}/include
-  )
 
   FetchContent_Declare(
     yaml-cpp

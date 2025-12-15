@@ -1,34 +1,13 @@
 // Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "evm/interpreter.h"
 #include "evm_test_fixtures.h"
 #include "evm_test_helpers.h"
 #include "evm_test_host.hpp"
-#include "host/evm/crypto.h"
-#include "runtime/evm_instance.h"
-#include "runtime/runtime.h"
-#include "utils/others.h"
-#include "zetaengine.h"
-
 #include <gtest/gtest.h>
 
-#include <algorithm>
-#include <cctype>
-#include <cstring>
-#include <filesystem>
-#include <iostream>
-#include <string>
-#include <vector>
-
-#include <evmc/evmc.hpp>
-#include <evmc/hex.hpp>
-#include <evmc/mocked_host.hpp>
-#include <rapidjson/document.h>
-
-using namespace zen;
 using namespace zen::evm;
-using namespace zen::runtime;
+using namespace zen::utils;
 using namespace zen::evm_test_utils;
 
 namespace {

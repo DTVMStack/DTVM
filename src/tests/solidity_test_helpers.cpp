@@ -23,7 +23,7 @@ EVMTestEnvironment::EVMTestEnvironment(const RuntimeConfig &Config) {
   Runtime->setEVMHost(MockedHost);
 
   // Set up deployer account
-  DeployerAddr = DEFAULT_DEPLOYER_ADDRESS;
+  DeployerAddr = zen::evm::DEFAULT_DEPLOYER_ADDRESS;
   auto &DeployerAccount = MockedHost->accounts[DeployerAddr];
   DeployerAccount.nonce = 0;
   DeployerAccount.set_balance(100000000UL);

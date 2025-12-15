@@ -8,9 +8,8 @@
 #include "zetaengine.h"
 #include <CLI/CLI.hpp>
 #ifdef ZEN_ENABLE_EVM
-#include <evmc/evmc.h>
-#include <evmc/evmc.hpp>
-#include <evmc/mocked_host.hpp>
+#include "tests/evm_test_host.hpp"
+#include "utils/evm.h"
 #endif // ZEN_ENABLE_EVM
 #include <unistd.h>
 
@@ -57,13 +56,22 @@ int exitMain(int ExitCode, Runtime *RT = nullptr) {
 #endif // ZEN_ENABLE_EVMABI_TEST
 
 #ifdef ZEN_ENABLE_EVM
-static evmc_message createEvmMessage(uint64_t GasLimit,
-                                     const std::string &Calldata) {
+struct EVMMessageConfig {
+  evmc_call_kind Kind;
+  uint64_t GasLimit;
+  std::vector<uint8_t> Calldata;
+  std::string SenderAddress;
+  std::string ContractAddress;
+};
+
+static evmc_message createEvmMessage(evmc::MockedHost &Host,
+                                     const EVMMessageConfig &Config,
+                                     const std::vector<uint8_t> &Bytecode) {
   evmc_message Msg{
-      .kind = EVMC_CALL,
+      .kind = Config.Kind,
       .flags = 0u,
       .depth = 0,
-      .gas = static_cast<int64_t>(GasLimit),
+      .gas = static_cast<int64_t>(Config.GasLimit),
       .recipient = {},
       .sender = {},
       .input_data = nullptr,
@@ -75,10 +83,27 @@ static evmc_message createEvmMessage(uint64_t GasLimit,
       .code_size = 0,
   };
 
-  auto CalldataBytes = zen::utils::fromHex(Calldata);
-  if (CalldataBytes.has_value()) {
-    Msg.input_data = CalldataBytes->data();
-    Msg.input_size = CalldataBytes->size();
+  if (!Config.Calldata.empty()) {
+    Msg.input_data = Config.Calldata.data();
+    Msg.input_size = Config.Calldata.size();
+  }
+
+  if (EVMC_CREATE == Config.Kind) {
+    Msg.input_data = Bytecode.data();
+    Msg.input_size = Bytecode.size();
+
+    evmc::address DeployerAddr = zen::utils::parseAddress(Config.SenderAddress);
+    auto &DeployerAccount = Host.accounts[DeployerAddr];
+    DeployerAccount.nonce = 0;
+    DeployerAccount.set_balance(100000000UL);
+    Msg.recipient = computeCreateAddress(DeployerAddr, DeployerAccount.nonce);
+    Msg.sender = DeployerAddr;
+  } else {
+    evmc::address ContractAddr =
+        zen::utils::parseAddress(Config.ContractAddress);
+    Msg.recipient = ContractAddr;
+    Msg.sender = zen::utils::parseAddress(Config.SenderAddress);
+    Msg.code_address = ContractAddr;
   }
 
   return Msg;
@@ -87,8 +112,8 @@ static evmc_message createEvmMessage(uint64_t GasLimit,
 static bool runEVMBenchmark(const std::string &Filename,
                             uint32_t NumExtraCompilations,
                             uint32_t NumExtraExecutions, Runtime *RT,
-                            EVMModule *Mod, uint64_t GasLimit,
-                            const std::string &Calldata) {
+                            EVMModule *Mod, const EVMMessageConfig &MsgConfig,
+                            evmc::MockedHost &Host) {
   if (NumExtraCompilations + NumExtraExecutions == 0) {
     return true;
   }
@@ -111,12 +136,10 @@ static bool runEVMBenchmark(const std::string &Filename,
     IsolationUniquePtr TestIso = RT->createUnmanagedIsolation();
     ZEN_ASSERT(TestIso);
     MayBe<EVMInstance *> TestInstRet =
-        TestIso->createEVMInstance(*Mod, GasLimit);
+        TestIso->createEVMInstance(*Mod, MsgConfig.GasLimit);
     ZEN_ASSERT(TestInstRet);
     EVMInstance *TestInst = *TestInstRet;
-
-    evmc_message TestMsg = createEvmMessage(GasLimit, Calldata);
-
+    evmc_message TestMsg = createEvmMessage(Host, MsgConfig, Bytecode);
     evmc::Result TestExeResult;
     RT->callEVMMain(*TestInst, TestMsg, TestExeResult);
   }
@@ -146,12 +169,17 @@ int main(int argc, char *argv[]) {
   std::vector<std::string> Args;
   std::vector<std::string> Envs;
   std::vector<std::string> Dirs;
+  std::string SaveStateFile;
+  std::string LoadStateFile;
   uint64_t GasLimit = UINT64_MAX;
   LoggerLevel LogLevel = LoggerLevel::Info;
   uint32_t NumExtraCompilations = 0;
   uint32_t NumExtraExecutions = 0;
   RuntimeConfig Config;
   bool EnableBenchmark = false;
+  bool DeployMode = false;
+  std::string ContractAddress;
+  std::string SenderAddress = "1000000000000000000000000000000000000000";
 
   const std::unordered_map<std::string, InputFormat> FormatMap = {
       {"wasm", InputFormat::WASM},
@@ -184,6 +212,15 @@ int main(int argc, char *argv[]) {
     CLIParser->add_option("--gas-limit", GasLimit, "Gas limit");
     CLIParser->add_option("--log-level", LogLevel, "Log level")
         ->transform(CLI::CheckedTransformer(LogMap, CLI::ignore_case));
+    CLIParser->add_option("--save-state", SaveStateFile,
+                          "Save EVM state to file");
+    CLIParser->add_option("--load-state", LoadStateFile,
+                          "Load EVM state from file");
+    CLIParser->add_flag("--deploy", DeployMode, "Deploy contract mode");
+    CLIParser->add_option("--contract-address", ContractAddress,
+                          "Contract address for call mode");
+    CLIParser->add_option("--sender", SenderAddress,
+                          "Sender address for transactions");
     CLIParser->add_option("--num-extra-compilations", NumExtraCompilations,
                           "The number of extra compilations");
     CLIParser->add_option("--num-extra-executions", NumExtraExecutions,
@@ -239,12 +276,26 @@ int main(int argc, char *argv[]) {
   /// ================ EVM mode ================
 #ifdef ZEN_ENABLE_EVM
   if (Config.Format == InputFormat::EVM) {
-    std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
+    auto MockedEVMHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+    // Load state if specified
+    if (!LoadStateFile.empty() &&
+        !zen::utils::loadState(*MockedEVMHost, LoadStateFile)) {
+      ZEN_LOG_ERROR("failed to load state from file: %s",
+                    LoadStateFile.c_str());
+      return exitMain(EXIT_FAILURE);
+    }
+
+    // std::unique_ptr<evmc::Host> Host = std::move(MockedEVMHost);
+    auto &MockedHost = *MockedEVMHost;
+    std::unique_ptr<evmc::Host> Host = std::move(MockedEVMHost);
     std::unique_ptr<Runtime> RT = Runtime::newEVMRuntime(Config, Host.get());
     if (!RT) {
       ZEN_LOG_ERROR("failed to create runtime");
       return exitMain(EXIT_FAILURE);
     }
+
+    // Set runtime for ZenMockedEVMHost
+    MockedHost.setRuntime(RT.get());
 
     MayBe<EVMModule *> ModRet = RT->loadEVMModule(Filename);
     if (!ModRet) {
@@ -272,10 +323,43 @@ int main(int argc, char *argv[]) {
       return exitMain(EXIT_FAILURE, RT.get());
     }
     EVMInstance *Inst = *InstRet;
-
-    evmc_message Msg = createEvmMessage(GasLimit, Calldata);
+    evmc_call_kind MsgKind = DeployMode ? EVMC_CREATE : EVMC_CALL;
     evmc::Result ExeResult;
+    std::vector<uint8_t> Bytecode;
+    if (EVMC_CREATE == MsgKind) {
+      std::ifstream File(Filename, std::ios::binary);
+      if (!File) {
+        ZEN_LOG_ERROR("failed to open contract file: %s", Filename.c_str());
+        return exitMain(EXIT_FAILURE, RT.get());
+      }
+
+      Bytecode.assign((std::istreambuf_iterator<char>(File)),
+                      std::istreambuf_iterator<char>());
+    }
+
+    static thread_local std::vector<uint8_t> CalldataBytes;
+    CalldataBytes.clear();
+    if (!Calldata.empty()) {
+      auto Bytes = zen::utils::fromHex(Calldata);
+      if (Bytes.has_value()) {
+        CalldataBytes = std::move(*Bytes);
+      }
+    }
+
+    EVMMessageConfig MsgConfig{.Kind = MsgKind,
+                               .GasLimit = GasLimit,
+                               .Calldata = CalldataBytes,
+                               .SenderAddress = SenderAddress,
+                               .ContractAddress = ContractAddress};
+    evmc_message Msg = createEvmMessage(MockedHost, MsgConfig, Bytecode);
     RT->callEVMMain(*Inst, Msg, ExeResult);
+
+    if (EVMC_CREATE == MsgKind && ExeResult.status_code == EVMC_SUCCESS) {
+      evmc::address DeployerAddr = zen::utils::parseAddress(SenderAddress);
+      auto &DeployerAccount = MockedHost.accounts[DeployerAddr];
+      DeployerAccount.nonce++;
+    }
+
     // Use EVM status code directly as process exit code
     int ExitCode = static_cast<int>(ExeResult.status_code);
     if (ExeResult.output_data && ExeResult.output_size > 0) {
@@ -284,9 +368,21 @@ int main(int argc, char *argv[]) {
       printf("output: 0x%s\n", output.c_str());
     }
 
+    if (!SaveStateFile.empty()) {
+      auto *MockedHostPtr = static_cast<evmc::MockedHost *>(Host.get());
+      if (MockedHostPtr) {
+        if (!zen::utils::saveState(*MockedHostPtr, SaveStateFile)) {
+          ZEN_LOG_ERROR("failed to save state to file: %s",
+                        SaveStateFile.c_str());
+          return exitMain(EXIT_FAILURE, RT.get());
+        }
+      }
+    }
+
     /// ======= EVM Extra compilations and executions for benchmarking =======
     if (!runEVMBenchmark(Filename, NumExtraCompilations, NumExtraExecutions,
-                         RT.get(), Mod, GasLimit, Calldata)) {
+                         RT.get(), Mod, MsgConfig,
+                         *static_cast<evmc::MockedHost *>(Host.get()))) {
       return exitMain(EXIT_FAILURE, RT.get());
     }
 

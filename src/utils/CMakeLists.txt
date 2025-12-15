@@ -19,4 +19,12 @@ if(ZEN_ENABLE_LINUX_PERF)
   list(APPEND UTILS_SRCS perf.cpp)
 endif()
 
+if(ZEN_ENABLE_EVM)
+  list(APPEND UTILS_SRCS evm.cpp rlp_encoding.cpp)
+endif()
+
 add_library(utils OBJECT ${UTILS_SRCS})
+
+if(ZEN_ENABLE_EVM)
+  target_include_directories(utils PRIVATE ${rapidjson_SOURCE_DIR}/include)
+endif()

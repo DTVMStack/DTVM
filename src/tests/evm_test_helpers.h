@@ -6,9 +6,10 @@
 
 #include "evmc/evmc.hpp"
 #include "evmc/mocked_host.hpp"
-#include "mpt/rlp_encoding.h"
+#include "utils/rlp_encoding.h"
 
-#include "utils/others.h"
+#include "utils/evm.h"
+#include "utils/logging.h"
 #include <filesystem>
 #include <fstream>
 #include <rapidjson/document.h>

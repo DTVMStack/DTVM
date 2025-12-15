@@ -5,11 +5,7 @@
 #define ZEN_TESTS_EVM_TEST_FIXTURES_H
 
 #include "evmc/mocked_host.hpp"
-
-#include <memory>
 #include <rapidjson/document.h>
-#include <string>
-#include <vector>
 
 namespace zen::evm_test_utils {
 
@@ -56,11 +52,6 @@ struct ForkPostResult {
   } Indexes;
   std::shared_ptr<rapidjson::Document> ExpectedState;
 };
-
-evmc::address parseAddress(const std::string &HexAddr);
-evmc::bytes32 parseBytes32(const std::string &HexStr);
-evmc::uint256be parseUint256(const std::string &HexStr);
-std::vector<uint8_t> parseHexData(const std::string &HexStr);
 
 std::vector<ParsedAccount> parsePreAccounts(const rapidjson::Value &Pre);
 

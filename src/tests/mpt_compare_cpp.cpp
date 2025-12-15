@@ -3,17 +3,13 @@
 
 #include "host/evm/crypto.h"
 #include "mpt/merkle_patricia_trie.h"
-
-#include <evmc/evmc.h>
-#include <evmc/hex.hpp>
+#include "utils/evm.h"
 #include <fstream>
 #include <iostream>
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
-#include <string>
-#include <vector>
 
 using namespace zen::evm::mpt;
 
@@ -44,8 +40,7 @@ private:
   }
 
   std::string bytesToHex(const std::vector<uint8_t> &Bytes) {
-    evmc::bytes_view View(Bytes.data(), Bytes.size());
-    return evmc::hex(View);
+    return zen::utils::toHex(Bytes.data(), Bytes.size());
   }
 
   evmc_uint256be hexToUint256(const std::string &HexStr) {

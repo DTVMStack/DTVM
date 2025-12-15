@@ -6,9 +6,10 @@
 #include <yaml-cpp/yaml.h>
 
 #include "evm/interpreter.h"
+#include "evm_test_host.hpp"
 #include "evmc/mocked_host.hpp"
 #include "runtime/evm_module.h"
-#include "utils/others.h"
+#include "utils/evm.h"
 #include "zetaengine.h"
 
 using namespace zen;
@@ -191,7 +192,7 @@ TEST_P(EVMSampleTest, ExecuteSample) {
       .depth = 0,
       .gas = static_cast<int64_t>(GasLimit),
       .recipient = {},
-      .sender = {},
+      .sender = zen::evm::DEFAULT_DEPLOYER_ADDRESS,
       .input_data = nullptr,
       .input_size = 0,
       .value = {},

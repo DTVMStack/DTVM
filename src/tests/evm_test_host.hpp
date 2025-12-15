@@ -3,31 +3,22 @@
 #ifndef ZEN_TESTS_EVM_TEST_HOST_HPP
 #define ZEN_TESTS_EVM_TEST_HOST_HPP
 
-#include "evm/evm.h"
 #include "evm/interpreter.h"
 #include "evm_precompiles.hpp"
 #include "evmc/mocked_host.hpp"
-#include "evmc/hex.hpp"
 #include "host/evm/crypto.h"
-#include "mpt/rlp_encoding.h"
+#include "utils/evm.h"
+#include "utils/rlp_encoding.h"
 #include "runtime/evm_instance.h"
 #include "runtime/isolation.h"
-#include "runtime/runtime.h"
-#include "utils/logging.h"
-#include <algorithm>
-#include <atomic>
-#include <cstring>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <string>
-#include <vector>
-#include <cstdio>
 
 using namespace zen;
 using namespace zen::runtime;
 
 namespace zen::evm {
+constexpr evmc::address DEFAULT_DEPLOYER_ADDRESS =
+    evmc::literals::operator""_address(
+        "1000000000000000000000000000000000000000");
 
 /// Recursive Host that can execute CALL instructions by creating new
 /// interpreters
@@ -480,20 +471,6 @@ public:
     }
   }
   using hash256 = evmc::bytes32;
-  std::vector<uint8_t> uint256beToBytes(const evmc::uint256be &Value) {
-    const auto *Data = Value.bytes;
-    size_t Start = 0;
-
-    while (Start < sizeof(Value.bytes) && Data[Start] == 0) {
-      Start++;
-    }
-
-    if (Start == sizeof(Value.bytes)) {
-      return {};
-    }
-
-    return std::vector<uint8_t>(Data + Start, Data + sizeof(Value.bytes));
-  }
   evmc::address computeCreateAddress(const evmc::address &Sender,
                                      uint64_t SenderNonce) noexcept {
     static constexpr auto ADDRESS_SIZE = sizeof(Sender);
@@ -502,7 +479,7 @@ public:
 
     evmc_uint256be NonceUint256 = {};
     intx::be::store(NonceUint256.bytes, intx::uint256{SenderNonce});
-    std::vector<uint8_t> NonceMinimalBytes = uint256beToBytes(NonceUint256);
+    std::vector<uint8_t> NonceMinimalBytes = zen::utils::uint256beToBytes(NonceUint256);
 
     std::vector<std::vector<uint8_t>> RlpListItems = {SenderBytes,
                                                       NonceMinimalBytes};
@@ -656,9 +633,6 @@ public:
       }
 
       int64_t RemainingGas = static_cast<int64_t>(Inst->getGas());
-      const bool OverInitcodeLimit =
-          Revision >= EVMC_SHANGHAI &&
-          Msg.input_size > MAX_SIZE_OF_INITCODE;
       const int64_t GasRefund =
           static_cast<int64_t>(Inst->getGasRefund());
 

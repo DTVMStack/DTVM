@@ -3,7 +3,7 @@
 
 #include "merkle_patricia_trie.h"
 #include "host/evm/crypto.h"
-#include "rlp_encoding.h"
+#include "utils/rlp_encoding.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>

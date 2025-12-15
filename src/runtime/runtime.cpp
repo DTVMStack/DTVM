@@ -18,6 +18,7 @@
 #ifdef ZEN_ENABLE_EVM
 #include "evm/interpreter.h"
 #include "runtime/evm_instance.h"
+#include "utils/evm.h"
 #include <evmc/hex.hpp>
 #endif // ZEN_ENABLE_EVM
 #include "runtime/codeholder.h"

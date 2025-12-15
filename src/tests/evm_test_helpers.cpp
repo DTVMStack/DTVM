@@ -5,7 +5,7 @@
 #include "evm/evm.h"
 #include "host/evm/crypto.h"
 #include "mpt/merkle_patricia_trie.h"
-#include "utils/others.h"
+#include "utils/evm.h"
 
 #include <algorithm>
 #include <evmc/evmc.hpp>
@@ -56,18 +56,6 @@ calculateLogsHashImpl(const std::vector<evmc::MockedHost::log_record> &Logs) {
   return evmc::hex(HashView);
 }
 
-std::vector<uint8_t> uint256beToBytes(const evmc::uint256be &Value) {
-  intx::uint256 Val = intx::be::load<intx::uint256>(Value.bytes);
-  if (Val == 0) {
-    return {};
-  }
-
-  unsigned NumBytes = intx::count_significant_bytes(Val);
-  std::vector<uint8_t> Result(32);
-  intx::be::unsafe::store(Result.data(), Val);
-  return std::vector<uint8_t>(Result.end() - NumBytes, Result.end());
-}
-
 std::vector<uint8_t> calculateStorageRoot(
     const std::unordered_map<evmc::bytes32, evmc::StorageValue> &Storage) {
   zen::evm::mpt::MerklePatriciaTrie StorageTrie;
@@ -81,7 +69,7 @@ std::vector<uint8_t> calculateStorageRoot(
     auto KeyHash = zen::host::evm::crypto::keccak256(
         std::vector<uint8_t>(Key.bytes, Key.bytes + sizeof(Key.bytes)));
 
-    auto ValueBytes = uint256beToBytes(StorageValue.current);
+    auto ValueBytes = zen::utils::uint256beToBytes(StorageValue.current);
     auto EncodedValue = zen::evm::rlp::encodeString(ValueBytes);
 
     StorageTrie.put(KeyHash, EncodedValue);
@@ -105,7 +93,7 @@ std::vector<uint8_t> encodeAccount(const evmc::MockedAccount &Account) {
     AccountFields.push_back(NonceBytes);
   }
 
-  auto BalanceBytes = uint256beToBytes(Account.balance);
+  auto BalanceBytes = zen::utils::uint256beToBytes(Account.balance);
   AccountFields.push_back(BalanceBytes);
 
   auto StorageRoot = calculateStorageRoot(Account.storage);
