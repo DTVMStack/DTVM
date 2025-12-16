@@ -21,8 +21,8 @@ void trimString(std::string &Str) {
 }
 
 std::optional<std::vector<uint8_t>> fromHex(std::string_view HexStr) {
-  if (auto decoded = evmc::from_hex(HexStr)) {
-    return std::vector<uint8_t>(decoded->begin(), decoded->end());
+  if (auto Data = evmc::from_hex(HexStr)) {
+    return std::vector<uint8_t>(Data->begin(), Data->end());
   } else {
     return std::nullopt;
   }
@@ -59,38 +59,44 @@ evmc::address parseAddress(const std::string &HexAddr) {
   if (HexAddr.empty()) {
     return Addr;
   }
-  auto Data = fromHex(HexAddr);
-  if (!Data || Data->size() != 20) {
-    throw getErrorWithExtraMessage(ErrorCode::InvalidRawData,
-                                   "Hex address must be 20 bytes");
+
+  if (auto Data = evmc::from_hex(HexAddr)) {
+    if (Data->size() == 20) {
+      std::memcpy(Addr.bytes, Data->data(), 20);
+      return Addr;
+    }
   }
 
-  std::memcpy(Addr.bytes, Data->data(), 20);
-  return Addr;
+  throw getErrorWithExtraMessage(ErrorCode::InvalidRawData,
+                                 "Hex address must be 20 bytes");
 }
 
 evmc::bytes32 parseBytes32(const std::string &HexStr) {
-  auto Data = fromHex(HexStr);
-  if (!Data || Data->size() > 32) {
-    throw getErrorWithExtraMessage(ErrorCode::InvalidRawData,
-                                   "Invalid Bytes32 hex string");
+  evmc::bytes32 Result{};
+  if (auto Data = evmc::from_hex(HexStr)) {
+    if (Data->size() <= 32) {
+      std::memcpy(Result.bytes + (32 - Data->size()), Data->data(),
+                  Data->size());
+      return Result;
+    }
   }
 
-  evmc::bytes32 Result{};
-  std::memcpy(Result.bytes + (32 - Data->size()), Data->data(), Data->size());
-  return Result;
+  throw getErrorWithExtraMessage(ErrorCode::InvalidRawData,
+                                 "Invalid Bytes32 hex string");
 }
 
 evmc::uint256be parseUint256(const std::string &HexStr) {
-  auto Data = fromHex(HexStr);
-  if (!Data || Data->size() > 32) {
-    throw getErrorWithExtraMessage(ErrorCode::InvalidRawData,
-                                   "Invalid Uint256 hex string too long");
+  evmc::uint256be Result{};
+  if (auto Data = evmc::from_hex(HexStr)) {
+    if (Data->size() <= 32) {
+      std::memcpy(Result.bytes + (32 - Data->size()), Data->data(),
+                  Data->size());
+      return Result;
+    }
   }
 
-  evmc::uint256be Result{};
-  std::memcpy(Result.bytes + (32 - Data->size()), Data->data(), Data->size());
-  return Result;
+  throw getErrorWithExtraMessage(ErrorCode::InvalidRawData,
+                                 "Invalid Uint256 hex string too long");
 }
 
 std::vector<uint8_t> parseHexData(const std::string &HexStr) {
