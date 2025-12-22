@@ -111,9 +111,11 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
   }
 
   EVMModule *Mod = *ModRet;
-  VM->Iso = VM->RT->createManagedIsolation();
   if (!VM->Iso) {
-    return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
+    VM->Iso = VM->RT->createManagedIsolation();
+    if (!VM->Iso) {
+      return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
+    }
   }
 
   auto InstRet = VM->Iso->createEVMInstance(*Mod, 1000000000);
