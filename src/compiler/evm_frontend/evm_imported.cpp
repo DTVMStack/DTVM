@@ -812,11 +812,6 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   uint64_t GasLeft =
       Result.gas_left > 0 ? static_cast<uint64_t>(Result.gas_left) : 0;
   uint64_t GasUsed = ProvidedGas > GasLeft ? ProvidedGas - GasLeft : 0;
-  if (GasUsed >= zen::evm::BASIC_EXECUTION_COST) {
-    GasUsed -= zen::evm::BASIC_EXECUTION_COST;
-  } else {
-    GasUsed = 0;
-  }
   if (GasUsed != 0) {
     Instance->chargeGas(GasUsed);
   }
@@ -1217,3 +1212,4 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
 }
 
 } // namespace COMPILER
+

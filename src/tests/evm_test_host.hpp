@@ -7,10 +7,10 @@
 #include "evm_precompiles.hpp"
 #include "evmc/mocked_host.hpp"
 #include "host/evm/crypto.h"
-#include "utils/evm.h"
-#include "utils/rlp_encoding.h"
 #include "runtime/evm_instance.h"
 #include "runtime/isolation.h"
+#include "utils/evm.h"
+#include "utils/rlp_encoding.h"
 
 using namespace zen;
 using namespace zen::runtime;
@@ -57,6 +57,7 @@ public:
     evmc_message Message{};
     uint64_t GasLimit = 0;
     uint64_t GasLimitMultiplier = 1;
+    uint64_t IntrinsicGas = 0;
     std::optional<evmc::uint256be> MaxPriorityFeePerGas;
     std::vector<AccessListEntry> AccessList;
     evmc_revision Revision = zen::evm::DEFAULT_REVISION;
@@ -108,7 +109,7 @@ public:
     const evmc_revision ActiveRevision = Config.Revision;
     Revision = ActiveRevision;
     if (GasLimit == 0) {
-      if (Config.Message.gas <= 0) {
+      if (Config.Message.gas < 0) {
         Result.ErrorMessage = "Invalid gas provided in message";
         return Result;
       }
@@ -123,84 +124,12 @@ public:
       GasLimit *= Config.GasLimitMultiplier;
     }
 
-    // Process access list (EIP-2930): calculate intrinsic gas first
-    constexpr uint64_t ACCESS_LIST_ADDRESS_COST = 2400;
-    constexpr uint64_t ACCESS_LIST_STORAGE_KEY_COST = 1900;
-    constexpr uint64_t TX_DATA_ZERO_GAS = 4;
-    constexpr uint64_t TX_CREATE_COST = 32000;
-    const uint64_t TxDataNonZeroGas =
-        ActiveRevision >= EVMC_ISTANBUL ? 16 : 68;
-    uint64_t AccessListIntrinsicGas = 0;
-    uint64_t TxDataIntrinsicGas = 0;
-    uint64_t InitcodeIntrinsicGas = 0;
-    uint64_t CreateIntrinsicGas = 0;
-
-    if (ActiveRevision >= EVMC_BERLIN) {
-      for (const auto &AccessEntry : Config.AccessList) {
-        AccessListIntrinsicGas += ACCESS_LIST_ADDRESS_COST;
-        AccessListIntrinsicGas +=
-            ACCESS_LIST_STORAGE_KEY_COST * AccessEntry.StorageKeys.size();
-      }
-    }
-
-    if (Config.Message.input_data && Config.Message.input_size > 0) {
-      const uint8_t *Data =
-          static_cast<const uint8_t *>(Config.Message.input_data);
-      for (size_t I = 0; I < Config.Message.input_size; ++I) {
-        TxDataIntrinsicGas += Data[I] == 0 ? TX_DATA_ZERO_GAS
-                                            : TxDataNonZeroGas;
-      }
-    }
-
-    if (IsCreateTx) {
-      CreateIntrinsicGas = TX_CREATE_COST;
-    }
-
-    if (IsCreateTx && ActiveRevision >= EVMC_SHANGHAI) {
-      const uint64_t InitcodeSize =
-          static_cast<uint64_t>(Config.Message.input_size);
-      if (InitcodeSize > MAX_SIZE_OF_INITCODE) {
-        Result.Success = true;
-        Result.Status = EVMC_OUT_OF_GAS;
-        Result.RemainingGas = 0;
-        Result.GasUsed = GasLimit;
-        Result.GasRefund = 0;
-        Result.GasCharged = Result.GasUsed;
-        settleGasCharges(Result.GasCharged, Config, Config.Message, Result);
-        return Result;
-      }
-      constexpr uint64_t INITCODE_WORD_COST = 2;
-      const uint64_t InitcodeWords = (InitcodeSize + 31) / 32;
-      if (InitcodeWords >
-          std::numeric_limits<uint64_t>::max() / INITCODE_WORD_COST) {
-        Result.ErrorMessage = "Initcode size too large";
-        return Result;
-      }
-      InitcodeIntrinsicGas = InitcodeWords * INITCODE_WORD_COST;
-    }
-
-    const uint64_t TotalIntrinsicGas = AccessListIntrinsicGas +
-                                       TxDataIntrinsicGas +
-                                       InitcodeIntrinsicGas +
-                                       CreateIntrinsicGas;
-
     // EIP-3651: coinbase is warm starting from Shanghai
     if (ActiveRevision >= EVMC_SHANGHAI) {
       access_account(tx_context.block_coinbase);
     }
 
-    // Deduct access list intrinsic gas from available gas
-    if (GasLimit < TotalIntrinsicGas) {
-      Result.Success = true;
-      Result.Status = EVMC_OUT_OF_GAS;
-      Result.RemainingGas = 0;
-      Result.GasUsed = GasLimit;
-      Result.GasRefund = 0;
-      Result.GasCharged = Result.GasUsed;
-      settleGasCharges(Result.GasCharged, Config, Config.Message, Result);
-      return Result;
-    }
-    uint64_t AvailableGas = GasLimit - TotalIntrinsicGas;
+    uint64_t AvailableGas = GasLimit;
 
     evmc_message Msg = Config.Message;
     Msg.gas = static_cast<int64_t>(AvailableGas);
@@ -235,7 +164,7 @@ public:
           Result.RemainingGas > 0 ? static_cast<uint64_t>(Result.RemainingGas)
                                   : 0;
       Result.GasUsed = AvailableGas > GasLeft ? AvailableGas - GasLeft : 0;
-      Result.GasUsed += TotalIntrinsicGas;
+      Result.GasUsed += Config.IntrinsicGas;
       uint64_t GasRefund = static_cast<uint64_t>(
           std::max<int64_t>(0, CreateResult.gas_refund));
       uint64_t RefundLimit = Result.GasUsed / 5;
@@ -329,9 +258,7 @@ public:
             ? OriginalGas - static_cast<uint64_t>(Result.RemainingGas)
             : 0;
 
-    // Add intrinsic gas components (EIP-2930 / EIP-3860)
-    Result.GasUsed += AccessListIntrinsicGas + TxDataIntrinsicGas +
-                     InitcodeIntrinsicGas;
+    Result.GasUsed += Config.IntrinsicGas;
 
     uint64_t GasRefund =
         static_cast<uint64_t>(std::max<int64_t>(0, Inst->getGasRefund()));
@@ -823,3 +750,4 @@ private:
 } // namespace zen::evm
 
 #endif // ZEN_TESTS_EVM_TEST_HOST_HPP
+

@@ -24,6 +24,7 @@ struct ParsedTransaction {
   std::unique_ptr<evmc_message> Message;
   std::vector<uint8_t> CallData;
   std::vector<AccessListEntry> AccessList;
+  size_t AuthorizationListSize = 0;
 };
 
 struct StateTestFixture {

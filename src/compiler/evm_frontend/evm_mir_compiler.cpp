@@ -120,9 +120,6 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   GasChunkCost = EvmCtx->getGasChunkCost();
   GasChunkSize = EvmCtx->getGasChunkSize();
 
-  if (Ctx.isGasMeteringEnabled()) {
-    meterGas(zen::evm::BASIC_EXECUTION_COST);
-  }
 #ifdef ZEN_ENABLE_LINUX_PERF
   CurBB->setSourceOffset(1);
   CurBB->setSourceName("MAIN_ENTRY");
@@ -2682,3 +2679,4 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleReturnDataSize() {
 }
 
 } // namespace COMPILER
+

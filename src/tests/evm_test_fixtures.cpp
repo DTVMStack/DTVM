@@ -332,6 +332,19 @@ createTransactionFromIndex(const rapidjson::Document &Transaction,
     }
   }
 
+  if (Transaction.HasMember("authorizationList") &&
+      Transaction["authorizationList"].IsArray()) {
+    const rapidjson::Value &AuthorizationLists =
+        Transaction["authorizationList"];
+    if (Result.Indexes.Data < AuthorizationLists.Size()) {
+      const rapidjson::Value &AuthListForIndex =
+          AuthorizationLists[Result.Indexes.Data];
+      if (AuthListForIndex.IsArray()) {
+        PT.AuthorizationListSize = AuthListForIndex.Size();
+      }
+    }
+  }
+
   return PT;
 }
 

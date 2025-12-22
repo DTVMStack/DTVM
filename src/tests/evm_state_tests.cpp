@@ -1,10 +1,14 @@
 // Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "evm/evm.h"
 #include "evm_test_fixtures.h"
 #include "evm_test_helpers.h"
 #include "evm_test_host.hpp"
+#include "llvm/ADT/STLExtras.h"
+
 #include <gtest/gtest.h>
+#include <algorithm>
 
 using namespace zen::evm;
 using namespace zen::utils;
@@ -12,10 +16,74 @@ using namespace zen::evm_test_utils;
 
 namespace {
 
-const bool DEBUG = true;
-const bool PRINT_FAILURE_DETAILS = true;
+constexpr bool DEBUG = false;
+constexpr bool PRINT_FAILURE_DETAILS = false;
 // TODO: RunMode selection logic will be refactored in the future.
-constexpr common::RunMode STATE_TEST_RUN_MODE = common::RunMode::MultipassMode;
+constexpr auto STATE_TEST_RUN_MODE = common::RunMode::MultipassMode;
+
+struct TxIntrinsicCost {
+  int64_t Intrinsic = 0;
+  int64_t Min = 0;
+};
+
+int64_t countTxDataTokens(const evmc_revision Revision,
+                          const std::vector<uint8_t> &Data) {
+  const size_t ZeroBytes =
+      static_cast<size_t>(llvm::count(Data, 0));
+  const size_t NonZeroBytes = Data.size() - ZeroBytes;
+  const int64_t NonZeroMultiplier = Revision >= EVMC_ISTANBUL ? 4 : 17;
+  return static_cast<int64_t>(NonZeroBytes) * NonZeroMultiplier +
+         static_cast<int64_t>(ZeroBytes);
+}
+
+TxIntrinsicCost computeTxIntrinsicCost(const evmc_revision Revision,
+                                       const ParsedTransaction &PT) {
+  static constexpr int64_t TxCreateCost = 32000;
+  static constexpr int64_t DataTokenCost = 4;
+  static constexpr int64_t AccessListAddressCost = 2400;
+  static constexpr int64_t AccessListStorageKeyCost = 1900;
+  static constexpr int64_t AuthorizationEmptyAccountCost = 25000;
+  static constexpr int64_t InitcodeWordCost = 2;
+  static constexpr int64_t TotalCostFloorPerToken = 10;
+
+  const bool IsCreateTx =
+      PT.Message->kind == EVMC_CREATE || PT.Message->kind == EVMC_CREATE2;
+  const int64_t CreateCost =
+      IsCreateTx && Revision >= EVMC_HOMESTEAD ? TxCreateCost : 0;
+
+  const int64_t DataTokens = countTxDataTokens(Revision, PT.CallData);
+  const int64_t DataCost = DataTokens * DataTokenCost;
+
+  int64_t AccessListCost = 0;
+  if (Revision >= EVMC_BERLIN) {
+    for (const auto &Entry : PT.AccessList) {
+      AccessListCost += AccessListAddressCost;
+      AccessListCost += AccessListStorageKeyCost *
+                        static_cast<int64_t>(Entry.StorageKeys.size());
+    }
+  }
+
+  const int64_t AuthListCost = static_cast<int64_t>(PT.AuthorizationListSize) *
+                               AuthorizationEmptyAccountCost;
+
+  int64_t InitcodeCost = 0;
+  if (IsCreateTx && Revision >= EVMC_SHANGHAI) {
+    const int64_t InitcodeWords =
+        static_cast<int64_t>((PT.CallData.size() + 31) / 32);
+    InitcodeCost = InitcodeWords * InitcodeWordCost;
+  }
+
+  const int64_t IntrinsicCost = zen::evm::BASIC_EXECUTION_COST + CreateCost +
+                                DataCost + AccessListCost + AuthListCost +
+                                InitcodeCost;
+
+  const int64_t MinCost =
+      Revision >= EVMC_PRAGUE
+          ? zen::evm::BASIC_EXECUTION_COST + DataTokens * TotalCostFloorPerToken
+          : 0;
+
+  return {IntrinsicCost, MinCost};
+}
 
 // Revision filter configuration
 // Set to EVMC_MAX_REVISION to run all tests, or a specific revision to filter
@@ -110,9 +178,33 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
   try {
     ParsedTransaction PT =
         createTransactionFromIndex(*Fixture.Transaction, ExpectedResult);
+    const evmc_revision Revision = mapForkToRevision(Fork);
+    const TxIntrinsicCost IntrinsicCost = computeTxIntrinsicCost(Revision, PT);
 
     const bool IsCreateTx =
         PT.Message->kind == EVMC_CREATE || PT.Message->kind == EVMC_CREATE2;
+    if (IsCreateTx && Revision >= EVMC_SHANGHAI &&
+        PT.CallData.size() > zen::evm::MAX_SIZE_OF_INITCODE) {
+      if (!ExpectedResult.ExpectedException.empty()) {
+        return {true, {}};
+      }
+      return MakeFailure("Initcode size limit exceeded for " +
+                         Fixture.TestName + " (" + Fork + ")");
+    }
+
+    const int64_t TxGasLimit = PT.Message->gas;
+    const int64_t RequiredGasLimit =
+        std::max(IntrinsicCost.Intrinsic, IntrinsicCost.Min);
+    if (TxGasLimit < RequiredGasLimit) {
+      if (!ExpectedResult.ExpectedException.empty()) {
+        return {true, {}};
+      }
+      return MakeFailure("Intrinsic gas too low for " + Fixture.TestName +
+                         " (" + Fork + ")");
+    }
+
+    const int64_t ExecutionGasLimit = TxGasLimit - IntrinsicCost.Intrinsic;
+    PT.Message->gas = ExecutionGasLimit;
 
     // Find the target account (contract to call)
     const ParsedAccount *TargetAccount = nullptr;
@@ -184,7 +276,8 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
       ExecConfig.BytecodeSize = TargetAccount->Account.code.size();
     }
     ExecConfig.Message = *PT.Message;
-    ExecConfig.Revision = mapForkToRevision(Fork);
+    ExecConfig.Revision = Revision;
+    ExecConfig.IntrinsicGas = static_cast<uint64_t>(IntrinsicCost.Intrinsic);
 
     // Convert AccessList from ParsedTransaction to TransactionExecutionConfig
     for (const auto &Entry : PT.AccessList) {

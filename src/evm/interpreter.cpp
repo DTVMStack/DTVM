@@ -263,13 +263,6 @@ handleExecutionStatus(zen::evm::EVMFrame *&Frame,
 } // namespace
 
 EVMFrame *InterpreterExecContext::allocTopFrame(evmc_message *Msg) {
-  // Only deduct intrinsic gas (BASIC_EXECUTION_COST) for top-level transactions
-  // (depth == 0) Nested calls (depth > 0) should not pay intrinsic gas
-  const bool IsTopLevel = (Msg->depth == 0);
-  const int64_t IntrinsicGas = IsTopLevel ? BASIC_EXECUTION_COST : 0;
-
-  EVM_REQUIRE(Msg->gas >= IntrinsicGas, GasLimitExceeded);
-
   FrameStack.emplace_back();
 
   EVMFrame &Frame = FrameStack.back();
@@ -277,7 +270,6 @@ EVMFrame *InterpreterExecContext::allocTopFrame(evmc_message *Msg) {
   Frame.Msg = *Msg;
   Inst->pushMessage(&Frame.Msg);
 
-  Frame.Msg.gas = Frame.Msg.gas - IntrinsicGas;
   return &Frame;
 }
 
@@ -1281,3 +1273,4 @@ void BaseInterpreter::interpret() {
                          ReturnData.data(), ReturnData.size());
   Context.setExeResult(std::move(ExeResult));
 }
+
