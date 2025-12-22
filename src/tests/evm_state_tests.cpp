@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <gtest/gtest.h>
 
 using namespace zen::evm;
 using namespace zen::utils;
