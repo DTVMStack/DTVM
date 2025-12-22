@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <gtest/gtest.h>
+#include <algorithm>
 
 using namespace zen::evm;
 using namespace zen::utils;

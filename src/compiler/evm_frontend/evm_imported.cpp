@@ -1195,3 +1195,4 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
 }
 
 } // namespace COMPILER
+

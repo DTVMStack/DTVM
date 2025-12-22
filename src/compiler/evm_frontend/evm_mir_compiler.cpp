@@ -2658,3 +2658,4 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleReturnDataSize() {
 }
 
 } // namespace COMPILER
+
