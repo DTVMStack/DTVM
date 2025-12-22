@@ -5,7 +5,6 @@
 #include "evm_test_fixtures.h"
 #include "evm_test_helpers.h"
 #include "evm_test_host.hpp"
-#include "llvm/ADT/STLExtras.h"
 
 #include <algorithm>
 #include <gtest/gtest.h>
@@ -28,7 +27,8 @@ struct TxIntrinsicCost {
 
 int64_t countTxDataTokens(const evmc_revision Revision,
                           const std::vector<uint8_t> &Data) {
-  const size_t ZeroBytes = static_cast<size_t>(llvm::count(Data, 0));
+  const size_t ZeroBytes =
+      static_cast<size_t>(std::count(Data.begin(), Data.end(), 0));
   const size_t NonZeroBytes = Data.size() - ZeroBytes;
   const int64_t NonZeroMultiplier = Revision >= EVMC_ISTANBUL ? 4 : 17;
   return static_cast<int64_t>(NonZeroBytes) * NonZeroMultiplier +
