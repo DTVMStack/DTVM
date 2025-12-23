@@ -45,21 +45,19 @@ uint32_t crc32(const uint8_t *Data, size_t Size) {
 struct DTVM : evmc_vm {
   DTVM();
   ~DTVM() {
-    for (auto &P : Insts) {
-      EVMInstance *Inst = P.second;
-      if (Inst && !RT->unloadEVMModule(Inst->getModule())) {
+    for (auto &P : LoadedMods) {
+      EVMModule *Mod = P.second;
+      if (!RT->unloadEVMModule(Mod)) {
         ZEN_LOG_ERROR("failed to unload EVM module");
       }
-      if (Iso && !Iso->deleteEVMInstance(Inst)) {
-        ZEN_LOG_ERROR("failed to delete instance");
-      }
     }
+    RT->deleteManagedIsolation(Iso);
   }
   RuntimeConfig Config = {.Format = InputFormat::EVM,
                           .Mode = RunMode::MultipassMode};
   std::unique_ptr<Runtime> RT;
+  std::unordered_map<uint32_t, EVMModule *> LoadedMods;
   Isolation *Iso = nullptr;
-  std::unordered_map<uint32_t, EVMInstance *> Insts;
 };
 
 /// The implementation of the evmc_vm::destroy() method.
@@ -99,6 +97,8 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
 
   if (!VM->RT) {
     VM->RT = Runtime::newEVMRuntime(VM->Config, ExecHost.get());
+  } else {
+    VM->RT->setEVMHost(ExecHost.get());
   }
 
   uint32_t CheckSum = crc32(Code, CodeSize);
@@ -111,11 +111,12 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
   }
 
   EVMModule *Mod = *ModRet;
+  VM->LoadedMods[CheckSum] = Mod;
   if (!VM->Iso) {
     VM->Iso = VM->RT->createManagedIsolation();
-    if (!VM->Iso) {
-      return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
-    }
+  }
+  if (!VM->Iso) {
+    return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
 
   auto InstRet = VM->Iso->createEVMInstance(*Mod, 1000000000);
@@ -124,10 +125,10 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
   }
 
   auto TheInst = *InstRet;
-  VM->Insts[CheckSum] = TheInst;
   evmc_message Message = *Msg;
   evmc::Result Result;
   VM->RT->callEVMMain(*TheInst, Message, Result);
+  VM->Iso->deleteEVMInstance(TheInst);
 
   return Result.release_raw();
 }
