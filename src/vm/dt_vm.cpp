@@ -56,6 +56,7 @@ struct DTVM : evmc_vm {
   RuntimeConfig Config = {.Format = InputFormat::EVM,
                           .Mode = RunMode::MultipassMode};
   std::unique_ptr<Runtime> RT;
+  std::unique_ptr<WrappedHost> ExecHost;
   std::unordered_map<uint32_t, EVMModule *> LoadedMods;
   Isolation *Iso = nullptr;
 };
@@ -91,14 +92,11 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
                     evmc_host_context *Context, enum evmc_revision Rev,
                     const evmc_message *Msg, const uint8_t *Code,
                     size_t CodeSize) {
-  std::unique_ptr<evmc::Host> ExecHost =
-      std::make_unique<WrappedHost>(Host, Context);
   auto *VM = static_cast<DTVM *>(EVMInstance);
+  VM->ExecHost->reinitialize(Host, Context);
 
   if (!VM->RT) {
-    VM->RT = Runtime::newEVMRuntime(VM->Config, ExecHost.get());
-  } else {
-    VM->RT->setEVMHost(ExecHost.get());
+    VM->RT = Runtime::newEVMRuntime(VM->Config, VM->ExecHost.get());
   }
 
   uint32_t CheckSum = crc32(Code, CodeSize);
@@ -143,7 +141,8 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
 DTVM::DTVM()
     : evmc_vm{EVMC_ABI_VERSION, "dtvm",    PROJECT_VERSION,
               ::destroy,        ::execute, ::get_capabilities,
-              ::set_option} {}
+              ::set_option},
+      ExecHost(new WrappedHost) {}
 } // namespace
 
 extern "C" evmc_vm *evmc_create_dtvmapi() { return new DTVM; }
