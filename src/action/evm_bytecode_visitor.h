@@ -90,7 +90,7 @@ private:
         LastStop = (Opcode == OP_STOP);
 
         if (!IsJumpDest) {
-          Builder.meterOpcode(Opcode);
+          Builder.meterOpcode(Opcode, PC);
         }
 
         switch (Opcode) {
@@ -574,7 +574,7 @@ private:
           InDeadCode = false;
           handleEndBlock();
           Builder.handleJumpDest(PC);
-          Builder.meterOpcode(Opcode);
+          Builder.meterOpcode(Opcode, PC);
           break;
         }
 

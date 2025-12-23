@@ -64,10 +64,26 @@ public:
   void setGasMeteringEnabled(bool Enabled) { GasMeteringEnabled = Enabled; }
   bool isGasMeteringEnabled() const { return GasMeteringEnabled; }
 
+  void setGasChunkInfo(const uint32_t *ChunkEnd, const uint64_t *ChunkCost,
+                       size_t Size) {
+    GasChunkEnd = ChunkEnd;
+    GasChunkCost = ChunkCost;
+    GasChunkSize = Size;
+  }
+  const uint32_t *getGasChunkEnd() const { return GasChunkEnd; }
+  const uint64_t *getGasChunkCost() const { return GasChunkCost; }
+  size_t getGasChunkSize() const { return GasChunkSize; }
+  bool hasGasChunks() const {
+    return GasChunkEnd && GasChunkCost && GasChunkSize > 0;
+  }
+
 private:
   const Byte *Bytecode = nullptr;
   size_t BytecodeSize = 0;
   bool GasMeteringEnabled = false;
+  const uint32_t *GasChunkEnd = nullptr;
+  const uint64_t *GasChunkCost = nullptr;
+  size_t GasChunkSize = 0;
 };
 
 void buildEVMFunction(EVMFrontendContext &Context, MModule &MMod,
@@ -156,7 +172,7 @@ public:
   void initEVM(CompilerContext *Context);
   void finalizeEVMBase();
 
-  void meterOpcode(evmc_opcode Opcode);
+  void meterOpcode(evmc_opcode Opcode, uint64_t PC);
   void meterGas(uint64_t GasCost);
 
   // Complete jump implementation with jump table
@@ -597,6 +613,11 @@ private:
   MBasicBlock *StackCheckBB = nullptr;
   Variable *StackTopVar = nullptr;
   Variable *StackSizeVar = nullptr;
+
+  // Chunk gas metering
+  const uint32_t *GasChunkEnd = nullptr;
+  const uint64_t *GasChunkCost = nullptr;
+  size_t GasChunkSize = 0;
 
   // ==================== Interface Helper Methods ====================
 

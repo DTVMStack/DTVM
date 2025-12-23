@@ -63,7 +63,9 @@ EVMFrontendContext::EVMFrontendContext() {
 EVMFrontendContext::EVMFrontendContext(const EVMFrontendContext &OtherCtx)
     : CompileContext(OtherCtx), Bytecode(OtherCtx.Bytecode),
       BytecodeSize(OtherCtx.BytecodeSize),
-      GasMeteringEnabled(OtherCtx.GasMeteringEnabled) {}
+      GasMeteringEnabled(OtherCtx.GasMeteringEnabled),
+      GasChunkEnd(OtherCtx.GasChunkEnd), GasChunkCost(OtherCtx.GasChunkCost),
+      GasChunkSize(OtherCtx.GasChunkSize) {}
 
 // ==================== EVMMirBuilder Implementation ====================
 
@@ -112,6 +114,11 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   createJumpTable();
   ReturnBB = createBasicBlock();
   loadEVMInstanceAttr();
+
+  const auto *EvmCtx = static_cast<const EVMFrontendContext *>(&Ctx);
+  GasChunkEnd = EvmCtx->getGasChunkEnd();
+  GasChunkCost = EvmCtx->getGasChunkCost();
+  GasChunkSize = EvmCtx->getGasChunkSize();
 
   if (Ctx.isGasMeteringEnabled()) {
     meterGas(zen::evm::BASIC_EXECUTION_COST);
@@ -236,10 +243,17 @@ StoreInstruction *EVMMirBuilder::setInstanceElement(MType *ValueType,
                                              InstancePtr, Offset);
 }
 
-void EVMMirBuilder::meterOpcode(evmc_opcode Opcode) {
+void EVMMirBuilder::meterOpcode(evmc_opcode Opcode, uint64_t PC) {
   if (!Ctx.isGasMeteringEnabled()) {
     return;
   }
+  if (GasChunkEnd && GasChunkCost && PC < GasChunkSize) {
+    if (GasChunkEnd[PC] > PC) {
+      meterGas(GasChunkCost[PC]);
+    }
+    return;
+  }
+
   const uint8_t Index = static_cast<uint8_t>(Opcode);
   const auto &Metrics = InstructionMetrics[Index];
   meterGas(static_cast<uint64_t>(Metrics.gas_cost));
