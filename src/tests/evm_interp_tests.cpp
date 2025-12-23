@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <yaml-cpp/yaml.h>
 
+#include "evm/evm.h"
 #include "evm/interpreter.h"
 #include "evm_test_host.hpp"
 #include "evmc/mocked_host.hpp"
@@ -177,8 +178,10 @@ TEST_P(EVMSampleTest, ExecuteSample) {
 
   // same as evm.codes: 0xFFFF'FFFF'FFFF (281,474,976,710,655)
   uint64_t GasLimit = 0xFFFF'FFFF'FFFF;
+  const uint64_t IntrinsicGas = zen::evm::BASIC_EXECUTION_COST;
+  const uint64_t ExecutionGasLimit = GasLimit - IntrinsicGas;
 
-  auto InstRet = Iso->createEVMInstance(*Mod, GasLimit);
+  auto InstRet = Iso->createEVMInstance(*Mod, ExecutionGasLimit);
   ASSERT_TRUE(Iso) << "Failed to create Instance: " << FilePath;
   EVMInstance *Inst = *InstRet;
 
@@ -190,7 +193,7 @@ TEST_P(EVMSampleTest, ExecuteSample) {
       .kind = EVMC_CALL,
       .flags = 0u,
       .depth = 0,
-      .gas = static_cast<int64_t>(GasLimit),
+      .gas = static_cast<int64_t>(ExecutionGasLimit),
       .recipient = {},
       .sender = zen::evm::DEFAULT_DEPLOYER_ADDRESS,
       .input_data = nullptr,
