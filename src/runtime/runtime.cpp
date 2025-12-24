@@ -854,6 +854,11 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
       } else if (InstErr != ErrorCode::NoError) {
         Result.status_code = MapErrToStatus(InstErr);
       }
+      if (Result.status_code == EVMC_SUCCESS ||
+          Result.status_code == EVMC_REVERT) {
+        Result.gas_left = static_cast<int64_t>(Inst.getGas());
+        Result.gas_refund = static_cast<int64_t>(Inst.getGasRefund());
+      }
 
 #ifdef ZEN_ENABLE_CPU_EXCEPTION
     } else { // When cpu-exception

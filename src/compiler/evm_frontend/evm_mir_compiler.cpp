@@ -264,24 +264,18 @@ void EVMMirBuilder::meterGas(uint64_t GasCost) {
   MPointerType *VoidPtrType = createVoidPtrType();
   MPointerType *I64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
 
-  MInstruction *MsgPtr = getInstanceElement(
-      VoidPtrType, zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
-  MInstruction *MsgPtrInt = createInstruction<ConversionInstruction>(
-      false, OP_ptrtoint, I64Type, MsgPtr);
-
-  MInstruction *MsgGasOffsetValue = createIntConstInstruction(
-      I64Type, zen::runtime::EVMInstance::getMessageGasOffset());
-  MInstruction *MsgGasAddrInt = createInstruction<BinaryInstruction>(
-      false, OP_add, I64Type, MsgPtrInt, MsgGasOffsetValue);
-  MInstruction *MsgGasPtr = createInstruction<ConversionInstruction>(
-      false, OP_inttoptr, I64PtrType, MsgGasAddrInt);
-
-  MInstruction *MsgGasValue =
-      createInstruction<LoadInstruction>(false, I64Type, MsgGasPtr);
+  MInstruction *GasOffsetValue = createIntConstInstruction(
+      I64Type, zen::runtime::EVMInstance::getGasFieldOffset());
+  MInstruction *GasAddrInt = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, InstanceAddr, GasOffsetValue);
+  MInstruction *GasPtr = createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, I64PtrType, GasAddrInt);
+  MInstruction *GasValue =
+      createInstruction<LoadInstruction>(false, I64Type, GasPtr);
 
   MInstruction *GasCostValue = createIntConstInstruction(I64Type, GasCost);
   MInstruction *IsOutOfGas = createInstruction<CmpInstruction>(
-      false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, MsgGasValue,
+      false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, GasValue,
       GasCostValue);
 
   MBasicBlock *ContinueBB = createBasicBlock();
@@ -294,17 +288,34 @@ void EVMMirBuilder::meterGas(uint64_t GasCost) {
   setInsertBlock(ContinueBB);
 
   MInstruction *NewGas = createInstruction<BinaryInstruction>(
-      false, OP_sub, I64Type, MsgGasValue, GasCostValue);
-
-  MInstruction *GasOffsetValue = createIntConstInstruction(
-      I64Type, zen::runtime::EVMInstance::getGasFieldOffset());
-  MInstruction *GasAddrInt = createInstruction<BinaryInstruction>(
-      false, OP_add, I64Type, InstanceAddr, GasOffsetValue);
-  MInstruction *GasPtr = createInstruction<ConversionInstruction>(
-      false, OP_inttoptr, I64PtrType, GasAddrInt);
+      false, OP_sub, I64Type, GasValue, GasCostValue);
 
   createInstruction<StoreInstruction>(true, &Ctx.VoidType, NewGas, GasPtr);
+
+  MInstruction *MsgPtr = getInstanceElement(
+      VoidPtrType, zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
+  MInstruction *MsgPtrInt = createInstruction<ConversionInstruction>(
+      false, OP_ptrtoint, I64Type, MsgPtr);
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+  MInstruction *HasMsg = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, MsgPtrInt, Zero);
+  MBasicBlock *MsgStoreBB = createBasicBlock();
+  MBasicBlock *MsgSkipBB = createBasicBlock();
+  createInstruction<BrIfInstruction>(true, Ctx, HasMsg, MsgStoreBB, MsgSkipBB);
+  addSuccessor(MsgStoreBB);
+  addSuccessor(MsgSkipBB);
+
+  setInsertBlock(MsgStoreBB);
+  MInstruction *MsgGasOffsetValue = createIntConstInstruction(
+      I64Type, zen::runtime::EVMInstance::getMessageGasOffset());
+  MInstruction *MsgGasAddrInt = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, MsgPtrInt, MsgGasOffsetValue);
+  MInstruction *MsgGasPtr = createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, I64PtrType, MsgGasAddrInt);
   createInstruction<StoreInstruction>(true, &Ctx.VoidType, NewGas, MsgGasPtr);
+  createInstruction<BrInstruction>(true, Ctx, MsgSkipBB);
+  addSuccessor(MsgSkipBB);
+  setInsertBlock(MsgSkipBB);
 }
 
 void EVMMirBuilder::createStackCheckBlock(int32_t MinSize, int32_t MaxSize) {
@@ -799,11 +810,16 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
 
 void EVMMirBuilder::handleJumpDest(const uint64_t &PC) {
   MBasicBlock *DestBB = JumpDestTable.at(PC);
-  if (!CurBB->empty()) {
-    MInstruction *LastInst = *std::prev(CurBB->end());
-    if (!LastInst->isTerminator()) {
+  if (CurBB != DestBB) {
+    if (CurBB->empty()) {
       CurBB->addSuccessor(DestBB);
       createInstruction<BrInstruction>(true, Ctx, DestBB);
+    } else {
+      MInstruction *LastInst = *std::prev(CurBB->end());
+      if (!LastInst->isTerminator()) {
+        CurBB->addSuccessor(DestBB);
+        createInstruction<BrInstruction>(true, Ctx, DestBB);
+      }
     }
   }
   setInsertBlock(DestBB);
@@ -2656,5 +2672,4 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleReturnDataSize() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   return callRuntimeFor<uint64_t>(RuntimeFunctions.GetReturnDataSize);
 }
-
 } // namespace COMPILER

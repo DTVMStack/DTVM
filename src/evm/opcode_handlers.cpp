@@ -3,6 +3,7 @@
 
 #include "evm/opcode_handlers.h"
 #include "common/errors.h"
+#include "evm/gas_storage_cost.h"
 #include "evm/interpreter.h"
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
@@ -242,9 +243,11 @@ bool checkMemoryExpandAndChargeGas(EVMFrame *Frame, const intx::uint256 &Offset,
   if (Offset > std::numeric_limits<uint64_t>::max()) {
     return false;
   }
-  EVM_REQUIRE(static_cast<uint64_t>(Offset) < UINT64_MAX - Size,
-              IntegerOverflow);
-  const auto NewSize = static_cast<uint64_t>(Offset) + Size;
+  const uint64_t Offset64 = static_cast<uint64_t>(Offset);
+  if (Offset64 > std::numeric_limits<uint64_t>::max() - Size) {
+    return false;
+  }
+  const auto NewSize = Offset64 + Size;
   return expandMemoryAndChargeGas(Frame, NewSize);
 }
 bool checkMemoryExpandAndChargeGas(EVMFrame *Frame, const intx::uint256 &Offset,

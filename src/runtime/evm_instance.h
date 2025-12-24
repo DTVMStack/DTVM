@@ -6,7 +6,6 @@
 
 #include "common/evm_traphandler.h"
 #include "evm/evm.h"
-#include "evm/gas_storage_cost.h"
 #include "evmc/evmc.hpp"
 #include "intx/intx.hpp"
 #include "runtime/evm_module.h"
@@ -52,6 +51,9 @@ public:
                                                uint64_t NewSize);
   void consumeMemoryExpansionGas(uint64_t RequiredSize);
   void expandMemory(uint64_t RequiredSize);
+  bool expandMemoryChecked(uint64_t Offset, uint64_t Size);
+  bool expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA, uint64_t OffsetB,
+                           uint64_t SizeB);
   void chargeGas(uint64_t GasCost);
 
   void addGasRefund(uint64_t Amount) { GasRefund += Amount; }
@@ -97,12 +99,12 @@ public:
   // ==================== JIT Methods ====================
 
 #ifdef ZEN_ENABLE_JIT
-  static void __attribute__((noinline))
+  __attribute__((noinline)) static void
   setInstanceExceptionOnJIT(EVMInstance *Inst, ErrorCode ErrCode);
-  static void __attribute__((noinline))
+  __attribute__((noinline)) static void
   throwInstanceExceptionOnJIT(EVMInstance *Inst);
   // trigger = set + throw
-  static void __attribute__((noinline))
+  __attribute__((noinline)) static void
   triggerInstanceExceptionOnJIT(EVMInstance *Inst, ErrorCode ErrCode);
 #endif // ZEN_ENABLE_JIT
 
@@ -260,6 +262,7 @@ private:
   uint64_t GasRefund = 0;
   // memory
   std::vector<uint8_t> Memory;
+  std::vector<std::vector<uint8_t>> MemoryStack;
   std::vector<uint8_t> ReturnData;
   evmc::Result ExeResult{EVMC_SUCCESS, 0, 0};
 

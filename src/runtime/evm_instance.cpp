@@ -3,18 +3,27 @@
 
 #include "runtime/evm_instance.h"
 
-#include "action/instantiator.h"
-#include "common/enums.h"
 #include "common/errors.h"
 #include "common/evm_traphandler.h"
 #include "entrypoint/entrypoint.h"
-#include "runtime/config.h"
 #include "utils/backtrace.h"
 #include <algorithm>
+#include <utility>
 
 namespace zen::runtime {
 
 using namespace common;
+
+namespace {
+bool calcRequiredMemorySize(uint64_t Offset, uint64_t Size,
+                            uint64_t &RequiredSize) {
+  if (Offset > std::numeric_limits<uint64_t>::max() - Size) {
+    return false;
+  }
+  RequiredSize = Offset + Size;
+  return true;
+}
+} // namespace
 
 EVMInstanceUniquePtr EVMInstance::newEVMInstance(Isolation &Iso,
                                                  const EVMModule &Mod,
@@ -42,6 +51,13 @@ EVMInstance::~EVMInstance() {}
 void EVMInstance::setGas(uint64_t NewGas) { Gas = NewGas; }
 
 void EVMInstance::pushMessage(evmc_message *Msg) {
+  if (MessageStack.empty()) {
+    MemoryStack.clear();
+    Memory.clear();
+  } else {
+    MemoryStack.push_back(std::move(Memory));
+    Memory.clear();
+  }
   MessageStack.push_back(Msg);
   CurrentMessage = Msg;
   Gas = Msg ? Msg->gas : 0;
@@ -52,6 +68,12 @@ void EVMInstance::popMessage() {
     MessageStack.pop_back();
   }
   CurrentMessage = MessageStack.empty() ? nullptr : MessageStack.back();
+  if (!MemoryStack.empty()) {
+    Memory = std::move(MemoryStack.back());
+    MemoryStack.pop_back();
+  } else {
+    Memory.clear();
+  }
   Gas = CurrentMessage ? CurrentMessage->gas : 0;
 }
 
@@ -119,6 +141,29 @@ void EVMInstance::expandMemory(uint64_t RequiredSize) {
   if (NewSize > Memory.size()) {
     Memory.resize(NewSize, 0);
   }
+}
+
+bool EVMInstance::expandMemoryChecked(uint64_t Offset, uint64_t Size) {
+  uint64_t RequiredSize = 0;
+  if (!calcRequiredMemorySize(Offset, Size, RequiredSize)) {
+    chargeGas(getGas() + 1);
+    return false;
+  }
+  expandMemory(RequiredSize);
+  return true;
+}
+
+bool EVMInstance::expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA,
+                                      uint64_t OffsetB, uint64_t SizeB) {
+  uint64_t RequiredSizeA = 0;
+  uint64_t RequiredSizeB = 0;
+  if (!calcRequiredMemorySize(OffsetA, SizeA, RequiredSizeA) ||
+      !calcRequiredMemorySize(OffsetB, SizeB, RequiredSizeB)) {
+    chargeGas(getGas() + 1);
+    return false;
+  }
+  expandMemory(std::max(RequiredSizeA, RequiredSizeB));
+  return true;
 }
 void EVMInstance::chargeGas(uint64_t GasCost) {
   evmc_message *Msg = getCurrentMessage();
