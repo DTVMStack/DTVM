@@ -1,3 +1,5 @@
+// Copyright (C) 2025 the DTVM authors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 #include "dt_evmc_vm.h"
 #include "common/enums.h"
@@ -7,14 +9,11 @@
 #include "runtime/isolation.h"
 #include "runtime/runtime.h"
 #include "wrapped_host.h"
+
 #include <evmc/evmc.h>
 #include <evmc/evmc.hpp>
 #include <evmc/helpers.h>
-#include <evmc/instructions.h>
 
-#include <algorithm>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
 
 namespace {
@@ -137,7 +136,7 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
 
-  auto TheInst = *InstRet;
+  auto *TheInst = *InstRet;
   evmc_message Message = *Msg;
   evmc::Result Result;
   VM->RT->callEVMMain(*TheInst, Message, Result);
