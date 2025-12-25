@@ -13,15 +13,15 @@
 
 namespace zen::evm {
 
-struct EVMInterpreterCache {
+struct EVMBytecodeCache {
   std::vector<uint8_t> JumpDestMap;
   std::vector<intx::uint256> PushValueMap;
   std::vector<uint32_t> GasChunkEnd;
   std::vector<uint64_t> GasChunkCost;
 };
 
-void buildInterpreterCache(EVMInterpreterCache &Cache, const common::Byte *Code,
-                           size_t CodeSize);
+void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
+                        size_t CodeSize);
 
 } // namespace zen::evm
 

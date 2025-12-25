@@ -32,7 +32,7 @@ public:
   size_t CodeSize;
   evmc::Host *Host;
 
-  const evm::EVMInterpreterCache &getInterpreterCache() const;
+  const evm::EVMBytecodeCache &getBytecodeCache() const;
 
 #ifdef ZEN_ENABLE_JIT
   common::CodeMemPool &getJITCodeMemPool() { return JITCodeMemPool; }
@@ -55,9 +55,9 @@ private:
 
   Byte *initCode(size_t Size) { return (Byte *)allocateZeros(Size); }
 
-  void initInterpreterCache() const;
-  mutable bool InterpreterCacheInitialized = false;
-  mutable evm::EVMInterpreterCache InterpCache;
+  void initBytecodeCache() const;
+  mutable bool BytecodeCacheInitialized = false;
+  mutable evm::EVMBytecodeCache BytecodeCache;
 
 #ifdef ZEN_ENABLE_JIT
   common::CodeMemPool JITCodeMemPool;

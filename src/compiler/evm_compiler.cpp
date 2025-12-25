@@ -59,7 +59,7 @@ void EagerEVMJITCompiler::compile() {
   Ctx.setGasMeteringEnabled(Config.EnableEvmGasMetering);
   Ctx.setBytecode(reinterpret_cast<const Byte *>(EVMMod->Code),
                   EVMMod->CodeSize);
-  const auto &Cache = EVMMod->getInterpreterCache();
+  const auto &Cache = EVMMod->getBytecodeCache();
   Ctx.setGasChunkInfo(Cache.GasChunkEnd.data(), Cache.GasChunkCost.data(),
                       EVMMod->CodeSize);
 

@@ -1,6 +1,6 @@
-# EVM Interpreter Cache Design
+# EVM Bytecode Cache Design
 
-This document describes the interpreter cache built by `buildInterpreterCache()` in `src/evm/evm_cache.cpp` and used by `BaseInterpreter::interpret()` in `src/evm/interpreter.cpp`.
+This document describes the bytecode cache built by `buildBytecodeCache()` in `src/evm/evm_cache.cpp` and used by `BaseInterpreter::interpret()` in `src/evm/interpreter.cpp` as well as the EVM JIT compiler in `src/compiler/evm_compiler.cpp`.
 
 ## Layout
 

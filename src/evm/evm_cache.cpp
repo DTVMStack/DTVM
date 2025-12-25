@@ -174,8 +174,8 @@ static void buildGasChunks(const zen::common::Byte *Code, size_t CodeSize,
 
 } // namespace
 
-void buildInterpreterCache(EVMInterpreterCache &Cache, const common::Byte *Code,
-                           size_t CodeSize) {
+void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
+                        size_t CodeSize) {
   Cache.JumpDestMap.assign(CodeSize, 0);
   Cache.PushValueMap.resize(CodeSize);
   Cache.GasChunkEnd.assign(CodeSize, 0);

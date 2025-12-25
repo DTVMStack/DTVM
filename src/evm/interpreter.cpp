@@ -330,7 +330,7 @@ void BaseInterpreter::interpret() {
   Byte *Code = Mod->Code;
   static const auto *MetricsTable =
       evmc_get_instruction_metrics_table(DEFAULT_REVISION);
-  const auto &Cache = Mod->getInterpreterCache();
+  const auto &Cache = Mod->getBytecodeCache();
   const uint8_t *__restrict JumpDestMap = Cache.JumpDestMap.data();
   const intx::uint256 *__restrict PushValueMap = Cache.PushValueMap.data();
   const uint32_t *__restrict GasChunkEnd = Cache.GasChunkEnd.data();

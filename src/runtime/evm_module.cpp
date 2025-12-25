@@ -70,16 +70,16 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
   return Mod;
 }
 
-const evm::EVMInterpreterCache &EVMModule::getInterpreterCache() const {
-  if (!InterpreterCacheInitialized) {
-    initInterpreterCache();
-    InterpreterCacheInitialized = true;
+const evm::EVMBytecodeCache &EVMModule::getBytecodeCache() const {
+  if (!BytecodeCacheInitialized) {
+    initBytecodeCache();
+    BytecodeCacheInitialized = true;
   }
-  return InterpCache;
+  return BytecodeCache;
 }
 
-void EVMModule::initInterpreterCache() const {
-  evm::buildInterpreterCache(InterpCache, Code, CodeSize);
+void EVMModule::initBytecodeCache() const {
+  evm::buildBytecodeCache(BytecodeCache, Code, CodeSize);
 }
 
 } // namespace zen::runtime
