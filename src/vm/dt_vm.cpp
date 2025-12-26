@@ -51,7 +51,9 @@ struct DTVM : evmc_vm {
         ZEN_LOG_ERROR("failed to unload EVM module");
       }
     }
-    RT->deleteManagedIsolation(Iso);
+    if (Iso) {
+      RT->deleteManagedIsolation(Iso);
+    }
   }
   RuntimeConfig Config = {.Format = InputFormat::EVM,
                           .Mode = RunMode::MultipassMode};
