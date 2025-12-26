@@ -49,6 +49,11 @@ inline uint64_t calculateWordCopyGas(uint64_t Size) {
   uint64_t Words = numWords(Size);
   return Words * static_cast<uint64_t>(zen::evm::WORD_COPY_COST);
 }
+
+inline void triggerStaticModeViolation(zen::runtime::EVMInstance *Instance) {
+  zen::runtime::EVMInstance::triggerInstanceExceptionOnJIT(
+      Instance, zen::common::ErrorCode::EVMStaticModeViolation);
+}
 } // namespace
 
 const RuntimeFunctions &getRuntimeFunctionTable() {
@@ -890,7 +895,8 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   const bool TransfersValue =
       (CallKind == EVMC_CALL || CallKind == EVMC_CALLCODE) && Value != 0;
   if (TransfersValue && Instance->isStaticMode()) {
-    throw zen::common::getError(zen::common::ErrorCode::EVMStaticModeViolation);
+    triggerStaticModeViolation(Instance);
+    return 0;
   }
 
   if (CurrentMsg->depth >= zen::evm::MAXSTACK) {
@@ -1144,7 +1150,8 @@ void evmSetSStore(zen::runtime::EVMInstance *Instance,
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   if (Instance->isStaticMode()) {
-    throw zen::common::getError(zen::common::ErrorCode::EVMStaticModeViolation);
+    triggerStaticModeViolation(Instance);
+    return;
   }
   const evmc_message *Msg = Instance->getCurrentMessage();
   evmc_revision Rev = Instance->getRevision();
@@ -1190,7 +1197,8 @@ void evmSetTStore(zen::runtime::EVMInstance *Instance,
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   if (Instance->isStaticMode()) {
-    throw zen::common::getError(zen::common::ErrorCode::EVMStaticModeViolation);
+    triggerStaticModeViolation(Instance);
+    return;
   }
   const evmc_message *Msg = Instance->getCurrentMessage();
   const auto Key = intx::be::store<evmc::bytes32>(Index);
@@ -1202,7 +1210,8 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
   if (Instance->isStaticMode()) {
-    throw zen::common::getError(zen::common::ErrorCode::EVMStaticModeViolation);
+    triggerStaticModeViolation(Instance);
+    return;
   }
   const evmc_message *Msg = Instance->getCurrentMessage();
   evmc_revision Rev = Instance->getRevision();

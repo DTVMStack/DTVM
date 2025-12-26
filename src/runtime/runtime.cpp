@@ -826,6 +826,8 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
       return EVMC_INVALID_MEMORY_ACCESS;
     case ErrorCode::EVMInvalidInstruction:
       return EVMC_INVALID_INSTRUCTION;
+    case ErrorCode::EVMStaticModeViolation:
+      return EVMC_STATIC_MODE_VIOLATION;
     default:
       return EVMC_FAILURE;
     }
