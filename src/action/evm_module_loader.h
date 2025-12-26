@@ -16,7 +16,13 @@ public:
       : Mod(Mod), Data(Data), ModuleSize(Size) {}
 
   void load() {
-    if (Data == nullptr || ModuleSize == 0) {
+    if (ModuleSize == 0) {
+      // Keep a non-null code pointer for empty bytecode.
+      Mod.Code = Mod.initCode(1);
+      Mod.CodeSize = 0;
+      return;
+    }
+    if (Data == nullptr) {
       throw common::getError(common::ErrorCode::InvalidRawData);
     }
     Mod.Code = Mod.initCode(ModuleSize);

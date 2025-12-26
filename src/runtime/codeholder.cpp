@@ -45,15 +45,21 @@ CodeHolder::newRawDataCodeHolder(Runtime &RT, const void *Data, size_t Size) {
   if (Size > PresetMaxModuleSize) {
     throw getError(ErrorCode::ModuleSizeTooLarge);
   }
+  if (Size != 0 && Data == nullptr) {
+    throw getError(ErrorCode::InvalidRawData);
+  }
 
   void *Buf = RT.allocate(sizeof(CodeHolder));
   ZEN_ASSERT(Buf);
 
   CodeHolderUniquePtr RawData(new (Buf) CodeHolder(RT, HolderKind::kRawData));
 
-  void *DataCopy = RT.allocate(Size);
-  ZEN_ASSERT(DataCopy);
-  std::memcpy(DataCopy, Data, Size);
+  void *DataCopy = nullptr;
+  if (Size != 0) {
+    DataCopy = RT.allocate(Size);
+    ZEN_ASSERT(DataCopy);
+    std::memcpy(DataCopy, Data, Size);
+  }
 
   RawData->Data = DataCopy;
   RawData->Size = Size;
