@@ -6,6 +6,7 @@
 #include "common/errors.h"
 #include "common/evm_traphandler.h"
 #include "entrypoint/entrypoint.h"
+#include "evm/evm.h"
 #include "utils/backtrace.h"
 #include <algorithm>
 #include <utility>
@@ -149,6 +150,10 @@ bool EVMInstance::expandMemoryChecked(uint64_t Offset, uint64_t Size) {
     chargeGas(getGas() + 1);
     return false;
   }
+  if (RequiredSize > zen::evm::MAX_REQUIRED_MEMORY_SIZE) {
+    chargeGas(getGas() + 1);
+    return false;
+  }
   expandMemory(RequiredSize);
   return true;
 }
@@ -162,7 +167,12 @@ bool EVMInstance::expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA,
     chargeGas(getGas() + 1);
     return false;
   }
-  expandMemory(std::max(RequiredSizeA, RequiredSizeB));
+  const uint64_t RequiredSize = std::max(RequiredSizeA, RequiredSizeB);
+  if (RequiredSize > zen::evm::MAX_REQUIRED_MEMORY_SIZE) {
+    chargeGas(getGas() + 1);
+    return false;
+  }
+  expandMemory(RequiredSize);
   return true;
 }
 void EVMInstance::chargeGas(uint64_t GasCost) {

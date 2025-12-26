@@ -1068,6 +1068,9 @@ uint64_t evmHandleStaticCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
 
 void evmSetRevert(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                   uint64_t Size) {
+  if (!Instance->expandMemoryChecked(Offset, Size)) {
+    return;
+  }
   auto &Memory = Instance->getMemory();
   std::vector<uint8_t> ReturnData(Memory.begin() + Offset,
                                   Memory.begin() + Offset + Size);
