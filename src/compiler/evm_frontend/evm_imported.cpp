@@ -987,9 +987,8 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   Instance->popMessage();
 
   // Charge the caller for the gas actually consumed by the callee.
-  uint64_t CallGas = CallMsg.gas > 0 ? static_cast<uint64_t>(CallMsg.gas) : 0;
-  uint64_t GasLeft =
-      Result.gas_left > 0 ? static_cast<uint64_t>(Result.gas_left) : 0;
+  CallGas = CallMsg.gas > 0 ? static_cast<uint64_t>(CallMsg.gas) : 0;
+  GasLeft = Result.gas_left > 0 ? static_cast<uint64_t>(Result.gas_left) : 0;
   uint64_t GasUsed = CallGas > GasLeft ? CallGas - GasLeft : 0;
   if (GasUsed > 0) {
     if (GasUsed > 0) {
