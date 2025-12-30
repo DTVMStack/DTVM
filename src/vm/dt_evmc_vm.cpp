@@ -107,7 +107,20 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
                     const evmc_message *Msg, const uint8_t *Code,
                     size_t CodeSize) {
   auto *VM = static_cast<DTVM *>(EVMInstance);
-  VM->ExecHost->reinitialize(Host, Context);
+  struct HostContextScope {
+    WrappedHost *ExecHost;
+    const evmc_host_interface *PrevInterface;
+    evmc_host_context *PrevContext;
+    HostContextScope(WrappedHost *Host, const evmc_host_interface *Interface,
+                     evmc_host_context *Context)
+        : ExecHost(Host), PrevInterface(Host->getInterface()),
+          PrevContext(Host->getContext()) {
+      ExecHost->reinitialize(Interface, Context);
+    }
+    ~HostContextScope() { ExecHost->reinitialize(PrevInterface, PrevContext); }
+  };
+
+  HostContextScope HostScope(VM->ExecHost.get(), Host, Context);
 
   if (!VM->RT) {
     VM->RT = Runtime::newEVMRuntime(VM->Config, VM->ExecHost.get());

@@ -22,6 +22,12 @@ public:
     HostContext = context;
   }
 
+  const evmc_host_interface *getInterface() const noexcept {
+    return HostInterface;
+  }
+
+  evmc_host_context *getContext() const noexcept { return HostContext; }
+
   bool account_exists(const evmc::address &Addr) const noexcept override {
     return HostInterface->account_exists(HostContext, &Addr);
   }

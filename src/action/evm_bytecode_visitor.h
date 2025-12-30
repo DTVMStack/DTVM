@@ -545,7 +545,9 @@ private:
 
         case OP_SELFDESTRUCT: {
           Operand Beneficiary = pop();
+          handleEndBlock();
           Builder.handleSelfDestruct(Beneficiary);
+          InDeadCode = true;
           break;
         }
 

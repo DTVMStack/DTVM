@@ -1951,11 +1951,33 @@ void EVMMirBuilder::handleRevert(Operand OffsetOp, Operand SizeOp) {
   normalizeOperandU64(SizeOp);
   callRuntimeFor<void, uint64_t, uint64_t>(RuntimeFunctions.SetRevert, OffsetOp,
                                            SizeOp);
+
+  createInstruction<BrInstruction>(true, Ctx, ReturnBB);
+  addSuccessor(ReturnBB);
+
+  if (ReturnBB->empty()) {
+    setInsertBlock(ReturnBB);
+    handleVoidReturn();
+  }
+
+  MBasicBlock *PostRevertBB = createBasicBlock();
+  setInsertBlock(PostRevertBB);
 }
 
 void EVMMirBuilder::handleInvalid() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   callRuntimeFor(RuntimeFunctions.HandleInvalid);
+
+  createInstruction<BrInstruction>(true, Ctx, ReturnBB);
+  addSuccessor(ReturnBB);
+
+  if (ReturnBB->empty()) {
+    setInsertBlock(ReturnBB);
+    handleVoidReturn();
+  }
+
+  MBasicBlock *PostInvalidBB = createBasicBlock();
+  setInsertBlock(PostInvalidBB);
 }
 typename EVMMirBuilder::Operand
 EVMMirBuilder::handleSLoad(Operand KeyComponents) {
@@ -1983,6 +2005,17 @@ void EVMMirBuilder::handleSelfDestruct(Operand Beneficiary) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   callRuntimeFor<void, const uint8_t *>(RuntimeFunctions.HandleSelfDestruct,
                                         Beneficiary);
+
+  createInstruction<BrInstruction>(true, Ctx, ReturnBB);
+  addSuccessor(ReturnBB);
+
+  if (ReturnBB->empty()) {
+    setInsertBlock(ReturnBB);
+    handleVoidReturn();
+  }
+
+  MBasicBlock *PostSelfDestructBB = createBasicBlock();
+  setInsertBlock(PostSelfDestructBB);
 }
 
 typename EVMMirBuilder::Operand

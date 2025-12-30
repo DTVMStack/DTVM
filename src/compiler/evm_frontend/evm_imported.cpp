@@ -937,7 +937,7 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   uint64_t CallGas = Gas;
   uint64_t GasLeft = Instance->getGas();
   if (Rev >= EVMC_TANGERINE_WHISTLE) {
-    uint64_t GasCap = GasLeft - GasLeft / 64;
+    const uint64_t GasCap = GasLeft - GasLeft / 64;
     if (CallGas > GasCap) {
       CallGas = GasCap;
     }
@@ -946,6 +946,17 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   }
   if (TransfersValue) {
     CallGas += zen::evm::CALL_GAS_STIPEND;
+    GasLeft += zen::evm::CALL_GAS_STIPEND;
+    Instance->setGas(GasLeft);
+    evmc_message *CurrentMsgMutable =
+        const_cast<evmc_message *>(Instance->getCurrentMessage());
+    if (CurrentMsgMutable) {
+      CurrentMsgMutable->gas = static_cast<int64_t>(GasLeft);
+    }
+    if (!HasEnoughBalance) {
+      Instance->setReturnData({});
+      return 0;
+    }
   }
 
   // Create message for call
@@ -1220,24 +1231,35 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
 
   evmc::address BenefAddr = loadAddressFromLE(Beneficiary);
 
-  // EIP-161: if target account does not exist, charge account creation cost
+  // EIP-161: charge account creation cost only if a new account is created.
   if (Rev >= EVMC_SPURIOUS_DRAGON && !Module->Host->account_exists(BenefAddr)) {
-    Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
+    const auto Balance = Module->Host->get_balance(Msg->recipient);
+    if (intx::be::load<intx::uint256>(Balance) != 0) {
+      Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
+    }
   }
 
-  // EIP-2929: Charge cold account access cost if needed
-  if (Rev >= EVMC_BERLIN &&
-      Module->Host->access_account(BenefAddr) == EVMC_ACCESS_COLD) {
-    Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
+  // EIP-2929: charge warm access cost, plus additional cold cost if needed.
+  if (Rev >= EVMC_BERLIN) {
+    const bool IsCold =
+        Module->Host->access_account(BenefAddr) == EVMC_ACCESS_COLD;
+    Instance->chargeGas(zen::evm::WARM_ACCOUNT_ACCESS_COST);
+    if (IsCold) {
+      Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
+    }
   }
 
   Module->Host->selfdestruct(Msg->recipient, BenefAddr);
+  Instance->setReturnData({});
   uint64_t RemainingGas = Msg->gas;
   Instance->popMessage();
 
   if (const evmc_message *Parent = Instance->getCurrentMessage()) {
-    const_cast<evmc_message *>(Parent)->gas += RemainingGas;
+    auto *ParentMsg = const_cast<evmc_message *>(Parent);
+    ParentMsg->gas += static_cast<int64_t>(RemainingGas);
+    Instance->setGas(static_cast<uint64_t>(ParentMsg->gas));
   } else {
+    Instance->setGas(RemainingGas);
     evmc::Result ExeResult(
         EVMC_SUCCESS, 0, Instance ? Instance->getGasRefund() : 0,
         Instance->getReturnData().data(), Instance->getReturnData().size());
