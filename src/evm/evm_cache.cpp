@@ -174,8 +174,7 @@ struct GasBlock {
   std::vector<uint32_t> Preds;
 };
 
-static void addEdge(std::vector<GasBlock> &Blocks, uint32_t From,
-                    uint32_t To) {
+static void addEdge(std::vector<GasBlock> &Blocks, uint32_t From, uint32_t To) {
   auto &FromSuccs = Blocks[From].Succs;
   if (std::find(FromSuccs.begin(), FromSuccs.end(), To) == FromSuccs.end()) {
     FromSuccs.push_back(To);
@@ -239,11 +238,10 @@ static bool splitCriticalEdges(std::vector<GasBlock> &Blocks) {
   return Changed;
 }
 
-static void
-buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
-               const evmc_instruction_metrics *MetricsTable,
-               std::vector<GasBlock> &Blocks,
-               std::vector<uint32_t> &BlockAtPc) {
+static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
+                           const evmc_instruction_metrics *MetricsTable,
+                           std::vector<GasBlock> &Blocks,
+                           std::vector<uint32_t> &BlockAtPc) {
   if (CodeSize == 0) {
     return;
   }
@@ -340,9 +338,7 @@ static bool resolveConstantJumpTarget(const std::vector<uint8_t> &JumpDestMap,
   return true;
 }
 
-static size_t bitsetWordCount(size_t NumBits) {
-  return (NumBits + 63) / 64;
-}
+static size_t bitsetWordCount(size_t NumBits) { return (NumBits + 63) / 64; }
 
 static void bitsetSetAll(std::vector<uint64_t> &Bits, size_t NumBits) {
   std::fill(Bits.begin(), Bits.end(), ~uint64_t{0});
@@ -393,8 +389,8 @@ static size_t bitsetCount(const std::vector<uint64_t> &Bits) {
   return Count;
 }
 
-static std::vector<uint8_t> computeReachable(const std::vector<GasBlock> &Blocks,
-                                             uint32_t EntryId) {
+static std::vector<uint8_t>
+computeReachable(const std::vector<GasBlock> &Blocks, uint32_t EntryId) {
   const size_t NumBlocks = Blocks.size();
   std::vector<uint8_t> Reachable(NumBlocks, 0);
   if (NumBlocks == 0 || EntryId >= NumBlocks) {
@@ -474,10 +470,10 @@ computeDominators(const std::vector<GasBlock> &Blocks,
   return Dom;
 }
 
-static void findBackEdgesUsingDominators(
-    const std::vector<GasBlock> &Blocks,
-    const std::vector<std::vector<uint64_t>> &Dom,
-    std::vector<std::vector<uint32_t>> &BackEdges) {
+static void
+findBackEdgesUsingDominators(const std::vector<GasBlock> &Blocks,
+                             const std::vector<std::vector<uint64_t>> &Dom,
+                             std::vector<std::vector<uint32_t>> &BackEdges) {
   const size_t NumBlocks = Blocks.size();
   BackEdges.assign(NumBlocks, {});
 
@@ -590,9 +586,8 @@ static bool buildLoopsUsingDominance(
         It = HeaderIndex.emplace(To, LoopBuilds.size() - 1).first;
       }
 
-      std::vector<uint64_t> LoopBits =
-          collectNaturalLoop(static_cast<uint32_t>(From), To, Blocks, NumBlocks,
-                             Reachable);
+      std::vector<uint64_t> LoopBits = collectNaturalLoop(
+          static_cast<uint32_t>(From), To, Blocks, NumBlocks, Reachable);
       auto &TargetBits = LoopBuilds[It->second].Bits;
       for (size_t W = 0; W < Words; ++W) {
         TargetBits[W] |= LoopBits[W];
@@ -652,10 +647,9 @@ static bool buildLoopsUsingDominance(
   for (size_t I = 0; I < Loops.size(); ++I) {
     LoopOrder[I] = I;
   }
-  std::sort(LoopOrder.begin(), LoopOrder.end(),
-            [&](size_t A, size_t B) {
-              return Loops[A].Nodes.size() < Loops[B].Nodes.size();
-            });
+  std::sort(LoopOrder.begin(), LoopOrder.end(), [&](size_t A, size_t B) {
+    return Loops[A].Nodes.size() < Loops[B].Nodes.size();
+  });
 
   for (size_t I = 0; I < Loops.size(); ++I) {
     const auto &LoopBits = Loops[I].NodeMask;
@@ -721,8 +715,7 @@ static bool buildLoopsUsingDominance(
 }
 
 // Lemma 6.14 Update: move minimum successor cost to current node
-static bool lemma614Update(uint32_t NodeId,
-                           const std::vector<GasBlock> &Blocks,
+static bool lemma614Update(uint32_t NodeId, const std::vector<GasBlock> &Blocks,
                            const std::vector<std::vector<uint32_t>> *BackEdges,
                            const std::vector<uint64_t> *AllowedMask,
                            std::vector<uint64_t> &Metering) {
@@ -757,12 +750,12 @@ static bool lemma614Update(uint32_t NodeId,
   return true;
 }
 
-static bool buildGasChunksSPP(
-    const zen::common::Byte *Code, size_t CodeSize,
-    const evmc_instruction_metrics *MetricsTable,
-    const std::vector<uint8_t> &JumpDestMap,
-    const std::vector<intx::uint256> &PushValueMap,
-    std::vector<uint32_t> &GasChunkEnd, std::vector<uint64_t> &GasChunkCost) {
+static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
+                              const evmc_instruction_metrics *MetricsTable,
+                              const std::vector<uint8_t> &JumpDestMap,
+                              const std::vector<intx::uint256> &PushValueMap,
+                              std::vector<uint32_t> &GasChunkEnd,
+                              std::vector<uint64_t> &GasChunkCost) {
   std::vector<GasBlock> Blocks;
   std::vector<uint32_t> BlockAtPc;
   buildGasBlocks(Code, CodeSize, MetricsTable, Blocks, BlockAtPc);
@@ -841,8 +834,8 @@ static bool buildGasChunksSPP(
   std::vector<int32_t> LoopOf;
   std::vector<std::vector<uint32_t>> ExitLoops;
   std::vector<std::vector<uint8_t>> ExitFlags;
-  bool UseLinearSPP = buildLoopsUsingDominance(
-      Blocks, Dom, Reachable, Loops, LoopOf, ExitLoops, ExitFlags);
+  bool UseLinearSPP = buildLoopsUsingDominance(Blocks, Dom, Reachable, Loops,
+                                               LoopOf, ExitLoops, ExitFlags);
 
   // Initialize m = c (metering function = cost function)
   std::vector<uint64_t> Metering(Blocks.size(), 0);
@@ -877,10 +870,9 @@ static bool buildGasChunksSPP(
 
       // Fast-forward the loop in reverse topo order within the loop.
       auto &Order = Recorded[LoopId];
-      std::sort(Order.begin(), Order.end(),
-                [&](uint32_t A, uint32_t B) {
-                  return RevTopoIndex[A] < RevTopoIndex[B];
-                });
+      std::sort(Order.begin(), Order.end(), [&](uint32_t A, uint32_t B) {
+        return RevTopoIndex[A] < RevTopoIndex[B];
+      });
       for (uint32_t NodeId : Order) {
         lemma614Update(NodeId, Blocks, nullptr, &Loops[LoopId].NodeMask,
                        Metering);
@@ -938,7 +930,6 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
 
   buildGasChunksSPP(Code, CodeSize, MetricsTable, Cache.JumpDestMap,
                     Cache.PushValueMap, Cache.GasChunkEnd, Cache.GasChunkCost);
-
 }
 
 } // namespace zen::evm
