@@ -1499,8 +1499,7 @@ void SelfDestructHandler::doExecute() {
       Context->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
-    if (IsCold &&
-        !chargeGas(Frame, ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
+    if (IsCold && !chargeGas(Frame, ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
       Context->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
