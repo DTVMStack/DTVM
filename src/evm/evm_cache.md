@@ -7,7 +7,7 @@ This document describes the bytecode cache built by `buildBytecodeCache()` in `s
 - `JumpDestMap[pc]` (`uint8_t`): `1` iff `Code[pc]` is `OP_JUMPDEST` and this byte is an opcode byte (not inside PUSH data).
 - `PushValueMap[pc]` (`intx::uint256`): decoded immediate for `PUSH1..PUSH32` at `pc`. Unused entries are `0`.
 - `GasChunkEnd[pc]` (`uint32_t`): for a chunk start `pc`, the exclusive end PC of the chunk; otherwise `0`.
-- `GasChunkCost[pc]` (`uint64_t`): sum of EVMC base gas costs for opcodes in the chunk starting at `pc`; otherwise `0`.
+- `GasChunkCost[pc]` (`uint64_t`): metering cost charged at block start `pc` (SPP-shifted in optimized mode); otherwise `0`.
 
 ## Build Algorithm
 
@@ -22,11 +22,11 @@ This matches the EVM rule that jump destinations must be to a `JUMPDEST` opcode 
 
 ### 2) Gas chunks (`GasChunkEnd` / `GasChunkCost`)
 
-We partition the bytecode into straight-line "chunks" starting at some `ChunkStart` and ending at `ChunkEnd`:
+We still partition the bytecode into straight-line "gas blocks":
 
-- A chunk always contains at least one opcode.
-- A chunk stops *before* a `JUMPDEST` that is not the first opcode of the chunk, so every `JUMPDEST` begins a chunk.
-- A chunk stops after executing any of these terminator opcodes:
+- A block always contains at least one opcode.
+- A block starts at `pc = 0` and at every opcode-byte `JUMPDEST`.
+- A block stops after executing any of these barrier opcodes:
   - `STOP`, `RETURN`, `REVERT`, `SELFDESTRUCT`
   - `INVALID`
   - `JUMP`, `JUMPI`
@@ -34,17 +34,39 @@ We partition the bytecode into straight-line "chunks" starting at some `ChunkSta
   - `CREATE`, `CREATE2`
   - `CALL`, `CALLCODE`, `DELEGATECALL`, `STATICCALL`
 
-For each chunk start `s`, we compute:
+For each block start `s`, `GasChunkEnd[s]` is the exclusive end PC of that
+block.
+Critical-edge splitting may insert empty CFG blocks for SPP analysis; these are
+internal and do not correspond to bytecode PCs.
 
-`GasChunkCost[s] = Σ metrics[opcode_at(pc)].gas_cost` for `pc` in the chunk, where `metrics = evmc_get_instruction_metrics_table(DEFAULT_REVISION)` (and opcode lengths account for `PUSHn`).
+#### SPP-based charging
 
-The interpreter can then:
+SPP refers to an algorithm that satisfies the three properties: safety,
+precision, and polynomial-time complexity. In this context, SPP performs static
+analysis on the CFG to reorder where base gas is charged, reducing per-opcode
+metering into a smaller set of key charge points while preserving safety on
+every execution path.
 
-If `gas_left >= GasChunkCost[pc]`, charge `GasChunkCost[pc]` once at chunk
-entry and execute the opcodes in that range using `doExecute()` / no-gas
-helpers. Otherwise, fall back to the normal per-opcode charging path.
+We build a CFG of gas blocks and compute a *shifted* metering function `m`
+using a linear-time SPP pass:
 
-Extra/dynamic gas (memory expansion, cold/warm access, etc.) is still charged inside individual opcode handlers, on-demand.
+- Edges: fallthrough edges (including `JUMPI` fallthrough) and constant-jump
+  edges (validated by `JumpDestMap`). Dynamic jumps are conservatively
+  over-approximated to all `JUMPDEST` blocks.
+- Critical edges are split before SPP to preserve the local update rules.
+- Dominators and natural loops are computed from the CFG. The pass scans nodes
+  in reverse topological order:
+  - Non-loop nodes get a single Lemma 6.14 update.
+  - Loop nodes are recorded; once all loop members are recorded and all exits
+    have been seen, the loop is "fast-forwarded" by applying Lemma 6.14 updates
+    to the loop nodes in local reverse-topological order.
+
+This moves common costs earlier, reducing the number of non-zero charge points.
+The resulting `m` is stored in `GasChunkCost` at each block start.
+
+If the CFG is not suitable for linear SPP (e.g., dominance-based loop analysis
+fails), we still run SPP updates once per node in reverse topological order
+without loop fast-forward.
 
 ## Design Goal
 
@@ -74,19 +96,14 @@ zero bytes on the right, matching the EVM encoding.
 
 ### Correctness of chunk gas charging
 
-For a chunk starting at `s`, `GasChunkCost[s]` is the sum of EVMC base gas costs
-for opcodes in that straight-line region. The fast path is used only when
-`gas_left >= GasChunkCost[s]`, so base-cost out-of-gas cannot occur inside the
-chunk. Charging the sum upfront is equivalent to charging base gas before each
-opcode because base costs are non-negative (so the sum implies every prefix) and
-the chunk boundaries exclude opcodes that would observe the difference (e.g.,
-`GAS` and control-flow/host opcodes terminate the chunk).
+In SPP mode, `GasChunkCost[s]` is the shifted metering value `m(s)`. Lemma 6.14
+updates move cost along CFG edges while preserving total base cost on every
+path. Over-approximating dynamic jumps keeps the optimization safe (it may
+reduce shifts but never undercharges). Splitting critical edges ensures that
+cost is only moved along edges where the local update is valid. When loop
+analysis fails, the reverse-topological updates still preserve correctness
+without fast-forward.
 
-When `gas_left < GasChunkCost[s]`, the interpreter falls back to per-opcode
-charging, preserving the original exception ordering in low-gas cases (i.e., it
-does not return out-of-gas at chunk entry when an earlier non-gas exceptional
-condition would be hit while stepping through the chunk).
-
-Dynamic/extra gas is still charged at execution time inside opcode handlers
-(e.g., cold access penalties, memory expansion, keccak word cost). If out-of-gas
-occurs there, the execution fails at that opcode as required.
+The fast path is still used only when `gas_left >= GasChunkCost[s]`, so base-cost
+out-of-gas cannot occur inside a block. Dynamic/extra gas is charged inside
+opcode handlers as before (memory expansion, cold access, keccak word cost, etc).
