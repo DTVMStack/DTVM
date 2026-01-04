@@ -241,6 +241,15 @@ StoreInstruction *EVMMirBuilder::setInstanceElement(MType *ValueType,
 }
 
 void EVMMirBuilder::meterOpcode(evmc_opcode Opcode, uint64_t PC) {
+  if (!Ctx.isGasMeteringEnabled()) {
+    return;
+  }
+  if (GasChunkEnd && GasChunkCost && PC < GasChunkSize) {
+    if (GasChunkEnd[PC] > PC) {
+      meterGas(GasChunkCost[PC]);
+    }
+    return;
+  }
   const uint8_t Index = static_cast<uint8_t>(Opcode);
   const auto &Metrics = InstructionMetrics[Index];
   meterGas(static_cast<uint64_t>(Metrics.gas_cost));
