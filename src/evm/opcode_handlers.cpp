@@ -1389,11 +1389,11 @@ void CallHandler::doExecute() {
 
   if (TransfersValue) {
     NewMsg.gas += CALL_GAS_STIPEND;
-    Frame->Msg.gas += CALL_GAS_STIPEND;
     if (!HasEnoughBalance) {
       Context->setStatus(EVMC_SUCCESS); // "Light" failure
       return;
     }
+    Frame->Msg.gas += CALL_GAS_STIPEND;
   }
 
   const auto Result = Frame->Host->call(NewMsg);
