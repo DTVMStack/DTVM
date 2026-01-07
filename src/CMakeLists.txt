@@ -115,6 +115,10 @@ if(ZEN_ENABLE_MULTIPASS_JIT)
     add_compile_options(-fno-omit-frame-pointer)
     add_definitions(-DZEN_ENABLE_DUMP_CALL_STACK)
   endif()
+
+  if(ZEN_ENABLE_EVM_GAS_REGISTER AND ZEN_BUILD_TARGET_X86_64)
+    add_definitions(-DZEN_ENABLE_EVM_GAS_REGISTER)
+  endif()
 endif()
 
 if(ZEN_ENABLE_SGX)

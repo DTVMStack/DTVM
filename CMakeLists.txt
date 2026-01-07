@@ -27,6 +27,9 @@ option(ZEN_ENABLE_LIBEVM "Enable evmc library build" OFF)
 option(ZEN_ENABLE_CPU_EXCEPTION "Enable cpu trap to implement wasm trap" ON)
 option(ZEN_ENABLE_VIRTUAL_STACK "Enable virtual stack(no system stack)" OFF)
 option(ZEN_ENABLE_DUMP_CALL_STACK "Enable exception call stack dump" OFF)
+option(ZEN_ENABLE_EVM_GAS_REGISTER
+       "Enable gas register optimization for x86_64 multipass JIT" OFF
+)
 
 # Blockchain options
 option(ZEN_ENABLE_CHECKED_ARITHMETIC "Enable checked arithmetic" OFF)

@@ -619,6 +619,17 @@ private:
   const uint64_t *GasChunkCost = nullptr;
   size_t GasChunkSize = 0;
 
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  // Gas register variable - keeps gas value in R14 during execution
+  Variable *GasRegVar = nullptr;
+
+  // Gas register management methods
+  void initGasRegister();
+  void syncGasToMemory();
+  void syncGasToMemoryFull();
+  void reloadGasFromMemory();
+#endif
+
   // ==================== Interface Helper Methods ====================
 
   // Helper method to get instance pointer as instruction
