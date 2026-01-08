@@ -4,7 +4,7 @@ This document describes the bytecode cache built by `buildBytecodeCache()` in `s
 
 ## Layout
 
-- `JumpDestMap[pc]` (`uint8_t`): `1` iff `Code[pc]` is `OP_JUMPDEST` and this byte is an opcode byte (not inside PUSH data).
+- `JumpDestMap[pc]` (`uint8_t`): `1` if `Code[pc]` is `OP_JUMPDEST` and this byte is an opcode byte (not inside PUSH data).
 - `PushValueMap[pc]` (`intx::uint256`): decoded immediate for `PUSH1..PUSH32` at `pc`. Unused entries are `0`.
 - `GasChunkEnd[pc]` (`uint32_t`): for a chunk start `pc`, the exclusive end PC of the chunk; otherwise `0`.
 - `GasChunkCost[pc]` (`uint64_t`): metering cost charged at block start `pc` (SPP-shifted in optimized mode); otherwise `0`.

@@ -188,7 +188,7 @@ static void addEdge(std::vector<GasBlock> &Blocks, uint32_t From, uint32_t To) {
 // Split critical edges: insert empty blocks on edges from nodes with
 // multiple successors to nodes with multiple predecessors.
 // Returns true if any edges were split.
-static bool splitCriticalEdges(std::vector<GasBlock> &Blocks) {
+static bool splitCriticalEdges(std::vector<GasBlock> &Blocks, size_t CodeSize) {
   bool Changed = false;
   std::vector<std::pair<uint32_t, uint32_t>> EdgesToSplit;
 
@@ -210,6 +210,11 @@ static bool splitCriticalEdges(std::vector<GasBlock> &Blocks) {
     // Create new empty block
     GasBlock NewBlock;
     NewBlock.Start = Blocks[FromId].End; // Logically between From and To
+
+    if (NewBlock.Start >= CodeSize) {
+      continue;
+    }
+
     NewBlock.End = Blocks[FromId].End;
     NewBlock.LastPc = Blocks[FromId].End;
     NewBlock.PrevPc = UINT32_MAX;
@@ -276,6 +281,10 @@ static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
 
     GasBlock Block;
     Block.Start = static_cast<uint32_t>(Pc);
+
+    if (Block.Start >= CodeSize) {
+      break;
+    }
 
     size_t CurPc = Pc;
     while (CurPc < CodeSize) {
@@ -815,7 +824,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   }
 
   // Split critical edges (required for safe SPP optimization)
-  splitCriticalEdges(Blocks);
+  splitCriticalEdges(Blocks, CodeSize);
 
   const std::vector<uint8_t> Reachable = computeReachable(Blocks, 0);
   const std::vector<std::vector<uint64_t>> Dom =
