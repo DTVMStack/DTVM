@@ -1268,7 +1268,7 @@ BitVector X86LLVMWorkaround::getReservedRegs(const TargetRegisterInfo &TRI,
     Reserved.set(SubReg);
 #endif
 
-  // Set the base-pointer register and its aliases as reserved if needed.
+    // Set the base-pointer register and its aliases as reserved if needed.
 #if 0
   if (hasBasePointer(TRI, MF)) {
     CallingConv::ID CC = MF.getFunction().getCallingConv();
