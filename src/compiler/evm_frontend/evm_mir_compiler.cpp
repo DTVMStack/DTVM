@@ -1549,6 +1549,9 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
 
     // Calculate carry bits from the previous component (index-1)
     MInstruction *CarryValue = Zero;
+    MInstruction *HasShift = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, ShiftMod64,
+        Zero);
     for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
       MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, K);
       MInstruction *IsMatch = createInstruction<CmpInstruction>(
@@ -1565,6 +1568,9 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
           createInstruction<BinaryInstruction>(
               false, OP_sub, MirI64Type,
               createIntConstInstruction(MirI64Type, 64), ShiftMod64));
+      // Only use carry bits if there is an actual shift (ShiftMod64 > 0)
+      CarryBits = createInstruction<SelectInstruction>(
+          false, MirI64Type, HasShift, CarryBits, Zero);
       CarryValue = createInstruction<SelectInstruction>(
           false, MirI64Type, IsMatch, CarryBits, CarryValue);
     }
