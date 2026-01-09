@@ -1262,7 +1262,7 @@ BitVector X86LLVMWorkaround::getReservedRegs(const TargetRegisterInfo &TRI,
       Reserved.set(SubReg);
   }
 
-#ifdef ZEN_ENABLE_GAS_REGISTER
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   // Reserve R14 for gas register in EVM multipass JIT
   for (const MCPhysReg &SubReg : X86_TRI.subregs_inclusive(X86::R14))
     Reserved.set(SubReg);
