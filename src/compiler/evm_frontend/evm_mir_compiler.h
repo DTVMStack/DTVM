@@ -77,6 +77,11 @@ public:
     return GasChunkEnd && GasChunkCost && GasChunkSize > 0;
   }
 
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  void setGasRegisterEnabled(bool Enabled) { GasRegisterEnabled = Enabled; }
+  bool isGasRegisterEnabled() const { return GasRegisterEnabled; }
+#endif
+
 private:
   const Byte *Bytecode = nullptr;
   size_t BytecodeSize = 0;
@@ -84,6 +89,9 @@ private:
   const uint32_t *GasChunkEnd = nullptr;
   const uint64_t *GasChunkCost = nullptr;
   size_t GasChunkSize = 0;
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  bool GasRegisterEnabled = false;
+#endif
 };
 
 void buildEVMFunction(EVMFrontendContext &Context, MModule &MMod,
