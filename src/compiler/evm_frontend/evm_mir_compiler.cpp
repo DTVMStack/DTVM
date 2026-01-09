@@ -1533,21 +1533,24 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
     SrcValue = createInstruction<SelectInstruction>(
         false, MirI64Type, IsInBounds, SrcValue, LargeShiftResult);
 
-    MInstruction *PrevIdx = createInstruction<BinaryInstruction>(
-        false, OP_sub, MirI64Type, SrcIdx, One);
+    // Calculate next component index for carry bits
+    // next_idx = src_idx + 1
+    MInstruction *NextIdx = createInstruction<BinaryInstruction>(
+        false, OP_add, MirI64Type, SrcIdx, One);
 
-    // Validate previous component bounds
-    // if (0 <= prev_idx < EVM_ELEMENTS_COUNT) use Value[prev_idx] else 0
-    MInstruction *IsValidPrevLow = createInstruction<CmpInstruction>(
-        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, PrevIdx,
+    // Validate next component bounds
+    // if (0 <= next_idx < EVM_ELEMENTS_COUNT) use Value[next_idx] else
+    // sign_extend
+    MInstruction *IsValidNextLow = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, NextIdx,
         Zero);
-    MInstruction *IsValidPrevHigh = createInstruction<CmpInstruction>(
-        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, PrevIdx,
+    MInstruction *IsValidNextHigh = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, NextIdx,
         MaxIndex);
-    MInstruction *IsPrevValid = createInstruction<BinaryInstruction>(
-        false, OP_and, MirI64Type, IsValidPrevLow, IsValidPrevHigh);
+    MInstruction *IsNextValid = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, IsValidNextLow, IsValidNextHigh);
 
-    // Calculate carry bits from the previous component (index-1)
+    // Calculate carry bits from the next component (higher index)
     MInstruction *CarryValue = Zero;
     MInstruction *HasShift = createInstruction<CmpInstruction>(
         false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, ShiftMod64,
@@ -1555,16 +1558,18 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
     for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
       MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, K);
       MInstruction *IsMatch = createInstruction<CmpInstruction>(
-          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, PrevIdx,
+          false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, NextIdx,
           TargetIdx);
-      MInstruction *PrevValue = createInstruction<SelectInstruction>(
-          false, MirI64Type, IsMatch, Value[K], Zero);
-      PrevValue = createInstruction<SelectInstruction>(
-          false, MirI64Type, IsPrevValid, PrevValue, Zero);
+      MInstruction *NextValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsMatch, Value[K], LargeShiftResult);
+      NextValue = createInstruction<SelectInstruction>(
+          false, MirI64Type, IsNextValid, NextValue, LargeShiftResult);
 
-      // Extract high bits from previous component as carry
+      // Extract low bits from next component as carry
+      // carry_bits = (next_value << (64 - shift_mod)) for arithmetic right
+      // shift
       MInstruction *CarryBits = createInstruction<BinaryInstruction>(
-          false, OP_ushr, MirI64Type, PrevValue,
+          false, OP_shl, MirI64Type, NextValue,
           createInstruction<BinaryInstruction>(
               false, OP_sub, MirI64Type,
               createIntConstInstruction(MirI64Type, 64), ShiftMod64));
@@ -1575,8 +1580,14 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
           false, MirI64Type, IsMatch, CarryBits, CarryValue);
     }
 
-    MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
-        false, OP_sshr, MirI64Type, SrcValue, ShiftMod64);
+    // Use arithmetic right shift for negative numbers, logical for positive
+    // This ensures proper sign extension within each 64-bit component
+    MInstruction *ShiftedValue = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsNegative,
+        createInstruction<BinaryInstruction>(false, OP_sshr, MirI64Type,
+                                             SrcValue, ShiftMod64),
+        createInstruction<BinaryInstruction>(false, OP_ushr, MirI64Type,
+                                             SrcValue, ShiftMod64));
     MInstruction *CombinedValue = createInstruction<BinaryInstruction>(
         false, OP_or, MirI64Type, ShiftedValue, CarryValue);
 
