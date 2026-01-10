@@ -395,7 +395,7 @@ void EVMMirBuilder::initGasRegister() {
   MPointerType *I64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
   MPointerType *VoidPtrType = createVoidPtrType();
 
-  // Load gas from message->gas (same source as memory-based path)
+  // Load gas from message->gas
   MInstruction *MsgPtr = getInstanceElement(
       VoidPtrType, zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
   MInstruction *MsgPtrInt = createInstruction<ConversionInstruction>(
@@ -409,9 +409,12 @@ void EVMMirBuilder::initGasRegister() {
   MInstruction *GasValue =
       createInstruction<LoadInstruction>(false, I64Type, MsgGasPtr);
 
-  // Store in variable that will be allocated to R14
+  // Create GasRegVar - will be allocated to virtual register
+  // Explicit COPY instructions will be added during lowering
   GasRegVar = storeInstructionInTemp(GasValue, I64Type);
-  GasRegVar->setPhysicalRegister(X86::R14);
+
+  // Store the VarIdx so lowering can identify this variable
+  CurFunc->setGasRegisterVarIdx(GasRegVar->getVarIdx());
 }
 
 void EVMMirBuilder::syncGasToMemory() {

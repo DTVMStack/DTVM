@@ -637,6 +637,11 @@ private:
   void syncGasToMemory();
   void syncGasToMemoryFull();
   void reloadGasFromMemory();
+
+  // Get the variable index for gas register (used during lowering)
+  VariableIdx getGasRegisterVarIdx() const {
+    return GasRegVar ? GasRegVar->getVarIdx() : VariableIdx(-1);
+  }
 #endif
 
   // ==================== Interface Helper Methods ====================

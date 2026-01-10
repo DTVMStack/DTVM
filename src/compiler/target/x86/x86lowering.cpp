@@ -1635,6 +1635,20 @@ void X86CgLowering::lowerFormalArguments() {
       // FuncInfo->setArgumentStackSize(StackSize);
     }
   }
+
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  // Insert explicit COPY from R14 to gas register variable
+  VariableIdx GasVarIdx = _mir_func.getGasRegisterVarIdx();
+  if (GasVarIdx != VariableIdx(-1)) {
+    const TargetRegisterClass *RC = &X86::GR64RegClass;
+    CgRegister GasVirtReg = getOrCreateVarReg(GasVarIdx, RC);
+    // COPY from R14 (physical) to gas virtual register
+    MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), X86::R14,
+                            GasVirtReg);
+    // Mark R14 as live-in
+    MF->getRegInfo().addLiveIn(X86::R14, GasVirtReg);
+  }
+#endif
 }
 
 void X86CgLowering::lowerReturnStmt(llvm::MVT VT, CgRegister OperandReg) {
@@ -1650,6 +1664,18 @@ void X86CgLowering::lowerReturnStmt(llvm::MVT VT, CgRegister OperandReg) {
     ReturnOperands.push_back(
         CgOperand::createRegOperand(ResultReg, false, true));
   }
+
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  // Insert explicit COPY from gas register variable back to R14
+  VariableIdx GasVarIdx = _mir_func.getGasRegisterVarIdx();
+  if (GasVarIdx != VariableIdx(-1)) {
+    const TargetRegisterClass *RC = &X86::GR64RegClass;
+    CgRegister GasVirtReg = getOrCreateVarReg(GasVarIdx, RC);
+    // COPY from gas virtual register to R14 (physical)
+    MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), GasVirtReg,
+                            X86::R14);
+  }
+#endif
 
   MF->createCgInstruction(*CurBB, TII.get(RETOpc), ReturnOperands);
 }

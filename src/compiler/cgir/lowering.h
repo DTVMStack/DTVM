@@ -695,14 +695,7 @@ protected:
                                const llvm::TargetRegisterClass *reg_class) {
     auto pair = _var_reg_map.emplace(var_idx, 0);
     if (pair.second) {
-      Variable *Var = _mir_func.getVariable(var_idx);
-      if (Var && Var->hasPhysicalRegister()) {
-        unsigned PhysReg = Var->getPhysicalRegister();
-        llvm::errs() << "[GasReg DEBUG] VarIdx=" << var_idx << " -> PhysReg=" << PhysReg << "\n";
-        pair.first->second = PhysReg;
-      } else {
-        pair.first->second = createReg(reg_class);
-      }
+      pair.first->second = createReg(reg_class);
     }
     return pair.first->second;
   }

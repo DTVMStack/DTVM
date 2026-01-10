@@ -1262,13 +1262,7 @@ BitVector X86LLVMWorkaround::getReservedRegs(const TargetRegisterInfo &TRI,
       Reserved.set(SubReg);
   }
 
-#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
-  // Reserve R14 for gas register in EVM multipass JIT
-  for (const MCPhysReg &SubReg : X86_TRI.subregs_inclusive(X86::R14))
-    Reserved.set(SubReg);
-#endif
-
-    // Set the base-pointer register and its aliases as reserved if needed.
+  // Set the base-pointer register and its aliases as reserved if needed.
 #if 0
   if (hasBasePointer(TRI, MF)) {
     CallingConv::ID CC = MF.getFunction().getCallingConv();
