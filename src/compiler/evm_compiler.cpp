@@ -57,6 +57,9 @@ void EagerEVMJITCompiler::compile() {
 
   EVMFrontendContext Ctx;
   Ctx.setGasMeteringEnabled(Config.EnableEvmGasMetering);
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  Ctx.setGasRegisterEnabled(true);
+#endif
   Ctx.setBytecode(reinterpret_cast<const Byte *>(EVMMod->Code),
                   EVMMod->CodeSize);
   const auto &Cache = EVMMod->getBytecodeCache();

@@ -150,6 +150,14 @@ public:
     return Variables[VarIdx - getNumParams()]->getType();
   }
 
+  Variable *getVariable(uint32_t VarIdx) {
+    ZEN_ASSERT(VarIdx < getNumVariables());
+    if (VarIdx < getNumParams()) {
+      return nullptr;
+    }
+    return Variables[VarIdx - getNumParams()];
+  }
+
   uint32_t getNumInstructions() const { return Instructions.size(); }
 
   template <class T, typename... Arguments>

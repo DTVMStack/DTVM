@@ -18,9 +18,14 @@ public:
 
   VariableIdx getVarIdx() const { return VarIdx; }
 
+  void setPhysicalRegister(unsigned PhysReg) { PhysicalReg = PhysReg; }
+  unsigned getPhysicalRegister() const { return PhysicalReg; }
+  bool hasPhysicalRegister() const { return PhysicalReg != 0; }
+
 private:
   VariableIdx VarIdx;
   MType *Type = nullptr;
+  unsigned PhysicalReg = 0;
 };
 
 } // namespace COMPILER

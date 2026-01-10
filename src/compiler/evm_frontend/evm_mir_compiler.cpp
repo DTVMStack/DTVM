@@ -9,6 +9,10 @@
 #include "utils/hash_utils.h"
 #include <unordered_set>
 
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+#include "compiler/llvm-prebuild/Target/X86/X86Subtarget.h"
+#endif
+
 namespace COMPILER {
 
 // Hash table constants
@@ -407,6 +411,7 @@ void EVMMirBuilder::initGasRegister() {
 
   // Store in variable that will be allocated to R14
   GasRegVar = storeInstructionInTemp(GasValue, I64Type);
+  GasRegVar->setPhysicalRegister(X86::R14);
 }
 
 void EVMMirBuilder::syncGasToMemory() {
