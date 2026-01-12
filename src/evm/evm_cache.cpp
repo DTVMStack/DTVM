@@ -488,7 +488,7 @@ findBackEdgesUsingDominators(const std::vector<GasBlock> &Blocks,
 
   for (size_t From = 0; From < NumBlocks; ++From) {
     for (uint32_t To : Blocks[From].Succs) {
-      if (bitsetTest(Dom[From], To)) {
+      if (bitsetTest(Dom[To], From)) {
         BackEdges[From].push_back(To);
       }
     }
