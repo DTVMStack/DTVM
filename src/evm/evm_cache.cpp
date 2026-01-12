@@ -488,7 +488,7 @@ findBackEdgesUsingDominators(const std::vector<GasBlock> &Blocks,
 
   for (size_t From = 0; From < NumBlocks; ++From) {
     for (uint32_t To : Blocks[From].Succs) {
-      if (bitsetTest(Dom[To], From)) {
+      if (bitsetTest(Dom[From], To)) {
         BackEdges[From].push_back(To);
       }
     }
@@ -509,22 +509,28 @@ computeReverseTopo(const std::vector<GasBlock> &Blocks,
   std::vector<uint32_t> Order;
   Order.reserve(NumBlocks);
 
-  std::function<void(uint32_t)> Dfs = [&](uint32_t Node) {
-    Visited[Node] = 1;
-    for (uint32_t Succ : Blocks[Node].Succs) {
-      if (isBackEdge(BackEdges, Node, Succ)) {
+  for (uint32_t StartNode = 0; StartNode < NumBlocks; ++StartNode) {
+    if (Visited[StartNode] != 0) {
+      continue;
+    }
+    std::vector<uint32_t> Stack;
+    Stack.push_back(StartNode);
+    while (!Stack.empty()) {
+      uint32_t Current = Stack.back();
+      Stack.pop_back();
+      if (Visited[Current] == 1) {
+        Order.push_back(Current);
         continue;
       }
-      if (Visited[Succ] == 0) {
-        Dfs(Succ);
+      Visited[Current] = 1;
+      Stack.push_back(Current);
+      const auto &Succs = Blocks[Current].Succs;
+      for (auto It = Succs.rbegin(); It != Succs.rend(); ++It) {
+        uint32_t Succ = *It;
+        if (!isBackEdge(BackEdges, Current, Succ) && Visited[Succ] == 0) {
+          Stack.push_back(Succ);
+        }
       }
-    }
-    Order.push_back(Node);
-  };
-
-  for (size_t Node = 0; Node < NumBlocks; ++Node) {
-    if (Visited[Node] == 0) {
-      Dfs(static_cast<uint32_t>(Node));
     }
   }
 
