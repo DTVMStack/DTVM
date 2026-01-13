@@ -518,7 +518,11 @@ computeReverseTopo(const std::vector<GasBlock> &Blocks,
     while (!Stack.empty()) {
       uint32_t Current = Stack.back();
       Stack.pop_back();
+      if (Visited[Current] == 2) {
+        continue;
+      }
       if (Visited[Current] == 1) {
+        Visited[Current] = 2;
         Order.push_back(Current);
         continue;
       }
@@ -528,6 +532,7 @@ computeReverseTopo(const std::vector<GasBlock> &Blocks,
       for (auto It = Succs.rbegin(); It != Succs.rend(); ++It) {
         uint32_t Succ = *It;
         if (!isBackEdge(BackEdges, Current, Succ) && Visited[Succ] == 0) {
+          Visited[Succ] = 1;
           Stack.push_back(Succ);
         }
       }
