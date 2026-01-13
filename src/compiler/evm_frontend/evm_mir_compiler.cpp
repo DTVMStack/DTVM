@@ -1310,8 +1310,12 @@ EVMMirBuilder::handleLeftShift(const U256Inst &Value, MInstruction *ShiftAmount,
     MInstruction *IsPrevValid = createInstruction<BinaryInstruction>(
         false, OP_and, MirI64Type, IsValidPrevLow, IsValidPrevHigh);
 
-    // Calculate carry bits from the previous component
+    // Only calculate carry when there is actual bit-level shifting (ShiftMod64
+    // > 0)
     // carry_bits = (prev_idx == K) ? (Value[K] >> remaining_bits) : 0
+    MInstruction *HasBitShift = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, ShiftMod64,
+        Zero);
     MInstruction *CarryValue = Zero;
     for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
       MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, K);
@@ -1324,8 +1328,18 @@ EVMMirBuilder::handleLeftShift(const U256Inst &Value, MInstruction *ShiftAmount,
           false, MirI64Type, IsPrevValid, PrevValue, Zero);
 
       // Extract carry bits by shifting right the remaining bits
+      // Avoid undefined behavior when RemainingBits >= 64
+      MInstruction *IsValidShift = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type,
+          RemainingBits, Const64);
       MInstruction *CarryBits = createInstruction<BinaryInstruction>(
           false, OP_ushr, MirI64Type, PrevValue, RemainingBits);
+      // Use carry bits only if shift amount is valid (< 64) AND there is
+      // bit-level shifting
+      MInstruction *UseCarry = createInstruction<BinaryInstruction>(
+          false, OP_and, MirI64Type, IsValidShift, HasBitShift);
+      CarryBits = createInstruction<SelectInstruction>(
+          false, MirI64Type, UseCarry, CarryBits, Zero);
       CarryValue = createInstruction<SelectInstruction>(
           false, MirI64Type, IsMatch, CarryBits, CarryValue);
     }
