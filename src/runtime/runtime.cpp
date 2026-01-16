@@ -32,6 +32,7 @@
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
 #include "utils/virtual_stack.h"
 #endif // ZEN_ENABLE_VIRTUAL_STACK
+#include <cstdlib>
 #include <fstream>
 #include <string_view>
 #include <unistd.h>
@@ -868,6 +869,11 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
       // NoError means not need capture trap state
       ErrorCode CapturedTapErrCode = ErrorCode::NoError;
       evmc_status_code StatusCode = EVMC_SUCCESS;
+      if (std::getenv("DTVM_TRACE_TRAP")) {
+        const auto TrapState = TLS.getTrapState();
+        ZEN_LOG_ERROR("EVM JIT trap: signum=%d pc=%p fault=%p",
+                      JmpSignum, TrapState.PC, TrapState.FaultingAddress);
+      }
       switch (JmpSignum) {
       case SIGSEGV:
       case SIGBUS: {

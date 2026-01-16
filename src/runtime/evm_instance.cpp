@@ -9,6 +9,7 @@
 #include "evm/evm.h"
 #include "utils/backtrace.h"
 #include <algorithm>
+#include <cstring>
 #include <utility>
 
 namespace zen::runtime {
@@ -23,6 +24,16 @@ bool calcRequiredMemorySize(uint64_t Offset, uint64_t Size,
   }
   RequiredSize = Offset + Size;
   return true;
+}
+
+void initMemoryFrame(std::unique_ptr<uint8_t[]> &Memory, uint8_t *&Base,
+                     uint64_t &Size) {
+  if (!Memory) {
+    // Allocate raw buffer; expansion will zero the used range.
+    Memory.reset(new uint8_t[zen::evm::MAX_REQUIRED_MEMORY_SIZE]);
+  }
+  Base = Memory.get();
+  Size = 0;
 }
 } // namespace
 
@@ -54,11 +65,10 @@ void EVMInstance::setGas(uint64_t NewGas) { Gas = NewGas; }
 void EVMInstance::pushMessage(evmc_message *Msg) {
   if (MessageStack.empty()) {
     MemoryStack.clear();
-    Memory.clear();
   } else {
-    MemoryStack.push_back(std::move(Memory));
-    Memory.clear();
+    MemoryStack.push_back({std::move(Memory), MemorySize});
   }
+  initMemoryFrame(Memory, MemoryBase, MemorySize);
   MessageStack.push_back(Msg);
   CurrentMessage = Msg;
   Gas = Msg ? Msg->gas : 0;
@@ -70,10 +80,13 @@ void EVMInstance::popMessage() {
   }
   CurrentMessage = MessageStack.empty() ? nullptr : MessageStack.back();
   if (!MemoryStack.empty()) {
-    Memory = std::move(MemoryStack.back());
+    Memory = std::move(MemoryStack.back().Data);
+    MemorySize = MemoryStack.back().Size;
     MemoryStack.pop_back();
+    MemoryBase = Memory.get();
   } else {
-    Memory.clear();
+    MemoryBase = Memory.get();
+    MemorySize = 0;
   }
   Gas = CurrentMessage ? CurrentMessage->gas : 0;
 }
@@ -137,14 +150,38 @@ void EVMInstance::triggerInstanceExceptionOnJIT(EVMInstance *Inst,
 
 void EVMInstance::expandMemory(uint64_t RequiredSize) {
   auto NewSize = (RequiredSize + 31) / 32 * 32;
-  uint64_t ExpansionCost = calculateMemoryExpansionCost(Memory.size(), NewSize);
+  uint64_t ExpansionCost = calculateMemoryExpansionCost(MemorySize, NewSize);
   chargeGas(ExpansionCost);
-  if (NewSize > Memory.size()) {
-    Memory.resize(NewSize, 0);
+  if (NewSize > MemorySize) {
+    if (!MemoryBase) {
+      initMemoryFrame(Memory, MemoryBase, MemorySize);
+    }
+    if (NewSize > MemorySize) {
+      std::memset(MemoryBase + MemorySize, 0,
+                  static_cast<size_t>(NewSize - MemorySize));
+      MemorySize = NewSize;
+    }
+  }
+}
+
+void EVMInstance::expandMemoryNoGas(uint64_t RequiredSize) {
+  auto NewSize = (RequiredSize + 31) / 32 * 32;
+  if (NewSize > MemorySize) {
+    if (!MemoryBase) {
+      initMemoryFrame(Memory, MemoryBase, MemorySize);
+    }
+    if (NewSize > MemorySize) {
+      std::memset(MemoryBase + MemorySize, 0,
+                  static_cast<size_t>(NewSize - MemorySize));
+      MemorySize = NewSize;
+    }
   }
 }
 
 bool EVMInstance::expandMemoryChecked(uint64_t Offset, uint64_t Size) {
+  if (Size == 0) {
+    return true;
+  }
   uint64_t RequiredSize = 0;
   if (!calcRequiredMemorySize(Offset, Size, RequiredSize)) {
     chargeGas(getGas() + 1);
@@ -160,6 +197,17 @@ bool EVMInstance::expandMemoryChecked(uint64_t Offset, uint64_t Size) {
 
 bool EVMInstance::expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA,
                                       uint64_t OffsetB, uint64_t SizeB) {
+  const bool NeedA = SizeA > 0;
+  const bool NeedB = SizeB > 0;
+  if (!NeedA && !NeedB) {
+    return true;
+  }
+  if (NeedA && !NeedB) {
+    return expandMemoryChecked(OffsetA, SizeA);
+  }
+  if (!NeedA && NeedB) {
+    return expandMemoryChecked(OffsetB, SizeB);
+  }
   uint64_t RequiredSizeA = 0;
   uint64_t RequiredSizeB = 0;
   if (!calcRequiredMemorySize(OffsetA, SizeA, RequiredSizeA) ||

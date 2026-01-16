@@ -13,6 +13,7 @@ void MVerifier::visitUnaryInstruction(UnaryInstruction &I) {
   case OP_ctz:
   case OP_not:
   case OP_popcnt:
+  case OP_bswap:
     CHECK(OperandType->isInteger(),
           "The type of " + getOpcodeString(Opc) + " operand must be integer");
     break;

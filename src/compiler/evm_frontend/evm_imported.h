@@ -26,12 +26,9 @@ using SizeWithBytes32Fn = uint64_t (*)(zen::runtime::EVMInstance *,
                                        const uint8_t *);
 using U256WithBytes32Fn = const intx::uint256 *(*)(zen::runtime::EVMInstance *,
                                                    const uint8_t *);
-using U256WithUInt64Fn = const intx::uint256 *(*)(zen::runtime::EVMInstance *,
-                                                  uint64_t);
-using VoidWithUInt64U256Fn = void (*)(zen::runtime::EVMInstance *, uint64_t,
-                                      const intx::uint256 &);
 using VoidWithUInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *, uint64_t,
                                         uint64_t);
+using VoidWithUInt64Fn = void (*)(zen::runtime::EVMInstance *, uint64_t);
 using VoidWithUInt64UInt64UInt64Fn = void (*)(zen::runtime::EVMInstance *,
                                               uint64_t, uint64_t, uint64_t);
 using VoidWithBytes32UInt64UInt64UInt64Fn = void (*)(
@@ -108,19 +105,15 @@ struct RuntimeFunctions {
   U256Fn GetBaseFee;
   Bytes32WithUint64Fn GetBlobHash;
   U256Fn GetBlobBaseFee;
-  SizeFn GetMSize;
-  U256WithUInt64Fn GetMLoad;
-  VoidWithUInt64U256Fn SetMStore;
-  VoidWithUInt64U256Fn SetMStore8;
   U256WithU256Fn GetSLoad;
   VoidWithU256U256Fn SetSStore;
   SizeFn GetGas;
   U256WithU256Fn GetTLoad;
   VoidWithU256U256Fn SetTStore;
-  VoidWithUInt64UInt64UInt64Fn SetMCopy;
   VoidWithUInt64UInt64UInt64Fn SetCallDataCopy;
   VoidWithBytes32UInt64UInt64UInt64Fn SetExtCodeCopy;
   VoidWithUInt64UInt64UInt64Fn SetReturnDataCopy;
+  VoidWithUInt64Fn ExpandMemoryNoGas;
   SizeFn GetReturnDataSize;
   Log0Fn EmitLog0;
   Log1Fn EmitLog1;
@@ -203,15 +196,6 @@ const intx::uint256 *evmGetBaseFee(zen::runtime::EVMInstance *Instance);
 const uint8_t *evmGetBlobHash(zen::runtime::EVMInstance *Instance,
                               uint64_t Index);
 const intx::uint256 *evmGetBlobBaseFee(zen::runtime::EVMInstance *Instance);
-uint64_t evmGetMSize(zen::runtime::EVMInstance *Instance);
-const intx::uint256 *evmGetMLoad(zen::runtime::EVMInstance *Instance,
-                                 uint64_t Addr);
-void evmSetMStore(zen::runtime::EVMInstance *Instance, uint64_t Addr,
-                  const intx::uint256 &Value);
-void evmSetMStore8(zen::runtime::EVMInstance *Instance, uint64_t Addr,
-                   const intx::uint256 &Value);
-void evmSetMCopy(zen::runtime::EVMInstance *Instance, uint64_t DestAddr,
-                 uint64_t SrcAddr, uint64_t Length);
 void evmSetCallDataCopy(zen::runtime::EVMInstance *Instance,
                         uint64_t DestOffset, uint64_t Offset, uint64_t Size);
 void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
@@ -219,6 +203,8 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
                        uint64_t Offset, uint64_t Size);
 void evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance,
                           uint64_t DestOffset, uint64_t Offset, uint64_t Size);
+void evmExpandMemoryNoGas(zen::runtime::EVMInstance *Instance,
+                          uint64_t RequiredSize);
 uint64_t evmGetReturnDataSize(zen::runtime::EVMInstance *Instance);
 void evmEmitLog0(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                  uint64_t Size);

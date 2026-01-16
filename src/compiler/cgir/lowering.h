@@ -257,6 +257,10 @@ protected:
     case OP_popcnt:
       ISDOpcode = ISD::CTPOP;
       break;
+    case OP_bswap:
+      ZEN_ASSERT(IsInteger);
+      ISDOpcode = ISD::BSWAP;
+      break;
     case OP_fpabs:
       ZEN_ASSERT(!IsInteger);
       return SELF.lowerFPAbsExpr(OperandVT, OperandReg);

@@ -622,6 +622,16 @@ private:
   MBasicBlock *StackCheckBB = nullptr;
   Variable *StackTopVar = nullptr;
   Variable *StackSizeVar = nullptr;
+  Variable *MemoryBaseVar = nullptr;
+
+  // Helper methods for memory operations
+  MInstruction *getMemoryDataPointer();
+  MInstruction *getMemorySize();
+  void expandMemoryIR(MInstruction *RequiredSize, MInstruction *Overflow);
+  void chargeDynamicGasIR(MInstruction *GasCost);
+  void chargeMemoryExpansionGasIR(MInstruction *CurrentSize,
+                                  MInstruction *NewSize);
+  MInstruction *calculateMemoryGasCostIR(MInstruction *SizeInBytes);
 
   // Chunk gas metering
   const uint32_t *GasChunkEnd = nullptr;

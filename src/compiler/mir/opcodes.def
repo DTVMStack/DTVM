@@ -6,6 +6,7 @@ OPCODE(clz)                         // OP_UNARY_EXPR_START, OP_START
 OPCODE(ctz)
 OPCODE(not)
 OPCODE(popcnt)
+OPCODE(bswap)
 OPCODE(fpabs)
 OPCODE(fpneg)
 OPCODE(fpsqrt)

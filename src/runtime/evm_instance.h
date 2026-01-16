@@ -12,6 +12,7 @@
 #include "runtime/instance.h"
 #include <array>
 #include <limits>
+#include <memory>
 
 // Forward declaration for evmc_message
 struct evmc_message;
@@ -51,6 +52,7 @@ public:
                                                uint64_t NewSize);
   void consumeMemoryExpansionGas(uint64_t RequiredSize);
   void expandMemory(uint64_t RequiredSize);
+  void expandMemoryNoGas(uint64_t RequiredSize);
   bool expandMemoryChecked(uint64_t Offset, uint64_t Size);
   bool expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA, uint64_t OffsetB,
                            uint64_t SizeB);
@@ -62,8 +64,9 @@ public:
   void setRevision(evmc_revision NewRev) { Rev = NewRev; }
 
   // ==================== Memory Methods ====================
-  size_t getMemorySize() const { return Memory.size(); }
-  std::vector<uint8_t> &getMemory() { return Memory; }
+  uint64_t getMemorySize() const { return MemorySize; }
+  uint8_t *getMemoryBase() const { return MemoryBase; }
+  uint8_t *getMemory() { return Memory.get(); }
 
   // ==================== Evmc Message Stack Methods ====================
   // Note: These methods manage the call stack for JIT host interface functions
@@ -201,6 +204,20 @@ public:
     return static_cast<int32_t>(offsetof(EVMInstance, EVMStackSize));
   }
 
+  static constexpr int32_t getMemoryBaseOffset() {
+    static_assert(offsetof(EVMInstance, MemoryBase) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "EVMInstance offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(EVMInstance, MemoryBase));
+  }
+
+  static constexpr int32_t getMemorySizeOffset() {
+    static_assert(offsetof(EVMInstance, MemorySize) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "EVMInstance offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(EVMInstance, MemorySize));
+  }
+
   // Capacity for EVMStack: 1024 * 256 / 8 = 32768
   static const size_t EVMStackCapacity = 32768;
 
@@ -267,8 +284,14 @@ private:
   const EVMModule *Mod = nullptr;
   uint64_t GasRefund = 0;
   // memory
-  std::vector<uint8_t> Memory;
-  std::vector<std::vector<uint8_t>> MemoryStack;
+  uint8_t *MemoryBase = nullptr;
+  uint64_t MemorySize = 0;
+  std::unique_ptr<uint8_t[]> Memory;
+  struct MemoryFrame {
+    std::unique_ptr<uint8_t[]> Data;
+    uint64_t Size = 0;
+  };
+  std::vector<MemoryFrame> MemoryStack;
   std::vector<uint8_t> ReturnData;
   evmc::Result ExeResult{EVMC_SUCCESS, 0, 0};
 

@@ -1360,12 +1360,19 @@ void CallHandler::doExecute() {
     return;
   }
 
-  if (!expandMemoryAndChargeGas(Frame,
-                                uint256ToUint64(InputOffset + InputSize)) or
-      !expandMemoryAndChargeGas(Frame,
-                                uint256ToUint64(OutputOffset + OutputSize))) {
-    Context->setStatus(EVMC_OUT_OF_GAS);
-    return;
+  if (InputSize != 0) {
+    if (!expandMemoryAndChargeGas(Frame,
+                                  uint256ToUint64(InputOffset + InputSize))) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
+  }
+  if (OutputSize != 0) {
+    if (!expandMemoryAndChargeGas(
+            Frame, uint256ToUint64(OutputOffset + OutputSize))) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
   }
 
   evmc_message NewMsg{
