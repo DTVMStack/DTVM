@@ -168,14 +168,34 @@ cc_library(
         [
             "src/utils/*.cpp",
         ],
-        exclude = ["src/utils/perf.cpp"],
-    ),
+        exclude = [
+            "src/utils/perf.cpp",
+            "src/utils/evm.cpp",
+            "src/utils/rlp_encoding.cpp"
+        ],
+    ) + select({
+        ":enable_evm": [
+            "src/utils/evm.cpp",
+            "src/utils/rlp_encoding.cpp"
+        ],
+        "//conditions:default": [],
+    }),
     hdrs = glob(
         [
             "src/utils/*.h",
         ],
-        exclude = ["src/utils/perf.h"],
-    ),
+        exclude = [
+            "src/utils/perf.h",
+            "src/utils/evm.h",
+            "src/utils/rlp_encoding.h"
+        ],
+    ) + select({
+        ":enable_evm": [
+            "src/utils/evm.h",
+            "src/utils/rlp_encoding.h"
+        ],
+        "//conditions:default": [],
+    }),
     copts = PROJECT_COPTS,
     defines = PROJECT_DEFINES,
     linkopts = PROJECT_LINKOPTS,
