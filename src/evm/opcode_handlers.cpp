@@ -1368,8 +1368,8 @@ void CallHandler::doExecute() {
     }
   }
   if (OutputSize != 0) {
-    if (!expandMemoryAndChargeGas(
-            Frame, uint256ToUint64(OutputOffset + OutputSize))) {
+    if (!expandMemoryAndChargeGas(Frame,
+                                  uint256ToUint64(OutputOffset + OutputSize))) {
       Context->setStatus(EVMC_OUT_OF_GAS);
       return;
     }

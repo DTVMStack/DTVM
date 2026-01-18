@@ -2000,7 +2000,6 @@ EVMMirBuilder::handleMLoad(Operand AddrComponents) {
       Offset);
   expandMemoryIR(RequiredSize, Overflow);
 
-
   MInstruction *MemBase = getMemoryDataPointer();
   MInstruction *MemAddrInt = createInstruction<BinaryInstruction>(
       false, OP_add, I64Type, MemBase, Offset);
@@ -2091,8 +2090,8 @@ void EVMMirBuilder::handleMStore8(Operand AddrComponents,
   U256Inst ValueParts = extractU256Operand(ValueComponents);
   MInstruction *Low64 = ValueParts[0];
   MInstruction *Mask = createIntConstInstruction(I64Type, 0xFF);
-  MInstruction *Masked = createInstruction<BinaryInstruction>(
-      false, OP_and, I64Type, Low64, Mask);
+  MInstruction *Masked =
+      createInstruction<BinaryInstruction>(false, OP_and, I64Type, Low64, Mask);
   MInstruction *ByteValue = createInstruction<ConversionInstruction>(
       false, OP_trunc, &Ctx.I8Type, Masked);
   createInstruction<StoreInstruction>(true, &Ctx.VoidType, ByteValue, AddrPtr);
@@ -3202,34 +3201,28 @@ EVMMirBuilder::calculateMemoryGasCostIR(MInstruction *SizeInBytes) {
   // Convert bytes to words: (SizeInBytes + 31) / 32
   MInstruction *Const31 = createIntConstInstruction(I64Type, 31);
   MInstruction *Shift5 = createIntConstInstruction(I64Type, 5);
-  MInstruction *SizePlus31 =
-      createInstruction<BinaryInstruction>(false, OP_add, I64Type,
-                                           SizeInBytes, Const31);
-  MInstruction *SizeInWords =
-      createInstruction<BinaryInstruction>(false, OP_ushr, I64Type,
-                                           SizePlus31, Shift5);
+  MInstruction *SizePlus31 = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, SizeInBytes, Const31);
+  MInstruction *SizeInWords = createInstruction<BinaryInstruction>(
+      false, OP_ushr, I64Type, SizePlus31, Shift5);
 
   // Calculate sizeInWords^2
-  MInstruction *SizeSquared =
-      createInstruction<BinaryInstruction>(false, OP_mul, I64Type,
-                                           SizeInWords, SizeInWords);
+  MInstruction *SizeSquared = createInstruction<BinaryInstruction>(
+      false, OP_mul, I64Type, SizeInWords, SizeInWords);
 
   // Calculate sizeInWords^2 / 512
   MInstruction *Const512 = createIntConstInstruction(I64Type, 512);
-  MInstruction *QuadraticCost =
-      createInstruction<BinaryInstruction>(false, OP_udiv, I64Type,
-                                           SizeSquared, Const512);
+  MInstruction *QuadraticCost = createInstruction<BinaryInstruction>(
+      false, OP_udiv, I64Type, SizeSquared, Const512);
 
   // Calculate 3 * sizeInWords
   MInstruction *Const3 = createIntConstInstruction(I64Type, 3);
-  MInstruction *LinearCost =
-      createInstruction<BinaryInstruction>(false, OP_mul, I64Type, Const3,
-                                           SizeInWords);
+  MInstruction *LinearCost = createInstruction<BinaryInstruction>(
+      false, OP_mul, I64Type, Const3, SizeInWords);
 
   // Total cost = QuadraticCost + LinearCost
-  MInstruction *TotalCost =
-      createInstruction<BinaryInstruction>(false, OP_add, I64Type,
-                                           QuadraticCost, LinearCost);
+  MInstruction *TotalCost = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, QuadraticCost, LinearCost);
 
   return TotalCost;
 }
@@ -3273,8 +3266,7 @@ void EVMMirBuilder::chargeDynamicGasIR(MInstruction *GasCost) {
   const int32_t CurrentMessageOffset =
       zen::runtime::EVMInstance::getCurrentMessagePointerOffset();
   MPointerType *VoidPtrType = createVoidPtrType();
-  MInstruction *MsgPtr =
-      getInstanceElement(VoidPtrType, CurrentMessageOffset);
+  MInstruction *MsgPtr = getInstanceElement(VoidPtrType, CurrentMessageOffset);
   MInstruction *MsgPtrInt = createInstruction<ConversionInstruction>(
       false, OP_ptrtoint, I64Type, MsgPtr);
   MInstruction *Zero = createIntConstInstruction(I64Type, 0);
@@ -3321,8 +3313,8 @@ void EVMMirBuilder::expandMemoryIR(MInstruction *RequiredSize,
 
   MType *I64Type = &Ctx.I64Type;
 
-  MInstruction *MaxSize = createIntConstInstruction(
-      I64Type, zen::evm::MAX_REQUIRED_MEMORY_SIZE);
+  MInstruction *MaxSize =
+      createIntConstInstruction(I64Type, zen::evm::MAX_REQUIRED_MEMORY_SIZE);
   MInstruction *TooLarge = createInstruction<CmpInstruction>(
       false, CmpInstruction::Predicate::ICMP_UGT, I64Type, RequiredSize,
       MaxSize);
@@ -3353,8 +3345,8 @@ void EVMMirBuilder::expandMemoryIR(MInstruction *RequiredSize,
   MBasicBlock *ExpandBB = createBasicBlock();
   MBasicBlock *ContinueBB = createBasicBlock();
 
-  createInstruction<BrIfInstruction>(true, Ctx, NeedExpand,
-                                     ExpandBB, ContinueBB);
+  createInstruction<BrIfInstruction>(true, Ctx, NeedExpand, ExpandBB,
+                                     ContinueBB);
   addSuccessor(ExpandBB);
   addSuccessor(ContinueBB);
 

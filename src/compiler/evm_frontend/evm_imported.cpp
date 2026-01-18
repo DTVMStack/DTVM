@@ -524,8 +524,8 @@ void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t Offset,
       return;
     }
     uint8_t *MemoryBase = Instance->getMemoryBase();
-    ReturnData = std::vector<uint8_t>(MemoryBase + Offset,
-                                      MemoryBase + Offset + Len);
+    ReturnData =
+        std::vector<uint8_t>(MemoryBase + Offset, MemoryBase + Offset + Len);
   }
   Instance->setReturnData(ReturnData);
 
@@ -613,8 +613,7 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
 
     // Fill remaining bytes with zeros if needed
     if (Size > CopiedSize) {
-      std::memset(MemoryBase + DestOffset + CopiedSize, 0,
-                  Size - CopiedSize);
+      std::memset(MemoryBase + DestOffset + CopiedSize, 0, Size - CopiedSize);
     }
   }
 }
@@ -640,8 +639,7 @@ void evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance,
   } else {
     uint64_t CopySize = std::min<uint64_t>(
         Size, static_cast<uint64_t>(ReturnData.size()) - Offset);
-    std::memcpy(MemoryBase + DestOffset, ReturnData.data() + Offset,
-                CopySize);
+    std::memcpy(MemoryBase + DestOffset, ReturnData.data() + Offset, CopySize);
 
     // Fill remaining bytes with zeros
     if (Size > CopySize) {
@@ -1087,8 +1085,8 @@ void evmSetRevert(zen::runtime::EVMInstance *Instance, uint64_t Offset,
       return;
     }
     uint8_t *MemoryBase = Instance->getMemoryBase();
-    ReturnData = std::vector<uint8_t>(MemoryBase + Offset,
-                                      MemoryBase + Offset + Size);
+    ReturnData =
+        std::vector<uint8_t>(MemoryBase + Offset, MemoryBase + Offset + Size);
   }
   Instance->setReturnData(std::move(ReturnData));
   const int64_t GasLeft =
