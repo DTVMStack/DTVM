@@ -38,12 +38,14 @@ EVMModule::~EVMModule() {
 }
 
 EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
-                                           CodeHolderUniquePtr CodeHolder) {
+                                           CodeHolderUniquePtr CodeHolder,
+                                           evmc_revision Rev) {
   void *ObjBuf = RT.allocate(sizeof(EVMModule));
   ZEN_ASSERT(ObjBuf);
 
   auto *RawMod = new (ObjBuf) EVMModule(&RT);
   EVMModuleUniquePtr Mod(RawMod);
+  Mod->setRevision(Rev);
 
   const uint8_t *Data = static_cast<const uint8_t *>(CodeHolder->getData());
   size_t CodeSize = CodeHolder->getSize();
@@ -79,7 +81,7 @@ const evm::EVMBytecodeCache &EVMModule::getBytecodeCache() const {
 }
 
 void EVMModule::initBytecodeCache() const {
-  evm::buildBytecodeCache(BytecodeCache, Code, CodeSize);
+  evm::buildBytecodeCache(BytecodeCache, Code, CodeSize, Revision);
 }
 
 } // namespace zen::runtime

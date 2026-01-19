@@ -7,6 +7,8 @@
 #include "intx/intx.hpp"
 #include "platform/platform.h"
 
+#include <evmc/evmc.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -21,7 +23,7 @@ struct EVMBytecodeCache {
 };
 
 void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
-                        size_t CodeSize);
+                        size_t CodeSize, evmc_revision Rev);
 
 } // namespace zen::evm
 

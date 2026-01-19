@@ -71,7 +71,7 @@ EVMFrontendContext::EVMFrontendContext(const EVMFrontendContext &OtherCtx)
       BytecodeSize(OtherCtx.BytecodeSize),
       GasMeteringEnabled(OtherCtx.GasMeteringEnabled),
       GasChunkEnd(OtherCtx.GasChunkEnd), GasChunkCost(OtherCtx.GasChunkCost),
-      GasChunkSize(OtherCtx.GasChunkSize)
+      GasChunkSize(OtherCtx.GasChunkSize), Revision(OtherCtx.Revision)
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
       ,
       GasRegisterEnabled(OtherCtx.GasRegisterEnabled)
@@ -122,6 +122,13 @@ void EVMMirBuilder::loadEVMInstanceAttr() {
       false, OP_ptrtoint, &Ctx.I64Type, MemPtr);
   createInstruction<DassignInstruction>(true, &(Ctx.VoidType), MemBaseInt,
                                         MemoryBaseVar->getVarIdx());
+  // Cache memory size in a local for MSIZE and memory growth checks
+  MemorySizeVar = CurFunc->createVariable(&Ctx.I64Type);
+  const int32_t MemorySizeOffset =
+      zen::runtime::EVMInstance::getMemorySizeOffset();
+  MInstruction *MemSize = getInstanceElement(&Ctx.I64Type, MemorySizeOffset);
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), MemSize,
+                                        MemorySizeVar->getVarIdx());
 
   ExceptionReturnBB = CurFunc->createExceptionReturnBB();
 }
@@ -131,14 +138,23 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   MBasicBlock *EntryBB = createBasicBlock();
   setInsertBlock(EntryBB);
 
-  InstructionMetrics =
-      evmc_get_instruction_metrics_table(zen::evm::DEFAULT_REVISION);
+  const auto *EvmCtx = static_cast<const EVMFrontendContext *>(&Ctx);
+  const evmc_revision Rev = EvmCtx->getRevision();
+  InstructionMetrics = evmc_get_instruction_metrics_table(Rev);
+  InstructionNames = evmc_get_instruction_names_table(Rev);
+  if (!InstructionMetrics) {
+    InstructionMetrics =
+        evmc_get_instruction_metrics_table(zen::evm::DEFAULT_REVISION);
+  }
+  if (!InstructionNames) {
+    InstructionNames =
+        evmc_get_instruction_names_table(zen::evm::DEFAULT_REVISION);
+  }
 
   createJumpTable();
   ReturnBB = createBasicBlock();
   loadEVMInstanceAttr();
 
-  const auto *EvmCtx = static_cast<const EVMFrontendContext *>(&Ctx);
   GasChunkEnd = EvmCtx->getGasChunkEnd();
   GasChunkCost = EvmCtx->getGasChunkCost();
   GasChunkSize = EvmCtx->getGasChunkSize();
@@ -280,6 +296,19 @@ void EVMMirBuilder::meterOpcode(evmc_opcode Opcode, uint64_t PC) {
   const uint8_t Index = static_cast<uint8_t>(Opcode);
   const auto &Metrics = InstructionMetrics[Index];
   meterGas(static_cast<uint64_t>(Metrics.gas_cost));
+}
+
+bool EVMMirBuilder::isOpcodeDefined(evmc_opcode Opcode) const {
+  const uint8_t Index = static_cast<uint8_t>(Opcode);
+  if (InstructionNames && InstructionNames[Index] != nullptr) {
+    return true;
+  }
+  if (!InstructionMetrics) {
+    return true;
+  }
+  const auto &Metrics = InstructionMetrics[Index];
+  return Metrics.gas_cost != 0 || Metrics.stack_height_required != 0 ||
+         Metrics.stack_height_change != 0;
 }
 
 void EVMMirBuilder::meterGas(uint64_t GasCost) {
@@ -1888,6 +1917,7 @@ void EVMMirBuilder::handleCodeCopy(Operand DestOffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
 }
 
 typename EVMMirBuilder::Operand
@@ -1979,6 +2009,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleBlobBaseFee() {
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleMSize() {
   MInstruction *MemSize = getMemorySize();
+  // Capture MSIZE at this opcode to prevent later memory growth reordering.
+  MemSize = protectUnsafeValue(MemSize, &Ctx.I64Type);
   return convertSingleInstrToU256Operand(MemSize);
 }
 typename EVMMirBuilder::Operand
@@ -2007,10 +2039,11 @@ EVMMirBuilder::handleMLoad(Operand AddrComponents) {
       false, OP_inttoptr, createVoidPtrType(), MemAddrInt);
 
   Operand Bytes32Op(MemPtr, EVMType::BYTES32);
-  return convertBytes32ToU256Operand(Bytes32Op);
+  Operand Result = convertBytes32ToU256Operand(Bytes32Op);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  return Result;
 }
 
 void EVMMirBuilder::handleMStore(Operand AddrComponents,
@@ -2023,10 +2056,23 @@ void EVMMirBuilder::handleMStore(Operand AddrComponents,
 
   U256Inst AddrParts = extractU256Operand(AddrComponents);
   MInstruction *Offset = AddrParts[0];
+  U256Inst ValueParts = extractU256Operand(ValueComponents);
 
   MInstruction *SizeConst = createIntConstInstruction(I64Type, 32);
   MInstruction *RequiredSize = createInstruction<BinaryInstruction>(
       false, OP_add, I64Type, Offset, SizeConst);
+  // Tie expansion ordering to the stored value to prevent reordering.
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+  MInstruction *ValueDep = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, ValueParts[0], ValueParts[1]);
+  ValueDep = createInstruction<BinaryInstruction>(false, OP_or, I64Type,
+                                                  ValueDep, ValueParts[2]);
+  ValueDep = createInstruction<BinaryInstruction>(false, OP_or, I64Type,
+                                                  ValueDep, ValueParts[3]);
+  ValueDep = createInstruction<BinaryInstruction>(false, OP_and, I64Type,
+                                                  ValueDep, Zero);
+  RequiredSize = createInstruction<BinaryInstruction>(false, OP_add, I64Type,
+                                                      RequiredSize, ValueDep);
   MInstruction *Overflow = createInstruction<CmpInstruction>(
       false, CmpInstruction::Predicate::ICMP_ULT, I64Type, RequiredSize,
       Offset);
@@ -2036,7 +2082,6 @@ void EVMMirBuilder::handleMStore(Operand AddrComponents,
   MInstruction *BaseAddrInt = createInstruction<BinaryInstruction>(
       false, OP_add, I64Type, MemBase, Offset);
 
-  U256Inst ValueParts = extractU256Operand(ValueComponents);
   MPointerType *U64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
 
   auto ByteSwap64 = [&](MInstruction *Value) -> MInstruction * {
@@ -2070,10 +2115,17 @@ void EVMMirBuilder::handleMStore8(Operand AddrComponents,
 
   U256Inst AddrParts = extractU256Operand(AddrComponents);
   MInstruction *Offset = AddrParts[0];
+  U256Inst ValueParts = extractU256Operand(ValueComponents);
 
   MInstruction *SizeConst = createIntConstInstruction(I64Type, 1);
   MInstruction *RequiredSize = createInstruction<BinaryInstruction>(
       false, OP_add, I64Type, Offset, SizeConst);
+  // Tie expansion ordering to the stored value to prevent reordering.
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+  MInstruction *ValueDep = createInstruction<BinaryInstruction>(
+      false, OP_and, I64Type, ValueParts[0], Zero);
+  RequiredSize = createInstruction<BinaryInstruction>(false, OP_add, I64Type,
+                                                      RequiredSize, ValueDep);
   MInstruction *Overflow = createInstruction<CmpInstruction>(
       false, CmpInstruction::Predicate::ICMP_ULT, I64Type, RequiredSize,
       Offset);
@@ -2087,7 +2139,6 @@ void EVMMirBuilder::handleMStore8(Operand AddrComponents,
   MInstruction *AddrPtr = createInstruction<ConversionInstruction>(
       false, OP_inttoptr, I8PtrType, AddrInt);
 
-  U256Inst ValueParts = extractU256Operand(ValueComponents);
   MInstruction *Low64 = ValueParts[0];
   MInstruction *Mask = createIntConstInstruction(I64Type, 0xFF);
   MInstruction *Masked =
@@ -2243,6 +2294,7 @@ EVMMirBuilder::handleCreate(Operand ValueOp, Operand OffsetOp, Operand SizeOp) {
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
   return Result;
 }
 
@@ -2262,6 +2314,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCreate2(Operand ValueOp,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
   return Result;
 }
 
@@ -2287,6 +2340,7 @@ EVMMirBuilder::handleCall(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
   return Result;
 }
 
@@ -2312,6 +2366,7 @@ EVMMirBuilder::handleCallCode(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
   return Result;
 }
 
@@ -2359,6 +2414,7 @@ EVMMirBuilder::handleDelegateCall(Operand GasOp, Operand ToAddrOp,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
   return Result;
 }
 
@@ -2383,6 +2439,7 @@ EVMMirBuilder::handleStaticCall(Operand GasOp, Operand ToAddrOp,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
   return Result;
 }
 
@@ -2505,6 +2562,7 @@ EVMMirBuilder::handleKeccak256(Operand OffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
   return Result;
 }
 
@@ -3122,6 +3180,7 @@ void EVMMirBuilder::handleCallDataCopy(Operand DestOffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
 }
 
 void EVMMirBuilder::handleExtCodeCopy(Operand AddressComponents,
@@ -3141,6 +3200,7 @@ void EVMMirBuilder::handleExtCodeCopy(Operand AddressComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
 }
 
 void EVMMirBuilder::handleReturnDataCopy(Operand DestOffsetComponents,
@@ -3159,6 +3219,7 @@ void EVMMirBuilder::handleReturnDataCopy(Operand DestOffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleReturnDataSize() {
@@ -3184,10 +3245,25 @@ MInstruction *EVMMirBuilder::getMemoryDataPointer() {
 }
 
 MInstruction *EVMMirBuilder::getMemorySize() {
+  if (MemorySizeVar) {
+    return loadVariable(MemorySizeVar);
+  }
   MType *I64Type = &Ctx.I64Type;
   const int32_t MemorySizeOffset =
       zen::runtime::EVMInstance::getMemorySizeOffset();
   return getInstanceElement(I64Type, MemorySizeOffset);
+}
+
+void EVMMirBuilder::reloadMemorySizeFromInstance() {
+  if (!MemorySizeVar) {
+    return;
+  }
+  MType *I64Type = &Ctx.I64Type;
+  const int32_t MemorySizeOffset =
+      zen::runtime::EVMInstance::getMemorySizeOffset();
+  MInstruction *MemSize = getInstanceElement(I64Type, MemorySizeOffset);
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), MemSize,
+                                        MemorySizeVar->getVarIdx());
 }
 
 MInstruction *
@@ -3369,6 +3445,10 @@ void EVMMirBuilder::expandMemoryIR(MInstruction *RequiredSize,
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   callRuntimeFor<void, uint64_t>(RuntimeFunctions.ExpandMemoryNoGas,
                                  Operand(AlignedSize, EVMType::UINT64));
+  if (MemorySizeVar) {
+    createInstruction<DassignInstruction>(true, &(Ctx.VoidType), AlignedSize,
+                                          MemorySizeVar->getVarIdx());
+  }
   if (MemoryBaseVar) {
     MPointerType *VoidPtrType = createVoidPtrType();
     const int32_t MemoryBaseOffset =

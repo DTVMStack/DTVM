@@ -9,6 +9,7 @@
 #include "compiler/mir/function.h"
 #include "compiler/mir/instructions.h"
 #include "compiler/mir/pointer.h"
+#include "evm/evm.h"
 #include "evmc/instructions.h"
 #include "intx/intx.hpp"
 #include <vector>
@@ -77,6 +78,9 @@ public:
     return GasChunkEnd && GasChunkCost && GasChunkSize > 0;
   }
 
+  void setRevision(evmc_revision Rev) { Revision = Rev; }
+  evmc_revision getRevision() const { return Revision; }
+
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   void setGasRegisterEnabled(bool Enabled) { GasRegisterEnabled = Enabled; }
   bool isGasRegisterEnabled() const { return GasRegisterEnabled; }
@@ -89,6 +93,7 @@ private:
   const uint32_t *GasChunkEnd = nullptr;
   const uint64_t *GasChunkCost = nullptr;
   size_t GasChunkSize = 0;
+  evmc_revision Revision = zen::evm::DEFAULT_REVISION;
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   bool GasRegisterEnabled = false;
 #endif
@@ -181,6 +186,7 @@ public:
   void finalizeEVMBase();
 
   void meterOpcode(evmc_opcode Opcode, uint64_t PC);
+  bool isOpcodeDefined(evmc_opcode Opcode) const;
   void meterGas(uint64_t GasCost);
 
   // Complete jump implementation with jump table
@@ -608,6 +614,7 @@ private:
   // exit when has exception
   MBasicBlock *ExceptionReturnBB = nullptr;
   const evmc_instruction_metrics *InstructionMetrics = nullptr;
+  const char *const *InstructionNames = nullptr;
 
   // Jump table for dynamic jumps
   bool HasIndirectJump = false;
@@ -623,10 +630,12 @@ private:
   Variable *StackTopVar = nullptr;
   Variable *StackSizeVar = nullptr;
   Variable *MemoryBaseVar = nullptr;
+  Variable *MemorySizeVar = nullptr;
 
   // Helper methods for memory operations
   MInstruction *getMemoryDataPointer();
   MInstruction *getMemorySize();
+  void reloadMemorySizeFromInstance();
   void expandMemoryIR(MInstruction *RequiredSize, MInstruction *Overflow);
   void chargeDynamicGasIR(MInstruction *GasCost);
   void chargeMemoryExpansionGasIR(MInstruction *CurrentSize,

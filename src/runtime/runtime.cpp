@@ -16,6 +16,7 @@
 #include "common/type.h"
 #include "entrypoint/entrypoint.h"
 #ifdef ZEN_ENABLE_EVM
+#include "evm/evm.h"
 #include "evm/interpreter.h"
 #include "runtime/evm_instance.h"
 #include "utils/evm.h"
@@ -260,7 +261,7 @@ Runtime::loadEVMModule(const std::string &Filename) noexcept {
     // Create CodeHolder with decoded bytes
     auto Code = CodeHolder::newRawDataCodeHolder(*this, DecodedBytes->data(),
                                                  DecodedBytes->size());
-    return loadEVMModule(Name, std::move(Code));
+    return loadEVMModule(Name, std::move(Code), zen::evm::DEFAULT_REVISION);
   } catch (const Error &Err) {
     Stats.clearAllTimers();
     freeSymbol(Name);
@@ -273,8 +274,8 @@ Runtime::loadEVMModule(const std::string &Filename) noexcept {
 }
 
 MayBe<EVMModule *> Runtime::loadEVMModule(const std::string &ModName,
-                                          const void *Data,
-                                          size_t Size) noexcept {
+                                          const void *Data, size_t Size,
+                                          evmc_revision Rev) noexcept {
   if (ModName.empty() || (Size != 0 && Data == nullptr)) {
     return getError(ErrorCode::InvalidRawData);
   }
@@ -287,7 +288,7 @@ MayBe<EVMModule *> Runtime::loadEVMModule(const std::string &ModName,
 
   try {
     auto Code = CodeHolder::newRawDataCodeHolder(*this, Data, Size);
-    return loadEVMModule(Name, std::move(Code));
+    return loadEVMModule(Name, std::move(Code), Rev);
   } catch (const Error &Err) {
     Stats.clearAllTimers();
     freeSymbol(Name);
@@ -297,12 +298,13 @@ MayBe<EVMModule *> Runtime::loadEVMModule(const std::string &ModName,
 
 // Before executing this function, it is necessary to ensure that name is unique
 EVMModule *Runtime::loadEVMModule(EVMSymbol Name,
-                                  CodeHolderUniquePtr CodeHolder) {
+                                  CodeHolderUniquePtr CodeHolder,
+                                  evmc_revision Rev) {
   ZEN_ASSERT(Name);
   ZEN_ASSERT(CodeHolder);
 
   EVMModuleUniquePtr Mod =
-      EVMModule::newEVMModule(*this, std::move(CodeHolder));
+      EVMModule::newEVMModule(*this, std::move(CodeHolder), Rev);
   // All errors in Module::newModule are thrown as exceptions, so the return
   // value must be valid when the following line is executed
   ZEN_ASSERT(Mod);

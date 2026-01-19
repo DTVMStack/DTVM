@@ -111,6 +111,9 @@ set_property(
 
 add_library(compiler STATIC ${COMPILER_SRCS} $<TARGET_OBJECTS:utils>)
 target_link_libraries(compiler PRIVATE ${llvm_libs})
+if(ZEN_ENABLE_EVM)
+  target_link_libraries(compiler PUBLIC evmc::instructions)
+endif()
 
 add_executable(ircompiler ircompiler.cpp)
 target_link_libraries(ircompiler PRIVATE compiler dtvmcore CLI11::CLI11)

@@ -77,7 +77,7 @@ struct DTVM : evmc_vm {
                           .EnableEvmGasMetering = true};
   std::unique_ptr<Runtime> RT;
   std::unique_ptr<WrappedHost> ExecHost;
-  std::unordered_map<uint32_t, EVMModule *> LoadedMods;
+  std::unordered_map<uint64_t, EVMModule *> LoadedMods;
   Isolation *Iso = nullptr;
 };
 
@@ -154,7 +154,10 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
   }
 
   uint32_t CheckSum = crc32(Code, CodeSize);
-  auto ModRet = VM->RT->loadEVMModule(std::to_string(CheckSum), Code, CodeSize);
+  uint64_t ModKey = (static_cast<uint64_t>(Rev) << 32) | CheckSum;
+  std::string ModName =
+      std::to_string(CheckSum) + "_" + std::to_string(static_cast<int>(Rev));
+  auto ModRet = VM->RT->loadEVMModule(ModName, Code, CodeSize, Rev);
   if (!ModRet) {
     const Error &Err = ModRet.getError();
     ZEN_ASSERT(!Err.isEmpty());
@@ -163,7 +166,7 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
   }
 
   EVMModule *Mod = *ModRet;
-  VM->LoadedMods[CheckSum] = Mod;
+  VM->LoadedMods[ModKey] = Mod;
   if (!VM->Iso) {
     VM->Iso = VM->RT->createManagedIsolation();
   }

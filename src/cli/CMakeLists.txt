@@ -5,7 +5,7 @@ add_executable(dtvm dtvm.cpp)
 target_link_libraries(dtvm PRIVATE dtvmcore CLI11::CLI11)
 
 if(ZEN_ENABLE_EVM)
-  target_link_libraries(dtvm PUBLIC evmc::evmc)
+  target_link_libraries(dtvm PUBLIC evmc::evmc evmc::instructions)
 endif()
 
 if(ZEN_ENABLE_PROFILER)

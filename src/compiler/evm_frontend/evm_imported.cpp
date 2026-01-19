@@ -870,10 +870,6 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   if (Rev >= EVMC_BERLIN &&
       Module->Host->access_account(TargetAddr) == EVMC_ACCESS_COLD) {
     Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
-  } else if (Rev >= EVMC_TANGERINE_WHISTLE && Rev <= EVMC_ISTANBUL) {
-    if (CallKind == EVMC_DELEGATECALL) {
-      Instance->chargeGas(zen::evm::DELEGATECALL_EXTRA_GAS_TW_TO_ISTANBUL);
-    }
   }
 
   const bool TransfersValue =
@@ -937,6 +933,24 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     }
   }
 
+  if (TransfersValue && Instance->isStaticMode()) {
+    triggerStaticModeViolation(Instance);
+    return 0;
+  }
+
+  bool HasEnoughBalance = true;
+  if (TransfersValue) {
+    const auto CallerBalance = Module->Host->get_balance(CurrentMsg->recipient);
+    const intx::uint256 CallerValue =
+        intx::be::load<intx::uint256>(CallerBalance);
+    HasEnoughBalance = CallerValue >= intx::uint256(Value);
+    Instance->chargeGas(zen::evm::CALL_VALUE_COST);
+  }
+  if (CallKind == EVMC_CALL && (TransfersValue || Rev < EVMC_SPURIOUS_DRAGON) &&
+      !Module->Host->account_exists(TargetAddr)) {
+    Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
+  }
+
   uint8_t *MemoryBase = Instance->getMemoryBase();
   uint64_t CallGas = Gas;
   uint64_t GasLeft = Instance->getGas();
@@ -950,6 +964,11 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   }
   if (TransfersValue) {
     CallGas += zen::evm::CALL_GAS_STIPEND;
+  }
+
+  if (CurrentMsg->depth >= zen::evm::MAXSTACK) {
+    Instance->setReturnData({});
+    return 0;
   }
 
   // Create message for call
@@ -1000,16 +1019,12 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     Instance->addGasRefund(Result.gas_refund);
   }
 
-  // Copy return data to memory if output area is specified
+  // Copy return data to memory if output area is specified.
+  // Per EVM semantics, bytes beyond returned data length remain unchanged.
   if (RetSize > 0 && Result.output_size > 0) {
     size_t CopySize =
         std::min(static_cast<size_t>(RetSize), Result.output_size);
     std::memcpy(MemoryBase + RetOffset, Result.output_data, CopySize);
-
-    // Zero out remaining output area if needed
-    if (RetSize > CopySize) {
-      std::memset(MemoryBase + RetOffset + CopySize, 0, RetSize - CopySize);
-    }
   }
 
   // Store full return data for RETURNDATASIZE/RETURNDATACOPY

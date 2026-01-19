@@ -50,7 +50,7 @@ if(ZEN_ENABLE_EVM)
 
   # Link with EVMC library if available
   if(TARGET evmc::evmc)
-    target_link_libraries(dtvmapi PRIVATE evmc::evmc)
+    target_link_libraries(dtvmapi PRIVATE evmc::evmc evmc::instructions)
   endif()
 
   # Configure static linking for cross-environment compatibility This ensures

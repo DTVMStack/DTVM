@@ -83,6 +83,12 @@ private:
         }
         bool IsJumpDest = (Opcode == OP_JUMPDEST);
         if (!IsJumpDest) {
+          if (!Builder.isOpcodeDefined(Opcode)) {
+            handleEndBlock();
+            Builder.handleUndefined();
+            PC++;
+            continue;
+          }
           Builder.meterOpcode(Opcode, PC);
         }
 

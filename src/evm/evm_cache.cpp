@@ -959,7 +959,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
 } // namespace
 
 void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
-                        size_t CodeSize) {
+                        size_t CodeSize, evmc_revision Rev) {
   Cache.JumpDestMap.assign(CodeSize, 0);
   Cache.PushValueMap.resize(CodeSize);
   Cache.GasChunkEnd.assign(CodeSize, 0);
@@ -967,8 +967,10 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
 
   buildJumpDestMapAndPushCache(Code, CodeSize, Cache.JumpDestMap,
                                Cache.PushValueMap);
-  static const auto *MetricsTable =
-      evmc_get_instruction_metrics_table(DEFAULT_REVISION);
+  const auto *MetricsTable = evmc_get_instruction_metrics_table(Rev);
+  if (!MetricsTable) {
+    MetricsTable = evmc_get_instruction_metrics_table(DEFAULT_REVISION);
+  }
 
   buildGasChunksSPP(Code, CodeSize, MetricsTable, Cache.JumpDestMap,
                     Cache.PushValueMap, Cache.GasChunkEnd, Cache.GasChunkCost);

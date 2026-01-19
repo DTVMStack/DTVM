@@ -3,6 +3,7 @@
 #ifndef ZEN_RUNTIME_EVM_MODULE_H
 #define ZEN_RUNTIME_EVM_MODULE_H
 
+#include "evm/evm.h"
 #include "evm/evm_cache.h"
 #include "evmc/evmc.hpp"
 #include "runtime/module.h"
@@ -23,8 +24,8 @@ class EVMModule final : public BaseModule<EVMModule> {
 
 public:
   using Byte = zen::common::Byte;
-  static EVMModuleUniquePtr newEVMModule(Runtime &RT,
-                                         CodeHolderUniquePtr CodeHolder);
+  static EVMModuleUniquePtr
+  newEVMModule(Runtime &RT, CodeHolderUniquePtr CodeHolder, evmc_revision Rev);
 
   virtual ~EVMModule();
 
@@ -33,6 +34,8 @@ public:
   evmc::Host *Host;
 
   const evm::EVMBytecodeCache &getBytecodeCache() const;
+  evmc_revision getRevision() const { return Revision; }
+  void setRevision(evmc_revision Rev) { Revision = Rev; }
 
 #ifdef ZEN_ENABLE_JIT
   common::CodeMemPool &getJITCodeMemPool() { return JITCodeMemPool; }
@@ -58,6 +61,7 @@ private:
   void initBytecodeCache() const;
   mutable bool BytecodeCacheInitialized = false;
   mutable evm::EVMBytecodeCache BytecodeCache;
+  evmc_revision Revision = zen::evm::DEFAULT_REVISION;
 
 #ifdef ZEN_ENABLE_JIT
   common::CodeMemPool JITCodeMemPool;
