@@ -1,0 +1,43 @@
+// Fill return area with 0xAA bytes
+PUSH32 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+PUSH1 0x80
+MSTORE
+
+// Input for IDENTITY precompile at 0x00: 0x11223344
+PUSH1 0x11
+PUSH1 0x00
+MSTORE8
+PUSH1 0x22
+PUSH1 0x01
+MSTORE8
+PUSH1 0x33
+PUSH1 0x02
+MSTORE8
+PUSH1 0x44
+PUSH1 0x03
+MSTORE8
+
+// CALL identity precompile (0x04) with retSize > return length.
+// Stack (top -> bottom): gas, addr, value, inOffset, inSize, retOffset, retSize
+PUSH1 0x10
+PUSH1 0x80
+PUSH1 0x04
+PUSH1 0x00
+PUSH1 0x00
+PUSH1 0x04
+PUSH2 0x1000
+CALL
+POP
+
+// Verify output tail is unchanged: mload(0x80) matches expected pattern.
+PUSH1 0x80
+MLOAD
+PUSH32 0x11223344aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+EQ
+
+// Return 0x01 on success, 0x00 on failure
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN
