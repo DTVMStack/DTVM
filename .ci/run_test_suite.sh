@@ -148,10 +148,10 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
         "evmonetestsuite")
             git clone --depth 1 --recurse-submodules -b for_test https://github.com/DTVMStack/evmone.git
             mv build/lib/* evmone
-            mv EVMOneUnitTestsRunList.txt evmone
             cd evmone
             git status
-            ./run_unittests.sh
+            ./run_unittests.sh ../tests/evmone_unittests/EVMOneMultipassUnitTestsRunList.txt mode=multipass
+            ./run_unittests.sh ../tests/evmone_unittests/EVMOneInterpreterUnitTestsRunList.txt mode=interpreter
             ;;
     esac
 done

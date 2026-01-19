@@ -144,7 +144,7 @@ jobs:
 
           bash .ci/run_test_suite.sh
   build_test_release_evmone_unittests_on_x86:
-    name: Test DTVM-EVM multipass using evmone unit tests in release mode on x86-64
+    name: Test DTVM-EVM multipass and interpreter using evmone unit tests in release mode on x86-64
     runs-on: ubuntu-latest
     container:
       image: dtvmdev1/dtvm-dev-x64:main
