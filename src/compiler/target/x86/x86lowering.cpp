@@ -942,6 +942,46 @@ CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
   }
 }
 
+CgRegister
+X86CgLowering::lowerEvmUmul128Expr(const EvmUmul128Instruction &Inst) {
+  // 64x64->128 bit multiplication using x86 MUL64r
+  // MUL64r: RAX * r/m64 -> RDX:RAX (high 64 bits in RDX, low 64 bits in RAX)
+  const MInstruction *LHS = Inst.getOperand<0>();
+  const MInstruction *RHS = Inst.getOperand<1>();
+
+  CgRegister LHSReg = lowerExpr(*LHS);
+  CgRegister RHSReg = lowerExpr(*RHS);
+
+  // Copy LHS to RAX (MUL64r implicitly uses RAX as one operand)
+  // Use proper CgOperand format: {dst (isDef=true), src}
+  SmallVector<CgOperand, 2> CopyToRAXOperands{
+      CgOperand::createRegOperand(X86::RAX, true), // dst
+      CgOperand::createRegOperand(LHSReg, false),  // src
+  };
+  MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY),
+                          CopyToRAXOperands);
+
+  // MUL64r: RAX * RHS -> RDX:RAX
+  SmallVector<CgOperand, 1> MULOperands{
+      CgOperand::createRegOperand(RHSReg, false),
+  };
+  MF->createCgInstruction(*CurBB, TII.get(X86::MUL64r), MULOperands);
+
+  // Extract result based on which part is wanted
+  MCPhysReg SrcReg = Inst.wantsHighBits() ? X86::RDX : X86::RAX;
+  CgRegister ResultReg = createReg(&X86::GR64RegClass);
+
+  // Copy result from physical register to virtual register
+  SmallVector<CgOperand, 2> CopyResultOperands{
+      CgOperand::createRegOperand(ResultReg, true), // dst
+      CgOperand::createRegOperand(SrcReg, false),   // src
+  };
+  MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY),
+                          CopyResultOperands);
+
+  return ResultReg;
+}
+
 CgRegister X86CgLowering::lowerSelectExpr(const SelectInstruction &Inst) {
   const MType &Type = *Inst.getType();
   const MInstruction *Cond = Inst.getOperand<0>();

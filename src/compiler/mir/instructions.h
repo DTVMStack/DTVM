@@ -668,6 +668,34 @@ private:
   }
 };
 
+// EVM 64x64->128 multiplication instruction
+// Takes two i64 operands, returns i64 (either low or high 64 bits based on
+// opcode: OP_evm_umul128_lo returns low 64 bits, OP_evm_umul128_hi returns
+// high 64 bits)
+class EvmUmul128Instruction : public FixedOperandInstruction<2> {
+public:
+  template <typename... Arguments>
+  static EvmUmul128Instruction *create(Arguments &&...Args) {
+    return FixedOperandInstruction::create<EvmUmul128Instruction>(
+        std::forward<Arguments>(Args)...);
+  }
+
+  static bool classof(const MInstruction *Instr) {
+    return Instr->getKind() == EVM_UMUL128;
+  }
+
+  bool wantsHighBits() const { return getOpcode() == OP_evm_umul128_hi; }
+
+private:
+  friend class FixedOperandInstruction;
+  EvmUmul128Instruction(Opcode Opc, MType *Type, MInstruction *LHS,
+                        MInstruction *RHS)
+      : FixedOperandInstruction(MInstruction::EVM_UMUL128, Opc, 2, Type) {
+    setOperand<0>(LHS);
+    setOperand<1>(RHS);
+  }
+};
+
 } // namespace COMPILER
 
 #endif // COMPILER_IR_INSTRUCTIONS_H

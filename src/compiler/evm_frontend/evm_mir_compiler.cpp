@@ -1014,12 +1014,115 @@ void EVMMirBuilder::handleJumpDest(const uint64_t &PC) {
 
 // ==================== Arithmetic Instruction Handlers ====================
 
+MInstruction *EVMMirBuilder::createEvmUmul128Lo(MInstruction *LHS,
+                                                MInstruction *RHS) {
+  return createInstruction<EvmUmul128Instruction>(false, OP_evm_umul128_lo,
+                                                  &Ctx.I64Type, LHS, RHS);
+}
+
+MInstruction *EVMMirBuilder::createEvmUmul128Hi(MInstruction *LHS,
+                                                MInstruction *RHS) {
+  return createInstruction<EvmUmul128Instruction>(false, OP_evm_umul128_hi,
+                                                  &Ctx.I64Type, LHS, RHS);
+}
+
 typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
                                                          Operand MultiplierOp) {
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
-                        const intx::uint256 &>(RuntimeFunctions.GetMul,
-                                               MultiplicandOp, MultiplierOp);
+  // Optimized schoolbook multiplication for U256 (4x64-bit limbs)
+  // U256 layout: [0]=lo64, [1]=mid-lo, [2]=mid-hi, [3]=hi64
+  //
+  // For 256-bit truncated result, we need products where i+j < 4:
+  //   R[0] = P00_lo
+  //   R[1] = P00_hi + P01_lo + P10_lo
+  //   R[2] = P01_hi + P10_hi + P02_lo + P11_lo + P20_lo
+  //   R[3] = P02_hi + P11_hi + P20_hi + P03_lo + P12_lo + P21_lo + P30_lo
+
+  U256Inst A = extractU256Operand(MultiplicandOp);
+  U256Inst B = extractU256Operand(MultiplierOp);
+
+  MType *I64Type = &Ctx.I64Type;
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+
+  // Pre-compute partial products
+  // PLo[i][j] = (A[i] * B[j])_lo, PHi[i][j] = (A[i] * B[j])_hi
+  MInstruction *PLo[4][4] = {};
+  MInstruction *PHi[4][4] = {};
+
+  for (size_t I = 0; I < 4; ++I) {
+    for (size_t J = 0; J < 4; ++J) {
+      if (I + J < 4) {
+        PLo[I][J] = createEvmUmul128Lo(A[I], B[J]);
+      }
+      if (I + J < 3) {
+        PHi[I][J] = createEvmUmul128Hi(A[I], B[J]);
+      }
+    }
+  }
+
+  using SumCarryPair = std::pair<MInstruction *, MInstruction *>;
+
+  // Helper: add a term into sum and accumulate overflow count in Carry.
+  auto addTermWithCarry = [&](MInstruction *Sum, MInstruction *Carry,
+                              MInstruction *Term) -> SumCarryPair {
+    MInstruction *NewSum =
+        createInstruction<BinaryInstruction>(false, OP_add, I64Type, Sum, Term);
+    MInstruction *NewCarry =
+        createInstruction<AdcInstruction>(false, I64Type, Carry, Zero, Zero);
+    return {protectUnsafeValue(NewSum, I64Type),
+            protectUnsafeValue(NewCarry, I64Type)};
+  };
+
+  auto addTermNoCarry = [&](MInstruction *Sum, MInstruction *Term) {
+    MInstruction *NewSum =
+        createInstruction<BinaryInstruction>(false, OP_add, I64Type, Sum, Term);
+    return protectUnsafeValue(NewSum, I64Type);
+  };
+
+  // Accumulate each result limb
+  // Using sequential addition with carry propagation
+
+  // R[0] = P00_lo (no overflow possible for single value)
+  MInstruction *R0 = PLo[0][0];
+
+  // R[1] = P00_hi + P01_lo + P10_lo
+  MInstruction *R1 = PHi[0][0];
+  MInstruction *C1 = Zero;
+  {
+    auto [S1, C1a] = addTermWithCarry(R1, C1, PLo[0][1]);
+    auto [S2, C1b] = addTermWithCarry(S1, C1a, PLo[1][0]);
+    R1 = S2;
+    C1 = C1b;
+  }
+
+  // R[2] = P01_hi + P10_hi + P02_lo + P11_lo + P20_lo + C1
+  MInstruction *R2 = PHi[0][1];
+  MInstruction *C2 = Zero;
+  {
+    auto [S1, C2a] = addTermWithCarry(R2, C2, PHi[1][0]);
+    auto [S2, C2b] = addTermWithCarry(S1, C2a, PLo[0][2]);
+    auto [S3, C2c] = addTermWithCarry(S2, C2b, PLo[1][1]);
+    auto [S4, C2d] = addTermWithCarry(S3, C2c, PLo[2][0]);
+    auto [S5, C2e] = addTermWithCarry(S4, C2d, C1);
+    R2 = S5;
+    C2 = C2e;
+  }
+
+  // R[3] = P02_hi + P11_hi + P20_hi + P03_lo + P12_lo + P21_lo + P30_lo + C2
+  // (no need to track carry out since we truncate to 256 bits)
+  MInstruction *R3 = PHi[0][2];
+  {
+    R3 = addTermNoCarry(R3, PHi[1][1]);
+    R3 = addTermNoCarry(R3, PHi[2][0]);
+    R3 = addTermNoCarry(R3, PLo[0][3]);
+    R3 = addTermNoCarry(R3, PLo[1][2]);
+    R3 = addTermNoCarry(R3, PLo[2][1]);
+    R3 = addTermNoCarry(R3, PLo[3][0]);
+    R3 = addTermNoCarry(R3, C2);
+    // Ignore carries - they overflow into bit 256+
+  }
+
+  U256Inst Result = {R0, R1, R2, R3};
+  return Operand(Result, EVMType::UINT256);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,

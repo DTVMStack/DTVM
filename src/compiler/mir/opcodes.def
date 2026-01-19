@@ -62,7 +62,10 @@ OPCODE(load)
 OPCODE(wasm_sadd128_overflow)
 OPCODE(wasm_uadd128_overflow)
 OPCODE(wasm_ssub128_overflow)
-OPCODE(wasm_usub128_overflow)       // OP_OTHER_EXPR_END
+OPCODE(wasm_usub128_overflow)
+OPCODE(evm_umul128_lo)              // 64x64->64 multiplication (low bits)
+OPCODE(evm_umul128_hi)              // 64x64->64 multiplication (high bits)
+                                    // OP_OTHER_EXPR_END
 
 OPCODE(br)                          // OP_CTRL_STMT_START
 OPCODE(br_if)

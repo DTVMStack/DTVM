@@ -68,6 +68,7 @@ public:
   CgRegister lowerSelectExpr(const SelectInstruction &Inst);
   CgRegister lowerWasmOverflowI128BinaryExpr(
       const WasmOverflowI128BinaryInstruction &Inst);
+  CgRegister lowerEvmUmul128Expr(const EvmUmul128Instruction &Inst);
   CgRegister lowerAdcExpr(const AdcInstruction &Inst);
 
   // ==================== Memory Instructions ====================

@@ -183,6 +183,10 @@ protected:
       ResultReg = SELF.lowerWasmOverflowI128BinaryExpr(
           llvm::cast<WasmOverflowI128BinaryInstruction>(Inst));
       break;
+    case MInstruction::EVM_UMUL128:
+      ResultReg =
+          SELF.lowerEvmUmul128Expr(llvm::cast<EvmUmul128Instruction>(Inst));
+      break;
     case MInstruction::ADC:
       ResultReg = SELF.lowerAdcExpr(llvm::cast<AdcInstruction>(Inst));
       break;
