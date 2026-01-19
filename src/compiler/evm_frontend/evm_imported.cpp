@@ -933,24 +933,6 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     }
   }
 
-  if (TransfersValue && Instance->isStaticMode()) {
-    triggerStaticModeViolation(Instance);
-    return 0;
-  }
-
-  bool HasEnoughBalance = true;
-  if (TransfersValue) {
-    const auto CallerBalance = Module->Host->get_balance(CurrentMsg->recipient);
-    const intx::uint256 CallerValue =
-        intx::be::load<intx::uint256>(CallerBalance);
-    HasEnoughBalance = CallerValue >= intx::uint256(Value);
-    Instance->chargeGas(zen::evm::CALL_VALUE_COST);
-  }
-  if (CallKind == EVMC_CALL && (TransfersValue || Rev < EVMC_SPURIOUS_DRAGON) &&
-      !Module->Host->account_exists(TargetAddr)) {
-    Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
-  }
-
   uint8_t *MemoryBase = Instance->getMemoryBase();
   uint64_t CallGas = Gas;
   uint64_t GasLeft = Instance->getGas();

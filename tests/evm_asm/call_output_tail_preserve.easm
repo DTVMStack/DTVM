@@ -1,38 +1,65 @@
-// Fill return area with 0xAA bytes
+// Test CALL output tail preservation: when return data < retSize,
+// bytes beyond return data length should remain unchanged.
+
+// Fill return area (0x80) with 0xAA bytes
 PUSH32 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 PUSH1 0x80
 MSTORE
 
-// Input for IDENTITY precompile at 0x00: 0x11223344
-PUSH1 0x11
-PUSH1 0x00
-MSTORE8
-PUSH1 0x22
+// Setup MODEXP input at memory[0x00]:
+// Format: base_len(32) | exp_len(32) | mod_len(32) | base | exp | mod
+// We use: base=2, exp=3, mod=7 => 2^3 mod 7 = 1
+// base_len = 1, exp_len = 1, mod_len = 1
+
+// memory[0x00:0x20] = 1 (base length)
 PUSH1 0x01
-MSTORE8
-PUSH1 0x33
+PUSH1 0x00
+MSTORE
+
+// memory[0x20:0x40] = 1 (exp length)
+PUSH1 0x01
+PUSH1 0x20
+MSTORE
+
+// memory[0x40:0x60] = 1 (mod length)
+PUSH1 0x01
+PUSH1 0x40
+MSTORE
+
+// memory[0x60] = 2 (base)
 PUSH1 0x02
-MSTORE8
-PUSH1 0x44
-PUSH1 0x03
+PUSH1 0x60
 MSTORE8
 
-// CALL identity precompile (0x04) with retSize > return length.
-// Stack (top -> bottom): gas, addr, value, inOffset, inSize, retOffset, retSize
+// memory[0x61] = 3 (exp)
+PUSH1 0x03
+PUSH1 0x61
+MSTORE8
+
+// memory[0x62] = 7 (mod)
+PUSH1 0x07
+PUSH1 0x62
+MSTORE8
+
+// CALL MODEXP precompile (0x05)
+// argsOffset=0, argsSize=0x63 (99 bytes), retOffset=0x80, retSize=0x10 (16 bytes)
+// MODEXP returns 1 byte (mod_len), so [0x81, 0x90) should stay 0xAA
+// Stack for CALL: gas, addr, value, argsOffset, argsSize, retOffset, retSize
 PUSH1 0x10
 PUSH1 0x80
-PUSH1 0x04
+PUSH1 0x63
 PUSH1 0x00
 PUSH1 0x00
-PUSH1 0x04
-PUSH2 0x1000
+PUSH1 0x05
+PUSH4 0x100000
 CALL
 POP
 
-// Verify output tail is unchanged: mload(0x80) matches expected pattern.
+// Verify: MLOAD(0x80) should be 0x01 followed by 0xAA... (31 bytes)
+// Expected: 0x01AAAAAA...AA (first byte is result, rest unchanged)
 PUSH1 0x80
 MLOAD
-PUSH32 0x11223344aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+PUSH32 0x01aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 EQ
 
 // Return 0x01 on success, 0x00 on failure
