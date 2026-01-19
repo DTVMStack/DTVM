@@ -8,7 +8,6 @@
 #include "evm/evm.h"
 #include "evm/interpreter.h"
 #include "evm_test_host.hpp"
-#include "evmc/mocked_host.hpp"
 #include "runtime/evm_module.h"
 #include "utils/evm.h"
 #include "zetaengine.h"
@@ -163,10 +162,13 @@ TEST_P(EVMSampleTest, ExecuteSample) {
   RuntimeConfig Config;
   Config.Mode = common::RunMode::InterpMode;
 
-  std::unique_ptr<evmc::Host> Host = std::make_unique<evmc::MockedHost>();
+  auto MockedHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
 
-  auto RT = Runtime::newEVMRuntime(Config, Host.get());
+  auto RT = Runtime::newEVMRuntime(Config, MockedHost.get());
   ASSERT_TRUE(RT != nullptr) << "Failed to create runtime";
+
+  // Set runtime for ZenMockedEVMHost to enable precompile calls
+  MockedHost->setRuntime(RT.get());
 
   auto ModRet = RT->loadEVMModule(FilePath);
   ASSERT_TRUE(ModRet) << "Failed to load module: " << FilePath;
