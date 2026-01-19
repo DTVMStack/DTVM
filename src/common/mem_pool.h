@@ -27,6 +27,52 @@ namespace zen::common {
 
 #include "common/mem_pool_log.def"
 
+#ifdef ZEN_ENABLE_EVM
+// Custom allocator that uses malloc/free to avoid alloc-dealloc-mismatch
+// across shared library boundaries
+template <typename T> struct MallocAllocator {
+  using value_type = T;
+  using pointer = T *;
+  using const_pointer = const T *;
+  using reference = T &;
+  using const_reference = const T &;
+  using size_type = std::size_t;
+  using difference_type = std::ptrdiff_t;
+
+  template <class U> struct rebind {
+    using other = MallocAllocator<U>;
+  };
+
+  MallocAllocator() noexcept = default;
+  template <class U> MallocAllocator(const MallocAllocator<U> &) noexcept {}
+
+  T *allocate(std::size_t n) {
+    if (n == 0 || n > (std::numeric_limits<std::size_t>::max() / sizeof(T))) {
+      ZEN_ABORT();
+      return nullptr;
+    }
+    void *p = std::malloc(n * sizeof(T));
+    if (!p) {
+      ZEN_ABORT();
+      return nullptr;
+    }
+    return static_cast<T *>(p);
+  }
+
+  void deallocate(T *p, std::size_t) noexcept { std::free(p); }
+};
+
+template <typename T, typename U>
+bool operator==(const MallocAllocator<T> &, const MallocAllocator<U> &) {
+  return true;
+}
+
+template <typename T, typename U>
+bool operator!=(const MallocAllocator<T> &, const MallocAllocator<U> &) {
+  return false;
+}
+#endif // ZEN_ENABLE_EVM
+
 enum MemPoolKind {
   SYS_POOL,               // system malloc/free
   ALLOC_ONLY_POOL,        // allocate only pool
@@ -200,7 +246,14 @@ private:
   std::atomic<size_t> NumAllocs{0};
   std::atomic<size_t> AllocSize{0};
   SharedMutex AllocMutex;
+#ifdef ZEN_ENABLE_EVM
+  std::unordered_map<uintptr_t, const char *, std::hash<uintptr_t>,
+                     std::equal_to<uintptr_t>,
+                     MallocAllocator<std::pair<const uintptr_t, const char *>>>
+      AllocTypeNames;
+#else
   std::unordered_map<uintptr_t, const char *> AllocTypeNames;
+#endif // ZEN_ENABLE_EVM
 #endif
 };
 
