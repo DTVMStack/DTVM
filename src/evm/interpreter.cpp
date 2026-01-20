@@ -723,7 +723,7 @@ void BaseInterpreter::interpret() {
             CallHandler::doExecute();
             break;
           }
-          Context.setStatus(EVMC_INVALID_INSTRUCTION);
+          Context.setStatus(EVMC_UNDEFINED_INSTRUCTION);
         }
 
         if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS)) {
