@@ -180,3 +180,5 @@ multi_vm/evm.swapn_undefined/external_vm
 multi_vm/evm.undefined/external_vm
 multi_vm/evm.undefined_instruction_analysis_overflow/external_vm
 multi_vm/evm.undefined_instruction_block_cost_negative/external_vm
+multi_vm/evm.call_oog_after_depth_check/external_vm
+multi_vm/evm.delegatecall_oog_depth_limit/external_vm

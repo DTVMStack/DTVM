@@ -878,11 +878,6 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     return 0;
   }
 
-  if (CurrentMsg->depth >= zen::evm::MAXSTACK) {
-    Instance->setReturnData({});
-    return 0;
-  }
-
   bool HasEnoughBalance = true;
   if (TransfersValue) {
     const auto CallerBalance = Module->Host->get_balance(CurrentMsg->recipient);
