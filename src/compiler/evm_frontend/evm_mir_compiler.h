@@ -545,8 +545,8 @@ private:
                                       MInstruction *IsLargeShift);
 
   // Helper functions for inline U256 multiplication
-  MInstruction *createEvmUmul128Lo(MInstruction *LHS, MInstruction *RHS);
-  MInstruction *createEvmUmul128Hi(MInstruction *LHS, MInstruction *RHS);
+  MInstruction *createEvmUmul128(MInstruction *LHS, MInstruction *RHS);
+  MInstruction *createEvmUmul128Hi(MInstruction *MulInst);
 
   // ==================== EVM to MIR Opcode Mapping ====================
 

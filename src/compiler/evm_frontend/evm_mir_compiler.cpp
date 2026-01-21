@@ -1014,16 +1014,15 @@ void EVMMirBuilder::handleJumpDest(const uint64_t &PC) {
 
 // ==================== Arithmetic Instruction Handlers ====================
 
-MInstruction *EVMMirBuilder::createEvmUmul128Lo(MInstruction *LHS,
-                                                MInstruction *RHS) {
+MInstruction *EVMMirBuilder::createEvmUmul128(MInstruction *LHS,
+                                              MInstruction *RHS) {
   return createInstruction<EvmUmul128Instruction>(false, OP_evm_umul128_lo,
                                                   &Ctx.I64Type, LHS, RHS);
 }
 
-MInstruction *EVMMirBuilder::createEvmUmul128Hi(MInstruction *LHS,
-                                                MInstruction *RHS) {
-  return createInstruction<EvmUmul128Instruction>(false, OP_evm_umul128_hi,
-                                                  &Ctx.I64Type, LHS, RHS);
+MInstruction *EVMMirBuilder::createEvmUmul128Hi(MInstruction *MulInst) {
+  return createInstruction<EvmUmul128HiInstruction>(false, &Ctx.I64Type,
+                                                    MulInst);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
@@ -1051,10 +1050,10 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
   for (size_t I = 0; I < 4; ++I) {
     for (size_t J = 0; J < 4; ++J) {
       if (I + J < 4) {
-        PLo[I][J] = createEvmUmul128Lo(A[I], B[J]);
+        PLo[I][J] = createEvmUmul128(A[I], B[J]);
       }
       if (I + J < 3) {
-        PHi[I][J] = createEvmUmul128Hi(A[I], B[J]);
+        PHi[I][J] = createEvmUmul128Hi(PLo[I][J]);
       }
     }
   }

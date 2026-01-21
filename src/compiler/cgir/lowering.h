@@ -187,6 +187,10 @@ protected:
       ResultReg =
           SELF.lowerEvmUmul128Expr(llvm::cast<EvmUmul128Instruction>(Inst));
       break;
+    case MInstruction::EVM_UMUL128_HI:
+      ResultReg =
+          SELF.lowerEvmUmul128HiExpr(llvm::cast<EvmUmul128HiInstruction>(Inst));
+      break;
     case MInstruction::ADC:
       ResultReg = SELF.lowerAdcExpr(llvm::cast<AdcInstruction>(Inst));
       break;

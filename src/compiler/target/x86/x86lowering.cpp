@@ -967,19 +967,33 @@ X86CgLowering::lowerEvmUmul128Expr(const EvmUmul128Instruction &Inst) {
   };
   MF->createCgInstruction(*CurBB, TII.get(X86::MUL64r), MULOperands);
 
-  // Extract result based on which part is wanted
-  MCPhysReg SrcReg = Inst.wantsHighBits() ? X86::RDX : X86::RAX;
-  CgRegister ResultReg = createReg(&X86::GR64RegClass);
+  CgRegister LoReg = createReg(&X86::GR64RegClass);
+  CgRegister HiReg = createReg(&X86::GR64RegClass);
 
-  // Copy result from physical register to virtual register
-  SmallVector<CgOperand, 2> CopyResultOperands{
-      CgOperand::createRegOperand(ResultReg, true), // dst
-      CgOperand::createRegOperand(SrcReg, false),   // src
+  // Copy result from physical registers to virtual registers
+  SmallVector<CgOperand, 2> CopyLoOperands{
+      CgOperand::createRegOperand(LoReg, true),
+      CgOperand::createRegOperand(X86::RAX, false),
   };
-  MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY),
-                          CopyResultOperands);
+  MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), CopyLoOperands);
 
-  return ResultReg;
+  SmallVector<CgOperand, 2> CopyHiOperands{
+      CgOperand::createRegOperand(HiReg, true),
+      CgOperand::createRegOperand(X86::RDX, false),
+  };
+  MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), CopyHiOperands);
+
+  Umul128HiRegs[&Inst] = HiReg;
+  return LoReg;
+}
+
+CgRegister
+X86CgLowering::lowerEvmUmul128HiExpr(const EvmUmul128HiInstruction &Inst) {
+  const MInstruction *MulInst = Inst.getOperand<0>();
+  (void)lowerExpr(*MulInst);
+  auto It = Umul128HiRegs.find(MulInst);
+  ZEN_ASSERT(It != Umul128HiRegs.end());
+  return It->second;
 }
 
 CgRegister X86CgLowering::lowerSelectExpr(const SelectInstruction &Inst) {
