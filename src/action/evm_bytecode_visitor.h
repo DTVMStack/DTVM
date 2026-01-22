@@ -852,7 +852,7 @@ private:
     } else {
       std::array<Operand, NumTopics> Topics;
       for (size_t i = 0; i < NumTopics; ++i) {
-        Topics[NumTopics - 1 - i] = pop();
+        Topics[i] = pop();
       }
 
       if constexpr (NumTopics == 1) {

@@ -686,7 +686,7 @@ static void evmEmitLogGeneric(zen::runtime::EVMInstance *Instance,
 
   for (size_t i = 0; i < MaxTopics; ++i) {
     if (TopicsData[i]) {
-      std::memcpy(Topics[ActualNumTopics].bytes, TopicsData[i], 32);
+      Topics[ActualNumTopics] = loadBytes32FromLE(TopicsData[i]);
       ActualNumTopics++;
     }
   }
