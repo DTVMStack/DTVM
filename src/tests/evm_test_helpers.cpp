@@ -49,8 +49,7 @@ calculateLogsHashImpl(const std::vector<evmc::MockedHost::log_record> &Logs) {
         zen::evm::rlp::encodeListFromEncodedItems(LogComponents));
   }
 
-  auto RlpEncodedLogs =
-      zen::evm::rlp::encodeListFromEncodedItems(EncodedLogs);
+  auto RlpEncodedLogs = zen::evm::rlp::encodeListFromEncodedItems(EncodedLogs);
 
   auto Hash = zen::host::evm::crypto::keccak256(RlpEncodedLogs);
 
