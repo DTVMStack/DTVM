@@ -223,10 +223,10 @@ bool EVMInstance::expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA,
   expandMemory(RequiredSize);
   return true;
 }
+
 void EVMInstance::chargeGas(uint64_t GasCost) {
   evmc_message *Msg = getCurrentMessage();
   ZEN_ASSERT(Msg && "Active message required for gas accounting");
-
   uint64_t GasLeft = getGas();
   if (GasLeft < GasCost) {
 #if defined(ZEN_ENABLE_JIT) && defined(ZEN_ENABLE_CPU_EXCEPTION)

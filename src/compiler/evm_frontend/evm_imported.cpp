@@ -878,33 +878,6 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     return 0;
   }
 
-  bool HasEnoughBalance = true;
-  if (TransfersValue) {
-    const auto CallerBalance = Module->Host->get_balance(CurrentMsg->recipient);
-    const intx::uint256 CallerValue =
-        intx::be::load<intx::uint256>(CallerBalance);
-    HasEnoughBalance = CallerValue >= intx::uint256(Value);
-    uint64_t ValueCost = zen::evm::CALL_VALUE_COST;
-    if (!HasEnoughBalance) {
-      ValueCost -= zen::evm::CALL_GAS_STIPEND;
-    }
-    const bool ChargeAccountCreation =
-        CallKind == EVMC_CALL && HasEnoughBalance &&
-        !Module->Host->account_exists(TargetAddr);
-    if (ChargeAccountCreation) {
-      ValueCost -= zen::evm::CALL_GAS_STIPEND;
-    }
-    Instance->chargeGas(ValueCost);
-    if (ChargeAccountCreation) {
-      Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
-    }
-  }
-
-  if (TransfersValue && !HasEnoughBalance) {
-    Instance->setReturnData({});
-    return 0;
-  }
-
   // Calculate required memory sizes for input and output
   // Only expand memory if we actually need to access it
   bool needArgsMemory = ArgsSize > 0;
@@ -925,6 +898,37 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
       Instance->setReturnData({});
       return 0;
     }
+  }
+
+  bool HasEnoughBalance = true;
+  if (TransfersValue) {
+    const auto CallerBalance = Module->Host->get_balance(CurrentMsg->recipient);
+    const intx::uint256 CallerValue =
+        intx::be::load<intx::uint256>(CallerBalance);
+    HasEnoughBalance = CallerValue >= intx::uint256(Value);
+    uint64_t ValueCost = zen::evm::CALL_VALUE_COST;
+    if (Instance->getGas() < ValueCost) {
+      zen::runtime::EVMInstance::triggerInstanceExceptionOnJIT(
+          Instance, zen::common::ErrorCode::GasLimitExceeded);
+    }
+    if (!HasEnoughBalance) {
+      ValueCost -= zen::evm::CALL_GAS_STIPEND;
+    }
+    const bool ChargeAccountCreation =
+        CallKind == EVMC_CALL && HasEnoughBalance &&
+        !Module->Host->account_exists(TargetAddr);
+    if (ChargeAccountCreation) {
+      ValueCost -= zen::evm::CALL_GAS_STIPEND;
+    }
+    Instance->chargeGas(ValueCost);
+    if (ChargeAccountCreation) {
+      Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
+    }
+  }
+
+  if (TransfersValue && !HasEnoughBalance) {
+    Instance->setReturnData({});
+    return 0;
   }
 
   uint8_t *MemoryBase = Instance->getMemoryBase();
