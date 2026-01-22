@@ -39,15 +39,18 @@ calculateLogsHashImpl(const std::vector<evmc::MockedHost::log_record> &Logs) {
       std::vector<uint8_t> TopicBytes(Topic.bytes, Topic.bytes + 32);
       TopicsEncoded.push_back(zen::evm::rlp::encodeString(TopicBytes));
     }
-    LogComponents.push_back(zen::evm::rlp::encodeList(TopicsEncoded));
+    LogComponents.push_back(
+        zen::evm::rlp::encodeListFromEncodedItems(TopicsEncoded));
 
     std::vector<uint8_t> DataBytes(Log.data.begin(), Log.data.end());
     LogComponents.push_back(zen::evm::rlp::encodeString(DataBytes));
 
-    EncodedLogs.push_back(zen::evm::rlp::encodeList(LogComponents));
+    EncodedLogs.push_back(
+        zen::evm::rlp::encodeListFromEncodedItems(LogComponents));
   }
 
-  auto RlpEncodedLogs = zen::evm::rlp::encodeList(EncodedLogs);
+  auto RlpEncodedLogs =
+      zen::evm::rlp::encodeListFromEncodedItems(EncodedLogs);
 
   auto Hash = zen::host::evm::crypto::keccak256(RlpEncodedLogs);
 

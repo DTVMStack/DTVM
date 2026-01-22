@@ -227,6 +227,20 @@ const intx::uint256 *evmGetMulMod(zen::runtime::EVMInstance *Instance,
 const intx::uint256 *evmGetExp(zen::runtime::EVMInstance *Instance,
                                const intx::uint256 &Base,
                                const intx::uint256 &Exponent) {
+  // EIP-160: 50 gas per byte of exponent (charge before early returns).
+  uint64_t ExponentByteSize = 0;
+  if (Exponent != 0) {
+    intx::uint256 Temp = Exponent;
+    while (Temp > 0) {
+      ++ExponentByteSize;
+      Temp >>= 8;
+    }
+  }
+  if (ExponentByteSize > 0) {
+    static constexpr uint64_t GasPerByte = 50;
+    Instance->chargeGas(ExponentByteSize * GasPerByte);
+  }
+
   // Handle edge cases
   if (Exponent == 0) {
     return storeUint256Result(intx::uint256{1});
@@ -675,6 +689,10 @@ static void evmEmitLogGeneric(zen::runtime::EVMInstance *Instance,
   if (Size > 0) {
     if (!Instance->expandMemoryChecked(Offset, Size)) {
       return;
+    }
+    const uint64_t LogDataCost = 8 * Size;
+    if (LogDataCost != 0) {
+      Instance->chargeGas(LogDataCost);
     }
     uint8_t *MemoryBase = Instance->getMemoryBase();
     Data = MemoryBase + Offset;

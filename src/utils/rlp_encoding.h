@@ -18,6 +18,8 @@ extern const uint8_t RLP_OFFSET_SHORT_LIST;
 std::vector<uint8_t> encodeLength(size_t Length, uint8_t Offset);
 std::vector<uint8_t> encodeString(const std::vector<uint8_t> &Input);
 std::vector<uint8_t> encodeList(const std::vector<std::vector<uint8_t>> &Items);
+std::vector<uint8_t>
+encodeListFromEncodedItems(const std::vector<std::vector<uint8_t>> &Items);
 
 } // namespace zen::evm::rlp
 

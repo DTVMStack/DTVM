@@ -18,7 +18,7 @@ namespace {
 constexpr bool DEBUG = true;
 constexpr bool PRINT_FAILURE_DETAILS = true;
 // TODO: RunMode selection logic will be refactored in the future.
-constexpr auto STATE_TEST_RUN_MODE = common::RunMode::InterpMode;
+constexpr auto STATE_TEST_RUN_MODE = common::RunMode::MultipassMode;
 
 struct TxIntrinsicCost {
   int64_t Intrinsic = 0;

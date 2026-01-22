@@ -56,4 +56,16 @@ encodeList(const std::vector<std::vector<uint8_t>> &Items) {
   return LengthBytes;
 }
 
+std::vector<uint8_t>
+encodeListFromEncodedItems(const std::vector<std::vector<uint8_t>> &Items) {
+  std::vector<uint8_t> Payload;
+  for (const auto &Item : Items) {
+    Payload.insert(Payload.end(), Item.begin(), Item.end());
+  }
+
+  auto LengthBytes = encodeLength(Payload.size(), RLP_OFFSET_SHORT_LIST);
+  LengthBytes.insert(LengthBytes.end(), Payload.begin(), Payload.end());
+  return LengthBytes;
+}
+
 } // namespace zen::evm::rlp
