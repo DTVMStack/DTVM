@@ -870,9 +870,10 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
   }
 
-  const bool TransfersValue =
-      (CallKind == EVMC_CALL || CallKind == EVMC_CALLCODE) && Value != 0;
-  if (TransfersValue && Instance->isStaticMode()) {
+  const bool HasValueArgs = CallKind == EVMC_CALL || CallKind == EVMC_CALLCODE;
+  const bool HasValue = Value != 0;
+
+  if (HasValueArgs && HasValue && Instance->isStaticMode()) {
     triggerStaticModeViolation(Instance);
     return 0;
   }
@@ -899,35 +900,51 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     }
   }
 
-  bool HasEnoughBalance = true;
-  if (TransfersValue) {
-    const auto CallerBalance = Module->Host->get_balance(CurrentMsg->recipient);
-    const intx::uint256 CallerValue =
-        intx::be::load<intx::uint256>(CallerBalance);
-    HasEnoughBalance = CallerValue >= intx::uint256(Value);
-    uint64_t ValueCost = zen::evm::CALL_VALUE_COST;
-    if (Instance->getGas() < ValueCost) {
+  if (HasValueArgs) {
+    uint64_t GasCost = 0;
+    std::optional<bool> AccountState;
+    GasCost = HasValue ? zen::evm::CALL_VALUE_COST : 0;
+    if (CallKind == EVMC_CALL) {
+      if (HasValue || Instance->getRevision() < EVMC_SPURIOUS_DRAGON) {
+        AccountState = Module->Host->account_exists(TargetAddr);
+        if (!AccountState.value()) {
+          GasCost += zen::evm::ACCOUNT_CREATION_COST;
+        }
+      }
+    }
+
+    if (Instance->getGas() < GasCost) {
       zen::runtime::EVMInstance::triggerInstanceExceptionOnJIT(
           Instance, zen::common::ErrorCode::GasLimitExceeded);
     }
-    if (!HasEnoughBalance) {
-      ValueCost -= zen::evm::CALL_GAS_STIPEND;
-    }
-    const bool ChargeAccountCreation =
-        CallKind == EVMC_CALL && HasEnoughBalance &&
-        !Module->Host->account_exists(TargetAddr);
-    if (ChargeAccountCreation) {
-      ValueCost -= zen::evm::CALL_GAS_STIPEND;
-    }
-    Instance->chargeGas(ValueCost);
-    if (ChargeAccountCreation) {
-      Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
-    }
-  }
 
-  if (TransfersValue && !HasEnoughBalance) {
-    Instance->setReturnData({});
-    return 0;
+    bool HasEnoughBalance = true;
+    if (HasValue) {
+      const auto CallerBalance =
+          Module->Host->get_balance(CurrentMsg->recipient);
+      const intx::uint256 CallerValue =
+          intx::be::load<intx::uint256>(CallerBalance);
+      HasEnoughBalance = CallerValue >= intx::uint256(Value);
+      if (!HasEnoughBalance) {
+        GasCost -= zen::evm::CALL_GAS_STIPEND;
+      }
+
+      if (CallKind == EVMC_CALL && HasEnoughBalance) {
+        if (!AccountState.has_value()) {
+          AccountState = Module->Host->account_exists(TargetAddr);
+        }
+        if (!AccountState.value()) {
+          GasCost -= zen::evm::CALL_GAS_STIPEND;
+        }
+      }
+    }
+
+    Instance->chargeGas(GasCost);
+
+    if (HasValue && !HasEnoughBalance) {
+      Instance->setReturnData({});
+      return 0;
+    }
   }
 
   uint8_t *MemoryBase = Instance->getMemoryBase();
@@ -941,7 +958,7 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   } else if (CallGas > GasLeft) {
     Instance->chargeGas(GasLeft + 1);
   }
-  if (TransfersValue) {
+  if (HasValueArgs && HasValue) {
     CallGas += zen::evm::CALL_GAS_STIPEND;
   }
 
@@ -984,16 +1001,10 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     GasLeft = 0;
   }
   uint64_t GasUsed = CallGas > GasLeft ? CallGas - GasLeft : 0;
-  if (TransfersValue) {
-    GasUsed = GasUsed > zen::evm::CALL_GAS_STIPEND
-                  ? GasUsed - zen::evm::CALL_GAS_STIPEND
-                  : 0;
-  }
   if (GasUsed > 0) {
-    if (GasUsed > 0) {
-      Instance->chargeGas(GasUsed);
-    }
+    Instance->chargeGas(GasUsed);
   }
+
   if (Result.gas_refund > 0) {
     Instance->addGasRefund(Result.gas_refund);
   }
