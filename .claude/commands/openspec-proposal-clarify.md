@@ -1,5 +1,5 @@
 ---
-name: openspec_proposal_clarify
+name: openspec-proposal-clarify
 description: Clarify-first OpenSpec proposal (ask blockers, confirm decisions, then scaffold & validate).
 argument-hint: request or feature description
 ---
@@ -15,7 +15,7 @@ $ARGUMENTS
 **Clarify Gate (MANDATORY)**
 - Before creating or editing any files, identify all decisions that must be made.
 - If there is **any [Blocker] question**, you MUST:
-  1) Ask the questions first (following the Output Contract below),
+  1) Use the AskUserQuestion tool to gather decisions (following the Output Contract below),
   2) STOP and wait for the user's answers,
   3) Only continue after Blockers are resolved.
 - Until Blockers are resolved:
@@ -26,16 +26,36 @@ $ARGUMENTS
 
 **Decision hygiene**
 - Prefer explicit user decisions over assumptions.
+- Use AskUserQuestion tool for ALL decision points requiring user input.
 - Use assumptions ONLY for [Non-blocker] items; label them clearly as `Assumption` and include risk/impact.
-- If the user’s answers are incomplete or ambiguous, ask a second round of questions (max 4 follow-ups) and stop again.
+- If the user's answers are incomplete or ambiguous, use AskUserQuestion tool again with follow-up questions (max 4 follow-ups).
 
-**Clarify Output Contract (like specify.clarify)**
-- Ask at most **8** questions total, grouped by theme.
+**Using the AskUserQuestion Tool**
+The AskUserQuestion tool allows you to gather user decisions interactively. Use it when:
+
+1. **Multiple valid approaches exist** - When there are 2-4 reasonable ways to implement something
+2. **User preferences matter** - When the choice depends on user priorities or constraints
+3. **Trade-offs need validation** - When different options have different implications
+4. **Architectural decisions required** - When the choice affects system structure or patterns
+
+**AskUserQuestion Best Practices:**
+- Group related questions together (max 4 questions per call)
+- For each question, provide:
+  - A clear question with context
+  - 2-4 well-defined options with labels
+  - Descriptions explaining what each option means
+  - Set `multiSelect: true` only when multiple options can be chosen
+- Mark question headers clearly (max 12 characters)
+- Recommended option should be listed first with "(Recommended)" suffix
+
+**Clarify Output Contract**
+- Use AskUserQuestion tool for at most **8 questions** total, grouped by theme (2 calls max if needed).
 - For each question:
-  - Mark as **[Blocker]** or **[Non-blocker]**
-  - Provide a **recommended option** + brief rationale
+  - Mark as **[Blocker]** or **[Non-blocker]** in your own planning
+  - Provide a **recommended option** + brief rationale (first option with "(Recommended)")
   - Provide **2–4 options** (A/B/C/…)
-  - State the **impact** (scope/risk/timeline)
+  - State the **impact** (scope/risk/timeline) in option descriptions
+- AskUserQuestion automatically allows "Other" for custom input
 
 **Blocker categories (cover if relevant)**
 - Goal & non-goals (what success looks like; what we will NOT do)
@@ -44,21 +64,28 @@ $ARGUMENTS
 - Security & permissions (access control; audit logging)
 - Acceptance criteria (how we validate; required tests)
 
-**Answer format hint**
-- Invite the user to reply like `1A 2C 3B ...` (or free text). If the user replies in shorthand, restate choices in the Decision Log.
+**Answer format**
+- AskUserQuestion presents options to the user in a structured UI
+- User can select predefined options or provide custom input via "Other"
+- After receiving answers, output a Decision Log containing:
+  - Confirmed choices (summarized)
+  - Remaining open questions (if any)
+  - Assumptions taken (if any, and why)
 
 **Steps**
 0) **Clarify-first (NO FILE WRITES)**
    - Review `openspec/project.md`, run `openspec list` and `openspec list --specs`, and inspect related code or docs (e.g., via `rg`/`ls`) to ground the request in current behavior.
-   - Produce the Clarifying Questions per the Output Contract above.
+   - Identify all decisions that must be made.
+   - Categorize decisions as [Blocker] or [Non-blocker].
+   - Use AskUserQuestion tool to gather decisions for Blockers (and Non-blockers if user input would improve quality).
    - If any [Blocker] exists, STOP and wait for user answers.
 
 1) **Decision Log (still NO FILE WRITES)**
-   - After receiving user answers, output a Decision Log containing:
-     - Confirmed choices (numbered)
+   - After receiving user answers from AskUserQuestion, output a Decision Log containing:
+     - Confirmed choices (summarized from user selections)
      - Remaining open questions (if any)
      - Assumptions taken (if any, and why)
-   - If Blockers remain, ask follow-ups (max 4) and STOP again.
+   - If Blockers remain or answers are incomplete, use AskUserQuestion tool with follow-ups (max 4) and STOP again.
 
 2) **Scaffold the change**
    - Choose a unique verb-led `change-id` and scaffold `proposal.md`, `tasks.md`, and `design.md` (when needed) under `openspec/changes/<id>/`.
