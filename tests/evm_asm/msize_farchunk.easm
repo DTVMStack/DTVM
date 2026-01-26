@@ -1,0 +1,11 @@
+// modify from: tests-17.1/GeneralStateTests/VMTests/vmIOandFlowOperations/msize.json
+// indexes: [data=5, gas=0, value=0]
+PUSH1 0x01
+PUSH3 0xB00000
+MSTORE8
+MSIZE
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN
