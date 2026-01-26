@@ -240,4 +240,20 @@ void EVMInstance::chargeGas(uint64_t GasCost) {
   Msg->gas = static_cast<int64_t>(NewGas);
 }
 
+void EVMInstance::addGas(uint64_t GasAmount) {
+  evmc_message *Msg = getCurrentMessage();
+  ZEN_ASSERT(Msg && "Active message required for gas accounting");
+  uint64_t GasLeft = getGas();
+  if (GasLeft > UINT64_MAX - GasAmount) {
+#if defined(ZEN_ENABLE_JIT) && defined(ZEN_ENABLE_CPU_EXCEPTION)
+    triggerInstanceExceptionOnJIT(this, common::ErrorCode::GasLimitExceeded);
+#else
+    throw common::getError(common::ErrorCode::GasLimitExceeded);
+#endif
+  }
+  uint64_t NewGas = GasLeft + GasAmount;
+  setGas(NewGas);
+  Msg->gas = static_cast<int64_t>(NewGas);
+}
+
 } // namespace zen::runtime

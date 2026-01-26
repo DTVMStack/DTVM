@@ -900,10 +900,10 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     }
   }
 
+  uint64_t CallGas = Gas;
   if (HasValueArgs) {
-    uint64_t GasCost = 0;
     std::optional<bool> AccountState;
-    GasCost = HasValue ? zen::evm::CALL_VALUE_COST : 0;
+    uint64_t GasCost = HasValue ? zen::evm::CALL_VALUE_COST : 0;
     if (CallKind == EVMC_CALL) {
       if (HasValue || Instance->getRevision() < EVMC_SPURIOUS_DRAGON) {
         AccountState = Module->Host->account_exists(TargetAddr);
@@ -913,54 +913,38 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
       }
     }
 
-    if (Instance->getGas() < GasCost) {
-      zen::runtime::EVMInstance::triggerInstanceExceptionOnJIT(
-          Instance, zen::common::ErrorCode::GasLimitExceeded);
-    }
+    Instance->chargeGas(GasCost);
+  }
 
+  uint64_t GasLeft = Instance->getGas();
+  if (Rev >= EVMC_TANGERINE_WHISTLE) {
+    const uint64_t GasCap = GasLeft - GasLeft / 64;
+    CallGas = std::min(CallGas, GasCap);
+  } else if (CallGas > GasLeft) {
+    zen::runtime::EVMInstance::triggerInstanceExceptionOnJIT(
+        Instance, zen::common::ErrorCode::GasLimitExceeded);
+  }
+
+  if (HasValueArgs) {
     bool HasEnoughBalance = true;
     if (HasValue) {
+      Instance->addGas(zen::evm::CALL_GAS_STIPEND);
+      CallGas += zen::evm::CALL_GAS_STIPEND;
+
       const auto CallerBalance =
           Module->Host->get_balance(CurrentMsg->recipient);
       const intx::uint256 CallerValue =
           intx::be::load<intx::uint256>(CallerBalance);
       HasEnoughBalance = CallerValue >= intx::uint256(Value);
+
       if (!HasEnoughBalance) {
-        GasCost -= zen::evm::CALL_GAS_STIPEND;
+        Instance->setReturnData({});
+        return 0;
       }
-
-      if (CallKind == EVMC_CALL && HasEnoughBalance) {
-        if (!AccountState.has_value()) {
-          AccountState = Module->Host->account_exists(TargetAddr);
-        }
-        if (!AccountState.value()) {
-          GasCost -= zen::evm::CALL_GAS_STIPEND;
-        }
-      }
-    }
-
-    Instance->chargeGas(GasCost);
-
-    if (HasValue && !HasEnoughBalance) {
-      Instance->setReturnData({});
-      return 0;
     }
   }
 
   uint8_t *MemoryBase = Instance->getMemoryBase();
-  uint64_t CallGas = Gas;
-  uint64_t GasLeft = Instance->getGas();
-  if (Rev >= EVMC_TANGERINE_WHISTLE) {
-    const uint64_t GasCap = GasLeft - GasLeft / 64;
-    if (CallGas > GasCap) {
-      CallGas = GasCap;
-    }
-  } else if (CallGas > GasLeft) {
-    Instance->chargeGas(GasLeft + 1);
-  }
-  if (HasValueArgs && HasValue) {
-    CallGas += zen::evm::CALL_GAS_STIPEND;
-  }
 
   if (CurrentMsg->depth >= zen::evm::MAXSTACK) {
     Instance->setReturnData({});

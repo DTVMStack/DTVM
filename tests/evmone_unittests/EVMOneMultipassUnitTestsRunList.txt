@@ -187,3 +187,6 @@ multi_vm/evm.delegatecall_oog_depth_limit/external_vm
 multi_vm/evm.call_failing_with_value/external_vm
 multi_vm/evm.call_with_value_depth_limit/external_v
 multi_vm/evm.call_new_account_creation_cost/external_vm
+multi_vm/evm.call_with_value/external_vm
+multi_vm/evm.callcode_new_account_create/external_vm
+multi_vm/evm.call_value/external_vm

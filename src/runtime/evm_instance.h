@@ -57,6 +57,7 @@ public:
   bool expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA, uint64_t OffsetB,
                            uint64_t SizeB);
   void chargeGas(uint64_t GasCost);
+  void addGas(uint64_t GasAmount);
 
   void addGasRefund(uint64_t Amount) { GasRefund += Amount; }
   void setGasRefund(uint64_t Amount) { GasRefund = Amount; }
