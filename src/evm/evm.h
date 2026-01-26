@@ -9,10 +9,8 @@ namespace zen::evm {
 using namespace evmc::literals;
 constexpr auto MAXSTACK = 1024;
 
-// TODO: Reduce to 4MB once gas calculation is aligned with Ethereum spec
-// (30M gas theoretically allows ~3.76MB). Currently 16MB as temporary
-// workaround for gas calculation inconsistencies.
-// NOTE: Keep in sync with rust_crate/src/evm/utils.rs::MAX_BUFFER_SIZE
+// Limit required memory size to prevent excessive memory consumption
+// Ethereum EVM uses UINT32_MAX for memory size, with gas-based limiting
 constexpr uint64_t MAX_REQUIRED_MEMORY_SIZE = 16 * 1024 * 1024; // 16MB
 
 constexpr evmc_revision DEFAULT_REVISION = EVMC_CANCUN;
