@@ -92,7 +92,6 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Exp, OP_EXP);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(SignExtend, OP_SIGNEXTEND);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Byte, OP_BYTE);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Sar, OP_SAR);
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Exp, OP_EXP);
 
 // Environmental information
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Address, OP_ADDRESS);
@@ -309,39 +308,6 @@ void SignExtendHandler::doExecute() {
     // value unchanged
   }
   Frame->push(Res);
-}
-
-void ExpHandler::doExecute() {
-  auto *Frame = getFrame();
-  auto *Context = getContext();
-  EVM_FRAME_CHECK(Frame);
-  EVM_STACK_CHECK(Frame, 2);
-
-  intx::uint256 Base = Frame->pop();
-  intx::uint256 Exponent = Frame->pop();
-
-  // Calculate and charge dynamic gas based on exponent byte size
-  uint64_t ExponentByteSize = 0;
-  if (Exponent != 0) {
-    // Find the highest non-zero byte
-    intx::uint256 Temp = Exponent;
-    while (Temp > 0) {
-      ExponentByteSize++;
-      Temp >>= 8;
-    }
-  }
-
-  // EIP-160: 50 gas per byte of exponent
-  static const uint64_t GasPerByte = 50;
-  uint64_t DynamicGas = ExponentByteSize * GasPerByte;
-
-  if (!chargeGas(Frame, DynamicGas)) {
-    Context->setStatus(EVMC_OUT_OF_GAS);
-    return;
-  }
-
-  intx::uint256 Result = intx::exp(Base, Exponent);
-  Frame->push(Result);
 }
 
 void ByteHandler::doExecute() {

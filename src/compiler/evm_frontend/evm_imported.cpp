@@ -1003,6 +1003,11 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     GasLeft = 0;
   }
   uint64_t GasUsed = CallGas > GasLeft ? CallGas - GasLeft : 0;
+  if (HasValueArgs && HasValue) {
+    GasUsed = GasUsed > zen::evm::CALL_GAS_STIPEND
+                  ? GasUsed - zen::evm::CALL_GAS_STIPEND
+                  : 0;
+  }
   if (GasUsed > 0) {
     Instance->chargeGas(GasUsed);
   }
