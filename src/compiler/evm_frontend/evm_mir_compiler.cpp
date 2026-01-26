@@ -3338,9 +3338,13 @@ void EVMMirBuilder::handleExtCodeCopy(Operand AddressComponents,
                                       Operand OffsetComponents,
                                       Operand SizeComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  normalizeOperandU64(DestOffsetComponents);
-  normalizeOperandU64(OffsetComponents);
-  normalizeOperandU64(SizeComponents);
+  // Use max uint64_t value if the offset/size is not 64-bit, because the
+  // extcodecopy will fill zeros when offset is beyond code size or handle large
+  // size properly.
+  uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
+  normalizeOperandU64(DestOffsetComponents, &Non64Value);
+  normalizeOperandU64(OffsetComponents, &Non64Value);
+  normalizeOperandU64(SizeComponents, &Non64Value);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
