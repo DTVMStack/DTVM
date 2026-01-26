@@ -190,3 +190,4 @@ multi_vm/evm.call_new_account_creation_cost/external_vm
 multi_vm/evm.call_with_value/external_vm
 multi_vm/evm.callcode_new_account_create/external_vm
 multi_vm/evm.call_value/external_vm
+multi_vm/evm.eip2929_sstore_modify_cold/external_vm
