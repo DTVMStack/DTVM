@@ -3319,7 +3319,9 @@ void EVMMirBuilder::handleCallDataCopy(Operand DestOffsetComponents,
                                        Operand SizeComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   normalizeOperandU64(DestOffsetComponents);
-  normalizeOperandU64(OffsetComponents);
+
+  uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
+  normalizeOperandU64(OffsetComponents, &Non64Value);
   normalizeOperandU64(SizeComponents);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
