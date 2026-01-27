@@ -1597,6 +1597,15 @@ EVMMirBuilder::handleLogicalRightShift(const U256Inst &Value,
 
     // Calculate carry bits from the next component
     // carry_bits = (next_idx == K) ? (Value[K] << (64 - shift_mod)) : 0
+    MInstruction *HasBitShift = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, ShiftMod64,
+        Zero);
+    MInstruction *CarryShift = createInstruction<SelectInstruction>(
+        false, MirI64Type, HasBitShift,
+        createInstruction<BinaryInstruction>(
+            false, OP_sub, MirI64Type,
+            createIntConstInstruction(MirI64Type, 64), ShiftMod64),
+        Zero);
     MInstruction *CarryValue = Zero;
     for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
       MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, K);
@@ -1610,10 +1619,9 @@ EVMMirBuilder::handleLogicalRightShift(const U256Inst &Value,
 
       // Extract carry bits by shifting left the remaining bits
       MInstruction *CarryBits = createInstruction<BinaryInstruction>(
-          false, OP_shl, MirI64Type, NextValue,
-          createInstruction<BinaryInstruction>(
-              false, OP_sub, MirI64Type,
-              createIntConstInstruction(MirI64Type, 64), ShiftMod64));
+          false, OP_shl, MirI64Type, NextValue, CarryShift);
+      CarryBits = createInstruction<SelectInstruction>(
+          false, MirI64Type, HasBitShift, CarryBits, Zero);
       CarryValue = createInstruction<SelectInstruction>(
           false, MirI64Type, IsMatch, CarryBits, CarryValue);
     }
@@ -1724,44 +1732,38 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
     MInstruction *IsNextValid = createInstruction<BinaryInstruction>(
         false, OP_and, MirI64Type, IsValidNextLow, IsValidNextHigh);
 
-    // Calculate carry bits from the next component (higher index)
-    MInstruction *CarryValue = Zero;
+    // Calculate carry bits from the next component (higher index).
     MInstruction *HasShift = createInstruction<CmpInstruction>(
         false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, ShiftMod64,
         Zero);
+    MInstruction *CarryShift = createInstruction<SelectInstruction>(
+        false, MirI64Type, HasShift,
+        createInstruction<BinaryInstruction>(
+            false, OP_sub, MirI64Type,
+            createIntConstInstruction(MirI64Type, 64), ShiftMod64),
+        Zero);
+    MInstruction *NextValue = LargeShiftResult;
     for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
       MInstruction *TargetIdx = createIntConstInstruction(MirI64Type, K);
       MInstruction *IsMatch = createInstruction<CmpInstruction>(
           false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, NextIdx,
           TargetIdx);
-      MInstruction *NextValue = createInstruction<SelectInstruction>(
-          false, MirI64Type, IsMatch, Value[K], LargeShiftResult);
       NextValue = createInstruction<SelectInstruction>(
-          false, MirI64Type, IsNextValid, NextValue, LargeShiftResult);
-
-      // Extract low bits from next component as carry
-      // carry_bits = (next_value << (64 - shift_mod)) for arithmetic right
-      // shift
-      MInstruction *CarryBits = createInstruction<BinaryInstruction>(
-          false, OP_shl, MirI64Type, NextValue,
-          createInstruction<BinaryInstruction>(
-              false, OP_sub, MirI64Type,
-              createIntConstInstruction(MirI64Type, 64), ShiftMod64));
-      // Only use carry bits if there is an actual shift (ShiftMod64 > 0)
-      CarryBits = createInstruction<SelectInstruction>(
-          false, MirI64Type, HasShift, CarryBits, Zero);
-      CarryValue = createInstruction<SelectInstruction>(
-          false, MirI64Type, IsMatch, CarryBits, CarryValue);
+          false, MirI64Type, IsMatch, Value[K], NextValue);
     }
+    NextValue = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsNextValid, NextValue, LargeShiftResult);
 
-    // Use arithmetic right shift for negative numbers, logical for positive
-    // This ensures proper sign extension within each 64-bit component
-    MInstruction *ShiftedValue = createInstruction<SelectInstruction>(
-        false, MirI64Type, IsNegative,
-        createInstruction<BinaryInstruction>(false, OP_sshr, MirI64Type,
-                                             SrcValue, ShiftMod64),
-        createInstruction<BinaryInstruction>(false, OP_ushr, MirI64Type,
-                                             SrcValue, ShiftMod64));
+    // Extract low bits from next component as carry. When next_idx is out of
+    // bounds, use sign-extension bits from LargeShiftResult.
+    MInstruction *CarryBits = createInstruction<BinaryInstruction>(
+        false, OP_shl, MirI64Type, NextValue, CarryShift);
+    MInstruction *CarryValue = createInstruction<SelectInstruction>(
+        false, MirI64Type, HasShift, CarryBits, Zero);
+
+    // Use logical right shift; sign extension is handled via LargeShiftResult.
+    MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
+        false, OP_ushr, MirI64Type, SrcValue, ShiftMod64);
     MInstruction *CombinedValue = createInstruction<BinaryInstruction>(
         false, OP_or, MirI64Type, ShiftedValue, CarryValue);
 
