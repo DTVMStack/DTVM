@@ -1228,20 +1228,20 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
 
   evmc::address BenefAddr = loadAddressFromLE(Beneficiary);
 
-  // EIP-161: charge account creation cost only if a new account is created.
-  if (Rev >= EVMC_SPURIOUS_DRAGON && !Module->Host->account_exists(BenefAddr)) {
-    const auto Balance = Module->Host->get_balance(Msg->recipient);
-    if (intx::be::load<intx::uint256>(Balance) != 0) {
-      Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
-    }
-  }
-
   // EIP-2929: charge cold account access cost if needed.
   if (Rev >= EVMC_BERLIN) {
     const bool IsCold =
         Module->Host->access_account(BenefAddr) == EVMC_ACCESS_COLD;
     if (IsCold) {
       Instance->chargeGas(zen::evm::COLD_ACCOUNT_ACCESS_COST);
+    }
+  }
+
+  // EIP-161: charge account creation cost only if a new account is created.
+  if (Rev >= EVMC_SPURIOUS_DRAGON && !Module->Host->account_exists(BenefAddr)) {
+    const auto Balance = Module->Host->get_balance(Msg->recipient);
+    if (intx::be::load<intx::uint256>(Balance) != 0) {
+      Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
     }
   }
 
