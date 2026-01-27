@@ -2452,10 +2452,8 @@ EVMMirBuilder::handleCall(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
                           Operand RetOffsetOp, Operand RetSizeOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   normalizeOperandU64(GasOp);
-  normalizeOperandU64(ArgsOffsetOp);
-  normalizeOperandU64(ArgsSizeOp);
-  normalizeOperandU64(RetOffsetOp);
-  normalizeOperandU64(RetSizeOp);
+  normalizeOffsetWithSize(ArgsOffsetOp, ArgsSizeOp);
+  normalizeOffsetWithSize(RetOffsetOp, RetSizeOp);
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
@@ -2478,10 +2476,8 @@ EVMMirBuilder::handleCallCode(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
                               Operand RetOffsetOp, Operand RetSizeOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   normalizeOperandU64(GasOp);
-  normalizeOperandU64(ArgsOffsetOp);
-  normalizeOperandU64(ArgsSizeOp);
-  normalizeOperandU64(RetOffsetOp);
-  normalizeOperandU64(RetSizeOp);
+  normalizeOffsetWithSize(ArgsOffsetOp, ArgsSizeOp);
+  normalizeOffsetWithSize(RetOffsetOp, RetSizeOp);
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
@@ -2527,10 +2523,8 @@ EVMMirBuilder::handleDelegateCall(Operand GasOp, Operand ToAddrOp,
                                   Operand RetOffsetOp, Operand RetSizeOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   normalizeOperandU64(GasOp);
-  normalizeOperandU64(ArgsOffsetOp);
-  normalizeOperandU64(ArgsSizeOp);
-  normalizeOperandU64(RetOffsetOp);
-  normalizeOperandU64(RetSizeOp);
+  normalizeOffsetWithSize(ArgsOffsetOp, ArgsSizeOp);
+  normalizeOffsetWithSize(RetOffsetOp, RetSizeOp);
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
@@ -2552,10 +2546,8 @@ EVMMirBuilder::handleStaticCall(Operand GasOp, Operand ToAddrOp,
                                 Operand RetOffsetOp, Operand RetSizeOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   normalizeOperandU64(GasOp);
-  normalizeOperandU64(ArgsOffsetOp);
-  normalizeOperandU64(ArgsSizeOp);
-  normalizeOperandU64(RetOffsetOp);
-  normalizeOperandU64(RetSizeOp);
+  normalizeOffsetWithSize(ArgsOffsetOp, ArgsSizeOp);
+  normalizeOffsetWithSize(RetOffsetOp, RetSizeOp);
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
@@ -3084,6 +3076,61 @@ void EVMMirBuilder::normalizeOperandU64NonConst(Operand &Param,
     U256Inst NewVal = {Parts[0], Zero, Zero, Zero};
     Param = Operand(NewVal, EVMType::UINT256);
   }
+}
+
+void EVMMirBuilder::normalizeOffsetWithSize(Operand &Offset, Operand &Size) {
+  normalizeOperandU64(Size);
+  if (Offset.getType() != EVMType::UINT256) {
+    return;
+  }
+
+  U256Inst SizeParts = extractU256Operand(Size);
+  U256Inst OffsetParts = extractU256Operand(Offset);
+
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+
+  MInstruction *IsSizeZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, SizeParts[0],
+      Zero);
+
+  MInstruction *IsZero1 = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, OffsetParts[1],
+      Zero);
+  MInstruction *IsZero2 = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, OffsetParts[2],
+      Zero);
+  MInstruction *IsZero3 = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, OffsetParts[3],
+      Zero);
+
+  MInstruction *Cond12 = createInstruction<BinaryInstruction>(
+      false, OP_and, I64Type, IsZero1, IsZero2);
+  MInstruction *IsOffsetU64 = createInstruction<BinaryInstruction>(
+      false, OP_and, I64Type, Cond12, IsZero3);
+
+  MInstruction *IsOffsetInvalid = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, IsOffsetU64,
+      Zero);
+  MInstruction *IsSizeNonZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, IsSizeZero,
+      Zero);
+  MInstruction *ShouldTrap = createInstruction<BinaryInstruction>(
+      false, OP_and, I64Type, IsSizeNonZero, IsOffsetInvalid);
+
+  MBasicBlock *TrapBB =
+      getOrCreateExceptionSetBB(ErrorCode::GasLimitExceeded);
+  MBasicBlock *ContinueBB = createBasicBlock();
+  createInstruction<BrIfInstruction>(true, Ctx, ShouldTrap, TrapBB,
+                                     ContinueBB);
+  addUniqueSuccessor(TrapBB);
+  addSuccessor(ContinueBB);
+  setInsertBlock(ContinueBB);
+
+  MInstruction *SelectedLow = createInstruction<SelectInstruction>(
+      false, I64Type, IsSizeZero, Zero, OffsetParts[0]);
+  U256Inst NewVal = {SelectedLow, Zero, Zero, Zero};
+  Offset = Operand(NewVal, EVMType::UINT256);
 }
 
 // Template function for no-argument runtime calls
