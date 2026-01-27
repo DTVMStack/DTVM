@@ -1603,8 +1603,7 @@ EVMMirBuilder::handleLogicalRightShift(const U256Inst &Value,
     MInstruction *CarryShift = createInstruction<SelectInstruction>(
         false, MirI64Type, HasBitShift,
         createInstruction<BinaryInstruction>(
-            false, OP_sub, MirI64Type,
-            createIntConstInstruction(MirI64Type, 64), ShiftMod64),
+            false, OP_sub, MirI64Type, Const64, ShiftMod64),
         Zero);
     MInstruction *CarryValue = Zero;
     for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
@@ -1739,8 +1738,7 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
     MInstruction *CarryShift = createInstruction<SelectInstruction>(
         false, MirI64Type, HasShift,
         createInstruction<BinaryInstruction>(
-            false, OP_sub, MirI64Type,
-            createIntConstInstruction(MirI64Type, 64), ShiftMod64),
+            false, OP_sub, MirI64Type, Const64, ShiftMod64),
         Zero);
     MInstruction *NextValue = LargeShiftResult;
     for (size_t K = 0; K < EVM_ELEMENTS_COUNT; ++K) {
