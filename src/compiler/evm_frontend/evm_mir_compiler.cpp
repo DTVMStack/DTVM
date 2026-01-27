@@ -3118,11 +3118,9 @@ void EVMMirBuilder::normalizeOffsetWithSize(Operand &Offset, Operand &Size) {
   MInstruction *ShouldTrap = createInstruction<BinaryInstruction>(
       false, OP_and, I64Type, IsSizeNonZero, IsOffsetInvalid);
 
-  MBasicBlock *TrapBB =
-      getOrCreateExceptionSetBB(ErrorCode::GasLimitExceeded);
+  MBasicBlock *TrapBB = getOrCreateExceptionSetBB(ErrorCode::GasLimitExceeded);
   MBasicBlock *ContinueBB = createBasicBlock();
-  createInstruction<BrIfInstruction>(true, Ctx, ShouldTrap, TrapBB,
-                                     ContinueBB);
+  createInstruction<BrIfInstruction>(true, Ctx, ShouldTrap, TrapBB, ContinueBB);
   addUniqueSuccessor(TrapBB);
   addSuccessor(ContinueBB);
   setInsertBlock(ContinueBB);
