@@ -365,6 +365,75 @@ static bool bitsetTest(const std::vector<uint64_t> &Bits, size_t Index) {
   return (Bits[Index / 64] & (uint64_t{1} << (Index % 64))) != 0;
 }
 
+static std::vector<uint8_t>
+computeInCycle(const std::vector<GasBlock> &Blocks) {
+  const size_t NumBlocks = Blocks.size();
+  std::vector<int32_t> Index(NumBlocks, -1);
+  std::vector<int32_t> Lowlink(NumBlocks, 0);
+  std::vector<uint8_t> OnStack(NumBlocks, 0);
+  std::vector<uint32_t> Stack;
+  std::vector<uint8_t> InCycle(NumBlocks, 0);
+  int32_t CurIndex = 0;
+
+  std::function<void(uint32_t)> StrongConnect = [&](uint32_t Node) {
+    Index[Node] = CurIndex;
+    Lowlink[Node] = CurIndex;
+    ++CurIndex;
+    Stack.push_back(Node);
+    OnStack[Node] = 1;
+
+    for (uint32_t Succ : Blocks[Node].Succs) {
+      if (Succ >= NumBlocks) {
+        continue;
+      }
+      if (Index[Succ] < 0) {
+        StrongConnect(Succ);
+        Lowlink[Node] = std::min(Lowlink[Node], Lowlink[Succ]);
+      } else if (OnStack[Succ] != 0) {
+        Lowlink[Node] = std::min(Lowlink[Node], Index[Succ]);
+      }
+    }
+
+    if (Lowlink[Node] != Index[Node]) {
+      return;
+    }
+
+    std::vector<uint32_t> Scc;
+    while (!Stack.empty()) {
+      const uint32_t Top = Stack.back();
+      Stack.pop_back();
+      OnStack[Top] = 0;
+      Scc.push_back(Top);
+      if (Top == Node) {
+        break;
+      }
+    }
+
+    if (Scc.size() > 1) {
+      for (uint32_t Id : Scc) {
+        InCycle[Id] = 1;
+      }
+      return;
+    }
+
+    const uint32_t Only = Scc.front();
+    for (uint32_t Succ : Blocks[Only].Succs) {
+      if (Succ == Only) {
+        InCycle[Only] = 1;
+        break;
+      }
+    }
+  };
+
+  for (uint32_t Node = 0; Node < NumBlocks; ++Node) {
+    if (Index[Node] < 0) {
+      StrongConnect(Node);
+    }
+  }
+
+  return InCycle;
+}
+
 static bool bitsetEqual(const std::vector<uint64_t> &A,
                         const std::vector<uint64_t> &B) {
   return A == B;
@@ -871,6 +940,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   for (size_t Index = 0; Index < RevTopo.size(); ++Index) {
     RevTopoIndex[RevTopo[Index]] = Index;
   }
+  const std::vector<uint8_t> InCycle = computeInCycle(Blocks);
 
   std::vector<LoopInfo> Loops;
   std::vector<int32_t> LoopOf;
@@ -885,9 +955,19 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     Metering[Id] = Blocks[Id].Cost;
   }
 
+  std::vector<uint64_t> NonCycleMask(bitsetWordCount(Blocks.size()), 0);
+  for (size_t Id = 0; Id < Blocks.size(); ++Id) {
+    if (Id < InCycle.size() && InCycle[Id] == 0) {
+      bitsetSet(NonCycleMask, Id);
+    }
+  }
+
   if (!UseLinearSPP) {
     for (uint32_t NodeId : RevTopo) {
-      lemma614Update(NodeId, Blocks, &BackEdges, nullptr, Metering);
+      if (NodeId < InCycle.size() && InCycle[NodeId] != 0) {
+        continue;
+      }
+      lemma614Update(NodeId, Blocks, &BackEdges, &NonCycleMask, Metering);
     }
   } else {
     std::vector<std::vector<uint32_t>> Recorded(Loops.size());
@@ -916,8 +996,10 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
         return RevTopoIndex[A] < RevTopoIndex[B];
       });
       for (uint32_t NodeId : Order) {
-        lemma614Update(NodeId, Blocks, nullptr, &Loops[LoopId].NodeMask,
-                       Metering);
+        if (NodeId < InCycle.size() && InCycle[NodeId] != 0) {
+          continue;
+        }
+        lemma614Update(NodeId, Blocks, nullptr, &NonCycleMask, Metering);
       }
       LoopProcessed[LoopId] = 1;
     };
@@ -925,7 +1007,10 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     for (uint32_t NodeId : RevTopo) {
       const int32_t LoopId = (NodeId < LoopOf.size()) ? LoopOf[NodeId] : -1;
       if (LoopId < 0) {
-        lemma614Update(NodeId, Blocks, &BackEdges, nullptr, Metering);
+        if (NodeId < InCycle.size() && InCycle[NodeId] != 0) {
+          continue;
+        }
+        lemma614Update(NodeId, Blocks, &BackEdges, &NonCycleMask, Metering);
       } else {
         Recorded[LoopId].push_back(NodeId);
         ++RecordedCount[LoopId];
