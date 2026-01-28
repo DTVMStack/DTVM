@@ -1238,14 +1238,21 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
   }
 
   // EIP-161: charge account creation cost only if a new account is created.
-  if (Rev >= EVMC_SPURIOUS_DRAGON && !Module->Host->account_exists(BenefAddr)) {
-    const auto Balance = Module->Host->get_balance(Msg->recipient);
-    if (intx::be::load<intx::uint256>(Balance) != 0) {
-      Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
+  if (Rev >= EVMC_TANGERINE_WHISTLE) {
+    if (Rev == EVMC_TANGERINE_WHISTLE ||
+        Module->Host->get_balance(Msg->recipient)) {
+      if (!Module->Host->account_exists(BenefAddr)) {
+        Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST);
+      }
     }
   }
 
-  Module->Host->selfdestruct(Msg->recipient, BenefAddr);
+  if (Module->Host->selfdestruct(Msg->recipient, BenefAddr)) {
+    if (Rev < EVMC_LONDON) {
+      Instance->addGasRefund(zen::evm::EXTRA_REFUND_BEFORE_LONDON);
+    }
+  }
+
   Instance->setReturnData({});
   uint64_t RemainingGas = Msg->gas;
   Instance->popMessage();

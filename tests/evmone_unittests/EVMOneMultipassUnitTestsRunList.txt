@@ -193,3 +193,6 @@ multi_vm/evm.call_value/external_vm
 multi_vm/evm.eip2929_sstore_modify_cold/external_vm
 multi_vm/evm.eip2929_selfdestruct_cold_beneficiary/external_vm
 multi_vm/evm.selfdestruct_no_gas_refund/external_vm
+multi_vm/evm.selfdestruct/external_vm
+multi_vm/evm.selfdestruct_with_balance/external_vm
+multi_vm/evm.selfdestruct_gas_refund/external_vm
