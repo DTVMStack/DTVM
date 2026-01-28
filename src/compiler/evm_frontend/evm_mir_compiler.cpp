@@ -2451,7 +2451,10 @@ EVMMirBuilder::handleCall(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
                           Operand ArgsOffsetOp, Operand ArgsSizeOp,
                           Operand RetOffsetOp, Operand RetSizeOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  normalizeOperandU64(GasOp);
+  // When gas value exceeds 64 bits, use max uint64 as fallback.
+  // The runtime will cap it to available gas per EIP-150.
+  uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
+  normalizeOperandU64(GasOp, &Non64Value);
   normalizeOffsetWithSize(ArgsOffsetOp, ArgsSizeOp);
   normalizeOffsetWithSize(RetOffsetOp, RetSizeOp);
 
@@ -2475,7 +2478,10 @@ EVMMirBuilder::handleCallCode(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
                               Operand ArgsOffsetOp, Operand ArgsSizeOp,
                               Operand RetOffsetOp, Operand RetSizeOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  normalizeOperandU64(GasOp);
+  // When gas value exceeds 64 bits, use max uint64 as fallback.
+  // The runtime will cap it to available gas per EIP-150.
+  uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
+  normalizeOperandU64(GasOp, &Non64Value);
   normalizeOffsetWithSize(ArgsOffsetOp, ArgsSizeOp);
   normalizeOffsetWithSize(RetOffsetOp, RetSizeOp);
 
@@ -2523,7 +2529,10 @@ EVMMirBuilder::handleDelegateCall(Operand GasOp, Operand ToAddrOp,
                                   Operand ArgsOffsetOp, Operand ArgsSizeOp,
                                   Operand RetOffsetOp, Operand RetSizeOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  normalizeOperandU64(GasOp);
+  // When gas value exceeds 64 bits, use max uint64 as fallback.
+  // The runtime will cap it to available gas per EIP-150.
+  uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
+  normalizeOperandU64(GasOp, &Non64Value);
   normalizeOffsetWithSize(ArgsOffsetOp, ArgsSizeOp);
   normalizeOffsetWithSize(RetOffsetOp, RetSizeOp);
 
@@ -2546,7 +2555,10 @@ EVMMirBuilder::handleStaticCall(Operand GasOp, Operand ToAddrOp,
                                 Operand ArgsOffsetOp, Operand ArgsSizeOp,
                                 Operand RetOffsetOp, Operand RetSizeOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  normalizeOperandU64(GasOp);
+  // When gas value exceeds 64 bits, use max uint64 as fallback.
+  // The runtime will cap it to available gas per EIP-150.
+  uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
+  normalizeOperandU64(GasOp, &Non64Value);
   normalizeOffsetWithSize(ArgsOffsetOp, ArgsSizeOp);
   normalizeOffsetWithSize(RetOffsetOp, RetSizeOp);
 
