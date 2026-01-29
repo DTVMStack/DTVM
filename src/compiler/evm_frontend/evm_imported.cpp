@@ -1014,6 +1014,7 @@ uint64_t evmHandleCallCode(zen::runtime::EVMInstance *Instance, uint64_t Gas,
 
 void evmHandleInvalid(zen::runtime::EVMInstance *Instance) {
   // Immediately terminate the execution and return the invalid code (4)
+  Instance->setReturnData({});
   evmc::Result ExeResult(
       EVMC_INVALID_INSTRUCTION, 0, Instance ? Instance->getGasRefund() : 0,
       Instance->getReturnData().data(), Instance->getReturnData().size());
@@ -1024,6 +1025,7 @@ void evmHandleInvalid(zen::runtime::EVMInstance *Instance) {
 
 void evmHandleUndefined(zen::runtime::EVMInstance *Instance) {
   // Immediately terminate the execution and return the undefined code
+  Instance->setReturnData({});
   evmc::Result ExeResult(
       EVMC_UNDEFINED_INSTRUCTION, 0, Instance ? Instance->getGasRefund() : 0,
       Instance->getReturnData().data(), Instance->getReturnData().size());
