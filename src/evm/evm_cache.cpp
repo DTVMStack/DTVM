@@ -10,7 +10,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <functional>
 #include <unordered_map>
 #include <utility>
 
@@ -368,66 +367,88 @@ static bool bitsetTest(const std::vector<uint64_t> &Bits, size_t Index) {
 static std::vector<uint8_t>
 computeInCycle(const std::vector<GasBlock> &Blocks) {
   const size_t NumBlocks = Blocks.size();
-  std::vector<int32_t> Index(NumBlocks, -1);
-  std::vector<int32_t> Lowlink(NumBlocks, 0);
-  std::vector<uint8_t> OnStack(NumBlocks, 0);
-  std::vector<uint32_t> Stack;
-  std::vector<uint8_t> InCycle(NumBlocks, 0);
-  int32_t CurIndex = 0;
+  std::vector<uint8_t> Visited(NumBlocks, 0);
+  std::vector<uint32_t> Order;
+  Order.reserve(NumBlocks);
 
-  std::function<void(uint32_t)> StrongConnect = [&](uint32_t Node) {
-    Index[Node] = CurIndex;
-    Lowlink[Node] = CurIndex;
-    ++CurIndex;
-    Stack.push_back(Node);
-    OnStack[Node] = 1;
+  struct DfsFrame {
+    uint32_t Node = 0;
+    size_t SuccIndex = 0;
+  };
 
-    for (uint32_t Succ : Blocks[Node].Succs) {
-      if (Succ >= NumBlocks) {
+  std::vector<DfsFrame> DfsStack;
+  for (uint32_t Start = 0; Start < NumBlocks; ++Start) {
+    if (Visited[Start] != 0) {
+      continue;
+    }
+    DfsStack.push_back({Start, 0});
+    Visited[Start] = 1;
+    while (!DfsStack.empty()) {
+      DfsFrame &Frame = DfsStack.back();
+      const uint32_t Node = Frame.Node;
+      const auto &Succs = Blocks[Node].Succs;
+      bool Descended = false;
+      while (Frame.SuccIndex < Succs.size()) {
+        const uint32_t Succ = Succs[Frame.SuccIndex++];
+        if (Succ >= NumBlocks) {
+          continue;
+        }
+        if (Visited[Succ] == 0) {
+          Visited[Succ] = 1;
+          DfsStack.push_back({Succ, 0});
+          Descended = true;
+          break;
+        }
+      }
+      if (Descended) {
         continue;
       }
-      if (Index[Succ] < 0) {
-        StrongConnect(Succ);
-        Lowlink[Node] = std::min(Lowlink[Node], Lowlink[Succ]);
-      } else if (OnStack[Succ] != 0) {
-        Lowlink[Node] = std::min(Lowlink[Node], Index[Succ]);
-      }
+      Order.push_back(Node);
+      DfsStack.pop_back();
     }
+  }
 
-    if (Lowlink[Node] != Index[Node]) {
-      return;
+  std::vector<uint8_t> InCycle(NumBlocks, 0);
+  std::vector<uint8_t> Assigned(NumBlocks, 0);
+  std::vector<uint32_t> Stack;
+  Stack.reserve(NumBlocks);
+
+  for (auto It = Order.rbegin(); It != Order.rend(); ++It) {
+    const uint32_t Start = *It;
+    if (Assigned[Start] != 0) {
+      continue;
     }
-
-    std::vector<uint32_t> Scc;
+    std::vector<uint32_t> Component;
+    Stack.push_back(Start);
+    Assigned[Start] = 1;
     while (!Stack.empty()) {
-      const uint32_t Top = Stack.back();
+      const uint32_t Node = Stack.back();
       Stack.pop_back();
-      OnStack[Top] = 0;
-      Scc.push_back(Top);
-      if (Top == Node) {
-        break;
+      Component.push_back(Node);
+      for (uint32_t Pred : Blocks[Node].Preds) {
+        if (Pred >= NumBlocks) {
+          continue;
+        }
+        if (Assigned[Pred] == 0) {
+          Assigned[Pred] = 1;
+          Stack.push_back(Pred);
+        }
       }
     }
 
-    if (Scc.size() > 1) {
-      for (uint32_t Id : Scc) {
+    if (Component.size() > 1) {
+      for (uint32_t Id : Component) {
         InCycle[Id] = 1;
       }
-      return;
+      continue;
     }
 
-    const uint32_t Only = Scc.front();
+    const uint32_t Only = Component.front();
     for (uint32_t Succ : Blocks[Only].Succs) {
       if (Succ == Only) {
         InCycle[Only] = 1;
         break;
       }
-    }
-  };
-
-  for (uint32_t Node = 0; Node < NumBlocks; ++Node) {
-    if (Index[Node] < 0) {
-      StrongConnect(Node);
     }
   }
 
@@ -940,6 +961,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   for (size_t Index = 0; Index < RevTopo.size(); ++Index) {
     RevTopoIndex[RevTopo[Index]] = Index;
   }
+  // BackEdges give topo order; SCCs mark cyclic regions to skip updates.
   const std::vector<uint8_t> InCycle = computeInCycle(Blocks);
 
   std::vector<LoopInfo> Loops;
@@ -957,19 +979,27 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
 
   std::vector<uint64_t> NonCycleMask(bitsetWordCount(Blocks.size()), 0);
   for (size_t Id = 0; Id < Blocks.size(); ++Id) {
-    if (Id < InCycle.size() && InCycle[Id] == 0) {
+    if (InCycle[Id] == 0) {
       bitsetSet(NonCycleMask, Id);
     }
   }
 
   if (!UseLinearSPP) {
     for (uint32_t NodeId : RevTopo) {
-      if (NodeId < InCycle.size() && InCycle[NodeId] != 0) {
+      if (InCycle[NodeId] != 0) {
         continue;
       }
       lemma614Update(NodeId, Blocks, &BackEdges, &NonCycleMask, Metering);
     }
   } else {
+    std::vector<std::vector<uint64_t>> LoopNonCycleMask(Loops.size());
+    for (size_t LoopId = 0; LoopId < Loops.size(); ++LoopId) {
+      LoopNonCycleMask[LoopId] = Loops[LoopId].NodeMask;
+      for (size_t W = 0; W < LoopNonCycleMask[LoopId].size(); ++W) {
+        LoopNonCycleMask[LoopId][W] &= NonCycleMask[W];
+      }
+    }
+
     std::vector<std::vector<uint32_t>> Recorded(Loops.size());
     std::vector<size_t> RecordedCount(Loops.size(), 0);
     std::vector<size_t> ExitSeenCount(Loops.size(), 0);
@@ -996,10 +1026,11 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
         return RevTopoIndex[A] < RevTopoIndex[B];
       });
       for (uint32_t NodeId : Order) {
-        if (NodeId < InCycle.size() && InCycle[NodeId] != 0) {
+        if (InCycle[NodeId] != 0) {
           continue;
         }
-        lemma614Update(NodeId, Blocks, nullptr, &NonCycleMask, Metering);
+        lemma614Update(NodeId, Blocks, nullptr, &LoopNonCycleMask[LoopId],
+                       Metering);
       }
       LoopProcessed[LoopId] = 1;
     };
@@ -1007,7 +1038,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     for (uint32_t NodeId : RevTopo) {
       const int32_t LoopId = (NodeId < LoopOf.size()) ? LoopOf[NodeId] : -1;
       if (LoopId < 0) {
-        if (NodeId < InCycle.size() && InCycle[NodeId] != 0) {
+        if (InCycle[NodeId] != 0) {
           continue;
         }
         lemma614Update(NodeId, Blocks, &BackEdges, &NonCycleMask, Metering);
