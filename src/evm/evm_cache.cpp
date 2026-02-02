@@ -749,6 +749,12 @@ static bool lemma614Update(uint32_t NodeId, const std::vector<GasBlock> &Blocks,
     if (AllowedMask && !bitsetTest(*AllowedMask, Succ)) {
       continue;
     }
+    // Only consider successors with exactly one predecessor. If a successor has
+    // multiple predecessors, we cannot move its gas to this node because
+    // different execution paths may reach it from different predecessors.
+    if (Blocks[Succ].Preds.size() != 1) {
+      continue;
+    }
     MinSucc = std::min(MinSucc, Metering[Succ]);
   }
 
@@ -762,6 +768,10 @@ static bool lemma614Update(uint32_t NodeId, const std::vector<GasBlock> &Blocks,
       continue;
     }
     if (AllowedMask && !bitsetTest(*AllowedMask, Succ)) {
+      continue;
+    }
+    // Only subtract from successors with exactly one predecessor
+    if (Blocks[Succ].Preds.size() != 1) {
       continue;
     }
     Metering[Succ] -= MinSucc;
@@ -949,6 +959,12 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
 
   // Write results to output arrays
   for (size_t Id = 0; Id < Blocks.size(); ++Id) {
+    // Skip empty blocks created by splitCriticalEdges to avoid overwriting
+    // valid block entries. Empty blocks have no instructions and their Start
+    // position may conflict with real blocks.
+    if (Blocks[Id].Start == Blocks[Id].End) {
+      continue;
+    }
     GasChunkEnd[Blocks[Id].Start] = Blocks[Id].End;
     GasChunkCost[Blocks[Id].Start] = Metering[Id];
   }
