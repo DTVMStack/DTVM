@@ -213,37 +213,13 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
         precompile::isModExpPrecompile(PrecompileAddr) ||
         precompile::isBlake2bPrecompile(PrecompileAddr, Revision);
 
-    // Find the target account (contract to call)
+    // Find the target account (contract to call) if present.
     const ParsedAccount *TargetAccount = nullptr;
     for (const auto &PA : Fixture.PreState) {
       if (std::memcmp(PA.Address.bytes, PT.Message->recipient.bytes, 20) == 0) {
         TargetAccount = &PA;
         break;
       }
-    }
-
-    if (!TargetAccount && !IsCreateTx && !IsPrecompile) {
-      if (!ExpectedResult.ExpectedException.empty()) {
-        return {true, {}};
-      }
-      if (DEBUG) {
-        std::cout << "No target account found for test: " << Fixture.TestName
-                  << std::endl;
-      }
-      return MakeFailure(
-          "Target account " +
-          evmc::hex(evmc::bytes_view(PT.Message->recipient.bytes, 20)) +
-          " not present in pre-state for " + Fixture.TestName + " (" + Fork +
-          ")");
-    }
-
-    // Skip if no code to execute
-    if (!IsCreateTx && !IsPrecompile && TargetAccount->Account.code.empty()) {
-      if (DEBUG) {
-        std::cout << "No code to execute for test: " << Fixture.TestName
-                  << std::endl;
-      }
-      return {true, {}};
     }
 
     RuntimeConfig Config = buildRuntimeConfig();
@@ -287,9 +263,12 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     } else if (IsPrecompile) {
       ExecConfig.Bytecode = nullptr;
       ExecConfig.BytecodeSize = 0;
-    } else {
+    } else if (TargetAccount) {
       ExecConfig.Bytecode = TargetAccount->Account.code.data();
       ExecConfig.BytecodeSize = TargetAccount->Account.code.size();
+    } else {
+      ExecConfig.Bytecode = nullptr;
+      ExecConfig.BytecodeSize = 0;
     }
     ExecConfig.Message = *PT.Message;
     ExecConfig.Revision = Revision;
@@ -402,7 +381,6 @@ const std::vector<StateTestFixture> &getStateFixtures() {
       std::cout << "Found " << JsonFiles.size() << " JSON test files in "
                 << DEFAULT_TEST_DIR << std::endl;
     }
-
     for (const auto &FilePath : JsonFiles) {
       auto FixturesFromFile = parseStateTestFile(FilePath);
       for (auto &Fixture : FixturesFromFile) {

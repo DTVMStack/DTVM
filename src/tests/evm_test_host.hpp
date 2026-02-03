@@ -120,9 +120,8 @@ public:
     const bool IsPrecompile =
         precompile::isModExpPrecompile(PrecompileAddr) ||
         precompile::isBlake2bPrecompile(PrecompileAddr, ActiveRevision);
-    if ((!Config.Bytecode || Config.BytecodeSize == 0) && !IsCreateTx &&
-        !IsPrecompile) {
-      Result.ErrorMessage = "Bytecode buffer is empty";
+    if (!Config.Bytecode && Config.BytecodeSize != 0) {
+      Result.ErrorMessage = "Bytecode buffer is null";
       return Result;
     }
 
