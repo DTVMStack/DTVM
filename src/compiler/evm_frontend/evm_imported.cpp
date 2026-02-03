@@ -1156,7 +1156,6 @@ void evmSetSStore(zen::runtime::EVMInstance *Instance,
        Module->Host->access_storage(Msg->recipient, Key) == EVMC_ACCESS_COLD)
           ? zen::evm::COLD_SLOAD_COST
           : 0;
-  const auto PrevValue = Module->Host->get_storage(Msg->recipient, Key);
   const auto Status = Module->Host->set_storage(Msg->recipient, Key, Val);
 
   const auto [GasCostWarm, GasReFund] = zen::evm::SSTORE_COSTS[Rev][Status];
