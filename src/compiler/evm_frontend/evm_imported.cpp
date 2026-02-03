@@ -847,7 +847,7 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   const bool HasValueArgs = CallKind == EVMC_CALL || CallKind == EVMC_CALLCODE;
   const bool HasValue = Value != 0;
 
-  if (HasValueArgs && HasValue && Instance->isStaticMode()) {
+  if (CallKind == EVMC_CALL && HasValue && Instance->isStaticMode()) {
     triggerStaticModeViolation(Instance);
     return 0;
   }
