@@ -60,13 +60,38 @@ static bool isGasChunkTerminator(uint8_t OpcodeU8) {
   }
 }
 
+static bool isControlFlowTerminator(uint8_t OpcodeU8) {
+  switch (static_cast<evmc_opcode>(OpcodeU8)) {
+  case evmc_opcode::OP_STOP:
+  case evmc_opcode::OP_RETURN:
+  case evmc_opcode::OP_REVERT:
+  case evmc_opcode::OP_SELFDESTRUCT:
+  case evmc_opcode::OP_INVALID:
+  case evmc_opcode::OP_JUMP:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool isGasSensitiveTerminator(uint8_t OpcodeU8) {
+  switch (static_cast<evmc_opcode>(OpcodeU8)) {
+  case evmc_opcode::OP_GAS:
+  case evmc_opcode::OP_CREATE:
+  case evmc_opcode::OP_CREATE2:
+  case evmc_opcode::OP_CALL:
+  case evmc_opcode::OP_CALLCODE:
+  case evmc_opcode::OP_DELEGATECALL:
+  case evmc_opcode::OP_STATICCALL:
+    return true;
+  default:
+    return false;
+  }
+}
+
 static bool isJumpOpcode(uint8_t OpcodeU8) {
   return OpcodeU8 == static_cast<uint8_t>(evmc_opcode::OP_JUMP) ||
          OpcodeU8 == static_cast<uint8_t>(evmc_opcode::OP_JUMPI);
-}
-
-static bool isConditionalJumpOpcode(uint8_t OpcodeU8) {
-  return OpcodeU8 == static_cast<uint8_t>(evmc_opcode::OP_JUMPI);
 }
 
 static bool isPushOpcode(uint8_t OpcodeU8) {
@@ -830,6 +855,9 @@ static bool lemma614Update(uint32_t NodeId, const std::vector<GasBlock> &Blocks,
                            const std::vector<uint64_t> *AllowedMask,
                            std::vector<uint64_t> &Metering) {
   const auto &Node = Blocks[NodeId];
+  if (isGasSensitiveTerminator(Node.LastOpcode)) {
+    return false;
+  }
 
   uint64_t MinSucc = UINT64_MAX;
   for (uint32_t Succ : Node.Succs) {
@@ -927,11 +955,10 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   // Build CFG
   for (size_t BlockId = 0; BlockId < Blocks.size(); ++BlockId) {
     auto &Block = Blocks[BlockId];
-    const bool IsBarrier = isGasChunkTerminator(Block.LastOpcode);
-    const bool IsCondJump = isConditionalJumpOpcode(Block.LastOpcode);
+    const bool IsTerminator = isControlFlowTerminator(Block.LastOpcode);
 
-    // Add fallthrough edge (if not a barrier, or if conditional jump)
-    if ((!IsBarrier || IsCondJump) && Block.End < CodeSize) {
+    // Add fallthrough edge for non-terminating opcodes (CALL/CREATE/GAS included).
+    if (!IsTerminator && Block.End < CodeSize) {
       const uint32_t SuccId = BlockAtPc[Block.End];
       if (SuccId != UINT32_MAX) {
         addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
