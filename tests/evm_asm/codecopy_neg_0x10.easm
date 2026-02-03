@@ -1,0 +1,9 @@
+// modify from: tests-17.1/GeneralStateTests/stMemoryTest/bufferSrcOffset.json
+// indexes: [data=37, gas=0, value=0]
+PUSH1 0x10
+PUSH32 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0
+PUSH0
+CODECOPY
+PUSH1 0x20
+PUSH1 0x00
+RETURN
