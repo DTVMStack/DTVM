@@ -719,6 +719,18 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
     return ZeroAddress;
   }
 
+  // Calculate required memory size and charge gas
+  const uint8_t *InitCode = nullptr;
+  if (Size > 0) {
+    if (!Instance->expandMemoryChecked(Offset, Size)) {
+      Instance->setReturnData({});
+      return ZeroAddress;
+    }
+
+    uint8_t *MemoryBase = Instance->getMemoryBase();
+    InitCode = MemoryBase + Offset;
+  }
+
   evmc_revision Rev = Instance->getRevision();
   if (Rev >= EVMC_SHANGHAI && Size > zen::evm::MAX_SIZE_OF_INITCODE) {
     Instance->chargeGas(Instance->getGas() + 1);
@@ -749,18 +761,6 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
     return ZeroAddress;
   }
 
-  // Calculate required memory size and charge gas
-  const uint8_t *InitCode = nullptr;
-  if (Size > 0) {
-    if (!Instance->expandMemoryChecked(Offset, Size)) {
-      Instance->setReturnData({});
-      return ZeroAddress;
-    }
-
-    uint8_t *MemoryBase = Instance->getMemoryBase();
-    InitCode = MemoryBase + Offset;
-  }
-
   // Create message for CREATE/CREATE2
   evmc_message CreateMsg = {};
   CreateMsg.kind = CallKind;
@@ -789,9 +789,6 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
       CreateMsg.gas > 0 ? static_cast<uint64_t>(CreateMsg.gas) : 0;
   uint64_t GasLeft =
       Result.gas_left > 0 ? static_cast<uint64_t>(Result.gas_left) : 0;
-  if (Result.status_code != EVMC_SUCCESS && Result.status_code != EVMC_REVERT) {
-    GasLeft = 0;
-  }
   uint64_t GasUsed = ProvidedGas > GasLeft ? ProvidedGas - GasLeft : 0;
   if (GasUsed != 0) {
     Instance->chargeGas(GasUsed);
@@ -955,9 +952,6 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
   // Charge the caller for the gas actually consumed by the callee.
   CallGas = CallMsg.gas > 0 ? static_cast<uint64_t>(CallMsg.gas) : 0;
   GasLeft = Result.gas_left > 0 ? static_cast<uint64_t>(Result.gas_left) : 0;
-  if (Result.status_code != EVMC_SUCCESS && Result.status_code != EVMC_REVERT) {
-    GasLeft = 0;
-  }
   uint64_t GasUsed = CallGas > GasLeft ? CallGas - GasLeft : 0;
   if (GasUsed > 0) {
     Instance->chargeGas(GasUsed);
