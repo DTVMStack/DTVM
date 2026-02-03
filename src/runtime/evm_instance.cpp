@@ -81,6 +81,9 @@ void EVMInstance::popMessage() {
   }
   CurrentMessage = MessageStack.empty() ? nullptr : MessageStack.back();
   if (!GasRefundStack.empty()) {
+    // Only pop the snapshot: successful subcalls keep their accumulated
+    // refunds. On failures, refund rollback is handled by
+    // restoreGasRefundSnapshot() using this stack.
     GasRefundStack.pop_back();
   }
   if (!MemoryStack.empty()) {
