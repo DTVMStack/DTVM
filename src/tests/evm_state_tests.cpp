@@ -216,7 +216,8 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
       const auto &Tx = *Fixture.Transaction;
       if (Tx.HasMember("gasPrice") && Tx["gasPrice"].IsString()) {
         MaxFeePerGas = parseUint256(Tx["gasPrice"].GetString());
-      } else if (Tx.HasMember("maxFeePerGas") && Tx["maxFeePerGas"].IsString()) {
+      } else if (Tx.HasMember("maxFeePerGas") &&
+                 Tx["maxFeePerGas"].IsString()) {
         MaxFeePerGas = parseUint256(Tx["maxFeePerGas"].GetString());
       }
       if (Tx.HasMember("maxPriorityFeePerGas") &&
@@ -229,8 +230,7 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     const intx::uint256 BaseFee =
         intx::be::load<intx::uint256>(Fixture.Environment.block_base_fee);
     if (MaxFeePerGas) {
-      const intx::uint256 MaxFee =
-          intx::be::load<intx::uint256>(*MaxFeePerGas);
+      const intx::uint256 MaxFee = intx::be::load<intx::uint256>(*MaxFeePerGas);
       if (MaxFee < BaseFee) {
         return MaybeReturnInvalid("Max fee per gas below base fee");
       }
@@ -254,9 +254,9 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
       if (BlobCount == 0) {
         return MaybeReturnInvalid("Blob transaction has zero blobs");
       }
-      const size_t MaxBlobs =
-          (Revision >= EVMC_PRAGUE) ? static_cast<size_t>(9)
-                                    : static_cast<size_t>(6);
+      const size_t MaxBlobs = (Revision >= EVMC_PRAGUE)
+                                  ? static_cast<size_t>(9)
+                                  : static_cast<size_t>(6);
       if (BlobCount > MaxBlobs) {
         return MaybeReturnInvalid("Blob transaction has too many blobs");
       }
@@ -281,15 +281,13 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
       intx::uint256 SenderBalance = 0;
       for (const auto &PA : Fixture.PreState) {
         if (std::memcmp(PA.Address.bytes, PT.Message->sender.bytes, 20) == 0) {
-          SenderBalance =
-              intx::be::load<intx::uint256>(PA.Account.balance);
+          SenderBalance = intx::be::load<intx::uint256>(PA.Account.balance);
           break;
         }
       }
 
       const intx::uint256 GasLimit = intx::uint256(TxGasLimit);
-      const intx::uint256 MaxFee =
-          intx::be::load<intx::uint256>(*MaxFeePerGas);
+      const intx::uint256 MaxFee = intx::be::load<intx::uint256>(*MaxFeePerGas);
       const intx::uint256 Value =
           intx::be::load<intx::uint256>(PT.Message->value);
       intx::uint256 TotalCost = GasLimit * MaxFee + Value;
@@ -297,15 +295,15 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
       if (HasBlobFields && PT.MaxFeePerBlobGas) {
         constexpr uint64_t BlobGasPerBlob = 131072;
         const intx::uint256 BlobGas =
-            intx::uint256(PT.BlobHashes.size()) *
-            intx::uint256(BlobGasPerBlob);
+            intx::uint256(PT.BlobHashes.size()) * intx::uint256(BlobGasPerBlob);
         const intx::uint256 MaxBlobFee =
             intx::be::load<intx::uint256>(*PT.MaxFeePerBlobGas);
         TotalCost += BlobGas * MaxBlobFee;
       }
 
       if (SenderBalance < TotalCost) {
-        return MaybeReturnInvalid("Sender balance insufficient for upfront cost");
+        return MaybeReturnInvalid(
+            "Sender balance insufficient for upfront cost");
       }
     }
 
