@@ -693,7 +693,24 @@ CgSlotIndex CgSplitEditor::enterIntvAfter(CgSlotIndex Idx) {
   }
   LLVM_DEBUG(dbgs() << ": valno " << ParentVNI->id << '\n');
   CgInstruction *MI = LIS.getInstructionFromIndex(Idx);
-  assert(MI && "enterIntvAfter called with invalid index");
+  if (!MI) {
+    CgBasicBlock *MBB = LIS.getMBBFromIndex(Idx);
+    if (!MBB)
+      return Idx;
+
+    CgSlotIndex End = LIS.getMBBEndIdx(MBB);
+    if (Idx >= End.getPrevSlot())
+      return enterIntvAtEnd(*MBB);
+
+    CgSlotIndex NextIdx = LIS.getSlotIndexes()->getNextNonNullIndex(Idx);
+    CgInstruction *NextMI = LIS.getInstructionFromIndex(NextIdx);
+    if (!NextMI || NextMI->getParent() != MBB)
+      return enterIntvAtEnd(*MBB);
+
+    CgVNInfo *VNI =
+        defFromParent(OpenIdx, ParentVNI, Idx, *MBB, NextMI->getIterator());
+    return VNI->def;
+  }
 
   CgVNInfo *VNI = defFromParent(OpenIdx, ParentVNI, Idx, *MI->getParent(),
                                 std::next(CgBasicBlock::iterator(MI)));
