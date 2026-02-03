@@ -957,7 +957,8 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     auto &Block = Blocks[BlockId];
     const bool IsTerminator = isControlFlowTerminator(Block.LastOpcode);
 
-    // Add fallthrough edge for non-terminating opcodes (CALL/CREATE/GAS included).
+    // Add fallthrough edge for non-terminating opcodes (CALL/CREATE/GAS
+    // included).
     if (!IsTerminator && Block.End < CodeSize) {
       const uint32_t SuccId = BlockAtPc[Block.End];
       if (SuccId != UINT32_MAX) {
