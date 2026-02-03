@@ -2038,10 +2038,9 @@ void EVMMirBuilder::handleCodeCopy(Operand DestOffsetComponents,
                                    Operand OffsetComponents,
                                    Operand SizeComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  normalizeOffsetWithSize(DestOffsetComponents, SizeComponents);
   uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
-  normalizeOperandU64(DestOffsetComponents, &Non64Value);
   normalizeOperandU64(OffsetComponents, &Non64Value);
-  normalizeOperandU64(SizeComponents, &Non64Value);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
@@ -2051,7 +2050,6 @@ void EVMMirBuilder::handleCodeCopy(Operand DestOffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
-  reloadMemorySizeFromInstance();
 }
 
 typename EVMMirBuilder::Operand
@@ -2240,6 +2238,7 @@ void EVMMirBuilder::handleMStore(Operand AddrComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
+  reloadMemorySizeFromInstance();
 }
 
 void EVMMirBuilder::handleMStore8(Operand AddrComponents,
@@ -2388,9 +2387,7 @@ void EVMMirBuilder::handleLogWithTopics(Operand OffsetOp, Operand SizeOp,
                                         TopicArgs... Topics) {
   ZEN_STATIC_ASSERT(NumTopics <= 4);
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
-  normalizeOperandU64(OffsetOp, &Non64Value);
-  normalizeOperandU64(SizeOp, &Non64Value);
+  normalizeOffsetWithSize(OffsetOp, SizeOp);
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
@@ -2421,9 +2418,7 @@ void EVMMirBuilder::handleLogWithTopics(Operand OffsetOp, Operand SizeOp,
 typename EVMMirBuilder::Operand
 EVMMirBuilder::handleCreate(Operand ValueOp, Operand OffsetOp, Operand SizeOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
-  normalizeOperandU64(OffsetOp, &Non64Value);
-  normalizeOperandU64(SizeOp, &Non64Value);
+  normalizeOffsetWithSize(OffsetOp, SizeOp);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
 #endif
@@ -2442,9 +2437,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCreate2(Operand ValueOp,
                                                              Operand SizeOp,
                                                              Operand SaltOp) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
-  normalizeOperandU64(OffsetOp, &Non64Value);
-  normalizeOperandU64(SizeOp, &Non64Value);
+  normalizeOffsetWithSize(OffsetOp, SizeOp);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
 #endif
@@ -2698,9 +2691,7 @@ typename EVMMirBuilder::Operand
 EVMMirBuilder::handleKeccak256(Operand OffsetComponents,
                                Operand LengthComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
-  normalizeOperandU64(OffsetComponents, &Non64Value);
-  normalizeOperandU64(LengthComponents, &Non64Value);
+  normalizeOffsetWithSize(OffsetComponents, LengthComponents);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
@@ -3434,11 +3425,11 @@ void EVMMirBuilder::handleReturnDataCopy(Operand DestOffsetComponents,
                                          Operand OffsetComponents,
                                          Operand SizeComponents) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  normalizeOperandU64(DestOffsetComponents);
   // Use max uint64_t value if the offset/size is not 64-bit, because the
   // returndatacopy will trigger memory access error instead of out-of-gas
   // when offset/size is is very large.
   uint64_t Non64Value = std::numeric_limits<uint64_t>::max();
+  normalizeOperandU64(DestOffsetComponents, &Non64Value);
   normalizeOperandU64(OffsetComponents, &Non64Value);
   normalizeOperandU64(SizeComponents, &Non64Value);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
@@ -3476,13 +3467,15 @@ MInstruction *EVMMirBuilder::getMemoryDataPointer() {
 }
 
 MInstruction *EVMMirBuilder::getMemorySize() {
-  if (MemorySizeVar) {
-    return loadVariable(MemorySizeVar);
-  }
   MType *I64Type = &Ctx.I64Type;
   const int32_t MemorySizeOffset =
       zen::runtime::EVMInstance::getMemorySizeOffset();
-  return getInstanceElement(I64Type, MemorySizeOffset);
+  MInstruction *MemSize = getInstanceElement(I64Type, MemorySizeOffset);
+  if (MemorySizeVar) {
+    createInstruction<DassignInstruction>(true, &(Ctx.VoidType), MemSize,
+                                          MemorySizeVar->getVarIdx());
+  }
+  return MemSize;
 }
 
 void EVMMirBuilder::reloadMemorySizeFromInstance() {
