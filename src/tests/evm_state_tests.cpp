@@ -63,8 +63,10 @@ TxIntrinsicCost computeTxIntrinsicCost(const evmc_revision Revision,
     }
   }
 
-  const int64_t AuthListCost = static_cast<int64_t>(PT.AuthorizationListSize) *
-                               AuthorizationEmptyAccountCost;
+  const int64_t AuthListCost =
+      Revision >= EVMC_PRAGUE ? static_cast<int64_t>(PT.AuthorizationListSize) *
+                                    AuthorizationEmptyAccountCost
+                              : 0;
 
   int64_t InitcodeCost = 0;
   if (IsCreateTx && Revision >= EVMC_SHANGHAI) {
@@ -185,6 +187,17 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     ParsedTransaction PT =
         createTransactionFromIndex(*Fixture.Transaction, ExpectedResult);
     const evmc_revision Revision = mapForkToRevision(Fork);
+
+    const bool HasAuthorizationListField =
+        Fixture.Transaction &&
+        Fixture.Transaction->HasMember("authorizationList") &&
+        (*Fixture.Transaction)["authorizationList"].IsArray();
+    const bool IsType4Tx = !ExpectedResult.ExpectedTxBytes.empty() &&
+                           ExpectedResult.ExpectedTxBytes[0] == 0x04;
+    if (Revision < EVMC_PRAGUE && (HasAuthorizationListField || IsType4Tx)) {
+      return MaybeReturnInvalid("Type 4 transaction pre-fork");
+    }
+
     const TxIntrinsicCost IntrinsicCost = computeTxIntrinsicCost(Revision, PT);
 
     const bool IsCreateTx =
