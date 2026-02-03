@@ -796,9 +796,7 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   if (GasUsed != 0) {
     Instance->chargeGas(GasUsed);
   }
-  if (Result.gas_refund > 0) {
-    Instance->addGasRefund(Result.gas_refund);
-  }
+  Instance->addGasRefund(Result.gas_refund);
 
   std::vector<uint8_t> ReturnData(Result.output_data,
                                   Result.output_data + Result.output_size);
@@ -963,9 +961,7 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     Instance->chargeGas(GasUsed);
   }
 
-  if (Result.gas_refund > 0) {
-    Instance->addGasRefund(Result.gas_refund);
-  }
+  Instance->addGasRefund(Result.gas_refund);
 
   // Copy return data to memory if output area is specified.
   // Per EVM semantics, bytes beyond returned data length remain unchanged.
@@ -1004,6 +1000,7 @@ uint64_t evmHandleCallCode(zen::runtime::EVMInstance *Instance, uint64_t Gas,
 
 void evmHandleInvalid(zen::runtime::EVMInstance *Instance) {
   // Immediately terminate the execution and return the invalid code (4)
+  Instance->restoreGasRefundSnapshot();
   Instance->setReturnData({});
   evmc::Result ExeResult(
       EVMC_INVALID_INSTRUCTION, 0, Instance ? Instance->getGasRefund() : 0,
@@ -1015,6 +1012,7 @@ void evmHandleInvalid(zen::runtime::EVMInstance *Instance) {
 
 void evmHandleUndefined(zen::runtime::EVMInstance *Instance) {
   // Immediately terminate the execution and return the undefined code
+  Instance->restoreGasRefundSnapshot();
   Instance->setReturnData({});
   evmc::Result ExeResult(
       EVMC_UNDEFINED_INSTRUCTION, 0, Instance ? Instance->getGasRefund() : 0,
@@ -1053,6 +1051,7 @@ void evmSetRevert(zen::runtime::EVMInstance *Instance, uint64_t Offset,
     ReturnData =
         std::vector<uint8_t>(MemoryBase + Offset, MemoryBase + Offset + Size);
   }
+  Instance->restoreGasRefundSnapshot();
   Instance->setReturnData(std::move(ReturnData));
   const int64_t GasLeft =
       Instance ? static_cast<int64_t>(Instance->getGas()) : 0;

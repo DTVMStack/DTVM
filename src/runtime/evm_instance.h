@@ -62,6 +62,11 @@ public:
   void addGasRefund(uint64_t Amount) { GasRefund += Amount; }
   void setGasRefund(uint64_t Amount) { GasRefund = Amount; }
   uint64_t getGasRefund() const { return GasRefund; }
+  void restoreGasRefundSnapshot() {
+    if (!GasRefundStack.empty()) {
+      GasRefund = GasRefundStack.back();
+    }
+  }
   void setRevision(evmc_revision NewRev) { Rev = NewRev; }
 
   // ==================== Memory Methods ====================
@@ -299,6 +304,7 @@ private:
   // Message stack for call hierarchy tracking
   evmc_message *CurrentMessage = nullptr;
   std::vector<evmc_message *> MessageStack;
+  std::vector<uint64_t> GasRefundStack;
   evmc_revision Rev = zen::evm::DEFAULT_REVISION;
 
   // Instance-level cache storage (shared across all messages in execution)

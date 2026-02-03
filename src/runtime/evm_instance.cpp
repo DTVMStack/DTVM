@@ -71,6 +71,7 @@ void EVMInstance::pushMessage(evmc_message *Msg) {
   initMemoryFrame(Memory, MemoryBase, MemorySize);
   MessageStack.push_back(Msg);
   CurrentMessage = Msg;
+  GasRefundStack.push_back(GasRefund);
   Gas = Msg ? Msg->gas : 0;
 }
 
@@ -79,6 +80,9 @@ void EVMInstance::popMessage() {
     MessageStack.pop_back();
   }
   CurrentMessage = MessageStack.empty() ? nullptr : MessageStack.back();
+  if (!GasRefundStack.empty()) {
+    GasRefundStack.pop_back();
+  }
   if (!MemoryStack.empty()) {
     Memory = std::move(MemoryStack.back().Data);
     MemorySize = MemoryStack.back().Size;
@@ -111,6 +115,10 @@ void EVMInstance::setExecutionError(const Error &NewErr, uint32_t IgnoredDepth,
                                     common::evm_traphandler::EVMTrapState TS) {
   ZEN_ASSERT(NewErr.getPhase() == common::ErrorPhase::Execution);
   setError(NewErr);
+  if (NewErr.getCode() != ErrorCode::NoError &&
+      NewErr.getCode() != ErrorCode::InstanceExit) {
+    restoreGasRefundSnapshot();
+  }
   if (NewErr.getCode() == ErrorCode::GasLimitExceeded) {
     setGas(0); // gas left
   }
