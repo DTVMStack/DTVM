@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstring>
+#include <limits>
 
 using namespace zen;
 using namespace zen::evm;
@@ -335,7 +336,10 @@ void BaseInterpreter::interpret() {
   }
 
   auto Uint256ToUint64 = [](const intx::uint256 &Value) -> uint64_t {
-    return static_cast<uint64_t>(Value & 0xFFFFFFFFFFFFFFFFULL);
+    if ((Value[3] | Value[2] | Value[1]) != 0) {
+      return std::numeric_limits<uint64_t>::max();
+    }
+    return Value[0];
   };
 
   while (Frame->Pc < CodeSize) {

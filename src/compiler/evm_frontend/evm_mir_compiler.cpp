@@ -984,13 +984,35 @@ void EVMMirBuilder::handleJump(Operand Dest) {
   MBasicBlock *InvalidJumpBB =
       getOrCreateExceptionSetBB(ErrorCode::EVMBadJumpDestination);
   if (Dest.isConstant()) {
-    uint64_t ConstDest = Dest.getConstValue()[0];
+    const auto &ConstValue = Dest.getConstValue();
+    if ((ConstValue[3] | ConstValue[2] | ConstValue[1]) != 0) {
+      createInstruction<BrInstruction>(true, Ctx, InvalidJumpBB);
+      addSuccessor(InvalidJumpBB);
+      return;
+    }
+    uint64_t ConstDest = ConstValue[0];
     implementConstantJump(ConstDest, InvalidJumpBB);
-  } else {
-    U256Inst DestComponents = extractU256Operand(Dest);
-    MInstruction *JumpTarget = DestComponents[0];
-    implementIndirectJump(JumpTarget, InvalidJumpBB);
+    return;
   }
+
+  U256Inst DestComponents = extractU256Operand(Dest);
+  MInstruction *JumpTarget = DestComponents[0];
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+  MInstruction *HighOr = createInstruction<BinaryInstruction>(
+      false, OP_or, MirI64Type, DestComponents[1], DestComponents[2]);
+  HighOr = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                HighOr, DestComponents[3]);
+  MInstruction *HighNonZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, HighOr, Zero);
+  MBasicBlock *ValidJumpBB = createBasicBlock();
+  createInstruction<BrIfInstruction>(true, Ctx, HighNonZero, InvalidJumpBB,
+                                     ValidJumpBB);
+  addSuccessor(InvalidJumpBB);
+  addSuccessor(ValidJumpBB);
+  setInsertBlock(ValidJumpBB);
+  implementIndirectJump(JumpTarget, InvalidJumpBB);
 }
 
 void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
@@ -1034,9 +1056,28 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
     addSuccessor(FallThroughBB);
     setInsertBlock(JumpTableBB);
     if (Dest.isConstant()) {
-      uint64_t ConstDest = Dest.getConstValue()[0];
-      implementConstantJump(ConstDest, InvalidJumpBB);
+      const auto &ConstValue = Dest.getConstValue();
+      if ((ConstValue[3] | ConstValue[2] | ConstValue[1]) != 0) {
+        createInstruction<BrInstruction>(true, Ctx, InvalidJumpBB);
+        addSuccessor(InvalidJumpBB);
+      } else {
+        uint64_t ConstDest = ConstValue[0];
+        implementConstantJump(ConstDest, InvalidJumpBB);
+      }
     } else {
+      MInstruction *HighOr = createInstruction<BinaryInstruction>(
+          false, OP_or, MirI64Type, DestComponents[1], DestComponents[2]);
+      HighOr = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                    HighOr, DestComponents[3]);
+      MInstruction *HighNonZero = createInstruction<CmpInstruction>(
+          false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, HighOr,
+          Zero);
+      MBasicBlock *ValidJumpBB = createBasicBlock();
+      createInstruction<BrIfInstruction>(true, Ctx, HighNonZero, InvalidJumpBB,
+                                         ValidJumpBB);
+      addSuccessor(InvalidJumpBB);
+      addSuccessor(ValidJumpBB);
+      setInsertBlock(ValidJumpBB);
       implementIndirectJump(JumpTarget, InvalidJumpBB);
     }
   }
