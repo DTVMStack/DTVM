@@ -12,8 +12,8 @@
 #include "utils/evm.h"
 #include "utils/rlp_encoding.h"
 
-#include <utility>
 #include <unordered_set>
+#include <utility>
 
 using namespace zen;
 using namespace zen::runtime;
@@ -45,7 +45,6 @@ private:
       PrewarmStorageKeys;
   std::unordered_set<evmc::address> CreatedInTx;
   std::unordered_set<evmc::address> PendingSelfdestructs;
-  uint64_t CallStipendRefund = 0;
   bool FeesPrepaidInTx = false;
 
 public:
@@ -130,7 +129,6 @@ public:
     Revision = ActiveRevision;
     CreatedInTx.clear();
     PendingSelfdestructs.clear();
-    CallStipendRefund = 0;
     FeesPrepaidInTx = false;
     if (GasLimit == 0) {
       if (Config.Message.gas < 0) {
@@ -225,18 +223,13 @@ public:
               ? AvailableGas - static_cast<uint64_t>(Result.RemainingGas)
               : 0;
       Result.GasUsed += Config.IntrinsicGas;
-      if (FeesPrepaidInTx && CallStipendRefund != 0) {
-        Result.GasUsed = Result.GasUsed > CallStipendRefund
-                             ? Result.GasUsed - CallStipendRefund
-                             : 0;
-      }
       uint64_t GasRefund = static_cast<uint64_t>(
           std::max<int64_t>(0, PrecompileResult.gas_refund));
       uint64_t RefundLimit = Result.GasUsed / 5;
       Result.GasRefund = std::min(GasRefund, RefundLimit);
-      Result.GasCharged =
-          Result.GasUsed > Result.GasRefund ? Result.GasUsed - Result.GasRefund
-                                            : 0;
+      Result.GasCharged = Result.GasUsed > Result.GasRefund
+                              ? Result.GasUsed - Result.GasRefund
+                              : 0;
 
       if (Result.GasCharged != 0) {
         settleGasCharges(Result.GasCharged, TotalGasLimit, Config, Msg, Result,
@@ -262,23 +255,18 @@ public:
       Result.Status = CreateResult.status_code;
       Result.Success = true;
       Result.RemainingGas = CreateResult.gas_left;
-      const uint64_t GasLeft =
-          Result.RemainingGas > 0 ? static_cast<uint64_t>(Result.RemainingGas)
-                                  : 0;
+      const uint64_t GasLeft = Result.RemainingGas > 0
+                                   ? static_cast<uint64_t>(Result.RemainingGas)
+                                   : 0;
       Result.GasUsed = AvailableGas > GasLeft ? AvailableGas - GasLeft : 0;
       Result.GasUsed += Config.IntrinsicGas;
-      if (FeesPrepaidInTx && CallStipendRefund != 0) {
-        Result.GasUsed = Result.GasUsed > CallStipendRefund
-                             ? Result.GasUsed - CallStipendRefund
-                             : 0;
-      }
-      uint64_t GasRefund = static_cast<uint64_t>(
-          std::max<int64_t>(0, CreateResult.gas_refund));
+      uint64_t GasRefund =
+          static_cast<uint64_t>(std::max<int64_t>(0, CreateResult.gas_refund));
       uint64_t RefundLimit = Result.GasUsed / 5;
       Result.GasRefund = std::min(GasRefund, RefundLimit);
-      Result.GasCharged =
-          Result.GasUsed > Result.GasRefund ? Result.GasUsed - Result.GasRefund
-                                            : 0;
+      Result.GasCharged = Result.GasUsed > Result.GasRefund
+                              ? Result.GasUsed - Result.GasRefund
+                              : 0;
       if (Result.GasCharged != 0) {
         settleGasCharges(Result.GasCharged, TotalGasLimit, Config, Msg, Result,
                          FeesPrepaid);
@@ -304,13 +292,12 @@ public:
     }
 
     uint64_t Counter = ModuleCounter++;
-    std::string ModuleName = Config.ModuleName.empty()
-                                 ? ("tx_exec_mod_" + std::to_string(Counter))
-                                 : (Config.ModuleName + "_" +
-                                    std::to_string(Counter));
+    std::string ModuleName =
+        Config.ModuleName.empty()
+            ? ("tx_exec_mod_" + std::to_string(Counter))
+            : (Config.ModuleName + "_" + std::to_string(Counter));
 
-    auto ModRet =
-        RT->loadEVMModule(ModuleName, BytecodePtr, BytecodeSize);
+    auto ModRet = RT->loadEVMModule(ModuleName, BytecodePtr, BytecodeSize);
     if (!ModRet) {
       Result.ErrorMessage = "Failed to load EVM module: " + ModuleName;
       return Result;
@@ -326,8 +313,8 @@ public:
 
     auto InstRet = Iso->createEVMInstance(*Mod, AvailableGas);
     if (!InstRet) {
-      Result.ErrorMessage = "Failed to create EVM instance for module " +
-                            ModuleName;
+      Result.ErrorMessage =
+          "Failed to create EVM instance for module " + ModuleName;
       return Result;
     }
     EVMInstance *Inst = *InstRet;
@@ -375,19 +362,13 @@ public:
             : 0;
 
     Result.GasUsed += Config.IntrinsicGas;
-    if (FeesPrepaidInTx && CallStipendRefund != 0) {
-      Result.GasUsed = Result.GasUsed > CallStipendRefund
-                           ? Result.GasUsed - CallStipendRefund
-                           : 0;
-    }
-
     uint64_t GasRefund =
         static_cast<uint64_t>(std::max<int64_t>(0, Inst->getGasRefund()));
     uint64_t RefundLimit = Result.GasUsed / 5;
     Result.GasRefund = std::min(GasRefund, RefundLimit);
-    Result.GasCharged =
-        Result.GasUsed > Result.GasRefund ? Result.GasUsed - Result.GasRefund
-                                          : 0;
+    Result.GasCharged = Result.GasUsed > Result.GasRefund
+                            ? Result.GasUsed - Result.GasRefund
+                            : 0;
 
     if (Result.GasCharged != 0) {
       settleGasCharges(Result.GasCharged, TotalGasLimit, Config, Msg, Result,
@@ -429,8 +410,7 @@ public:
     ensureAccountHasCodeHash(SelfAcc);
 
     const bool CreatedThisTx = CreatedInTx.count(Addr) > 0;
-    const bool ShouldDelete =
-        (Revision < EVMC_CANCUN) || CreatedThisTx;
+    const bool ShouldDelete = (Revision < EVMC_CANCUN) || CreatedThisTx;
 
     intx::uint256 SelfBalance = toUint256Bytes(SelfAcc.balance);
     if (SelfBalance != 0) {
@@ -492,11 +472,6 @@ public:
           evmc::hex(evmc::bytes_view(CodeAddr.bytes, 20)).c_str());
       if (Msg.kind == EVMC_CALL && !applyCallValueTransfer(Msg)) {
         return ParentResult;
-      }
-      if (FeesPrepaidInTx && Msg.kind == EVMC_CALL &&
-          toUint256Bytes(Msg.value) != intx::uint256{0} &&
-          ParentResult.status_code == EVMC_SUCCESS) {
-        CallStipendRefund += CALL_GAS_STIPEND;
       }
       if (ParentResult.status_code == EVMC_SUCCESS &&
           ParentResult.gas_left == 0) {
@@ -590,9 +565,8 @@ public:
       } else {
         ReturnData.clear();
       }
-      int64_t RemainingGas = (InterpGasLeft >= 0)
-                                 ? InterpGasLeft
-                                 : ExecResult.gas_left;
+      int64_t RemainingGas =
+          (InterpGasLeft >= 0) ? InterpGasLeft : ExecResult.gas_left;
       if (RemainingGas < 0) {
         RemainingGas = static_cast<int64_t>(Inst->getGas());
       }
@@ -620,7 +594,8 @@ public:
 
     evmc_uint256be NonceUint256 = {};
     intx::be::store(NonceUint256.bytes, intx::uint256{SenderNonce});
-    std::vector<uint8_t> NonceMinimalBytes = zen::utils::uint256beToBytes(NonceUint256);
+    std::vector<uint8_t> NonceMinimalBytes =
+        zen::utils::uint256beToBytes(NonceUint256);
 
     std::vector<std::vector<uint8_t>> RlpListItems = {SenderBytes,
                                                       NonceMinimalBytes};
@@ -816,14 +791,12 @@ public:
         ReturnData.clear();
       }
 
-      int64_t RemainingGas = (InterpGasLeft >= 0)
-                                 ? InterpGasLeft
-                                 : ExecResult.gas_left;
+      int64_t RemainingGas =
+          (InterpGasLeft >= 0) ? InterpGasLeft : ExecResult.gas_left;
       if (RemainingGas < 0) {
         RemainingGas = static_cast<int64_t>(Inst->getGas());
       }
-      const int64_t GasRefund =
-          static_cast<int64_t>(Inst->getGasRefund());
+      const int64_t GasRefund = static_cast<int64_t>(Inst->getGasRefund());
 
       // 6 Deploy the contract code (the output is the runtime code)
       if (ExecResult.status_code != EVMC_SUCCESS) {
@@ -886,10 +859,10 @@ public:
         }
       }
 
-      evmc::Result CreateResult(EVMC_SUCCESS, RemainingGas, GasRefund,
-                                NewAccPost.code.empty() ? nullptr
-                                                        : NewAccPost.code.data(),
-                                NewAccPost.code.size());
+      evmc::Result CreateResult(
+          EVMC_SUCCESS, RemainingGas, GasRefund,
+          NewAccPost.code.empty() ? nullptr : NewAccPost.code.data(),
+          NewAccPost.code.size());
       CreateResult.create_address = NewAddr;
       return CreateResult;
     } catch (const std::exception &E) {
@@ -910,9 +883,9 @@ private:
   };
 
   HostStateSnapshot captureHostState() const {
-    return HostStateSnapshot{accounts, recorded_logs, recorded_selfdestructs,
-                             CreatedInTx, PendingSelfdestructs,
-                             recorded_account_accesses};
+    return HostStateSnapshot{
+        accounts,    recorded_logs,        recorded_selfdestructs,
+        CreatedInTx, PendingSelfdestructs, recorded_account_accesses};
   }
 
   void restoreHostState(const HostStateSnapshot &Snapshot) {
@@ -1030,8 +1003,7 @@ private:
     intx::uint256 EffectiveGasPrice = GasPrice;
 
     if (Config.MaxPriorityFeePerGas) {
-      intx::uint256 MaxPriority =
-          toUint256BE(*Config.MaxPriorityFeePerGas);
+      intx::uint256 MaxPriority = toUint256BE(*Config.MaxPriorityFeePerGas);
       intx::uint256 MaxFeeMinusBase =
           GasPrice > BaseFee ? GasPrice - BaseFee : intx::uint256{0};
       PriorityFee =
@@ -1039,19 +1011,16 @@ private:
       EffectiveGasPrice = BaseFee + PriorityFee;
     }
 
-    intx::uint256 UpfrontGasCost =
-        intx::uint256(GasLimit) * EffectiveGasPrice;
+    intx::uint256 UpfrontGasCost = intx::uint256(GasLimit) * EffectiveGasPrice;
     intx::uint256 BlobFee = 0;
     if (Config.MaxFeePerBlobGas && tx_context.blob_hashes_count > 0) {
       constexpr uint64_t BlobGasPerBlob = 131072;
       intx::uint256 BlobBaseFee = toUint256BE(tx_context.blob_base_fee);
-      intx::uint256 MaxFeePerBlobGas =
-          toUint256BE(*Config.MaxFeePerBlobGas);
+      intx::uint256 MaxFeePerBlobGas = toUint256BE(*Config.MaxFeePerBlobGas);
       intx::uint256 EffectiveBlobFee =
           BlobBaseFee <= MaxFeePerBlobGas ? BlobBaseFee : MaxFeePerBlobGas;
-      intx::uint256 BlobGasUsed =
-          intx::uint256(tx_context.blob_hashes_count) *
-          intx::uint256(BlobGasPerBlob);
+      intx::uint256 BlobGasUsed = intx::uint256(tx_context.blob_hashes_count) *
+                                  intx::uint256(BlobGasPerBlob);
       BlobFee = BlobGasUsed * EffectiveBlobFee;
     }
 
@@ -1070,12 +1039,10 @@ private:
     return true;
   }
 
-  void settleGasCharges(uint64_t GasCharged,
-                        uint64_t GasLimit,
+  void settleGasCharges(uint64_t GasCharged, uint64_t GasLimit,
                         const TransactionExecutionConfig &Config,
                         const evmc_message &Msg,
-                        TransactionExecutionResult &Result,
-                        bool FeesPrepaid) {
+                        TransactionExecutionResult &Result, bool FeesPrepaid) {
     intx::uint256 GasPrice = toUint256BE(tx_context.tx_gas_price);
     intx::uint256 BaseFee = toUint256BE(tx_context.block_base_fee);
     intx::uint256 PriorityFee =
@@ -1083,8 +1050,7 @@ private:
     intx::uint256 EffectiveGasPrice = GasPrice;
 
     if (Config.MaxPriorityFeePerGas) {
-      intx::uint256 MaxPriority =
-          toUint256BE(*Config.MaxPriorityFeePerGas);
+      intx::uint256 MaxPriority = toUint256BE(*Config.MaxPriorityFeePerGas);
       intx::uint256 MaxFeeMinusBase =
           GasPrice > BaseFee ? GasPrice - BaseFee : intx::uint256{0};
       PriorityFee =
@@ -1110,8 +1076,7 @@ private:
       if (Config.MaxFeePerBlobGas && tx_context.blob_hashes_count > 0) {
         constexpr uint64_t BlobGasPerBlob = 131072;
         intx::uint256 BlobBaseFee = toUint256BE(tx_context.blob_base_fee);
-        intx::uint256 MaxFeePerBlobGas =
-            toUint256BE(*Config.MaxFeePerBlobGas);
+        intx::uint256 MaxFeePerBlobGas = toUint256BE(*Config.MaxFeePerBlobGas);
         intx::uint256 EffectiveBlobFee =
             BlobBaseFee <= MaxFeePerBlobGas ? BlobBaseFee : MaxFeePerBlobGas;
         intx::uint256 BlobGasUsed =
