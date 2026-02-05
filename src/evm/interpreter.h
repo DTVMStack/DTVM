@@ -30,7 +30,7 @@ struct EVMFrame {
   evmc_message Msg = {};
   evmc::Host *Host = nullptr;
   evmc_tx_context MTx = {};
-  uint64_t GasRefundSnapshot = 0;
+  int64_t GasRefundSnapshot = 0;
 
   size_t Sp = 0;
   uint64_t Pc = 0;

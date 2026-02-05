@@ -794,6 +794,7 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   if (GasUsed != 0) {
     Instance->chargeGas(GasUsed);
   }
+  // Track subcall refund (may be negative)
   Instance->addGasRefund(Result.gas_refund);
 
   std::vector<uint8_t> ReturnData(Result.output_data,
@@ -956,6 +957,7 @@ static uint64_t evmHandleCallInternal(zen::runtime::EVMInstance *Instance,
     Instance->chargeGas(GasUsed);
   }
 
+  // Track subcall refund (may be negative)
   Instance->addGasRefund(Result.gas_refund);
 
   // Copy return data to memory if output area is specified.

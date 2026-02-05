@@ -1461,11 +1461,8 @@ void CallHandler::doExecute() {
     return;
   }
 
-  if (Result.gas_refund > 0) {
-    // Track subcall refund at Instance level
-    Context->getInstance()->addGasRefund(Result.gas_refund);
-  }
-
+  // Track subcall refund at Instance level (may be negative)
+  Context->getInstance()->addGasRefund(Result.gas_refund);
   Context->setStatus(EVMC_SUCCESS);
 }
 
