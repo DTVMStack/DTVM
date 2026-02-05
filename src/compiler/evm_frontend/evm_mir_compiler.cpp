@@ -1311,9 +1311,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
         false, OP_or, I64Type, Exponent[0], Exponent[1]);
     MInstruction *Any23 = createInstruction<BinaryInstruction>(
         false, OP_or, I64Type, Exponent[2], Exponent[3]);
-    MInstruction *Any =
-        createInstruction<BinaryInstruction>(false, OP_or, I64Type, Any01,
-                                             Any23);
+    MInstruction *Any = createInstruction<BinaryInstruction>(
+        false, OP_or, I64Type, Any01, Any23);
     MInstruction *IsZero = createInstruction<CmpInstruction>(
         false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Any, Zero);
 
@@ -1327,8 +1326,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
         false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Exponent[1],
         Zero);
 
-    MInstruction *Idx1 = createInstruction<SelectInstruction>(
-        false, I64Type, Has1, One, Zero);
+    MInstruction *Idx1 =
+        createInstruction<SelectInstruction>(false, I64Type, Has1, One, Zero);
     MInstruction *Idx2 = createInstruction<SelectInstruction>(
         false, I64Type, Has2, Const2, Idx1);
     MInstruction *Idx = createInstruction<SelectInstruction>(
@@ -1344,8 +1343,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
     // Avoid clz(0) undefined behavior by forcing at least one bit set.
     MInstruction *SafeLimb =
         createInstruction<BinaryInstruction>(false, OP_or, I64Type, Limb, One);
-    MInstruction *Clz = createInstruction<UnaryInstruction>(false, OP_clz,
-                                                            I64Type, SafeLimb);
+    MInstruction *Clz =
+        createInstruction<UnaryInstruction>(false, OP_clz, I64Type, SafeLimb);
     MInstruction *ClzBytes = createInstruction<BinaryInstruction>(
         false, OP_ushr, I64Type, Clz, Const3);
     MInstruction *SigBytes = createInstruction<BinaryInstruction>(
@@ -1359,10 +1358,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
                                                 TotalBytes);
   };
 
-  const uint64_t GasPerByte =
-      Ctx.getRevision() < EVMC_SPURIOUS_DRAGON
-          ? zen::evm::EXP_BYTE_GAS_PRE_SPURIOUS_DRAGON
-          : zen::evm::EXP_BYTE_GAS;
+  const uint64_t GasPerByte = Ctx.getRevision() < EVMC_SPURIOUS_DRAGON
+                                  ? zen::evm::EXP_BYTE_GAS_PRE_SPURIOUS_DRAGON
+                                  : zen::evm::EXP_BYTE_GAS;
   MInstruction *ExpByteSize = computeExpByteSize();
   MInstruction *GasPerByteConst =
       createIntConstInstruction(I64Type, GasPerByte);
@@ -1385,9 +1383,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
                                           BaseVars[I]->getVarIdx());
     createInstruction<DassignInstruction>(true, &(Ctx.VoidType), Exponent[I],
                                           ExpVars[I]->getVarIdx());
-    createInstruction<DassignInstruction>(
-        true, &(Ctx.VoidType), ResultInitComponents[I],
-        ResultVars[I]->getVarIdx());
+    createInstruction<DassignInstruction>(true, &(Ctx.VoidType),
+                                          ResultInitComponents[I],
+                                          ResultVars[I]->getVarIdx());
   }
 
   Variable *Exp64Var = CurFunc->createVariable(I64Type);
@@ -1430,8 +1428,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
   setInsertBlock(FastBodyBB);
   U256Inst FastBaseCur = loadU256Vars(BaseVars);
   Operand FastBaseOpCur(FastBaseCur, EVMType::UINT256);
-  MInstruction *FastLsb = createInstruction<BinaryInstruction>(
-      false, OP_and, I64Type, Exp64, One);
+  MInstruction *FastLsb =
+      createInstruction<BinaryInstruction>(false, OP_and, I64Type, Exp64, One);
   MInstruction *FastIsOdd = createInstruction<CmpInstruction>(
       false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, FastLsb, Zero);
   createInstruction<BrIfInstruction>(true, Ctx, FastIsOdd, FastOddBB,
@@ -1453,8 +1451,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
   addSuccessor(FastContinueBB);
 
   setInsertBlock(FastContinueBB);
-  MInstruction *FastShifted = createInstruction<BinaryInstruction>(
-      false, OP_ushr, I64Type, Exp64, One);
+  MInstruction *FastShifted =
+      createInstruction<BinaryInstruction>(false, OP_ushr, I64Type, Exp64, One);
   MInstruction *FastShiftZero = createInstruction<CmpInstruction>(
       false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, FastShifted,
       Zero);
@@ -1521,9 +1519,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
   addSuccessor(SlowContinueBB);
 
   setInsertBlock(SlowContinueBB);
-  Operand ExpShiftedOp =
-      handleShift<BinaryOperator::BO_SHR_U>(ShiftOne,
-                                            Operand(ExpCur, EVMType::UINT256));
+  Operand ExpShiftedOp = handleShift<BinaryOperator::BO_SHR_U>(
+      ShiftOne, Operand(ExpCur, EVMType::UINT256));
   U256Inst ExpShifted = extractU256Operand(ExpShiftedOp);
   MInstruction *ShiftAny01 = createInstruction<BinaryInstruction>(
       false, OP_or, I64Type, ExpShifted[0], ExpShifted[1]);
