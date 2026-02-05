@@ -1325,7 +1325,7 @@ void CallHandler::doExecute() {
     }
   }
 
-  if (HasValueArgs && HasValue && Frame->isStaticMode()) {
+  if (OpCode == evmc_opcode::OP_CALL && HasValue && Frame->isStaticMode()) {
     Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
     return;
   }
