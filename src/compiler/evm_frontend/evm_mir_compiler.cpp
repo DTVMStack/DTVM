@@ -1280,10 +1280,275 @@ EVMMirBuilder::handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
                                                          Operand ExponentOp) {
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
-                        const intx::uint256 &>(RuntimeFunctions.GetExp, BaseOp,
-                                               ExponentOp);
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+  MInstruction *One = createIntConstInstruction(I64Type, 1);
+  MInstruction *Const3 = createIntConstInstruction(I64Type, 3);
+  MInstruction *Const2 = createIntConstInstruction(I64Type, 2);
+  MInstruction *Const8 = createIntConstInstruction(I64Type, 8);
+
+  U256Inst Base = extractU256Operand(BaseOp);
+  U256Inst Exponent = extractU256Operand(ExponentOp);
+
+  auto loadU256Vars = [&](const U256Var &Vars) -> U256Inst {
+    U256Inst Result = {};
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      Result[I] = loadVariable(Vars[I]);
+    }
+    return Result;
+  };
+
+  auto storeU256Vars = [&](const U256Inst &Values, const U256Var &Vars) {
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      createInstruction<DassignInstruction>(true, &(Ctx.VoidType), Values[I],
+                                            Vars[I]->getVarIdx());
+    }
+  };
+
+  // Calculate exponent byte size for dynamic gas (EIP-160)
+  auto computeExpByteSize = [&]() -> MInstruction * {
+    MInstruction *Any01 = createInstruction<BinaryInstruction>(
+        false, OP_or, I64Type, Exponent[0], Exponent[1]);
+    MInstruction *Any23 = createInstruction<BinaryInstruction>(
+        false, OP_or, I64Type, Exponent[2], Exponent[3]);
+    MInstruction *Any =
+        createInstruction<BinaryInstruction>(false, OP_or, I64Type, Any01,
+                                             Any23);
+    MInstruction *IsZero = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, Any, Zero);
+
+    MInstruction *Has3 = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Exponent[3],
+        Zero);
+    MInstruction *Has2 = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Exponent[2],
+        Zero);
+    MInstruction *Has1 = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Exponent[1],
+        Zero);
+
+    MInstruction *Idx1 = createInstruction<SelectInstruction>(
+        false, I64Type, Has1, One, Zero);
+    MInstruction *Idx2 = createInstruction<SelectInstruction>(
+        false, I64Type, Has2, Const2, Idx1);
+    MInstruction *Idx = createInstruction<SelectInstruction>(
+        false, I64Type, Has3, Const3, Idx2);
+
+    MInstruction *Limb1 = createInstruction<SelectInstruction>(
+        false, I64Type, Has1, Exponent[1], Exponent[0]);
+    MInstruction *Limb2 = createInstruction<SelectInstruction>(
+        false, I64Type, Has2, Exponent[2], Limb1);
+    MInstruction *Limb = createInstruction<SelectInstruction>(
+        false, I64Type, Has3, Exponent[3], Limb2);
+
+    // Avoid clz(0) undefined behavior by forcing at least one bit set.
+    MInstruction *SafeLimb =
+        createInstruction<BinaryInstruction>(false, OP_or, I64Type, Limb, One);
+    MInstruction *Clz = createInstruction<UnaryInstruction>(false, OP_clz,
+                                                            I64Type, SafeLimb);
+    MInstruction *ClzBytes = createInstruction<BinaryInstruction>(
+        false, OP_ushr, I64Type, Clz, Const3);
+    MInstruction *SigBytes = createInstruction<BinaryInstruction>(
+        false, OP_sub, I64Type, Const8, ClzBytes);
+    MInstruction *IdxBytes = createInstruction<BinaryInstruction>(
+        false, OP_mul, I64Type, Idx, Const8);
+    MInstruction *TotalBytes = createInstruction<BinaryInstruction>(
+        false, OP_add, I64Type, SigBytes, IdxBytes);
+
+    return createInstruction<SelectInstruction>(false, I64Type, IsZero, Zero,
+                                                TotalBytes);
+  };
+
+  const uint64_t GasPerByte =
+      Ctx.getRevision() < EVMC_SPURIOUS_DRAGON
+          ? zen::evm::EXP_BYTE_GAS_PRE_SPURIOUS_DRAGON
+          : zen::evm::EXP_BYTE_GAS;
+  MInstruction *ExpByteSize = computeExpByteSize();
+  MInstruction *GasPerByteConst =
+      createIntConstInstruction(I64Type, GasPerByte);
+  MInstruction *ExpGas = createInstruction<BinaryInstruction>(
+      false, OP_mul, I64Type, ExpByteSize, GasPerByteConst);
+  chargeDynamicGasIR(ExpGas);
+
+  // Initialize loop variables
+  U256Var BaseVars = {};
+  U256Var ExpVars = {};
+  U256Var ResultVars = {};
+  Operand ResultInit = createU256ConstOperand(intx::uint256{1});
+  U256Inst ResultInitComponents = ResultInit.getU256Components();
+
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    BaseVars[I] = CurFunc->createVariable(I64Type);
+    ExpVars[I] = CurFunc->createVariable(I64Type);
+    ResultVars[I] = CurFunc->createVariable(I64Type);
+    createInstruction<DassignInstruction>(true, &(Ctx.VoidType), Base[I],
+                                          BaseVars[I]->getVarIdx());
+    createInstruction<DassignInstruction>(true, &(Ctx.VoidType), Exponent[I],
+                                          ExpVars[I]->getVarIdx());
+    createInstruction<DassignInstruction>(
+        true, &(Ctx.VoidType), ResultInitComponents[I],
+        ResultVars[I]->getVarIdx());
+  }
+
+  Variable *Exp64Var = CurFunc->createVariable(I64Type);
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), Exponent[0],
+                                        Exp64Var->getVarIdx());
+
+  Operand ShiftOne = createU256ConstOperand(intx::uint256{1});
+
+  MInstruction *High01 = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, Exponent[1], Exponent[2]);
+  MInstruction *HighAny = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, High01, Exponent[3]);
+  MInstruction *HasHigh = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, HighAny, Zero);
+
+  MBasicBlock *FastCondBB = createBasicBlock();
+  MBasicBlock *SlowCondBB = createBasicBlock();
+  MBasicBlock *AfterBB = createBasicBlock();
+  createInstruction<BrIfInstruction>(true, Ctx, HasHigh, SlowCondBB,
+                                     FastCondBB);
+  addSuccessor(SlowCondBB);
+  addSuccessor(FastCondBB);
+
+  // Fast path: 64-bit exponent loop when high limbs are zero.
+  MBasicBlock *FastBodyBB = createBasicBlock();
+  MBasicBlock *FastOddBB = createBasicBlock();
+  MBasicBlock *FastEvenBB = createBasicBlock();
+  MBasicBlock *FastContinueBB = createBasicBlock();
+  MBasicBlock *FastBaseBB = createBasicBlock();
+
+  setInsertBlock(FastCondBB);
+  MInstruction *Exp64 = loadVariable(Exp64Var);
+  MInstruction *FastIsNonZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Exp64, Zero);
+  createInstruction<BrIfInstruction>(true, Ctx, FastIsNonZero, FastBodyBB,
+                                     AfterBB);
+  addSuccessor(FastBodyBB);
+  addSuccessor(AfterBB);
+
+  setInsertBlock(FastBodyBB);
+  U256Inst FastBaseCur = loadU256Vars(BaseVars);
+  Operand FastBaseOpCur(FastBaseCur, EVMType::UINT256);
+  MInstruction *FastLsb = createInstruction<BinaryInstruction>(
+      false, OP_and, I64Type, Exp64, One);
+  MInstruction *FastIsOdd = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, FastLsb, Zero);
+  createInstruction<BrIfInstruction>(true, Ctx, FastIsOdd, FastOddBB,
+                                     FastEvenBB);
+  addSuccessor(FastOddBB);
+  addSuccessor(FastEvenBB);
+
+  setInsertBlock(FastOddBB);
+  U256Inst FastResultCur = loadU256Vars(ResultVars);
+  Operand FastResultOp(FastResultCur, EVMType::UINT256);
+  Operand FastMulResOp = handleMul(FastResultOp, FastBaseOpCur);
+  U256Inst FastMulRes = extractU256Operand(FastMulResOp);
+  storeU256Vars(FastMulRes, ResultVars);
+  createInstruction<BrInstruction>(true, Ctx, FastContinueBB);
+  addSuccessor(FastContinueBB);
+
+  setInsertBlock(FastEvenBB);
+  createInstruction<BrInstruction>(true, Ctx, FastContinueBB);
+  addSuccessor(FastContinueBB);
+
+  setInsertBlock(FastContinueBB);
+  MInstruction *FastShifted = createInstruction<BinaryInstruction>(
+      false, OP_ushr, I64Type, Exp64, One);
+  MInstruction *FastShiftZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, FastShifted,
+      Zero);
+  createInstruction<BrIfInstruction>(true, Ctx, FastShiftZero, AfterBB,
+                                     FastBaseBB);
+  addSuccessor(AfterBB);
+  addSuccessor(FastBaseBB);
+
+  setInsertBlock(FastBaseBB);
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), FastShifted,
+                                        Exp64Var->getVarIdx());
+  Operand FastBaseSquaredOp = handleMul(FastBaseOpCur, FastBaseOpCur);
+  U256Inst FastBaseSquared = extractU256Operand(FastBaseSquaredOp);
+  storeU256Vars(FastBaseSquared, BaseVars);
+  createInstruction<BrInstruction>(true, Ctx, FastCondBB);
+  addSuccessor(FastCondBB);
+
+  // Slow path: full 256-bit exponent loop.
+  MBasicBlock *SlowBodyBB = createBasicBlock();
+  MBasicBlock *SlowOddBB = createBasicBlock();
+  MBasicBlock *SlowEvenBB = createBasicBlock();
+  MBasicBlock *SlowContinueBB = createBasicBlock();
+  MBasicBlock *SlowBaseBB = createBasicBlock();
+
+  setInsertBlock(SlowCondBB);
+  U256Inst ExpCond = loadU256Vars(ExpVars);
+  MInstruction *SlowAny01 = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, ExpCond[0], ExpCond[1]);
+  MInstruction *SlowAny23 = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, ExpCond[2], ExpCond[3]);
+  MInstruction *SlowAny = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, SlowAny01, SlowAny23);
+  MInstruction *SlowIsNonZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, SlowAny, Zero);
+  createInstruction<BrIfInstruction>(true, Ctx, SlowIsNonZero, SlowBodyBB,
+                                     AfterBB);
+  addSuccessor(SlowBodyBB);
+  addSuccessor(AfterBB);
+
+  setInsertBlock(SlowBodyBB);
+  U256Inst ExpCur = loadU256Vars(ExpVars);
+  U256Inst BaseCur = loadU256Vars(BaseVars);
+  Operand BaseOpCur(BaseCur, EVMType::UINT256);
+
+  MInstruction *Lsb = createInstruction<BinaryInstruction>(
+      false, OP_and, I64Type, ExpCur[0], One);
+  MInstruction *IsOdd = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, Lsb, Zero);
+  createInstruction<BrIfInstruction>(true, Ctx, IsOdd, SlowOddBB, SlowEvenBB);
+  addSuccessor(SlowOddBB);
+  addSuccessor(SlowEvenBB);
+
+  setInsertBlock(SlowOddBB);
+  U256Inst ResultCur = loadU256Vars(ResultVars);
+  Operand ResultOp(ResultCur, EVMType::UINT256);
+  Operand MulResOp = handleMul(ResultOp, BaseOpCur);
+  U256Inst MulRes = extractU256Operand(MulResOp);
+  storeU256Vars(MulRes, ResultVars);
+  createInstruction<BrInstruction>(true, Ctx, SlowContinueBB);
+  addSuccessor(SlowContinueBB);
+
+  setInsertBlock(SlowEvenBB);
+  createInstruction<BrInstruction>(true, Ctx, SlowContinueBB);
+  addSuccessor(SlowContinueBB);
+
+  setInsertBlock(SlowContinueBB);
+  Operand ExpShiftedOp =
+      handleShift<BinaryOperator::BO_SHR_U>(ShiftOne,
+                                            Operand(ExpCur, EVMType::UINT256));
+  U256Inst ExpShifted = extractU256Operand(ExpShiftedOp);
+  MInstruction *ShiftAny01 = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, ExpShifted[0], ExpShifted[1]);
+  MInstruction *ShiftAny23 = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, ExpShifted[2], ExpShifted[3]);
+  MInstruction *ShiftAny = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, ShiftAny01, ShiftAny23);
+  MInstruction *ShiftIsZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, ShiftAny, Zero);
+  createInstruction<BrIfInstruction>(true, Ctx, ShiftIsZero, AfterBB,
+                                     SlowBaseBB);
+  addSuccessor(AfterBB);
+  addSuccessor(SlowBaseBB);
+
+  setInsertBlock(SlowBaseBB);
+  Operand BaseSquaredOp = handleMul(BaseOpCur, BaseOpCur);
+  U256Inst BaseSquared = extractU256Operand(BaseSquaredOp);
+  storeU256Vars(BaseSquared, BaseVars);
+  storeU256Vars(ExpShifted, ExpVars);
+  createInstruction<BrInstruction>(true, Ctx, SlowCondBB);
+  addSuccessor(SlowCondBB);
+
+  setInsertBlock(AfterBB);
+  U256Inst ResultFinal = loadU256Vars(ResultVars);
+  return Operand(ResultFinal, EVMType::UINT256);
 }
 
 EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQZ(const U256Inst &LHS,
