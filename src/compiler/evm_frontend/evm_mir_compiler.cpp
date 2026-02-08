@@ -426,7 +426,8 @@ void EVMMirBuilder::meterOpcodeRange(uint64_t StartPC,
   uint64_t TotalCost = 0;
   for (uint64_t PC = StartPC; PC < EndPCExclusive; ++PC) {
     uint64_t Cost = 0;
-    if (GasChunkEnd && GasChunkCost && PC < GasChunkSize && GasChunkEnd[PC] > PC) {
+    if (GasChunkEnd && GasChunkCost && PC < GasChunkSize &&
+        GasChunkEnd[PC] > PC) {
       Cost = GasChunkCost[PC];
     } else {
       const uint8_t Opcode = static_cast<uint8_t>(Bytecode[PC]);
