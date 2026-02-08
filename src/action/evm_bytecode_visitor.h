@@ -575,17 +575,17 @@ private:
         }
 
         case OP_JUMPDEST: {
-          // Skip to the last consecutive JUMPDEST if there are multiple
-          uint64_t PrevPC = PC;
+          // Consecutive JUMPDEST opcodes share one body BB in multipass.
+          // Charge all skipped metering points before jumping to the shared
+          // destination at the end of the run.
+          uint64_t RunStartPC = PC;
           while (Ip < IpEnd && static_cast<evmc_opcode>(*Ip) == OP_JUMPDEST) {
             Ip++;
             PC++;
           }
-          if (PC > PrevPC) {
-            // Meter gas for the skipped JUMPDESTs
-            Builder.meterGas(PC - PrevPC);
+          if (PC > RunStartPC) {
+            Builder.meterOpcodeRange(RunStartPC, PC);
           }
-          // Now process the last JUMPDEST (current position after skipping)
           handleEndBlock();
           Builder.handleJumpDest(PC);
           Builder.meterOpcode(Opcode, PC);

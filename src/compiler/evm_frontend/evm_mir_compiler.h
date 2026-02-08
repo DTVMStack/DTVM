@@ -186,6 +186,7 @@ public:
   void finalizeEVMBase();
 
   void meterOpcode(evmc_opcode Opcode, uint64_t PC);
+  void meterOpcodeRange(uint64_t StartPC, uint64_t EndPCExclusive);
   bool isOpcodeDefined(evmc_opcode Opcode) const;
   void meterGas(uint64_t GasCost);
 
@@ -627,9 +628,11 @@ private:
 
   // Jump table for dynamic jumps
   bool HasIndirectJump = false;
+  // Entry blocks for jump targets (may be tiny thunks for shared JUMPDEST
+  // bodies).
   std::map<uint64_t, MBasicBlock *> JumpDestTable;
-  // Consecutive JUMPDEST ranges: {start_pc, end_pc}
-  std::vector<std::pair<uint64_t, uint64_t>> ConsecutiveJumpDests;
+  // Canonical execution blocks for JUMPDEST opcodes in linear decode.
+  std::map<uint64_t, MBasicBlock *> JumpDestBodyTable;
   MBasicBlock *DefaultJumpBB = nullptr; // For invalid jump destinations
 
   std::map<uint64_t, std::vector<MBasicBlock *>> JumpHashTable;

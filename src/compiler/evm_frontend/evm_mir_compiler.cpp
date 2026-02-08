@@ -257,7 +257,6 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
         evmc_get_instruction_names_table(zen::evm::DEFAULT_REVISION);
   }
 
-  createJumpTable();
   ReturnBB = createBasicBlock();
   loadEVMInstanceAttr();
 
@@ -268,6 +267,8 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   initGasRegister();
 #endif
+
+  createJumpTable();
 
 #ifdef ZEN_ENABLE_LINUX_PERF
   CurBB->setSourceOffset(1);
@@ -402,6 +403,44 @@ void EVMMirBuilder::meterOpcode(evmc_opcode Opcode, uint64_t PC) {
   const uint8_t Index = static_cast<uint8_t>(Opcode);
   const auto &Metrics = InstructionMetrics[Index];
   meterGas(static_cast<uint64_t>(Metrics.gas_cost));
+}
+
+void EVMMirBuilder::meterOpcodeRange(uint64_t StartPC,
+                                     uint64_t EndPCExclusive) {
+  if (!Ctx.isGasMeteringEnabled() || StartPC >= EndPCExclusive) {
+    return;
+  }
+
+  const auto *EvmCtx = static_cast<const EVMFrontendContext *>(&Ctx);
+  const Byte *Bytecode = EvmCtx->getBytecode();
+  if (!Bytecode) {
+    return;
+  }
+
+  const uint64_t CodeSize = static_cast<uint64_t>(EvmCtx->getBytecodeSize());
+  if (StartPC >= CodeSize) {
+    return;
+  }
+  EndPCExclusive = std::min(EndPCExclusive, CodeSize);
+
+  uint64_t TotalCost = 0;
+  for (uint64_t PC = StartPC; PC < EndPCExclusive; ++PC) {
+    uint64_t Cost = 0;
+    if (GasChunkEnd && GasChunkCost && PC < GasChunkSize && GasChunkEnd[PC] > PC) {
+      Cost = GasChunkCost[PC];
+    } else {
+      const uint8_t Opcode = static_cast<uint8_t>(Bytecode[PC]);
+      Cost = static_cast<uint64_t>(InstructionMetrics[Opcode].gas_cost);
+    }
+
+    if (UINT64_MAX - TotalCost < Cost) {
+      TotalCost = UINT64_MAX;
+      break;
+    }
+    TotalCost += Cost;
+  }
+
+  meterGas(TotalCost);
 }
 
 bool EVMMirBuilder::isOpcodeDefined(evmc_opcode Opcode) const {
@@ -880,30 +919,51 @@ void EVMMirBuilder::createJumpTable() {
   const Byte *Bytecode = EvmCtx->getBytecode();
   size_t BytecodeSize = EvmCtx->getBytecodeSize();
 
-  uint64_t ConsecutiveStart = 0;
-  bool InConsecutive = false;
+  JumpDestTable.clear();
+  JumpDestBodyTable.clear();
+  JumpHashTable.clear();
+  JumpHashReverse.clear();
+  HashMask = 0;
+
+  MBasicBlock *SavedInsertBB = CurBB;
 
   for (size_t PC = 0; PC < BytecodeSize; ++PC) {
     if (Bytecode[PC] == static_cast<Byte>(evmc_opcode::OP_JUMPDEST)) {
-      if (JumpDestTable.count(PC - 1) > 0) {
-        // Reuse BB for consecutive JUMPDESTs
-        JumpDestTable[PC] = JumpDestTable[PC - 1];
-        // We are in a consecutive sequence, continue tracking
-        if (!InConsecutive) {
-          ConsecutiveStart = PC - 1;
-          InConsecutive = true;
+      const size_t RangeStart = PC;
+      while (PC + 1 < BytecodeSize &&
+             Bytecode[PC + 1] == static_cast<Byte>(evmc_opcode::OP_JUMPDEST)) {
+        ++PC;
+      }
+      const size_t RangeEnd = PC;
+
+      // Share one canonical execution block for the whole run.
+      MBasicBlock *BodyBB = createBasicBlock();
+      BodyBB->setJumpDestBB(true);
+
+      for (size_t DestPC = RangeStart; DestPC <= RangeEnd; ++DestPC) {
+        JumpDestBodyTable[DestPC] = BodyBB;
+      }
+
+      if (!Ctx.isGasMeteringEnabled() || RangeStart == RangeEnd) {
+        for (size_t DestPC = RangeStart; DestPC <= RangeEnd; ++DestPC) {
+          JumpDestTable[DestPC] = BodyBB;
         }
-        continue;
+      } else {
+        // For merged runs, materialize per-target entry thunks that charge the
+        // exact skipped metering before entering the shared body.
+        for (size_t DestPC = RangeStart; DestPC < RangeEnd; ++DestPC) {
+          MBasicBlock *EntryBB = createBasicBlock();
+          EntryBB->setJumpDestBB(true);
+          JumpDestTable[DestPC] = EntryBB;
+
+          setInsertBlock(EntryBB);
+          meterOpcodeRange(DestPC, RangeEnd);
+          createInstruction<BrInstruction>(true, Ctx, BodyBB);
+          addSuccessor(BodyBB);
+        }
+        JumpDestTable[RangeEnd] = BodyBB;
       }
-      MBasicBlock *DestBB = createBasicBlock();
-      DestBB->setJumpDestBB(true);
-      JumpDestTable[PC] = DestBB;
     } else {
-      // End of consecutive sequence if we were in one
-      if (InConsecutive) {
-        ConsecutiveJumpDests.push_back({ConsecutiveStart, PC - 1});
-        InConsecutive = false;
-      }
       if (static_cast<Byte>(evmc_opcode::OP_PUSH0) <= Bytecode[PC] &&
           Bytecode[PC] <= static_cast<Byte>(evmc_opcode::OP_PUSH32)) {
         uint8_t PushSize = static_cast<uint8_t>(Bytecode[PC]) + 1 -
@@ -912,10 +972,8 @@ void EVMMirBuilder::createJumpTable() {
       }
     }
   }
-  // Handle case where consecutive sequence extends to end of bytecode
-  if (InConsecutive) {
-    ConsecutiveJumpDests.push_back({ConsecutiveStart, BytecodeSize - 1});
-  }
+
+  setInsertBlock(SavedInsertBB);
 
   // If the size of JumpDests is greater than MinHashSize, create a hash table
   // which calculates the hash of DestPC and use it as the index to jump
@@ -936,13 +994,6 @@ void EVMMirBuilder::createJumpTable() {
 void EVMMirBuilder::implementConstantJump(uint64_t ConstDest,
                                           MBasicBlock *FailureBB) {
   if (JumpDestTable.count(ConstDest)) {
-    // Check if ConstDest falls within a consecutive JUMPDEST range
-    for (const auto &[StartPC, EndPC] : ConsecutiveJumpDests) {
-      if (ConstDest >= StartPC && ConstDest < EndPC) {
-        meterGas(EndPC - ConstDest);
-        break;
-      }
-    }
     createInstruction<BrInstruction>(true, Ctx, JumpDestTable[ConstDest]);
     addSuccessor(JumpDestTable[ConstDest]);
   } else {
@@ -959,55 +1010,6 @@ void EVMMirBuilder::implementIndirectJump(MInstruction *JumpTarget,
     return;
   }
   HasIndirectJump = true;
-
-  // Check if JumpTarget falls within any consecutive JUMPDEST range
-  // and charge gas for skipped JUMPDESTs
-  if (!ConsecutiveJumpDests.empty() && Ctx.isGasMeteringEnabled()) {
-    MType *I64Type = &Ctx.I64Type;
-    MBasicBlock *FinalBB = createBasicBlock();
-
-    for (const auto &[StartPC, EndPC] : ConsecutiveJumpDests) {
-      MBasicBlock *NextCheckBB = createBasicBlock();
-      MBasicBlock *ChargeGasBB = createBasicBlock();
-
-      // Check if JumpTarget >= StartPC
-      MInstruction *StartPCConst = createIntConstInstruction(I64Type, StartPC);
-      MInstruction *IsGEStart = createInstruction<CmpInstruction>(
-          false, CmpInstruction::Predicate::ICMP_UGE, I64Type, JumpTarget,
-          StartPCConst);
-
-      // Check if JumpTarget < EndPC
-      MInstruction *EndPCConst = createIntConstInstruction(I64Type, EndPC);
-      MInstruction *IsLTEnd = createInstruction<CmpInstruction>(
-          false, CmpInstruction::Predicate::ICMP_ULT, I64Type, JumpTarget,
-          EndPCConst);
-
-      // Combine: JumpTarget >= StartPC && JumpTarget < EndPC
-      MInstruction *InRange = createInstruction<BinaryInstruction>(
-          false, OP_and, I64Type, IsGEStart, IsLTEnd);
-
-      createInstruction<BrIfInstruction>(true, Ctx, InRange, ChargeGasBB,
-                                         NextCheckBB);
-      addSuccessor(ChargeGasBB);
-      addSuccessor(NextCheckBB);
-
-      // ChargeGasBB: charge gas for (EndPC - JumpTarget)
-      setInsertBlock(ChargeGasBB);
-      MInstruction *GasCost = createInstruction<BinaryInstruction>(
-          false, OP_sub, I64Type, EndPCConst, JumpTarget);
-      chargeDynamicGasIR(GasCost);
-      createInstruction<BrInstruction>(true, Ctx, FinalBB);
-      addSuccessor(FinalBB);
-
-      // Continue to next check
-      setInsertBlock(NextCheckBB);
-    }
-
-    // After all checks, branch to FinalBB
-    createInstruction<BrInstruction>(true, Ctx, FinalBB);
-    addSuccessor(FinalBB);
-    setInsertBlock(FinalBB);
-  }
 
   MBasicBlock *TargetBB = getOrCreateIndirectJumpBB();
   createInstruction<DassignInstruction>(true, &(Ctx.VoidType), JumpTarget,
@@ -1166,7 +1168,9 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
 }
 
 void EVMMirBuilder::handleJumpDest(const uint64_t &PC) {
-  MBasicBlock *DestBB = JumpDestTable.at(PC);
+  auto BodyIt = JumpDestBodyTable.find(PC);
+  ZEN_ASSERT(BodyIt != JumpDestBodyTable.end() && "JUMPDEST body not found");
+  MBasicBlock *DestBB = BodyIt->second;
   // Only add successor if the current BB is not ExceptionSetBB,
   bool IsExceptionSetBB = false;
   for (auto &[EC, BB] : CurFunc->getExceptionSetBBs()) {
