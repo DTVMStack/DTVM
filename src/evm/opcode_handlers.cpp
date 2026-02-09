@@ -150,13 +150,6 @@ DEFINE_NOT_TEMPLATE_CALCULATE_GAS(GasLimit, OP_GASLIMIT);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Return, OP_RETURN);
 DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Revert, OP_REVERT);
 
-// Stack operations
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Pop, OP_POP);
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Push, OP_PUSH1);
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Push0, OP_PUSH0);
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Dup, OP_DUP1);
-DEFINE_NOT_TEMPLATE_CALCULATE_GAS(Swap, OP_SWAP1);
-
 // Call operations
 DEFINE_MULTICODE_NOT_TEMPLATE_CALCULATE_GAS(Create) // CREATE CREATE
 DEFINE_MULTICODE_NOT_TEMPLATE_CALCULATE_GAS(
@@ -1103,71 +1096,6 @@ void RevertHandler::doExecute() {
   if (Context->getCurFrame() != nullptr) {
     Context->getCurFrame()->Msg.gas += RemainingGas;
   }
-}
-
-// Stack operations
-void PopHandler::doExecute() {
-  auto *Frame = getFrame();
-  EVM_FRAME_CHECK(Frame);
-  EVM_STACK_CHECK(Frame, 1);
-  Frame->pop();
-}
-
-void PushHandler::doExecute() {
-  auto *Frame = getFrame();
-  EVM_FRAME_CHECK(Frame);
-  auto *Context = getContext();
-  auto *Inst = Context->getInstance();
-  auto *Mod = Inst->getModule();
-  auto *Code = Mod->Code;
-  uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
-  // PUSH1 ~ PUSH32
-  uint32_t NumBytes =
-      OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_PUSH1) + 1;
-  uint8_t ValueBytes[32];
-  memset(ValueBytes, 0, sizeof(ValueBytes));
-  size_t Offset = Frame->Pc + 1;
-  size_t AvailableBytes = Offset < Mod->CodeSize ? (Mod->CodeSize - Offset) : 0;
-  size_t CopyBytes = std::min<uint32_t>(NumBytes, AvailableBytes);
-  if (CopyBytes > 0) {
-    std::memcpy(ValueBytes + (32 - NumBytes), Code + Offset, CopyBytes);
-  }
-  intx::uint256 Val = intx::be::load<intx::uint256>(ValueBytes);
-  EVM_REQUIRE_STACK_SPACE(Frame, 1);
-  Frame->push(Val);
-  Frame->Pc += NumBytes;
-}
-
-void Push0Handler::doExecute() {
-  auto *Frame = getFrame();
-  EVM_FRAME_CHECK(Frame);
-  EVM_REQUIRE_STACK_SPACE(Frame, 1);
-  Frame->push(0);
-}
-
-void DupHandler::doExecute() {
-  auto *Frame = getFrame();
-  EVM_FRAME_CHECK(Frame);
-  uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
-  // DUP1 ~ DUP16
-  uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_DUP1) + 1;
-  EVM_SET_EXCEPTION_UNLESS(Frame->stackHeight() >= N, EVMC_STACK_UNDERFLOW);
-  intx::uint256 V = Frame->peek(N - 1);
-  EVM_REQUIRE_STACK_SPACE(Frame, 1);
-  Frame->push(V);
-}
-
-void SwapHandler::doExecute() {
-  auto *Frame = getFrame();
-  EVM_FRAME_CHECK(Frame);
-  uint8_t OpcodeByte = static_cast<uint8_t>(OpCode);
-  // SWAP1 ~ SWAP16
-  uint32_t N = OpcodeByte - static_cast<uint8_t>(evmc_opcode::OP_SWAP1) + 1;
-  EVM_SET_EXCEPTION_UNLESS(Frame->stackHeight() >= (N + 1),
-                           EVMC_STACK_UNDERFLOW);
-  intx::uint256 &Top = Frame->peek(0);
-  intx::uint256 &Nth = Frame->peek(N);
-  std::swap(Top, Nth);
 }
 
 void CreateHandler::doExecute() {

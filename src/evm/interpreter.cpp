@@ -1288,6 +1288,10 @@ void BaseInterpreter::interpret() {
 
     Frame->Pc++;
   }
+  // When execution falls through (PC >= CodeSize), it's an implicit STOP.
+  // Per EVM semantics, return data should be cleared for implicit STOP,
+  // as only RETURN/REVERT preserve return data.
+  Context.setReturnData(std::vector<uint8_t>());
   Context.freeBackFrame();
   const auto &ReturnData = Context.getReturnData();
   uint64_t GasLeft = Context.getInstance()->getGas();

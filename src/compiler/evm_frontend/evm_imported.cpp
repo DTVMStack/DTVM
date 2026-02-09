@@ -719,6 +719,7 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   static thread_local uint8_t ZeroAddress[32] = {0};
   if (Instance->isStaticMode()) {
     triggerStaticModeViolation(Instance);
+    Instance->setReturnData({});
     return ZeroAddress;
   }
 
