@@ -633,7 +633,11 @@ private:
   std::map<uint64_t, MBasicBlock *> JumpDestTable;
   // Canonical execution blocks for JUMPDEST opcodes in linear decode.
   std::map<uint64_t, MBasicBlock *> JumpDestBodyTable;
-  MBasicBlock *DefaultJumpBB = nullptr; // For invalid jump destinations
+  // Cached skipped-metering for merged consecutive JUMPDEST runs.
+  // Cache it so meterOpcodeRange(S, E) doesn't have to re-scan the same run.
+  std::vector<uint32_t> JumpDestRunLastPC;   // [S] = E, else invalid sentinel
+  std::vector<uint64_t> JumpDestRunSkipCost; // [S] = sum cost for [S, E)
+  MBasicBlock *DefaultJumpBB = nullptr;      // For invalid jump destinations
 
   std::map<uint64_t, std::vector<MBasicBlock *>> JumpHashTable;
   std::map<uint64_t, std::vector<uint64_t>> JumpHashReverse;

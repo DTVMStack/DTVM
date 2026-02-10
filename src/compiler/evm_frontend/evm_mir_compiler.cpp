@@ -9,7 +9,6 @@
 #include "runtime/evm_instance.h"
 #include "utils/hash_utils.h"
 #include <cstring>
-#include <unordered_set>
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
 #include "compiler/llvm-prebuild/Target/X86/X86Subtarget.h"
@@ -21,6 +20,7 @@ namespace COMPILER {
 constexpr uint64_t HashMultiplier = 0x9E3779B97F4A7C15ULL;
 constexpr uint64_t MinHashSize = 5;
 constexpr uint64_t MaxHashSize = 1024;
+constexpr uint32_t InvalidJumpDestRunPC = 0xFFFFFFFFu;
 
 zen::common::EVMU256Type *EVMFrontendContext::getEVMU256Type() {
   static zen::common::EVMU256Type U256Type;
@@ -409,6 +409,17 @@ void EVMMirBuilder::meterOpcodeRange(uint64_t StartPC,
                                      uint64_t EndPCExclusive) {
   if (!Ctx.isGasMeteringEnabled() || StartPC >= EndPCExclusive) {
     return;
+  }
+
+  // Fast path for merged consecutive JUMPDEST runs: the skipped cost for
+  // [StartPC, EndPCExclusive) is precomputed once when building the jump table.
+  if (StartPC < JumpDestRunLastPC.size()) {
+    const uint32_t RunLastPC = JumpDestRunLastPC[static_cast<size_t>(StartPC)];
+    if (RunLastPC != InvalidJumpDestRunPC &&
+        static_cast<uint64_t>(RunLastPC) == EndPCExclusive) {
+      meterGas(JumpDestRunSkipCost[static_cast<size_t>(StartPC)]);
+      return;
+    }
   }
 
   const auto *EvmCtx = static_cast<const EVMFrontendContext *>(&Ctx);
@@ -925,6 +936,13 @@ void EVMMirBuilder::createJumpTable() {
   JumpHashTable.clear();
   JumpHashReverse.clear();
   HashMask = 0;
+  if (Ctx.isGasMeteringEnabled()) {
+    JumpDestRunLastPC.assign(BytecodeSize, InvalidJumpDestRunPC);
+    JumpDestRunSkipCost.assign(BytecodeSize, 0);
+  } else {
+    JumpDestRunLastPC.clear();
+    JumpDestRunSkipCost.clear();
+  }
 
   MBasicBlock *SavedInsertBB = CurBB;
 
@@ -952,13 +970,52 @@ void EVMMirBuilder::createJumpTable() {
       } else {
         // For merged runs, materialize per-target entry thunks that charge the
         // exact skipped metering before entering the shared body.
+        //
+        // NOTE: We may create O(n) thunks for a run of length n. Avoid an
+        // O(n^2) compile-time cost by precomputing the suffix sums of skipped
+        // metering once for the run.
+        const size_t SkipCount = RangeEnd - RangeStart; // exclude RangeEnd
+        const uint64_t JumpDestBaseCost = static_cast<uint64_t>(
+            InstructionMetrics[static_cast<uint8_t>(evmc_opcode::OP_JUMPDEST)]
+                .gas_cost);
+        std::vector<uint64_t> SkipCostByOffset(SkipCount, 0);
+        if (SkipCount > 0) {
+          uint64_t Running = 0;
+          for (size_t Offset = SkipCount; Offset > 0; --Offset) {
+            const size_t Pc = RangeStart + (Offset - 1);
+            uint64_t Cost = 0;
+            if (GasChunkEnd && GasChunkCost && Pc < GasChunkSize &&
+                GasChunkEnd[Pc] > Pc) {
+              Cost = GasChunkCost[Pc];
+            } else {
+              // All bytes in the run are JUMPDEST opcode bytes (PUSH payload is
+              // skipped in the scan above), so the fallback is a constant.
+              Cost = JumpDestBaseCost;
+            }
+
+            if (UINT64_MAX - Running < Cost) {
+              Running = UINT64_MAX;
+            } else {
+              Running += Cost;
+            }
+            SkipCostByOffset[Pc - RangeStart] = Running;
+          }
+        }
+
+        // Cache the total skipped cost at run start so the linear decode path
+        // can reuse it without re-scanning the same consecutive JUMPDEST range.
+        if (RangeStart < JumpDestRunLastPC.size()) {
+          JumpDestRunLastPC[RangeStart] = static_cast<uint32_t>(RangeEnd);
+          JumpDestRunSkipCost[RangeStart] = SkipCostByOffset[0];
+        }
+
         for (size_t DestPC = RangeStart; DestPC < RangeEnd; ++DestPC) {
           MBasicBlock *EntryBB = createBasicBlock();
           EntryBB->setJumpDestBB(true);
           JumpDestTable[DestPC] = EntryBB;
 
           setInsertBlock(EntryBB);
-          meterOpcodeRange(DestPC, RangeEnd);
+          meterGas(SkipCostByOffset[DestPC - RangeStart]);
           createInstruction<BrInstruction>(true, Ctx, BodyBB);
           addSuccessor(BodyBB);
         }
@@ -982,7 +1039,6 @@ void EVMMirBuilder::createJumpTable() {
     uint64_t HashSize =
         std::min(nextPowerOfTwo(JumpDestTable.size()), MaxHashSize);
     HashMask = HashSize - 1;
-    std::vector<std::vector<MBasicBlock *>> HashDests(HashSize);
     for (const auto &[DestPC, DestBB] : JumpDestTable) {
       // HashIndex(a) = (a * HashMultiplier) & (size - 1)
       uint64_t Index = (DestPC * HashMultiplier) & HashMask;
