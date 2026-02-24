@@ -700,15 +700,25 @@ void EVMMirBuilder::createStackCheckBlock(int32_t MinSize, int32_t MaxSize) {
   // Check if StackSize greater than MaxSize
   MInstruction *IsOverflow = createInstruction<CmpInstruction>(
       false, CmpInstruction::ICMP_UGT, &Ctx.I64Type, StackSize, MaxSizeConst);
-  // Handle EVMStackOverflow in exception BB
+
+  // Use an intermediate SyncBB to avoid a critical edge (multi-successor →
+  // multi-predecessor) between this check and the shared StackOverflowBB.
+  // Also sync StackSize to Instance for accurate diagnostics on overflow.
+  MBasicBlock *SyncBB = createBasicBlock();
   MBasicBlock *StackOverflowBB =
       CurFunc->getOrCreateExceptionSetBB(common::ErrorCode::EVMStackOverflow);
-  // Handle EVMStackOverflow in exception BB
   MBasicBlock *FollowBB = createBasicBlock();
-  createInstruction<BrIfInstruction>(true, Ctx, IsOverflow, StackOverflowBB,
-                                     FollowBB);
-  addUniqueSuccessor(StackOverflowBB);
+  createInstruction<BrIfInstruction>(true, Ctx, IsOverflow, SyncBB, FollowBB);
+  addSuccessor(SyncBB);
   addSuccessor(FollowBB);
+
+  setInsertBlock(SyncBB);
+  const int32_t StackSizeOffset =
+      zen::runtime::EVMInstance::getEVMStackSizeOffset();
+  setInstanceElement(&Ctx.I64Type, StackSize, StackSizeOffset);
+  createInstruction<BrInstruction>(true, Ctx, StackOverflowBB);
+  addUniqueSuccessor(StackOverflowBB);
+
   setInsertBlock(FollowBB);
 }
 
