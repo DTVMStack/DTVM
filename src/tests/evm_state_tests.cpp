@@ -16,8 +16,6 @@ using namespace zen::evm_test_utils;
 
 namespace {
 
-constexpr bool DEBUG = true;
-constexpr bool PRINT_FAILURE_DETAILS = true;
 // TODO: RunMode selection logic will be refactored in the future.
 constexpr auto STATE_TEST_RUN_MODE = common::RunMode::InterpMode;
 
@@ -132,9 +130,11 @@ RuntimeConfig buildRuntimeConfig() {
 
   if (STATE_TEST_RUN_MODE == common::RunMode::MultipassMode &&
       !MultipassSupported) {
+#ifndef NDEBUG
     std::cerr << "Multipass requested but not built, falling back to "
                  "interpreter"
               << std::endl;
+#endif // NDEBUG
     Config.Mode = common::RunMode::InterpMode;
   } else {
     Config.Mode = STATE_TEST_RUN_MODE;
@@ -417,16 +417,15 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
 
     auto ExecResult = MockedHost->executeTransaction(ExecConfig);
 
-    if (DEBUG) {
-      std::cout << "ExecutionSucceeded: " << ExecResult.Success << std::endl;
-      std::cout << "ExecutionGasUsed: " << ExecResult.GasUsed << std::endl;
-      std::cout << "ExecutionGasCharged: " << ExecResult.GasCharged
-                << std::endl;
-      std::cout << "ExecutionStatus: " << ExecResult.Status << std::endl;
-      if (!ExecResult.ErrorMessage.empty()) {
-        std::cout << "ExecutionError: " << ExecResult.ErrorMessage << std::endl;
-      }
+#ifndef NDEBUG
+    std::cout << "ExecutionSucceeded: " << ExecResult.Success << std::endl;
+    std::cout << "ExecutionGasUsed: " << ExecResult.GasUsed << std::endl;
+    std::cout << "ExecutionGasCharged: " << ExecResult.GasCharged << std::endl;
+    std::cout << "ExecutionStatus: " << ExecResult.Status << std::endl;
+    if (!ExecResult.ErrorMessage.empty()) {
+      std::cout << "ExecutionError: " << ExecResult.ErrorMessage << std::endl;
     }
+#endif // NDEBUG
 
     if (!ExpectedResult.ExpectedException.empty()) {
       if (ExecResult.Status == EVMC_SUCCESS) {
@@ -500,23 +499,23 @@ const std::vector<StateTestFixture> &getStateFixtures() {
   static std::vector<StateTestFixture> Fixtures = [] {
     std::vector<StateTestFixture> Loaded;
     auto JsonFiles = findJsonFiles(DEFAULT_TEST_DIR);
-    if (DEBUG) {
-      std::cout << "Found " << JsonFiles.size() << " JSON test files in "
-                << DEFAULT_TEST_DIR << std::endl;
-    }
+#ifndef NDEBUG
+    std::cout << "Found " << JsonFiles.size() << " JSON test files in "
+              << DEFAULT_TEST_DIR << std::endl;
+#endif // NDEBUG
     for (const auto &FilePath : JsonFiles) {
       auto FixturesFromFile = parseStateTestFile(FilePath);
       for (auto &Fixture : FixturesFromFile) {
-        if (DEBUG) {
-          std::cout << "Loaded fixture: " << Fixture.TestName << std::endl;
-        }
+#ifndef NDEBUG
+        std::cout << "Loaded fixture: " << Fixture.TestName << std::endl;
+#endif // NDEBUG
         Loaded.push_back(std::move(Fixture));
       }
     }
 
-    if (DEBUG) {
-      std::cout << "Total fixtures loaded: " << Loaded.size() << std::endl;
-    }
+#ifndef NDEBUG
+    std::cout << "Total fixtures loaded: " << Loaded.size() << std::endl;
+#endif // NDEBUG
 
     return Loaded;
   }();
@@ -596,10 +595,10 @@ const std::vector<StateTestCaseParam> &getStateTestParams() {
       }
     }
 
-    if (DEBUG) {
-      std::cout << "Generated " << Cases.size() << " state test cases"
-                << std::endl;
-    }
+#ifndef NDEBUG
+    std::cout << "Generated " << Cases.size() << " state test cases"
+              << std::endl;
+#endif // NDEBUG
 
     return Cases;
   }();
@@ -642,11 +641,6 @@ TEST_P(EVMStateTest, ExecutesStateTest) {
       executeStateTest(*Param.Fixture, Param.ForkName, Param.Expected);
 
   if (!Result.Passed) {
-    if (!PRINT_FAILURE_DETAILS) {
-      EXPECT_TRUE(Result.Passed);
-      return;
-    }
-
     std::string CombinedErrors = "\n";
     CombinedErrors += "=================================================\n";
     CombinedErrors +=
