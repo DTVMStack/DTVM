@@ -1384,9 +1384,6 @@ void CallHandler::doExecute() {
 
   CallGas = NewMsg.gas > 0 ? static_cast<uint64_t>(NewMsg.gas) : 0;
   GasLeft = Result.gas_left > 0 ? static_cast<uint64_t>(Result.gas_left) : 0;
-  if (Result.status_code != EVMC_SUCCESS && Result.status_code != EVMC_REVERT) {
-    GasLeft = 0;
-  }
   uint64_t GasUsed = CallGas > GasLeft ? CallGas - GasLeft : 0;
   if (GasUsed > 0 && !chargeGas(Frame, GasUsed)) {
     Context->setStatus(EVMC_OUT_OF_GAS);
