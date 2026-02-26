@@ -46,7 +46,9 @@ if(ZEN_ENABLE_EVM)
   # Define EVMC_EXPORT for proper symbol visibility
 
   target_compile_options(dtvmapi PRIVATE "-fvisibility=hidden")
-  target_link_options(dtvmapi PRIVATE "-Wl,--exclude-libs,ALL")
+  target_link_options(
+    dtvmapi PRIVATE "-Wl,--exclude-libs,ALL" "-Wl,-Bsymbolic-functions"
+  )
 
   # Link with EVMC library if available
   if(TARGET evmc::evmc)
