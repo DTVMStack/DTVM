@@ -2549,7 +2549,7 @@ EVMMirBuilder::handleExtCodeHash(Operand Address) {
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
-  auto Result = callRuntimeFor<const uint8_t *, const uint8_t *>(
+  auto Result = callRuntimeFor<const intx::uint256 *, const uint8_t *>(
       RuntimeFunctions.GetExtCodeHash, Address);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();

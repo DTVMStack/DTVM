@@ -334,8 +334,8 @@ uint64_t evmGetExtCodeSize(zen::runtime::EVMInstance *Instance,
   return Size;
 }
 
-const uint8_t *evmGetExtCodeHash(zen::runtime::EVMInstance *Instance,
-                                 const uint8_t *Address) {
+const intx::uint256 *evmGetExtCodeHash(zen::runtime::EVMInstance *Instance,
+                                       const uint8_t *Address) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
@@ -347,11 +347,9 @@ const uint8_t *evmGetExtCodeHash(zen::runtime::EVMInstance *Instance,
     Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
   }
 
-  auto &Cache = Instance->getMessageCache();
   evmc::bytes32 Hash = Module->Host->get_code_hash(Addr);
-  Cache.ExtcodeHashes.push_back(Hash);
-
-  return Cache.ExtcodeHashes.back().bytes;
+  intx::uint256 HashValue = intx::be::load<intx::uint256>(Hash);
+  return storeUint256Result(HashValue);
 }
 
 uint64_t evmGetCallDataSize(zen::runtime::EVMInstance *Instance) {

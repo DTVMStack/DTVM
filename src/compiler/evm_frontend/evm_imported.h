@@ -95,7 +95,7 @@ struct RuntimeFunctions {
   VoidWithUInt64UInt64UInt64Fn SetCodeCopy;
   U256Fn GetGasPrice;
   SizeWithBytes32Fn GetExtCodeSize;
-  Bytes32WithBytes32Fn GetExtCodeHash;
+  U256WithBytes32Fn GetExtCodeHash;
   Bytes32WithInt64Fn GetBlockHash;
   Bytes32Fn GetCoinBase;
   U256Fn GetTimestamp;
@@ -185,8 +185,8 @@ void evmSetCodeCopy(zen::runtime::EVMInstance *Instance, uint64_t DestOffset,
 const intx::uint256 *evmGetGasPrice(zen::runtime::EVMInstance *Instance);
 uint64_t evmGetExtCodeSize(zen::runtime::EVMInstance *Instance,
                            const uint8_t *Address);
-const uint8_t *evmGetExtCodeHash(zen::runtime::EVMInstance *Instance,
-                                 const uint8_t *Address);
+const intx::uint256 *evmGetExtCodeHash(zen::runtime::EVMInstance *Instance,
+                                       const uint8_t *Address);
 const uint8_t *evmGetBlockHash(zen::runtime::EVMInstance *Instance,
                                int64_t BlockNumber);
 const uint8_t *evmGetCoinBase(zen::runtime::EVMInstance *Instance);
