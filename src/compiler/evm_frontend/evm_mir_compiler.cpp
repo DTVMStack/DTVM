@@ -659,6 +659,16 @@ void EVMMirBuilder::syncGasToMemoryFull() {
       VoidPtrType, zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
   MInstruction *MsgPtrInt = createInstruction<ConversionInstruction>(
       false, OP_ptrtoint, I64Type, MsgPtr);
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+  MInstruction *HasMsg = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, MsgPtrInt, Zero);
+  MBasicBlock *MsgStoreBB = createBasicBlock();
+  MBasicBlock *MsgSkipBB = createBasicBlock();
+  createInstruction<BrIfInstruction>(true, Ctx, HasMsg, MsgStoreBB, MsgSkipBB);
+  addSuccessor(MsgStoreBB);
+  addSuccessor(MsgSkipBB);
+
+  setInsertBlock(MsgStoreBB);
   MInstruction *MsgGasOffsetValue = createIntConstInstruction(
       I64Type, zen::runtime::EVMInstance::getMessageGasOffset());
   MInstruction *MsgGasAddrInt = createInstruction<BinaryInstruction>(
@@ -666,6 +676,9 @@ void EVMMirBuilder::syncGasToMemoryFull() {
   MInstruction *MsgGasPtr = createInstruction<ConversionInstruction>(
       false, OP_inttoptr, I64PtrType, MsgGasAddrInt);
   createInstruction<StoreInstruction>(true, &Ctx.VoidType, GasValue, MsgGasPtr);
+  createInstruction<BrInstruction>(true, Ctx, MsgSkipBB);
+  addSuccessor(MsgSkipBB);
+  setInsertBlock(MsgSkipBB);
 }
 
 void EVMMirBuilder::reloadGasFromMemory() {
@@ -1535,7 +1548,13 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
       createIntConstInstruction(I64Type, GasPerByte);
   MInstruction *ExpGas = createInstruction<BinaryInstruction>(
       false, OP_mul, I64Type, ExpByteSize, GasPerByteConst);
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  syncGasToMemory();
+#endif
   chargeDynamicGasIR(ExpGas);
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  reloadGasFromMemory();
+#endif
 
   // Initialize loop variables
   U256Var BaseVars = {};
@@ -3054,6 +3073,9 @@ void EVMMirBuilder::handleReturn(Operand MemOffsetComponents,
 #endif
   callRuntimeFor<void, uint64_t, uint64_t>(
       RuntimeFunctions.SetReturn, MemOffsetComponents, LengthComponents);
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  reloadGasFromMemory();
+#endif
 
   createInstruction<BrInstruction>(true, Ctx, ReturnBB);
   addSuccessor(ReturnBB);
@@ -3129,6 +3151,9 @@ void EVMMirBuilder::handleRevert(Operand OffsetOp, Operand SizeOp) {
 #endif
   callRuntimeFor<void, uint64_t, uint64_t>(RuntimeFunctions.SetRevert, OffsetOp,
                                            SizeOp);
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  reloadGasFromMemory();
+#endif
 
   createInstruction<BrInstruction>(true, Ctx, ReturnBB);
   addSuccessor(ReturnBB);
@@ -3140,14 +3165,14 @@ void EVMMirBuilder::handleRevert(Operand OffsetOp, Operand SizeOp) {
 
   MBasicBlock *PostRevertBB = createBasicBlock();
   setInsertBlock(PostRevertBB);
-#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
-  reloadGasFromMemory();
-#endif
 }
 
 void EVMMirBuilder::handleInvalid() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   callRuntimeFor(RuntimeFunctions.HandleInvalid);
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  reloadGasFromMemory();
+#endif
 
   createInstruction<BrInstruction>(true, Ctx, ReturnBB);
   addSuccessor(ReturnBB);
@@ -3161,6 +3186,9 @@ void EVMMirBuilder::handleInvalid() {
 void EVMMirBuilder::handleUndefined() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
   callRuntimeFor(RuntimeFunctions.HandleUndefined);
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  reloadGasFromMemory();
+#endif
 
   createInstruction<BrInstruction>(true, Ctx, ReturnBB);
   addSuccessor(ReturnBB);
@@ -3207,8 +3235,14 @@ void EVMMirBuilder::handleTStore(Operand Index, Operand ValueComponents) {
 }
 void EVMMirBuilder::handleSelfDestruct(Operand Beneficiary) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  syncGasToMemoryFull();
+#endif
   callRuntimeFor<void, const uint8_t *>(RuntimeFunctions.HandleSelfDestruct,
                                         Beneficiary);
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  reloadGasFromMemory();
+#endif
 
   createInstruction<BrInstruction>(true, Ctx, ReturnBB);
   addSuccessor(ReturnBB);
@@ -3220,9 +3254,6 @@ void EVMMirBuilder::handleSelfDestruct(Operand Beneficiary) {
 
   MBasicBlock *PostSelfDestructBB = createBasicBlock();
   setInsertBlock(PostSelfDestructBB);
-#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
-  reloadGasFromMemory();
-#endif
 }
 
 typename EVMMirBuilder::Operand
