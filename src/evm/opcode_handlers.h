@@ -45,8 +45,8 @@
 namespace zen::evm {
 class EVMResource {
 public:
-  static EVMFrame *CurrentFrame;
-  static InterpreterExecContext *CurrentContext;
+  static thread_local EVMFrame *CurrentFrame;
+  static thread_local InterpreterExecContext *CurrentContext;
 
   static void setExecutionContext(EVMFrame *Frame,
                                   InterpreterExecContext *Context) {

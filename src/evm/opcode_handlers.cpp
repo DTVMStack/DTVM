@@ -10,9 +10,9 @@
 #include "host/evm/crypto.h"
 #include "runtime/evm_instance.h"
 
-zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
-zen::evm::InterpreterExecContext *zen::evm::EVMResource::CurrentContext =
-    nullptr;
+thread_local zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
+thread_local zen::evm::InterpreterExecContext
+    *zen::evm::EVMResource::CurrentContext = nullptr;
 
 using namespace zen;
 using namespace zen::evm;
