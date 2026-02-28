@@ -211,7 +211,7 @@ DEFINE_BINARY_OP(Sgt, intx::slt(B, A));
 #define DEFINE_MULTIOPCODE_UNIMPLEMENT_HANDLER(OpName)                         \
   class OpName##Handler : public EVMOpcodeHandlerBase<OpName##Handler> {       \
   public:                                                                      \
-    inline static evmc_opcode OpCode = OP_INVALID;                             \
+    inline static thread_local evmc_opcode OpCode = OP_INVALID;                \
     static EVMFrame *getFrame() { return EVMResource::getCurFrame(); }         \
     static InterpreterExecContext *getContext() {                              \
       return EVMResource::getInterpreterExecContext();                         \
