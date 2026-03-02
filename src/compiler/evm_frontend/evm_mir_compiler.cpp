@@ -3152,9 +3152,6 @@ void EVMMirBuilder::handleRevert(Operand OffsetOp, Operand SizeOp) {
 
   MBasicBlock *PostRevertBB = createBasicBlock();
   setInsertBlock(PostRevertBB);
-#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
-  reloadGasFromMemory();
-#endif
 }
 
 void EVMMirBuilder::handleInvalid() {
