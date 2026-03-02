@@ -794,13 +794,10 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   // Track subcall refund (may be negative)
   Instance->addGasRefund(Result.gas_refund);
 
-  if (Result.status_code == EVMC_REVERT) {
-    std::vector<uint8_t> ReturnData(Result.output_data,
-                                    Result.output_data + Result.output_size);
-    Instance->setReturnData(std::move(ReturnData));
-  } else {
-    Instance->setReturnData({});
-  }
+  std::vector<uint8_t> ReturnData(Result.output_data,
+                                  Result.output_data + Result.output_size);
+  Instance->setReturnData(std::move(ReturnData));
+
   if (Result.status_code == EVMC_SUCCESS) {
     static thread_local uint8_t PaddedAddress[32] = {0};
     memcpy(PaddedAddress + 12, Result.create_address.bytes, 20);
