@@ -329,6 +329,8 @@ public:
 
 #ifdef ZEN_ENABLE_EVM
   void callEVMMain(EVMInstance &Inst, evmc_message &Msg, evmc::Result &Result);
+  void callEVMMainOnPhysStack(EVMInstance &Inst, evmc_message &Msg,
+                              evmc::Result &Result);
   evmc::Host *getEVMHost() const { return EVMHost; }
   void setEVMHost(evmc::Host *Host) { EVMHost = Host; }
 #endif // ZEN_ENABLE_EVM

@@ -674,11 +674,17 @@ void Runtime::callEVMInInterpMode(EVMInstance &Inst, evmc_message &Msg,
   Result = std::move(const_cast<evmc::Result &>(Ctx.getExeResult()));
 }
 
-void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
-                          evmc::Result &Result) {
-#ifdef ZEN_ENABLE_LINUX_PERF
-  auto Timer = Stats.startRecord(utils::StatisticPhase::Execution);
-#endif
+#ifdef ZEN_ENABLE_VIRTUAL_STACK
+static void callEVMFuncFromVirtualStack(VirtualStackInfo *StackInfo) {
+  auto *Inst = static_cast<EVMInstance *>(StackInfo->SavedPtr1);
+  auto *Msg = static_cast<evmc_message *>(StackInfo->SavedPtr2);
+  auto *Result = static_cast<evmc::Result *>(StackInfo->SavedPtr3);
+  Inst->getRuntime()->callEVMMainOnPhysStack(*Inst, *Msg, *Result);
+}
+#endif // ZEN_ENABLE_VIRTUAL_STACK
+
+void Runtime::callEVMMainOnPhysStack(EVMInstance &Inst, evmc_message &Msg,
+                                     evmc::Result &Result) {
   Inst.clearMessageCache();
   evmc_message MsgWithCode = Msg;
   MsgWithCode.code = reinterpret_cast<uint8_t *>(Inst.getModule()->Code);
@@ -695,6 +701,28 @@ void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
 #endif
   }
   Result.gas_left = Inst.getGas();
+}
+
+void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
+                          evmc::Result &Result) {
+#ifdef ZEN_ENABLE_LINUX_PERF
+  auto Timer = Stats.startRecord(utils::StatisticPhase::Execution);
+#endif
+
+#ifdef ZEN_ENABLE_VIRTUAL_STACK
+  if (Msg.depth == 0) {
+    VirtualStackInfo StackInfo;
+    StackInfo.SavedPtr1 = &Inst;
+    StackInfo.SavedPtr2 = &Msg;
+    StackInfo.SavedPtr3 = &Result;
+    StackInfo.runInVirtualStack(&callEVMFuncFromVirtualStack);
+  } else {
+    callEVMMainOnPhysStack(Inst, Msg, Result);
+  }
+#else
+  callEVMMainOnPhysStack(Inst, Msg, Result);
+#endif // ZEN_ENABLE_VIRTUAL_STACK
+
 #ifdef ZEN_ENABLE_LINUX_PERF
   Stats.stopRecord(Timer);
 #endif

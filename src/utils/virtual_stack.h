@@ -12,7 +12,11 @@
 
 namespace zen::runtime {
 class Instance;
-}
+#ifdef ZEN_ENABLE_EVM
+class EVMInstance;
+#endif // ZEN_ENABLE_EVM
+} // namespace zen::runtime
+
 namespace zen::utils {
 using namespace common;
 using namespace runtime;
@@ -71,15 +75,27 @@ struct VirtualStackInfo {
   // pointed to the offset in AllInfo[16:24)
   uint64_t *OldRspPtr = nullptr;
 
-  // arguments backed up to call in virtual stack
+  // arguments backed up to call in virtual stack (WASM)
   Instance *SavedInst = nullptr;
   uint32_t SavedFuncIdx;
   const std::vector<TypedValue> *SavedArgs = nullptr;
   std::vector<TypedValue> *SavedResults = nullptr;
+
+#ifdef ZEN_ENABLE_EVM
+  // Saved pointers for EVM virtual stack usage.
+  // Using void* to avoid pulling EVM-specific headers (evmc.h, evm_instance.h)
+  // into this utility header.
+  void *SavedPtr1 = nullptr; // EVMInstance*    (the EVM execution instance)
+  void *SavedPtr2 = nullptr; // evmc_message*   (the EVM call message)
+  void *SavedPtr3 =
+      nullptr; // evmc::Result*   (output slot for execution result)
+#endif         // ZEN_ENABLE_EVM
+
   jmp_buf JmpBufBefore;
   // func to run in virtual stack
   InVirtualStackFuncPtr FuncInStack;
 
+  // constructor for WASM
   VirtualStackInfo(Instance *Inst, uint32_t FuncIdx,
                    const std::vector<TypedValue> *Args,
                    std::vector<TypedValue> *Results)
@@ -87,6 +103,11 @@ struct VirtualStackInfo {
         SavedResults(Results) {
     allocate();
   }
+
+#ifdef ZEN_ENABLE_EVM
+  // constructor for EVM
+  VirtualStackInfo() { allocate(); }
+#endif // ZEN_ENABLE_EVM
 
   void allocate();
   void deallocate();
