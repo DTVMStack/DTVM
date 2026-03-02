@@ -246,6 +246,37 @@ jobs:
 
           bash .ci/run_test_suite.sh
 
+  build_test_release_evmone_statetests_on_x86:
+    name: Test DTVM-EVM multipass and interpreter using evmone statetests in release mode on x86-64
+    runs-on: ubuntu-latest
+    container:
+      image: dtvmdev1/dtvm-dev-x64:main
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: "true"
+      - name: Code Format Check
+        run: |
+          ./tools/format.sh check
+      - name: Build and Test
+        run: |
+          echo "current home is $HOME"
+          export LLVM_SYS_150_PREFIX=/opt/llvm15
+          export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
+          export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
+          export CMAKE_BUILD_TARGET=Release
+          export ENABLE_ASAN=true
+          export RUN_MODE=multipass
+          export ENABLE_LAZY=false
+          export ENABLE_MULTITHREAD=true
+          export ENABLE_GAS_METER=true
+          export CPU_EXCEPTION_TYPE='cpu'
+          export TestSuite=evmonestatetestsuite
+          export EVMONE_STATETEST_FILTER=fork_Cancun
+
+          bash .ci/run_test_suite.sh
+
   build_test_release_multipass_evmjitfallback_on_x86_ctest:
     name: Test DTVM-EVM JIT fallback in release mode with ctest on x86-64
     runs-on: ubuntu-latest

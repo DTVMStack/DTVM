@@ -73,6 +73,9 @@ case $TestSuite in
     "evmonetestsuite")
         CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON"
         ;;
+    "evmonestatetestsuite")
+        CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON"
+        ;;
     "evmfallbacksuite")
         CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_SPEC_TEST=ON -DZEN_ENABLE_ASSEMBLYSCRIPT_TEST=ON -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON -DZEN_ENABLE_JIT_FALLBACK_TEST=ON"
         ;;
@@ -96,6 +99,10 @@ if [[ $RUN_MODE == "interpreter" ]]; then
 fi
 
 if [[ $TestSuite == "evmonetestsuite" ]]; then
+    STACK_TYPES=("-DZEN_ENABLE_VIRTUAL_STACK=ON")
+fi
+
+if [[ $TestSuite == "evmonestatetestsuite" ]]; then
     STACK_TYPES=("-DZEN_ENABLE_VIRTUAL_STACK=ON")
 fi
 
@@ -163,6 +170,42 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             cd evmone
             ./run_unittests.sh ../tests/evmone_unittests/EVMOneMultipassUnitTestsRunList.txt "./libdtvmapi.so,mode=multipass"
             ./run_unittests.sh ../tests/evmone_unittests/EVMOneInterpreterUnitTestsRunList.txt "./libdtvmapi.so,mode=interpreter"
+            ;;
+        "evmonestatetestsuite")
+            EVMONE_BRANCH=${EVMONE_BRANCH:-for_test}
+            EVMONE_DIR=${EVMONE_DIR:-evmone}
+            EVM_SPEC_TESTS_ROOT=${EVM_SPEC_TESTS_ROOT:-"$PWD/tests/evm_spec_test"}
+            EVM_SPEC_FIXTURES_SUFFIX=${EVM_SPEC_FIXTURES_SUFFIX:-develop}
+            EVM_SPEC_FIXTURES_ARCHIVE="/tmp/fixtures_${EVM_SPEC_FIXTURES_SUFFIX}.tar.gz"
+            EVM_SPEC_FIXTURES_URL=${EVM_SPEC_FIXTURES_URL:-"https://github.com/ethereum/execution-spec-tests/releases/latest/download/fixtures_${EVM_SPEC_FIXTURES_SUFFIX}.tar.gz"}
+            EVMONE_STATETEST_FILTER=${EVMONE_STATETEST_FILTER:-fork_Cancun}
+
+            if [ ! -d "$EVMONE_DIR" ]; then
+                git clone --depth 1 --recurse-submodules -b "$EVMONE_BRANCH" https://github.com/DTVMStack/evmone.git "$EVMONE_DIR"
+            fi
+
+            cp build/lib/* "$EVMONE_DIR"
+
+            mkdir -p "$EVM_SPEC_TESTS_ROOT"
+            rm -rf "$EVM_SPEC_TESTS_ROOT/fixtures"
+            curl -L --retry 3 -C - "$EVM_SPEC_FIXTURES_URL" -o "$EVM_SPEC_FIXTURES_ARCHIVE"
+            tar -xzf "$EVM_SPEC_FIXTURES_ARCHIVE" -C "$EVM_SPEC_TESTS_ROOT"
+
+            EVMONE_STATETEST_PATH="$EVM_SPEC_TESTS_ROOT/fixtures/state_tests"
+            if [ ! -d "$EVMONE_STATETEST_PATH" ]; then
+                echo "State test fixtures not found: $EVMONE_STATETEST_PATH"
+                exit 1
+            fi
+
+            cd "$EVMONE_DIR"
+            cmake -S . -B build -DEVMONE_TESTING=ON
+            cmake --build build -j16
+
+            for EVMONE_MODE in multipass interpreter; do
+                EVMONE_VM_OPTION="./libdtvmapi.so,mode=${EVMONE_MODE},enable_gas_metering=true"
+                ./build/bin/evmone-statetest "$EVMONE_STATETEST_PATH" --vm "$EVMONE_VM_OPTION" -k "$EVMONE_STATETEST_FILTER"
+            done
+            cd ..
             ;;
         "evmfallbacksuite")
             python3 tools/run_evm_tests.py -r build/dtvm $EXTRA_EXE_OPTIONS
