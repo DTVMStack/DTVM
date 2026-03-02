@@ -175,7 +175,6 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             EVMONE_REPO=${EVMONE_REPO:-https://github.com/DTVMStack/evmone.git}
             EVMONE_BRANCH=${EVMONE_BRANCH:-for_test}
             EVMONE_DIR=${EVMONE_DIR:-evmone-statetest}
-            EVMONE_STATETEST_PATCH=${EVMONE_STATETEST_PATCH:-"$PWD/.ci/patches/evmone-statetest-vm-config.patch"}
             EVM_SPEC_TESTS_ROOT=${EVM_SPEC_TESTS_ROOT:-"$PWD/tests/evm_spec_test"}
             EVM_SPEC_FIXTURES_SUFFIX=${EVM_SPEC_FIXTURES_SUFFIX:-develop}
             EVM_SPEC_FIXTURES_ARCHIVE="/tmp/fixtures_${EVM_SPEC_FIXTURES_SUFFIX}.tar.gz"
@@ -184,12 +183,6 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
 
             if [ ! -d "$EVMONE_DIR" ]; then
                 git clone --depth 1 --recurse-submodules -b "$EVMONE_BRANCH" "$EVMONE_REPO" "$EVMONE_DIR"
-            fi
-
-            if [ -f "$EVMONE_STATETEST_PATCH" ]; then
-                if ! grep -q "Path to EVMC VM module with optional configuration options, or VM name filter." "$EVMONE_DIR/test/statetest/statetest.cpp"; then
-                    git -C "$EVMONE_DIR" apply "$EVMONE_STATETEST_PATCH"
-                fi
             fi
 
             cp build/lib/* "$EVMONE_DIR"
@@ -210,8 +203,8 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             cmake --build build -j16
 
             for EVMONE_MODE in multipass interpreter; do
-                EVMONE_VM_OPTION="./libdtvmapi.so,mode=${EVMONE_MODE},enable_gas_metering=true"
-                ./build/bin/evmone-statetest "$EVMONE_STATETEST_PATH" --vm "$EVMONE_VM_OPTION" -k "$EVMONE_STATETEST_FILTER"
+                DTVM_EVM_MODE="$EVMONE_MODE" DTVM_EVM_ENABLE_GAS_METERING=true \
+                    ./build/bin/evmone-statetest "$EVMONE_STATETEST_PATH" --vm external_vm -k "$EVMONE_STATETEST_FILTER"
             done
             cd ..
             ;;
