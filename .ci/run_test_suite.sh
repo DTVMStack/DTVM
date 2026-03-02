@@ -172,8 +172,10 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             ./run_unittests.sh ../tests/evmone_unittests/EVMOneInterpreterUnitTestsRunList.txt "./libdtvmapi.so,mode=interpreter"
             ;;
         "evmonestatetestsuite")
+            EVMONE_REPO=${EVMONE_REPO:-https://github.com/DTVMStack/evmone.git}
             EVMONE_BRANCH=${EVMONE_BRANCH:-for_test}
-            EVMONE_DIR=${EVMONE_DIR:-evmone}
+            EVMONE_DIR=${EVMONE_DIR:-evmone-statetest}
+            EVMONE_STATETEST_PATCH=${EVMONE_STATETEST_PATCH:-"$PWD/.ci/patches/evmone-statetest-vm-config.patch"}
             EVM_SPEC_TESTS_ROOT=${EVM_SPEC_TESTS_ROOT:-"$PWD/tests/evm_spec_test"}
             EVM_SPEC_FIXTURES_SUFFIX=${EVM_SPEC_FIXTURES_SUFFIX:-develop}
             EVM_SPEC_FIXTURES_ARCHIVE="/tmp/fixtures_${EVM_SPEC_FIXTURES_SUFFIX}.tar.gz"
@@ -181,7 +183,13 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             EVMONE_STATETEST_FILTER=${EVMONE_STATETEST_FILTER:-fork_Cancun}
 
             if [ ! -d "$EVMONE_DIR" ]; then
-                git clone --depth 1 --recurse-submodules -b "$EVMONE_BRANCH" https://github.com/DTVMStack/evmone.git "$EVMONE_DIR"
+                git clone --depth 1 --recurse-submodules -b "$EVMONE_BRANCH" "$EVMONE_REPO" "$EVMONE_DIR"
+            fi
+
+            if [ -f "$EVMONE_STATETEST_PATCH" ]; then
+                if ! grep -q "Path to EVMC VM module with optional configuration options, or VM name filter." "$EVMONE_DIR/test/statetest/statetest.cpp"; then
+                    git -C "$EVMONE_DIR" apply "$EVMONE_STATETEST_PATCH"
+                fi
             fi
 
             cp build/lib/* "$EVMONE_DIR"
