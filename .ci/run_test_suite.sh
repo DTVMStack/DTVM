@@ -175,6 +175,8 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             EVMONE_REPO=${EVMONE_REPO:-https://github.com/DTVMStack/evmone.git}
             EVMONE_BRANCH=${EVMONE_BRANCH:-for_test}
             EVMONE_DIR=${EVMONE_DIR:-evmone-statetest}
+            EVMONE_ABS_DIR="$PWD/$EVMONE_DIR"
+            DTVM_BUILD_LIB_DIR="$PWD/build/lib"
             EVM_SPEC_TESTS_ROOT=${EVM_SPEC_TESTS_ROOT:-"$PWD/tests/evm_spec_test"}
             EVM_SPEC_FIXTURES_SUFFIX=${EVM_SPEC_FIXTURES_SUFFIX:-develop}
             EVM_SPEC_FIXTURES_ARCHIVE="/tmp/fixtures_${EVM_SPEC_FIXTURES_SUFFIX}.tar.gz"
@@ -186,6 +188,23 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             fi
 
             cp build/lib/* "$EVMONE_DIR"
+            if [ ! -f "$EVMONE_DIR/libdtvmapi.so" ]; then
+                DTVM_SO_VERSIONED=$(find "$EVMONE_DIR" -maxdepth 1 -type f -name "libdtvmapi.so.*" | head -n1)
+                if [ -n "$DTVM_SO_VERSIONED" ]; then
+                    ln -sf "$(basename "$DTVM_SO_VERSIONED")" "$EVMONE_DIR/libdtvmapi.so"
+                fi
+            fi
+            if [ ! -f "$EVMONE_DIR/libdtvmapi.so" ]; then
+                echo "libdtvmapi.so not found in $EVMONE_DIR"
+                ls -la "$EVMONE_DIR" | sed -n '1,120p'
+                exit 1
+            fi
+
+            export LD_LIBRARY_PATH="$EVMONE_ABS_DIR:$DTVM_BUILD_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            ASAN_LIB_PATH="${ASAN_LIB_PATH:-$(find /usr/lib /usr/lib64 /lib /lib64 -name 'libasan.so.*' 2>/dev/null | head -n1)}"
+            if [ -n "$ASAN_LIB_PATH" ]; then
+                export LD_PRELOAD="${ASAN_LIB_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
+            fi
 
             mkdir -p "$EVM_SPEC_TESTS_ROOT"
             rm -rf "$EVM_SPEC_TESTS_ROOT/fixtures"
@@ -201,6 +220,21 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             cd "$EVMONE_DIR"
             cmake -S . -B build -DEVMONE_TESTING=ON
             cmake --build build -j16
+
+            EVMONE_PROBE_TEST=$(find "$EVMONE_STATETEST_PATH" -type f -name "*.json" | head -n1)
+            if [ -z "$EVMONE_PROBE_TEST" ]; then
+                echo "No json test file found in $EVMONE_STATETEST_PATH"
+                exit 1
+            fi
+            if ! ./build/bin/evmone-statetest "$EVMONE_PROBE_TEST" --gtest_list_tests --vm external_vm >/tmp/evmone_external_vm_probe.log 2>&1; then
+                echo "external_vm probe failed. Diagnose output:"
+                cat /tmp/evmone_external_vm_probe.log
+                if [ -f "./libdtvmapi.so" ]; then
+                    echo "ldd on ./libdtvmapi.so:"
+                    ldd ./libdtvmapi.so || true
+                fi
+                exit 1
+            fi
 
             for EVMONE_MODE in multipass interpreter; do
                 DTVM_EVM_MODE="$EVMONE_MODE" DTVM_EVM_ENABLE_GAS_METERING=true \
