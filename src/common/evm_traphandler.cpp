@@ -34,6 +34,23 @@ void EVMCallThreadState::setJITTraces() {
 }
 
 bool initEVMPlatformTrapHandler() {
+#ifdef ZEN_ENABLE_VIRTUAL_STACK
+  // SA_ONSTACK requires an alternate signal stack; configure it so signal
+  // handlers can run safely when the virtual stack is exhausted.
+  static constexpr size_t SIG_STACK_SIZE = 64 * 1024; // 64 KB
+  static thread_local std::unique_ptr<uint8_t[]> SigStackMem;
+  if (!SigStackMem) {
+    SigStackMem = std::make_unique<uint8_t[]>(SIG_STACK_SIZE);
+    stack_t SS{};
+    SS.ss_sp = SigStackMem.get();
+    SS.ss_size = SIG_STACK_SIZE;
+    SS.ss_flags = 0;
+    if (sigaltstack(&SS, nullptr) != 0) {
+      ZEN_LOG_ERROR("failed to set sigaltstack\n");
+    }
+  }
+#endif // ZEN_ENABLE_VIRTUAL_STACK
+
   static struct sigaction PrevSigill;
   static struct sigaction PrevSigfpe;
   static struct sigaction PrevSigsegv;
