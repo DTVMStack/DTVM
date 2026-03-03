@@ -153,7 +153,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                     SKIP_LIST="-*test_blob_gas_subtraction*"
                     GTEST_FILTER=$SKIP_LIST SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose
                 else # evm multipass
-                    SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose -E evmStateTests
+                    SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose
                 fi
             done
             cd ..
