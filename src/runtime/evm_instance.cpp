@@ -28,12 +28,16 @@ bool calcRequiredMemorySize(uint64_t Offset, uint64_t Size,
 
 void initMemoryFrame(std::unique_ptr<uint8_t[]> &Memory, uint8_t *&Base,
                      uint64_t &Size) {
+  Base = Memory.get();
+  Size = 0;
+}
+
+void ensureMemoryBuffer(std::unique_ptr<uint8_t[]> &Memory, uint8_t *&Base) {
   if (!Memory) {
-    // Allocate raw buffer; expansion will zero the used range.
+    // Lazily allocate memory backing store on first real expansion.
     Memory.reset(new uint8_t[zen::evm::MAX_REQUIRED_MEMORY_SIZE]);
   }
   Base = Memory.get();
-  Size = 0;
 }
 } // namespace
 
@@ -165,7 +169,7 @@ void EVMInstance::expandMemory(uint64_t RequiredSize) {
   chargeGas(ExpansionCost);
   if (NewSize > MemorySize) {
     if (!MemoryBase) {
-      initMemoryFrame(Memory, MemoryBase, MemorySize);
+      ensureMemoryBuffer(Memory, MemoryBase);
     }
     if (NewSize > MemorySize) {
       std::memset(MemoryBase + MemorySize, 0,
@@ -179,7 +183,7 @@ void EVMInstance::expandMemoryNoGas(uint64_t RequiredSize) {
   auto NewSize = (RequiredSize + 31) / 32 * 32;
   if (NewSize > MemorySize) {
     if (!MemoryBase) {
-      initMemoryFrame(Memory, MemoryBase, MemorySize);
+      ensureMemoryBuffer(Memory, MemoryBase);
     }
     if (NewSize > MemorySize) {
       std::memset(MemoryBase + MemorySize, 0,

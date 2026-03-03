@@ -147,9 +147,26 @@ public:
   };
 
   ExecutionCache &getMessageCache() { return InstanceExecutionCache; }
-  void clearMessageCache() { InstanceExecutionCache = ExecutionCache{}; }
+  void clearMessageCache() {
+    // Keep allocated capacity across calls to reduce allocator churn.
+    InstanceExecutionCache.TxContext = {};
+    InstanceExecutionCache.TxContextCached = false;
+    InstanceExecutionCache.BlockHashes.clear();
+    InstanceExecutionCache.BlobHashes.clear();
+    InstanceExecutionCache.CalldataLoads.clear();
+    InstanceExecutionCache.ExtcodeHashes.clear();
+    InstanceExecutionCache.Keccak256Results.clear();
+  }
   void setReturnData(std::vector<uint8_t> Data) {
     ReturnData = std::move(Data);
+  }
+  void clearReturnData() {
+    constexpr std::size_t ReleaseThreshold = 64 * 1024;
+    if (ReturnData.capacity() > ReleaseThreshold) {
+      std::vector<uint8_t>().swap(ReturnData);
+      return;
+    }
+    ReturnData.clear();
   }
   const std::vector<uint8_t> &getReturnData() const { return ReturnData; }
   void setExeResult(evmc::Result Result) { ExeResult = std::move(Result); }

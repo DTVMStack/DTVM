@@ -1122,7 +1122,7 @@ void CreateHandler::doExecute() {
   // Assume failure
   EVM_REQUIRE_STACK_SPACE(Frame, 1);
   Frame->push(0);
-  Context->setReturnData(std::vector<uint8_t>());
+  Context->clearReturnData();
 
   if (Frame->isStaticMode()) {
     Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
@@ -1201,7 +1201,7 @@ void CreateHandler::doExecute() {
     Context->setReturnData(std::vector<uint8_t>(
         Result.output_data, Result.output_data + Result.output_size));
   } else {
-    Context->setReturnData(std::vector<uint8_t>());
+    Context->clearReturnData();
   }
   if (Result.status_code == EVMC_SUCCESS) {
     Frame->pop(); // pop the assume value
@@ -1242,7 +1242,7 @@ void CallHandler::doExecute() {
   // Assume failure
   EVM_REQUIRE_STACK_SPACE(Frame, 1);
   Frame->push(0);
-  Context->setReturnData(std::vector<uint8_t>());
+  Context->clearReturnData();
 
   // EIP-2929
   // Note: The base gas cost (WARM_STORAGE_READ_COST = 100) is already charged

@@ -103,6 +103,14 @@ public:
   void setReturnData(std::vector<uint8_t> Data) {
     ReturnData = std::move(Data);
   }
+  void clearReturnData() {
+    constexpr std::size_t ReleaseThreshold = 64 * 1024;
+    if (ReturnData.capacity() > ReleaseThreshold) {
+      std::vector<uint8_t>().swap(ReturnData);
+      return;
+    }
+    ReturnData.clear();
+  }
   const evmc::Result &getExeResult() const { return ExeResult; }
   void setExeResult(evmc::Result Result) { ExeResult = std::move(Result); }
 

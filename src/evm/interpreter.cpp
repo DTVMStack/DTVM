@@ -229,7 +229,7 @@ handleExecutionStatus(zen::evm::EVMFrame *&Frame,
   case EVMC_INSUFFICIENT_BALANCE:
     Frame->Msg.gas = 0;
     Context.getInstance()->setGasRefund(Frame->GasRefundSnapshot);
-    Context.setReturnData(std::vector<uint8_t>());
+    Context.clearReturnData();
     Context.freeBackFrame();
     Frame = Context.getCurFrame();
     if (!Frame) {
@@ -246,7 +246,7 @@ handleExecutionStatus(zen::evm::EVMFrame *&Frame,
   default:
     Frame->Msg.gas = 0;
     Context.getInstance()->setGasRefund(Frame->GasRefundSnapshot);
-    Context.setReturnData(std::vector<uint8_t>());
+    Context.clearReturnData();
     Context.freeBackFrame();
     Frame = Context.getCurFrame();
     if (!Frame) {
@@ -365,7 +365,7 @@ void BaseInterpreter::interpret() {
         switch (Op) {
         case evmc_opcode::OP_STOP: {
           const uint64_t RemainingGas = Frame->Msg.gas;
-          Context.setReturnData(std::vector<uint8_t>());
+          Context.clearReturnData();
           Context.freeBackFrame();
           Frame = Context.getCurFrame();
           if (!Frame) {
@@ -777,7 +777,7 @@ void BaseInterpreter::interpret() {
 
     switch (Op) {
     case evmc_opcode::OP_STOP:
-      Context.setReturnData(std::vector<uint8_t>());
+      Context.clearReturnData();
       Context.freeBackFrame();
       Frame = Context.getCurFrame();
       if (!Frame) {
@@ -1300,7 +1300,7 @@ void BaseInterpreter::interpret() {
   // When execution falls through (PC >= CodeSize), it's an implicit STOP.
   // Per EVM semantics, return data should be cleared for implicit STOP,
   // as only RETURN/REVERT preserve return data.
-  Context.setReturnData(std::vector<uint8_t>());
+  Context.clearReturnData();
   Context.freeBackFrame();
   const auto &ReturnData = Context.getReturnData();
   uint64_t GasLeft = Context.getInstance()->getGas();
