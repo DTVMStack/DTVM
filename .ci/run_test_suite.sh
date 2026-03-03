@@ -208,6 +208,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
 
             mkdir -p "$EVM_SPEC_TESTS_ROOT"
             rm -rf "$EVM_SPEC_TESTS_ROOT/fixtures"
+            rm -f "$EVM_SPEC_FIXTURES_ARCHIVE"
             if command -v aria2c >/dev/null 2>&1; then
                 aria2c -c --max-tries=3 --retry-wait=1 --auto-file-renaming=false \
                     --dir "$(dirname "$EVM_SPEC_FIXTURES_ARCHIVE")" \
@@ -215,11 +216,18 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                     "$EVM_SPEC_FIXTURES_URL"
             elif command -v wget >/dev/null 2>&1; then
                 wget -c --tries=3 --waitretry=1 --max-redirect=20 \
+                    --progress=dot:giga \
                     -O "$EVM_SPEC_FIXTURES_ARCHIVE" "$EVM_SPEC_FIXTURES_URL"
             else
                 echo "Neither aria2c nor wget is available in CI environment."
                 exit 1
             fi
+            if [ ! -s "$EVM_SPEC_FIXTURES_ARCHIVE" ]; then
+                echo "Downloaded archive is missing or empty: $EVM_SPEC_FIXTURES_ARCHIVE"
+                exit 1
+            fi
+            echo "EVM spec fixtures archive size:"
+            ls -lh "$EVM_SPEC_FIXTURES_ARCHIVE"
             echo "EVM spec fixtures download completed: $EVM_SPEC_FIXTURES_ARCHIVE"
             echo "::notice::EVM spec fixtures download completed"
             if [ -n "${GITHUB_OUTPUT:-}" ]; then
@@ -228,7 +236,25 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                     echo "evm_spec_fixtures_archive=$EVM_SPEC_FIXTURES_ARCHIVE"
                 } >> "$GITHUB_OUTPUT"
             fi
-            tar -xzf "$EVM_SPEC_FIXTURES_ARCHIVE" -C "$EVM_SPEC_TESTS_ROOT"
+            if command -v gzip >/dev/null 2>&1; then
+                if ! gzip -t "$EVM_SPEC_FIXTURES_ARCHIVE"; then
+                    echo "gzip integrity check failed: $EVM_SPEC_FIXTURES_ARCHIVE"
+                    exit 1
+                fi
+            fi
+            echo "Disk usage before extraction:"
+            df -h "$EVM_SPEC_TESTS_ROOT" /tmp || true
+            if ! tar -xzf "$EVM_SPEC_FIXTURES_ARCHIVE" -C "$EVM_SPEC_TESTS_ROOT" \
+                2>/tmp/evm_spec_fixtures_extract.err; then
+                echo "Failed to extract fixtures archive: $EVM_SPEC_FIXTURES_ARCHIVE"
+                echo "tar stderr:"
+                cat /tmp/evm_spec_fixtures_extract.err || true
+                echo "Disk usage on extraction failure:"
+                df -h "$EVM_SPEC_TESTS_ROOT" /tmp || true
+                exit 1
+            fi
+            echo "Disk usage after extraction:"
+            df -h "$EVM_SPEC_TESTS_ROOT" /tmp || true
             echo "EVM spec fixtures extracted: $EVM_SPEC_TESTS_ROOT/fixtures"
             echo "::notice::EVM spec fixtures extracted successfully"
             if [ -n "${GITHUB_OUTPUT:-}" ]; then
