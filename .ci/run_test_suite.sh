@@ -209,6 +209,13 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             mkdir -p "$EVM_SPEC_TESTS_ROOT"
             rm -rf "$EVM_SPEC_TESTS_ROOT/fixtures"
             curl -L --retry 3 -C - "$EVM_SPEC_FIXTURES_URL" -o "$EVM_SPEC_FIXTURES_ARCHIVE"
+            echo "::notice::EVM spec fixtures download completed"
+            if [ -n "${GITHUB_OUTPUT:-}" ]; then
+                {
+                    echo "evm_spec_fixtures_downloaded=true"
+                    echo "evm_spec_fixtures_archive=$EVM_SPEC_FIXTURES_ARCHIVE"
+                } >> "$GITHUB_OUTPUT"
+            fi
             tar -xzf "$EVM_SPEC_FIXTURES_ARCHIVE" -C "$EVM_SPEC_TESTS_ROOT"
             echo "::notice::EVM spec fixtures extracted successfully"
             if [ -n "${GITHUB_OUTPUT:-}" ]; then
