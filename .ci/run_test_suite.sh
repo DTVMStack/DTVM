@@ -248,16 +248,18 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             df -ih "$EVM_SPEC_TESTS_ROOT" /tmp || true
             EXTRACT_SUBPATH="fixtures/state_tests"
             TAR_EXTRA_ARGS=()
-            if tar -tzf "$EVM_SPEC_FIXTURES_ARCHIVE" "$EXTRACT_SUBPATH" >/dev/null 2>&1; then
-                TAR_EXTRA_ARGS+=("$EXTRACT_SUBPATH")
+            if tar -tzf "$EVM_SPEC_FIXTURES_ARCHIVE" --wildcards "${EXTRACT_SUBPATH}/*" >/dev/null 2>&1; then
+                TAR_EXTRA_ARGS+=(--wildcards "${EXTRACT_SUBPATH}/*")
                 echo "Extracting subpath only: $EXTRACT_SUBPATH"
             else
                 echo "Subpath not found in archive, extracting full archive."
             fi
 
+            set +e
             tar -xzf "$EVM_SPEC_FIXTURES_ARCHIVE" -C "$EVM_SPEC_TESTS_ROOT" \
                 "${TAR_EXTRA_ARGS[@]}" 2>/tmp/evm_spec_fixtures_extract.err
             tar_extract_status=$?
+            set -e
             if [ "$tar_extract_status" -ne 0 ]; then
                 echo "Failed to extract fixtures archive: $EVM_SPEC_FIXTURES_ARCHIVE"
                 echo "tar exit code: $tar_extract_status"
