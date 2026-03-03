@@ -240,15 +240,27 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             for EVMONE_MODE in multipass interpreter; do
                 echo "Running evmone-statetest mode=${EVMONE_MODE}, filter=${EVMONE_STATETEST_FILTER}"
                 run_status=0
+                RESULT_JSON="/tmp/evmone_st_${EVMONE_MODE}.json"
+                RESULT_LOG="/tmp/evmone_st_${EVMONE_MODE}.log"
                 if [ -n "$EVMONE_MODE_TIMEOUT_SECONDS" ]; then
                     echo "Mode timeout enabled: ${EVMONE_MODE_TIMEOUT_SECONDS}s"
                     timeout --foreground "$EVMONE_MODE_TIMEOUT_SECONDS" env \
                         DTVM_EVM_MODE="$EVMONE_MODE" \
                         DTVM_EVM_ENABLE_GAS_METERING=true \
-                        ./build/bin/evmone-statetest "$EVMONE_STATETEST_PATH" --vm external_vm -k "$EVMONE_STATETEST_FILTER" || run_status=$?
+                        stdbuf -oL -eL \
+                        ./build/bin/evmone-statetest "$EVMONE_STATETEST_PATH" \
+                        --vm external_vm \
+                        -k "$EVMONE_STATETEST_FILTER" \
+                        --gtest_output="json:${RESULT_JSON}" 2>&1 | tee "$RESULT_LOG"
+                    run_status=${PIPESTATUS[0]}
                 else
-                    DTVM_EVM_MODE="$EVMONE_MODE" DTVM_EVM_ENABLE_GAS_METERING=true \
-                        ./build/bin/evmone-statetest "$EVMONE_STATETEST_PATH" --vm external_vm -k "$EVMONE_STATETEST_FILTER" || run_status=$?
+                    env DTVM_EVM_MODE="$EVMONE_MODE" DTVM_EVM_ENABLE_GAS_METERING=true \
+                        stdbuf -oL -eL \
+                        ./build/bin/evmone-statetest "$EVMONE_STATETEST_PATH" \
+                        --vm external_vm \
+                        -k "$EVMONE_STATETEST_FILTER" \
+                        --gtest_output="json:${RESULT_JSON}" 2>&1 | tee "$RESULT_LOG"
+                    run_status=${PIPESTATUS[0]}
                 fi
 
                 if [ "$run_status" -ne 0 ]; then
