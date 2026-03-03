@@ -37,7 +37,7 @@ public:
   StackMemPool(size_t ItemSize);
   ~StackMemPool();
   NONCOPYABLE(StackMemPool);
-  void *allocate(bool AllowReadWrite);
+  void *allocate(bool AllowReadWrite, bool *IsReused = nullptr);
   void deallocate(void *Ptr);
 
 private:

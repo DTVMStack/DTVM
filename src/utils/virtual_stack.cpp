@@ -24,7 +24,7 @@ StackMemPool::StackMemPool(size_t ItemSize)
 }
 StackMemPool::~StackMemPool() { platform::munmap(MemStart, MaxCodeSize); }
 
-void *StackMemPool::allocate(bool AllowReadWrite) {
+void *StackMemPool::allocate(bool AllowReadWrite, bool *IsReused) {
   common::UniqueLock<common::Mutex> Lock(Mutex);
 #ifndef ZEN_ENABLE_SGX
   AvailableCountCV.wait(Lock, [this]() { return AvailableCount > 0; });
@@ -34,8 +34,12 @@ void *StackMemPool::allocate(bool AllowReadWrite) {
   if (!FreeObjects.empty()) {
     auto *Result = FreeObjects.front();
     FreeObjects.pop();
+    if (IsReused)
+      *IsReused = true;
     return Result;
   }
+  if (IsReused)
+    *IsReused = false;
   constexpr size_t Align = 16;
   uint8_t *Ptr = reinterpret_cast<uint8_t *>(
       ZEN_ALIGN(reinterpret_cast<uintptr_t>(MemEnd), Align));
@@ -87,11 +91,14 @@ void VirtualStackInfo::allocate() {
     return;
   }
   auto *MemPool = getVirtualStackPool();
-  AllocatedMem = (uint8_t *)MemPool->allocate(true);
+  bool IsReused = false;
+  AllocatedMem = (uint8_t *)MemPool->allocate(true, &IsReused);
   AllInfo = AllocatedMem + StackMemorySize;
   // [AllocatedMem, AllInfo) is disabled visiting
   // [AllInfo, StackMemoryTop) is available stack memory
-  platform::mprotect(AllocatedMem, StackMemorySize, PROT_NONE);
+  if (!IsReused) {
+    platform::mprotect(AllocatedMem, StackMemorySize, PROT_NONE);
+  }
 
   // when update sp/rsp register, we need copy old frame to new frame, then
   // the new frame rsp should have enough frame to store
