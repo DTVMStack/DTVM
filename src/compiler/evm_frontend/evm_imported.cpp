@@ -911,8 +911,7 @@ static uint64_t evmHandleCallInternal(
   }
 
   uint8_t *MemoryBase = Instance->getMemoryBase();
-  const uint8_t *InputData =
-      ArgsSize > 0 ? (MemoryBase + ArgsOffset) : nullptr;
+  const uint8_t *InputData = ArgsSize > 0 ? MemoryBase + ArgsOffset : nullptr;
 
   if (CurrentMsg->depth >= zen::evm::MAXSTACK) {
     Instance->setReturnData({});
