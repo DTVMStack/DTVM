@@ -715,7 +715,9 @@ void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
     StackInfo.SavedPtr1 = &Inst;
     StackInfo.SavedPtr2 = &Msg;
     StackInfo.SavedPtr3 = &Result;
+    Inst.pushVirtualStack(&StackInfo);
     StackInfo.runInVirtualStack(&callEVMFuncFromVirtualStack);
+    Inst.popVirtualStack();
   } else {
     callEVMMainOnPhysStack(Inst, Msg, Result);
   }
@@ -770,49 +772,42 @@ void Runtime::callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
       case SIGBUS: {
         // out of bounds signal
         CapturedTapErrCode = ErrorCode::OutOfBoundsMemory;
-#ifdef ZEN_ENABLE_STACK_CHECK_CPU
-        // when the accessed address in virtual stack, raise CallStackExhausted
-        auto *FaultingAddress =
-            static_cast<uint8_t *>(TLS.getTrapState().FaultingAddress);
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
-        auto *VirtualStack = Inst.currentVirtualStack();
-        if (FaultingAddress != nullptr && VirtualStack) {
-          if (FaultingAddress >= VirtualStack->AllInfo &&
-              FaultingAddress < VirtualStack->StackMemoryTop) {
-            CapturedTapErrCode = ErrorCode::CallStackExhausted;
+        {
+          auto *FaultingAddress =
+              static_cast<uint8_t *>(TLS.getTrapState().FaultingAddress);
+          auto *VirtualStack = Inst.currentVirtualStack();
+          if (FaultingAddress != nullptr && VirtualStack) {
+            if (FaultingAddress >= VirtualStack->AllInfo &&
+                FaultingAddress < VirtualStack->StackMemoryTop) {
+              CapturedTapErrCode = ErrorCode::CallStackExhausted;
+            }
           }
         }
-#else
-
+#elif defined(ZEN_ENABLE_STACK_CHECK_CPU)
+        {
+          auto *FaultingAddress =
+              static_cast<uint8_t *>(TLS.getTrapState().FaultingAddress);
 #ifdef ZEN_BUILD_PLATFORM_DARWIN
-        // on darwin get stack info
-        void *StackAddr = pthread_get_stackaddr_np(pthread_self());
-        size_t StackSize = pthread_get_stacksize_np(pthread_self());
+          void *StackAddr = pthread_get_stackaddr_np(pthread_self());
+          size_t StackSize = pthread_get_stacksize_np(pthread_self());
 #else
-        // on linux get stack info
-        pthread_attr_t Attrs;
-        pthread_getattr_np(pthread_self(), &Attrs);
-
-        void *StackAddr;
-        size_t StackSize;
-        pthread_attr_getstack(&Attrs, &StackAddr, &StackSize);
+          pthread_attr_t Attrs;
+          pthread_getattr_np(pthread_self(), &Attrs);
+          void *StackAddr;
+          size_t StackSize;
+          pthread_attr_getstack(&Attrs, &StackAddr, &StackSize);
 #endif
-
-        size_t GuardSize =
-            common::StackGuardSize; // stack overflow guard, when overflow not
-                                    // in dwasm, not greater then StackGuardSize
-                                    // bytes
-        if ((uintptr_t)FaultingAddress >= (uintptr_t)StackAddr - GuardSize &&
-            (uintptr_t)FaultingAddress < ((uintptr_t)StackAddr + StackSize)) {
-          CapturedTapErrCode = ErrorCode::CallStackExhausted;
-        }
+          size_t GuardSize = common::StackGuardSize;
+          if ((uintptr_t)FaultingAddress >= (uintptr_t)StackAddr - GuardSize &&
+              (uintptr_t)FaultingAddress < ((uintptr_t)StackAddr + StackSize)) {
+            CapturedTapErrCode = ErrorCode::CallStackExhausted;
+          }
 #ifndef ZEN_BUILD_PLATFORM_DARWIN
-        pthread_attr_destroy(&Attrs);
+          pthread_attr_destroy(&Attrs);
 #endif // ZEN_BUILD_PLATFORM_DARWIN
-
-#endif // ZEN_ENABLE_VIRTUAL_STACK
-
-#endif // ZEN_ENABLE_STACK_CHECK_CPU
+        }
+#endif // ZEN_ENABLE_VIRTUAL_STACK / ZEN_ENABLE_STACK_CHECK_CPU
         break;
       }
       default: {
@@ -904,51 +899,44 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
         // out of bounds signal
         CapturedTapErrCode = ErrorCode::OutOfBoundsMemory;
         StatusCode = EVMC_INVALID_MEMORY_ACCESS;
-#ifdef ZEN_ENABLE_STACK_CHECK_CPU
-        // when the accessed address in virtual stack, raise CallStackExhausted
-        auto *FaultingAddress =
-            static_cast<uint8_t *>(TLS.getTrapState().FaultingAddress);
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
-        auto *VirtualStack = Inst.currentVirtualStack();
-        if (FaultingAddress != nullptr && VirtualStack) {
-          if (FaultingAddress >= VirtualStack->AllInfo &&
-              FaultingAddress < VirtualStack->StackMemoryTop) {
+        {
+          auto *FaultingAddress =
+              static_cast<uint8_t *>(TLS.getTrapState().FaultingAddress);
+          auto *VirtualStack = Inst.currentVirtualStack();
+          if (FaultingAddress != nullptr && VirtualStack) {
+            if (FaultingAddress >= VirtualStack->AllInfo &&
+                FaultingAddress < VirtualStack->StackMemoryTop) {
+              CapturedTapErrCode = ErrorCode::CallStackExhausted;
+              StatusCode = EVMC_STACK_OVERFLOW;
+            }
+          }
+        }
+#elif defined(ZEN_ENABLE_STACK_CHECK_CPU)
+        {
+          auto *FaultingAddress =
+              static_cast<uint8_t *>(TLS.getTrapState().FaultingAddress);
+#ifdef ZEN_BUILD_PLATFORM_DARWIN
+          void *StackAddr = pthread_get_stackaddr_np(pthread_self());
+          size_t StackSize = pthread_get_stacksize_np(pthread_self());
+#else
+          pthread_attr_t Attrs;
+          pthread_getattr_np(pthread_self(), &Attrs);
+          void *StackAddr;
+          size_t StackSize;
+          pthread_attr_getstack(&Attrs, &StackAddr, &StackSize);
+#endif
+          size_t GuardSize = common::StackGuardSize;
+          if ((uintptr_t)FaultingAddress >= (uintptr_t)StackAddr - GuardSize &&
+              (uintptr_t)FaultingAddress < ((uintptr_t)StackAddr + StackSize)) {
             CapturedTapErrCode = ErrorCode::CallStackExhausted;
             StatusCode = EVMC_STACK_OVERFLOW;
           }
-        }
-#else
-
-#ifdef ZEN_BUILD_PLATFORM_DARWIN
-        // on darwin get stack info
-        void *StackAddr = pthread_get_stackaddr_np(pthread_self());
-        size_t StackSize = pthread_get_stacksize_np(pthread_self());
-#else
-        // on linux get stack info
-        pthread_attr_t Attrs;
-        pthread_getattr_np(pthread_self(), &Attrs);
-
-        void *StackAddr;
-        size_t StackSize;
-        pthread_attr_getstack(&Attrs, &StackAddr, &StackSize);
-#endif
-
-        size_t GuardSize =
-            common::StackGuardSize; // stack overflow guard, when overflow not
-                                    // in dwasm, not greater then StackGuardSize
-                                    // bytes
-        if ((uintptr_t)FaultingAddress >= (uintptr_t)StackAddr - GuardSize &&
-            (uintptr_t)FaultingAddress < ((uintptr_t)StackAddr + StackSize)) {
-          CapturedTapErrCode = ErrorCode::CallStackExhausted;
-          StatusCode = EVMC_STACK_OVERFLOW;
-        }
 #ifndef ZEN_BUILD_PLATFORM_DARWIN
-        pthread_attr_destroy(&Attrs);
-#endif // ZEN_BUILD_PLATFORM_DARWIN
-
-#endif // ZEN_ENABLE_VIRTUAL_STACK
-
-#endif // ZEN_ENABLE_STACK_CHECK_CPU
+          pthread_attr_destroy(&Attrs);
+#endif
+        }
+#endif // ZEN_ENABLE_VIRTUAL_STACK / ZEN_ENABLE_STACK_CHECK_CPU
         break;
       }
       default: {

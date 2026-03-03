@@ -285,6 +285,17 @@ private:
 
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
   std::queue<utils::VirtualStackInfo *> VirtualStacks;
+
+public:
+  void pushVirtualStack(utils::VirtualStackInfo *VStack) {
+    VirtualStacks.push(VStack);
+  }
+  void popVirtualStack() { VirtualStacks.pop(); }
+  utils::VirtualStackInfo *currentVirtualStack() const {
+    return VirtualStacks.empty() ? nullptr : VirtualStacks.back();
+  }
+
+private:
 #endif
   // ========= EVM-specific fields start here =========
 
