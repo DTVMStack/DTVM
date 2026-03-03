@@ -3067,13 +3067,15 @@ void EVMMirBuilder::handleReturn(Operand MemOffsetComponents,
   callRuntimeFor<void, uint64_t, uint64_t>(
       RuntimeFunctions.SetReturn, MemOffsetComponents, LengthComponents);
 
-  createInstruction<BrInstruction>(true, Ctx, ReturnBB);
-  addSuccessor(ReturnBB);
-
-  if (ReturnBB->empty()) {
-    setInsertBlock(ReturnBB);
-    handleVoidReturn();
-  }
+  // The runtime SetReturn may charge memory expansion gas via chargeGas(),
+  // which updates Instance->Gas directly. We must NOT branch to the shared
+  // ReturnBB because its syncGasToMemoryFull() would overwrite the correct
+  // Instance->Gas with the stale gas register value.
+  MBasicBlock *ReturnDirectBB = createBasicBlock();
+  createInstruction<BrInstruction>(true, Ctx, ReturnDirectBB);
+  addSuccessor(ReturnDirectBB);
+  setInsertBlock(ReturnDirectBB);
+  createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
 
   MBasicBlock *PostReturnBB = createBasicBlock();
   setInsertBlock(PostReturnBB);
@@ -3142,13 +3144,15 @@ void EVMMirBuilder::handleRevert(Operand OffsetOp, Operand SizeOp) {
   callRuntimeFor<void, uint64_t, uint64_t>(RuntimeFunctions.SetRevert, OffsetOp,
                                            SizeOp);
 
-  createInstruction<BrInstruction>(true, Ctx, ReturnBB);
-  addSuccessor(ReturnBB);
-
-  if (ReturnBB->empty()) {
-    setInsertBlock(ReturnBB);
-    handleVoidReturn();
-  }
+  // The runtime SetRevert may charge memory expansion gas via chargeGas(),
+  // which updates Instance->Gas directly. We must NOT branch to the shared
+  // ReturnBB because its syncGasToMemoryFull() would overwrite the correct
+  // Instance->Gas with the stale gas register value.
+  MBasicBlock *RevertReturnBB = createBasicBlock();
+  createInstruction<BrInstruction>(true, Ctx, RevertReturnBB);
+  addSuccessor(RevertReturnBB);
+  setInsertBlock(RevertReturnBB);
+  createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
 
   MBasicBlock *PostRevertBB = createBasicBlock();
   setInsertBlock(PostRevertBB);
@@ -3156,28 +3160,36 @@ void EVMMirBuilder::handleRevert(Operand OffsetOp, Operand SizeOp) {
 
 void EVMMirBuilder::handleInvalid() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  syncGasToMemoryFull();
+#endif
   callRuntimeFor(RuntimeFunctions.HandleInvalid);
 
-  createInstruction<BrInstruction>(true, Ctx, ReturnBB);
-  addSuccessor(ReturnBB);
-
-  if (ReturnBB->empty()) {
-    setInsertBlock(ReturnBB);
-    handleVoidReturn();
-  }
+  // HandleInvalid sets Instance->Gas to 0. We must NOT branch to the shared
+  // ReturnBB because its syncGasToMemoryFull() would overwrite the zeroed gas
+  // with the stale gas register value.
+  MBasicBlock *InvalidReturnBB = createBasicBlock();
+  createInstruction<BrInstruction>(true, Ctx, InvalidReturnBB);
+  addSuccessor(InvalidReturnBB);
+  setInsertBlock(InvalidReturnBB);
+  createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
 }
 
 void EVMMirBuilder::handleUndefined() {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  syncGasToMemoryFull();
+#endif
   callRuntimeFor(RuntimeFunctions.HandleUndefined);
 
-  createInstruction<BrInstruction>(true, Ctx, ReturnBB);
-  addSuccessor(ReturnBB);
-
-  if (ReturnBB->empty()) {
-    setInsertBlock(ReturnBB);
-    handleVoidReturn();
-  }
+  // HandleUndefined sets Instance->Gas to 0. We must NOT branch to the shared
+  // ReturnBB because its syncGasToMemoryFull() would overwrite the zeroed gas
+  // with the stale gas register value.
+  MBasicBlock *UndefinedReturnBB = createBasicBlock();
+  createInstruction<BrInstruction>(true, Ctx, UndefinedReturnBB);
+  addSuccessor(UndefinedReturnBB);
+  setInsertBlock(UndefinedReturnBB);
+  createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
 }
 typename EVMMirBuilder::Operand
 EVMMirBuilder::handleSLoad(Operand KeyComponents) {
@@ -4083,6 +4095,44 @@ EVMMirBuilder::calculateMemoryGasCostIR(MInstruction *SizeInBytes) {
 
 void EVMMirBuilder::chargeDynamicGasIR(MInstruction *GasCost) {
   MType *I64Type = &Ctx.I64Type;
+
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  if (Ctx.isGasRegisterEnabled() && GasRegVar) {
+    MInstruction *CurrentGas = loadVariable(GasRegVar);
+
+    MInstruction *IsOutOfGas = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_ULT, &Ctx.I64Type, CurrentGas,
+        GasCost);
+
+    MBasicBlock *ContinueBB = createBasicBlock();
+    MBasicBlock *OutOfGasBB =
+        getOrCreateExceptionSetBB(ErrorCode::GasLimitExceeded);
+    createInstruction<BrIfInstruction>(true, Ctx, IsOutOfGas, OutOfGasBB,
+                                       ContinueBB);
+    addUniqueSuccessor(OutOfGasBB);
+    addSuccessor(ContinueBB);
+    setInsertBlock(ContinueBB);
+
+    MInstruction *NewGas = createInstruction<BinaryInstruction>(
+        false, OP_sub, I64Type, CurrentGas, GasCost);
+    createInstruction<DassignInstruction>(true, &(Ctx.VoidType), NewGas,
+                                          GasRegVar->getVarIdx());
+
+    // Sync updated gas to Instance->Gas memory so that a subsequent
+    // reloadGasFromMemory() (e.g. in handleMStore/handleMLoad after
+    // expandMemoryIR) picks up the correct post-deduction value.
+    MPointerType *I64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
+    MInstruction *GasOff = createIntConstInstruction(
+        I64Type, zen::runtime::EVMInstance::getGasFieldOffset());
+    MInstruction *GasAddr = createInstruction<BinaryInstruction>(
+        false, OP_add, I64Type, InstanceAddr, GasOff);
+    MInstruction *GasPtr = createInstruction<ConversionInstruction>(
+        false, OP_inttoptr, I64PtrType, GasAddr);
+    createInstruction<StoreInstruction>(true, &Ctx.VoidType, NewGas, GasPtr);
+    return;
+  }
+#endif
+
   MInstruction *GasOffsetValue = createIntConstInstruction(
       I64Type, zen::runtime::EVMInstance::getGasFieldOffset());
   MInstruction *GasAddrInt = createInstruction<BinaryInstruction>(
