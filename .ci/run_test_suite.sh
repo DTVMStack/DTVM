@@ -208,7 +208,18 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
 
             mkdir -p "$EVM_SPEC_TESTS_ROOT"
             rm -rf "$EVM_SPEC_TESTS_ROOT/fixtures"
-            curl -L --retry 3 -C - "$EVM_SPEC_FIXTURES_URL" -o "$EVM_SPEC_FIXTURES_ARCHIVE"
+            if command -v aria2c >/dev/null 2>&1; then
+                aria2c -c --max-tries=3 --retry-wait=1 --auto-file-renaming=false \
+                    --dir "$(dirname "$EVM_SPEC_FIXTURES_ARCHIVE")" \
+                    --out "$(basename "$EVM_SPEC_FIXTURES_ARCHIVE")" \
+                    "$EVM_SPEC_FIXTURES_URL"
+            elif command -v wget >/dev/null 2>&1; then
+                wget -c --tries=3 --waitretry=1 --max-redirect=20 \
+                    -O "$EVM_SPEC_FIXTURES_ARCHIVE" "$EVM_SPEC_FIXTURES_URL"
+            else
+                echo "Neither aria2c nor wget is available in CI environment."
+                exit 1
+            fi
             echo "EVM spec fixtures download completed: $EVM_SPEC_FIXTURES_ARCHIVE"
             echo "::notice::EVM spec fixtures download completed"
             if [ -n "${GITHUB_OUTPUT:-}" ]; then
