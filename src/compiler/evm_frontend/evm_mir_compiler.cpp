@@ -3216,22 +3216,25 @@ void EVMMirBuilder::handleTStore(Operand Index, Operand ValueComponents) {
 }
 void EVMMirBuilder::handleSelfDestruct(Operand Beneficiary) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  syncGasToMemoryFull();
+#endif
   callRuntimeFor<void, const uint8_t *>(RuntimeFunctions.HandleSelfDestruct,
                                         Beneficiary);
 
-  createInstruction<BrInstruction>(true, Ctx, ReturnBB);
-  addSuccessor(ReturnBB);
-
-  if (ReturnBB->empty()) {
-    setInsertBlock(ReturnBB);
-    handleVoidReturn();
-  }
+  // The runtime function (evmHandleSelfDestruct) calls popMessage() which may
+  // set CurrentMessage to nullptr when there is no parent frame. The shared
+  // ReturnBB uses syncGasToMemoryFull() which writes to Msg->gas via
+  // CurrentMessage, causing a null pointer write (SEGV at address 0x10).
+  // Use a dedicated return block with a plain return instruction instead.
+  MBasicBlock *SelfDestructReturnBB = createBasicBlock();
+  createInstruction<BrInstruction>(true, Ctx, SelfDestructReturnBB);
+  addSuccessor(SelfDestructReturnBB);
+  setInsertBlock(SelfDestructReturnBB);
+  createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
 
   MBasicBlock *PostSelfDestructBB = createBasicBlock();
   setInsertBlock(PostSelfDestructBB);
-#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
-  reloadGasFromMemory();
-#endif
 }
 
 typename EVMMirBuilder::Operand
