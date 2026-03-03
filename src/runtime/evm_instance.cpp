@@ -28,6 +28,8 @@ bool calcRequiredMemorySize(uint64_t Offset, uint64_t Size,
 
 void initMemoryFrame(std::unique_ptr<uint8_t[]> &Memory, uint8_t *&Base,
                      uint64_t &Size) {
+  // Reset frame state only; backing allocation is handled lazily by
+  // ensureMemoryBuffer() when real memory growth happens.
   Base = Memory.get();
   Size = 0;
 }

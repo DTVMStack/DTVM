@@ -25,6 +25,16 @@ class Instantiator;
 
 namespace runtime {
 
+inline constexpr std::size_t ReturnDataReleaseThreshold = 64 * 1024;
+
+inline void clearReturnDataBuffer(std::vector<uint8_t> &Buffer) {
+  if (Buffer.capacity() > ReturnDataReleaseThreshold) {
+    std::vector<uint8_t>().swap(Buffer);
+    return;
+  }
+  Buffer.clear();
+}
+
 /// \warning: not support multi-threading
 class EVMInstance final : public RuntimeObject<EVMInstance> {
   using Error = common::Error;
@@ -144,30 +154,27 @@ public:
     std::vector<evmc::bytes32> ExtcodeHashes;
     std::vector<evmc::bytes32> Keccak256Results;
     bool TxContextCached = false;
+
+    void clear() {
+      TxContext = {};
+      TxContextCached = false;
+      BlockHashes.clear();
+      BlobHashes.clear();
+      CalldataLoads.clear();
+      ExtcodeHashes.clear();
+      Keccak256Results.clear();
+    }
   };
 
   ExecutionCache &getMessageCache() { return InstanceExecutionCache; }
   void clearMessageCache() {
     // Keep allocated capacity across calls to reduce allocator churn.
-    InstanceExecutionCache.TxContext = {};
-    InstanceExecutionCache.TxContextCached = false;
-    InstanceExecutionCache.BlockHashes.clear();
-    InstanceExecutionCache.BlobHashes.clear();
-    InstanceExecutionCache.CalldataLoads.clear();
-    InstanceExecutionCache.ExtcodeHashes.clear();
-    InstanceExecutionCache.Keccak256Results.clear();
+    InstanceExecutionCache.clear();
   }
   void setReturnData(std::vector<uint8_t> Data) {
     ReturnData = std::move(Data);
   }
-  void clearReturnData() {
-    constexpr std::size_t ReleaseThreshold = 64 * 1024;
-    if (ReturnData.capacity() > ReleaseThreshold) {
-      std::vector<uint8_t>().swap(ReturnData);
-      return;
-    }
-    ReturnData.clear();
-  }
+  void clearReturnData() { clearReturnDataBuffer(ReturnData); }
   const std::vector<uint8_t> &getReturnData() const { return ReturnData; }
   void setExeResult(evmc::Result Result) { ExeResult = std::move(Result); }
   const evmc::Result &getExeResult() const { return ExeResult; }
