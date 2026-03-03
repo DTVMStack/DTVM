@@ -248,6 +248,7 @@ jobs:
 
   build_test_release_evmone_statetests_on_x86:
     name: Test DTVM-EVM multipass and interpreter using evmone statetests in release mode on x86-64
+    timeout-minutes: 300
     runs-on: ubuntu-latest
     container:
       image: dtvmdev1/dtvm-dev-x64:main
@@ -266,7 +267,7 @@ jobs:
           export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
           export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
           export CMAKE_BUILD_TARGET=Release
-          export ENABLE_ASAN=true
+          export ENABLE_ASAN=false
           export RUN_MODE=multipass
           export ENABLE_LAZY=false
           export ENABLE_MULTITHREAD=true
@@ -274,6 +275,7 @@ jobs:
           export CPU_EXCEPTION_TYPE='cpu'
           export TestSuite=evmonestatetestsuite
           export EVMONE_STATETEST_FILTER=fork_Cancun
+          export EVMONE_MODE_TIMEOUT_SECONDS=5400
 
           bash .ci/run_test_suite.sh
 

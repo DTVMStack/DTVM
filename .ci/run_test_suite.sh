@@ -236,9 +236,29 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 exit 1
             fi
 
+            EVMONE_MODE_TIMEOUT_SECONDS=${EVMONE_MODE_TIMEOUT_SECONDS:-}
             for EVMONE_MODE in multipass interpreter; do
-                DTVM_EVM_MODE="$EVMONE_MODE" DTVM_EVM_ENABLE_GAS_METERING=true \
-                    ./build/bin/evmone-statetest "$EVMONE_STATETEST_PATH" --vm external_vm -k "$EVMONE_STATETEST_FILTER"
+                echo "Running evmone-statetest mode=${EVMONE_MODE}, filter=${EVMONE_STATETEST_FILTER}"
+                run_status=0
+                if [ -n "$EVMONE_MODE_TIMEOUT_SECONDS" ]; then
+                    echo "Mode timeout enabled: ${EVMONE_MODE_TIMEOUT_SECONDS}s"
+                    timeout --foreground "$EVMONE_MODE_TIMEOUT_SECONDS" env \
+                        DTVM_EVM_MODE="$EVMONE_MODE" \
+                        DTVM_EVM_ENABLE_GAS_METERING=true \
+                        ./build/bin/evmone-statetest "$EVMONE_STATETEST_PATH" --vm external_vm -k "$EVMONE_STATETEST_FILTER" || run_status=$?
+                else
+                    DTVM_EVM_MODE="$EVMONE_MODE" DTVM_EVM_ENABLE_GAS_METERING=true \
+                        ./build/bin/evmone-statetest "$EVMONE_STATETEST_PATH" --vm external_vm -k "$EVMONE_STATETEST_FILTER" || run_status=$?
+                fi
+
+                if [ "$run_status" -ne 0 ]; then
+                    if [ "$run_status" -eq 124 ]; then
+                        echo "evmone-statetest timed out in mode=${EVMONE_MODE} after ${EVMONE_MODE_TIMEOUT_SECONDS}s"
+                    else
+                        echo "evmone-statetest failed in mode=${EVMONE_MODE} with exit code ${run_status}"
+                    fi
+                    exit "$run_status"
+                fi
             done
             cd ..
             ;;
