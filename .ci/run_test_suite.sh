@@ -244,17 +244,39 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             fi
             echo "Disk usage before extraction:"
             df -h "$EVM_SPEC_TESTS_ROOT" /tmp || true
-            if ! tar -xzf "$EVM_SPEC_FIXTURES_ARCHIVE" -C "$EVM_SPEC_TESTS_ROOT" \
-                2>/tmp/evm_spec_fixtures_extract.err; then
+            echo "Inode usage before extraction:"
+            df -ih "$EVM_SPEC_TESTS_ROOT" /tmp || true
+            EXTRACT_SUBPATH="fixtures/state_tests"
+            TAR_EXTRA_ARGS=()
+            if tar -tzf "$EVM_SPEC_FIXTURES_ARCHIVE" "$EXTRACT_SUBPATH" >/dev/null 2>&1; then
+                TAR_EXTRA_ARGS+=("$EXTRACT_SUBPATH")
+                echo "Extracting subpath only: $EXTRACT_SUBPATH"
+            else
+                echo "Subpath not found in archive, extracting full archive."
+            fi
+
+            tar -xzf "$EVM_SPEC_FIXTURES_ARCHIVE" -C "$EVM_SPEC_TESTS_ROOT" \
+                "${TAR_EXTRA_ARGS[@]}" 2>/tmp/evm_spec_fixtures_extract.err
+            tar_extract_status=$?
+            if [ "$tar_extract_status" -ne 0 ]; then
                 echo "Failed to extract fixtures archive: $EVM_SPEC_FIXTURES_ARCHIVE"
+                echo "tar exit code: $tar_extract_status"
                 echo "tar stderr:"
-                cat /tmp/evm_spec_fixtures_extract.err || true
+                if [ -s /tmp/evm_spec_fixtures_extract.err ]; then
+                    sed -n '1,200p' /tmp/evm_spec_fixtures_extract.err
+                else
+                    echo "(empty)"
+                fi
                 echo "Disk usage on extraction failure:"
                 df -h "$EVM_SPEC_TESTS_ROOT" /tmp || true
-                exit 1
+                echo "Inode usage on extraction failure:"
+                df -ih "$EVM_SPEC_TESTS_ROOT" /tmp || true
+                exit "$tar_extract_status"
             fi
             echo "Disk usage after extraction:"
             df -h "$EVM_SPEC_TESTS_ROOT" /tmp || true
+            echo "Inode usage after extraction:"
+            df -ih "$EVM_SPEC_TESTS_ROOT" /tmp || true
             echo "EVM spec fixtures extracted: $EVM_SPEC_TESTS_ROOT/fixtures"
             echo "::notice::EVM spec fixtures extracted successfully"
             if [ -n "${GITHUB_OUTPUT:-}" ]; then
