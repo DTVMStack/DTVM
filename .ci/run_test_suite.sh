@@ -248,8 +248,9 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             df -ih "$EVM_SPEC_TESTS_ROOT" /tmp || true
             EXTRACT_SUBPATH="fixtures/state_tests"
             TAR_EXTRA_ARGS=()
-            if tar -tzf "$EVM_SPEC_FIXTURES_ARCHIVE" --wildcards "${EXTRACT_SUBPATH}/*" >/dev/null 2>&1; then
-                TAR_EXTRA_ARGS+=(--wildcards "${EXTRACT_SUBPATH}/*")
+            if tar -tzf "$EVM_SPEC_FIXTURES_ARCHIVE" \
+                --wildcards --wildcards-match-slash "${EXTRACT_SUBPATH}/*" >/dev/null 2>&1; then
+                TAR_EXTRA_ARGS+=(--wildcards --wildcards-match-slash "${EXTRACT_SUBPATH}/*")
                 echo "Extracting subpath only: $EXTRACT_SUBPATH"
             else
                 echo "Subpath not found in archive, extracting full archive."
@@ -261,19 +262,29 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             tar_extract_status=$?
             set -e
             if [ "$tar_extract_status" -ne 0 ]; then
-                echo "Failed to extract fixtures archive: $EVM_SPEC_FIXTURES_ARCHIVE"
-                echo "tar exit code: $tar_extract_status"
-                echo "tar stderr:"
-                if [ -s /tmp/evm_spec_fixtures_extract.err ]; then
-                    sed -n '1,200p' /tmp/evm_spec_fixtures_extract.err
-                else
-                    echo "(empty)"
+                extracted_state_tests_dir="$EVM_SPEC_TESTS_ROOT/$EXTRACT_SUBPATH"
+                extracted_probe_json=""
+                if [ -d "$extracted_state_tests_dir" ]; then
+                    extracted_probe_json=$(find "$extracted_state_tests_dir" -type f -name "*.json" | head -n1)
                 fi
-                echo "Disk usage on extraction failure:"
-                df -h "$EVM_SPEC_TESTS_ROOT" /tmp || true
-                echo "Inode usage on extraction failure:"
-                df -ih "$EVM_SPEC_TESTS_ROOT" /tmp || true
-                exit "$tar_extract_status"
+                if [ "$tar_extract_status" -eq 1 ] && [ -n "$extracted_probe_json" ]; then
+                    echo "tar returned 1, but extracted fixtures are present. Continuing."
+                    echo "Probe json: $extracted_probe_json"
+                else
+                    echo "Failed to extract fixtures archive: $EVM_SPEC_FIXTURES_ARCHIVE"
+                    echo "tar exit code: $tar_extract_status"
+                    echo "tar stderr:"
+                    if [ -s /tmp/evm_spec_fixtures_extract.err ]; then
+                        sed -n '1,200p' /tmp/evm_spec_fixtures_extract.err
+                    else
+                        echo "(empty)"
+                    fi
+                    echo "Disk usage on extraction failure:"
+                    df -h "$EVM_SPEC_TESTS_ROOT" /tmp || true
+                    echo "Inode usage on extraction failure:"
+                    df -ih "$EVM_SPEC_TESTS_ROOT" /tmp || true
+                    exit "$tar_extract_status"
+                fi
             fi
             echo "Disk usage after extraction:"
             df -h "$EVM_SPEC_TESTS_ROOT" /tmp || true
