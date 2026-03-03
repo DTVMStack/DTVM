@@ -210,6 +210,13 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             rm -rf "$EVM_SPEC_TESTS_ROOT/fixtures"
             curl -L --retry 3 -C - "$EVM_SPEC_FIXTURES_URL" -o "$EVM_SPEC_FIXTURES_ARCHIVE"
             tar -xzf "$EVM_SPEC_FIXTURES_ARCHIVE" -C "$EVM_SPEC_TESTS_ROOT"
+            echo "::notice::EVM spec fixtures extracted successfully"
+            if [ -n "${GITHUB_OUTPUT:-}" ]; then
+                {
+                    echo "evm_spec_fixtures_extracted=true"
+                    echo "evm_spec_fixtures_path=$EVM_SPEC_TESTS_ROOT/fixtures"
+                } >> "$GITHUB_OUTPUT"
+            fi
 
             EVMONE_STATETEST_PATH="$EVM_SPEC_TESTS_ROOT/fixtures/state_tests"
             if [ ! -d "$EVMONE_STATETEST_PATH" ]; then
