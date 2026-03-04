@@ -21,6 +21,65 @@
 
 set -e
 
+# Emit periodic logs while a long-running command executes so CI does not look stalled.
+log_keepalive_until_pid_exits() {
+    local watched_pid=$1
+    local context=$2
+    local interval_seconds=$3
+
+    while kill -0 "$watched_pid" 2>/dev/null; do
+        echo "[keepalive] ${context} is still running..."
+        sleep "$interval_seconds"
+    done
+}
+
+run_with_keepalive_timeout_and_retries() {
+    local description=$1
+    local timeout_seconds=$2
+    local retry_count=$3
+    local retry_sleep_seconds=$4
+    shift 4
+
+    local attempt=1
+    local cmd_status=0
+    local keepalive_interval="${EVMONE_KEEPALIVE_SECONDS:-30}"
+
+    while [ "$attempt" -le "$retry_count" ]; do
+        echo "${description} (attempt ${attempt}/${retry_count})"
+
+        set +e
+        timeout --foreground "$timeout_seconds" "$@" &
+        local cmd_pid=$!
+        log_keepalive_until_pid_exits "$cmd_pid" "$description" "$keepalive_interval" &
+        local keepalive_pid=$!
+
+        wait "$cmd_pid"
+        cmd_status=$?
+
+        kill "$keepalive_pid" 2>/dev/null || true
+        wait "$keepalive_pid" 2>/dev/null || true
+        set -e
+
+        if [ "$cmd_status" -eq 0 ]; then
+            return 0
+        fi
+
+        if [ "$cmd_status" -eq 124 ]; then
+            echo "${description} timed out after ${timeout_seconds}s"
+        else
+            echo "${description} failed with exit code ${cmd_status}"
+        fi
+
+        if [ "$attempt" -lt "$retry_count" ]; then
+            echo "Retrying in ${retry_sleep_seconds}s..."
+            sleep "$retry_sleep_seconds"
+        fi
+        attempt=$((attempt + 1))
+    done
+
+    return "$cmd_status"
+}
+
 # Convert INPUT_FORMAT to lowercase for case-insensitive comparison
 INPUT_FORMAT=${INPUT_FORMAT,,}
 
@@ -305,9 +364,33 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 exit 1
             fi
 
+            EVMONE_CMAKE_CONFIG_TIMEOUT_SECONDS=${EVMONE_CMAKE_CONFIG_TIMEOUT_SECONDS:-1800}
+            EVMONE_CMAKE_BUILD_TIMEOUT_SECONDS=${EVMONE_CMAKE_BUILD_TIMEOUT_SECONDS:-5400}
+            EVMONE_CMAKE_CONFIG_RETRIES=${EVMONE_CMAKE_CONFIG_RETRIES:-3}
+            EVMONE_CMAKE_BUILD_RETRIES=${EVMONE_CMAKE_BUILD_RETRIES:-2}
+            EVMONE_CMAKE_RETRY_SLEEP_SECONDS=${EVMONE_CMAKE_RETRY_SLEEP_SECONDS:-20}
+            EVMONE_KEEPALIVE_SECONDS=${EVMONE_KEEPALIVE_SECONDS:-30}
+
             cd "$EVMONE_DIR"
-            cmake -S . -B build -DEVMONE_TESTING=ON
-            cmake --build build -j16
+            if ! run_with_keepalive_timeout_and_retries \
+                "Configuring evmone for statetests" \
+                "$EVMONE_CMAKE_CONFIG_TIMEOUT_SECONDS" \
+                "$EVMONE_CMAKE_CONFIG_RETRIES" \
+                "$EVMONE_CMAKE_RETRY_SLEEP_SECONDS" \
+                cmake -S . -B build -DEVMONE_TESTING=ON; then
+                echo "Failed to configure evmone for statetests after ${EVMONE_CMAKE_CONFIG_RETRIES} attempts."
+                exit 1
+            fi
+
+            if ! run_with_keepalive_timeout_and_retries \
+                "Building evmone statetest binaries" \
+                "$EVMONE_CMAKE_BUILD_TIMEOUT_SECONDS" \
+                "$EVMONE_CMAKE_BUILD_RETRIES" \
+                "$EVMONE_CMAKE_RETRY_SLEEP_SECONDS" \
+                cmake --build build -j16; then
+                echo "Failed to build evmone statetest binaries after ${EVMONE_CMAKE_BUILD_RETRIES} attempts."
+                exit 1
+            fi
 
             EVMONE_PROBE_TEST=$(find "$EVMONE_STATETEST_PATH" -type f -name "*.json" | head -n1)
             if [ -z "$EVMONE_PROBE_TEST" ]; then

@@ -257,6 +257,13 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: "true"
+      - name: Cache Hunter
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.hunter
+          key: ${{ runner.os }}-hunter-evmone-v1-${{ hashFiles('evmone/cmake/Hunter/init.cmake', 'evmone/cmake/Hunter/config.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-hunter-evmone-v1-
       - name: Code Format Check
         run: |
           ./tools/format.sh check
@@ -276,6 +283,12 @@ jobs:
           export TestSuite=evmonestatetestsuite
           export EVMONE_STATETEST_FILTER=fork_Cancun
           export EVMONE_MODE_TIMEOUT_SECONDS=5400
+          export EVMONE_CMAKE_CONFIG_TIMEOUT_SECONDS=1800
+          export EVMONE_CMAKE_BUILD_TIMEOUT_SECONDS=5400
+          export EVMONE_CMAKE_CONFIG_RETRIES=3
+          export EVMONE_CMAKE_BUILD_RETRIES=2
+          export EVMONE_CMAKE_RETRY_SLEEP_SECONDS=20
+          export EVMONE_KEEPALIVE_SECONDS=30
 
           bash .ci/run_test_suite.sh
 
