@@ -233,16 +233,18 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Build and Test
+        env:
+          LLVM_SYS_150_PREFIX: /opt/llvm15
+          CMAKE_BUILD_TARGET: Release
+          ENABLE_ASAN: "true"
+          RUN_MODE: multipass
+          INPUT_FORMAT: evm
+          CPU_EXCEPTION_TYPE: cpu
+          TestSuite: evmonetestsuite
         run: |
           echo "current home is $HOME"
-          export LLVM_SYS_150_PREFIX=/opt/llvm15
           export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
           export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
-          export CMAKE_BUILD_TARGET=Release
-          export ENABLE_ASAN=true
-          export RUN_MODE=multipass
-          export CPU_EXCEPTION_TYPE='cpu'
-          export TestSuite=evmonetestsuite
 
           bash .ci/run_test_suite.sh
 
@@ -268,28 +270,23 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Build and Test
+        env:
+          LLVM_SYS_150_PREFIX: /opt/llvm15
+          CMAKE_BUILD_TARGET: Release
+          ENABLE_ASAN: "false"
+          RUN_MODE: multipass
+          INPUT_FORMAT: evm
+          ENABLE_LAZY: "false"
+          ENABLE_MULTITHREAD: "true"
+          ENABLE_GAS_METER: "true"
+          CPU_EXCEPTION_TYPE: cpu
+          TestSuite: evmonestatetestsuite
+          EVMONE_STATETEST_FILTER: fork_Cancun
+          EVMONE_MODE_TIMEOUT_SECONDS: "5400"
         run: |
           echo "current home is $HOME"
-          export LLVM_SYS_150_PREFIX=/opt/llvm15
           export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
           export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
-          export HUNTER_ROOT=/github/home/.hunter
-          export CMAKE_BUILD_TARGET=Release
-          export ENABLE_ASAN=false
-          export RUN_MODE=multipass
-          export ENABLE_LAZY=false
-          export ENABLE_MULTITHREAD=true
-          export ENABLE_GAS_METER=true
-          export CPU_EXCEPTION_TYPE='cpu'
-          export TestSuite=evmonestatetestsuite
-          export EVMONE_STATETEST_FILTER=fork_Cancun
-          export EVMONE_MODE_TIMEOUT_SECONDS=5400
-          export EVMONE_CMAKE_CONFIG_TIMEOUT_SECONDS=600
-          export EVMONE_CMAKE_BUILD_TIMEOUT_SECONDS=5400
-          export EVMONE_CMAKE_CONFIG_RETRIES=2
-          export EVMONE_CMAKE_BUILD_RETRIES=2
-          export EVMONE_CMAKE_RETRY_SLEEP_SECONDS=20
-          export EVMONE_KEEPALIVE_SECONDS=30
 
           bash .ci/run_test_suite.sh
 
