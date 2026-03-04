@@ -261,7 +261,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /github/home/.hunter
-          key: ${{ runner.os }}-hunter-evmone-v1-${{ hashFiles('evmone/cmake/Hunter/init.cmake', 'evmone/cmake/Hunter/config.cmake') }}
+          key: ${{ runner.os }}-hunter-evmone-v1-${{ hashFiles('.ci/run_test_suite.sh', '.github/workflows/dtvm_evm_test_x86.yml') }}
           restore-keys: |
             ${{ runner.os }}-hunter-evmone-v1-
       - name: Code Format Check
@@ -273,6 +273,7 @@ jobs:
           export LLVM_SYS_150_PREFIX=/opt/llvm15
           export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
           export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
+          export HUNTER_ROOT=/github/home/.hunter
           export CMAKE_BUILD_TARGET=Release
           export ENABLE_ASAN=false
           export RUN_MODE=multipass
