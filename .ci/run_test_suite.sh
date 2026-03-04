@@ -370,6 +370,52 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             EVMONE_CMAKE_BUILD_RETRIES=${EVMONE_CMAKE_BUILD_RETRIES:-2}
             EVMONE_CMAKE_RETRY_SLEEP_SECONDS=${EVMONE_CMAKE_RETRY_SLEEP_SECONDS:-20}
             EVMONE_KEEPALIVE_SECONDS=${EVMONE_KEEPALIVE_SECONDS:-30}
+            HUNTER_GATE_VERSION=0.26.0
+            HUNTER_GATE_SHA1=b1944539bad88a7cc006b4f3e4028a72a8ae46d1
+            HUNTER_GATE_SHORT_SHA1=b194453
+            HUNTER_GATE_URL=https://github.com/cpp-pm/hunter/archive/v${HUNTER_GATE_VERSION}.tar.gz
+
+            if [ -z "${HUNTER_ROOT:-}" ]; then
+                if [ -s "/root/.hunter/_Base/Download/Hunter/${HUNTER_GATE_VERSION}/${HUNTER_GATE_SHORT_SHA1}/v${HUNTER_GATE_VERSION}.tar.gz" ]; then
+                    export HUNTER_ROOT="/root/.hunter"
+                else
+                    export HUNTER_ROOT="$HOME/.hunter"
+                fi
+            fi
+            echo "Using HUNTER_ROOT=${HUNTER_ROOT}"
+
+            HUNTER_DOWNLOAD_DIR="${HUNTER_ROOT}/_Base/Download/Hunter/${HUNTER_GATE_VERSION}/${HUNTER_GATE_SHORT_SHA1}"
+            HUNTER_ARCHIVE_PATH="${HUNTER_DOWNLOAD_DIR}/v${HUNTER_GATE_VERSION}.tar.gz"
+            mkdir -p "$HUNTER_DOWNLOAD_DIR"
+
+            if [ ! -s "$HUNTER_ARCHIVE_PATH" ]; then
+                echo "Prefetching Hunter archive: ${HUNTER_GATE_URL}"
+                if command -v aria2c >/dev/null 2>&1; then
+                    aria2c -c --max-tries=3 --retry-wait=1 --auto-file-renaming=false \
+                        --dir "$HUNTER_DOWNLOAD_DIR" \
+                        --out "$(basename "$HUNTER_ARCHIVE_PATH")" \
+                        "$HUNTER_GATE_URL"
+                elif command -v wget >/dev/null 2>&1; then
+                    wget -c --tries=3 --waitretry=1 --max-redirect=20 \
+                        --progress=dot:giga \
+                        -O "$HUNTER_ARCHIVE_PATH" "$HUNTER_GATE_URL"
+                else
+                    echo "Neither aria2c nor wget is available to prefetch Hunter archive."
+                    exit 1
+                fi
+            fi
+
+            if [ ! -s "$HUNTER_ARCHIVE_PATH" ]; then
+                echo "Hunter archive is missing or empty: ${HUNTER_ARCHIVE_PATH}"
+                exit 1
+            fi
+
+            HUNTER_ARCHIVE_SHA1=$(sha1sum "$HUNTER_ARCHIVE_PATH" | awk '{print $1}')
+            if [ "$HUNTER_ARCHIVE_SHA1" != "$HUNTER_GATE_SHA1" ]; then
+                echo "Hunter archive SHA1 mismatch: expected=${HUNTER_GATE_SHA1}, actual=${HUNTER_ARCHIVE_SHA1}"
+                rm -f "$HUNTER_ARCHIVE_PATH"
+                exit 1
+            fi
 
             cd "$EVMONE_DIR"
             if ! run_with_keepalive_timeout_and_retries \
@@ -379,6 +425,10 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 "$EVMONE_CMAKE_RETRY_SLEEP_SECONDS" \
                 cmake -S . -B build -DEVMONE_TESTING=ON; then
                 echo "Failed to configure evmone for statetests after ${EVMONE_CMAKE_CONFIG_RETRIES} attempts."
+                find "${HUNTER_DOWNLOAD_DIR}" -maxdepth 4 -type f \( -name "*download*.log" -o -name "*-err.log" \) 2>/dev/null | while read -r hunter_log; do
+                    echo "Hunter log: ${hunter_log}"
+                    sed -n '1,200p' "$hunter_log"
+                done
                 exit 1
             fi
 

@@ -283,9 +283,9 @@ jobs:
           export TestSuite=evmonestatetestsuite
           export EVMONE_STATETEST_FILTER=fork_Cancun
           export EVMONE_MODE_TIMEOUT_SECONDS=5400
-          export EVMONE_CMAKE_CONFIG_TIMEOUT_SECONDS=1800
+          export EVMONE_CMAKE_CONFIG_TIMEOUT_SECONDS=600
           export EVMONE_CMAKE_BUILD_TIMEOUT_SECONDS=5400
-          export EVMONE_CMAKE_CONFIG_RETRIES=3
+          export EVMONE_CMAKE_CONFIG_RETRIES=2
           export EVMONE_CMAKE_BUILD_RETRIES=2
           export EVMONE_CMAKE_RETRY_SLEEP_SECONDS=20
           export EVMONE_KEEPALIVE_SECONDS=30
