@@ -50,20 +50,23 @@ for dir in "$BASE_DIR"/*/; do
         # Get the directory name (without path)
         dirname=$(basename "$dir")
 
-        # Check if the corresponding .sol file exists
-        sol_file="$dir$dirname.sol"
+        # Check if any .sol files exist in the directory
+        shopt -s nullglob
+        sol_files=("$dir"*.sol)
+        shopt -u nullglob
+
         json_file="$dir$dirname.json"
 
-        if [ -f "$sol_file" ]; then
-            echo "Compiling $sol_file..."
-            # Compile the Solidity file and format JSON
-            if solc --evm-version cancun --combined-json abi,bin,bin-runtime "$dir$dirname.sol" | jq --indent 2 '.' > "$dir$dirname.json"; then
-                echo "✓ Successfully compiled $dirname.sol to $dirname.json (cancun EVM)"
+        if [ ${#sol_files[@]} -gt 0 ]; then
+            echo "Compiling ${#sol_files[@]} Solidity files in $dir..."
+            # Compile the Solidity files and format JSON
+            if solc --evm-version cancun --combined-json abi,bin,bin-runtime "${sol_files[@]}" | jq --indent 2 '.' > "$json_file"; then
+                echo "✓ Successfully compiled files in $dir to $dirname.json (cancun EVM)"
             else
-                echo "✗ Failed to compile $dirname.sol"
+                echo "✗ Failed to compile files in $dir"
             fi
         else
-            echo "Warning: $sol_file not found, skipping directory $dirname"
+            echo "Warning: No .sol files found in $dir, skipping"
         fi
     fi
 done

@@ -765,15 +765,6 @@ void BaseInterpreter::interpret() {
 
     Byte OpcodeByte = Code[Frame->Pc];
     evmc_opcode Op = static_cast<evmc_opcode>(OpcodeByte);
-    const uint8_t OpcodeU8 = static_cast<uint8_t>(OpcodeByte);
-
-    if (NamesTable[OpcodeU8] == NULL) {
-      Context.setStatus(EVMC_UNDEFINED_INSTRUCTION);
-      if (handleExecutionStatus(Frame, Context)) {
-        return;
-      }
-      break;
-    }
 
     switch (Op) {
     case evmc_opcode::OP_STOP:

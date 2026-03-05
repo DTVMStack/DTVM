@@ -79,7 +79,8 @@ def run_benchmark(
         cmd.extend(extra_args)
 
     if not any(arg.startswith("--benchmark_filter") for arg in cmd):
-        cmd.append("--benchmark_filter=external/total/*")
+        # We include external/total/* for standard benchmarks and synthetic benchmarks
+        cmd.append("--benchmark_filter=external/total/.*")
 
     print(f"Running: {' '.join(cmd)}")
     print(f"Environment: EVMONE_EXTERNAL_OPTIONS={env['EVMONE_EXTERNAL_OPTIONS']}")

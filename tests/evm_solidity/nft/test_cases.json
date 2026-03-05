@@ -1,0 +1,29 @@
+{
+  "skip": false,
+  "main_contract": "NFTWrapper",
+  "deploy_contracts": [
+    "ERC721Enumerable",
+    "OnChainMetadataNFT",
+    "NFTWrapper"
+  ],
+  "constructor_args": {
+    "NFTWrapper": [
+      {"type": "address", "value": "ERC721Enumerable"},
+      {"type": "address", "value": "OnChainMetadataNFT"}
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "test_enumerable_mint_burn",
+      "function": "testEnumerableMintBurn()",
+      "calldata": "7c7fa45e",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "name": "test_metadata",
+      "function": "testMetadata()",
+      "calldata": "5ad7ef92",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000005d646174613a6170706c69636174696f6e2f6a736f6e3b6261736536342c65794a755957316c496a6f67496c526c6333524f526c51694c4341695a47567a59334a7063485270623234694f694169515342305a584e304945354756434a39000000"
+    }
+  ]
+}

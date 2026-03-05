@@ -2713,18 +2713,6 @@ EVMMirBuilder::handleMLoad(Operand AddrComponents) {
 
   Operand Bytes32Op(MemPtr, EVMType::BYTES32);
   Operand Result = convertBytes32ToU256Operand(Bytes32Op);
-
-  // Pin loaded values into local variables so the backend cannot reschedule
-  // the memory reads past later function calls (e.g. CODECOPY / MSTORE) that
-  // may modify the same memory region.  Without this, an MLOAD result that
-  // stays on the EVM stack across a memory-writing opcode could observe the
-  // *new* contents instead of the value at the time of the MLOAD.
-  U256Inst Parts = extractU256Operand(Result);
-  for (int I = 0; I < static_cast<int>(EVM_ELEMENTS_COUNT); ++I) {
-    Parts[I] = protectUnsafeValue(Parts[I], I64Type);
-  }
-  Result = Operand(Parts, EVMType::UINT256);
-
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
@@ -3152,6 +3140,9 @@ void EVMMirBuilder::handleRevert(Operand OffsetOp, Operand SizeOp) {
 
   MBasicBlock *PostRevertBB = createBasicBlock();
   setInsertBlock(PostRevertBB);
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  reloadGasFromMemory();
+#endif
 }
 
 void EVMMirBuilder::handleInvalid() {

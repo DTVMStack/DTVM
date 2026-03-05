@@ -238,9 +238,19 @@ void parseTestCasesFromJson(const rapidjson::Document &Doc,
       Test.Function = TestCase["function"].GetString();
     }
 
+    if (TestCase.HasMember("args") && TestCase["args"].IsArray()) {
+      for (const auto &Arg : TestCase["args"].GetArray()) {
+        if (Arg.HasMember("type") && Arg["type"].IsString() &&
+            Arg.HasMember("value") && Arg["value"].IsString()) {
+          Test.Args.emplace_back(Arg["type"].GetString(),
+                                 Arg["value"].GetString());
+        }
+      }
+    }
+
     if (TestCase.HasMember("calldata") && TestCase["calldata"].IsString()) {
       Test.Calldata = TestCase["calldata"].GetString();
-    } else if (!Test.Function.empty()) {
+    } else if (!Test.Function.empty() && Test.Args.empty()) {
       std::string FunctionSelector = computeFunctionSelector(Test.Function);
       if (!FunctionSelector.empty()) {
         Test.Calldata = FunctionSelector;
@@ -248,7 +258,7 @@ void parseTestCasesFromJson(const rapidjson::Document &Doc,
         // Skip test case if can't compute calldata
         continue;
       }
-    } else {
+    } else if (Test.Function.empty() && Test.Calldata.empty()) {
       // Skip test case if neither calldata nor function provided
       continue;
     }

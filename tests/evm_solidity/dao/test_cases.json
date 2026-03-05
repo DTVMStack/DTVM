@@ -1,0 +1,34 @@
+{
+  "skip": false,
+  "main_contract": "DAOWrapper",
+  "deploy_contracts": [
+    "SimpleGovernor",
+    "MultiSigWallet",
+    "DAOWrapper"
+  ],
+  "constructor_args": {
+    "MultiSigWallet": [
+      {"type": "address", "value": "0x1000000000000000000000000000000000000000"},
+      {"type": "address", "value": "DAOWrapper"},
+      {"type": "uint256", "value": "1"}
+    ],
+    "DAOWrapper": [
+      {"type": "address", "value": "SimpleGovernor"},
+      {"type": "address", "value": "MultiSigWallet"}
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "test_governor",
+      "function": "testGovernor()",
+      "calldata": "634a9562",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "name": "test_multisig",
+      "function": "testMultiSig()",
+      "calldata": "158f00cf",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000001"
+    }
+  ]
+}

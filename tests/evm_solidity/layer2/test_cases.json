@@ -1,0 +1,29 @@
+{
+  "skip": false,
+  "main_contract": "Layer2Wrapper",
+  "deploy_contracts": [
+    "RollupState",
+    "MerkleProofVerifier",
+    "Layer2Wrapper"
+  ],
+  "constructor_args": {
+    "Layer2Wrapper": [
+      {"type": "address", "value": "RollupState"},
+      {"type": "address", "value": "MerkleProofVerifier"}
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "test_rollup",
+      "function": "testRollup()",
+      "calldata": "9d47753e",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "name": "test_merkle",
+      "function": "testMerkle()",
+      "calldata": "4d748da2",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000001"
+    }
+  ]
+}

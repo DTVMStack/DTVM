@@ -1,0 +1,51 @@
+{
+  "skip": false,
+  "main_contract": "ERC20BenchWrapper",
+  "deploy_contracts": ["PausableBurnableERC20", "FeeOnTransferERC20", "ERC20BenchWrapper"],
+  "constructor_args": {
+    "PausableBurnableERC20": [{"type": "uint256", "value": "1000000"}],
+    "FeeOnTransferERC20": [
+      {"type": "uint256", "value": "1000000"},
+      {"type": "uint256", "value": "5"},
+      {"type": "address", "value": "0x1000000000000000000000000000000000000000"}
+    ],
+    "ERC20BenchWrapper": [
+      {"type": "address", "value": "PausableBurnableERC20"},
+      {"type": "address", "value": "FeeOnTransferERC20"}
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "setup_fund_pb",
+      "function": "transfer(address,uint256)",
+      "contract": "PausableBurnableERC20",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000001",
+      "args": [
+        {"type": "address", "value": "ERC20BenchWrapper"},
+        {"type": "uint256", "value": "1000000"}
+      ]
+    },
+    {
+      "name": "setup_fund_fot",
+      "function": "transfer(address,uint256)",
+      "contract": "FeeOnTransferERC20",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000001",
+      "args": [
+        {"type": "address", "value": "ERC20BenchWrapper"},
+        {"type": "uint256", "value": "1000000"}
+      ]
+    },
+    {
+      "name": "test_pausable_burnable",
+      "function": "testPausableBurnable()",
+      "calldata": "bae4cf7e",
+      "expected": "00000000000000000000000000000000000000000000000000000000000f404c"
+    },
+    {
+      "name": "test_fee_on_transfer",
+      "function": "testFeeOnTransfer()",
+      "calldata": "cd0685ca",
+      "expected": "00000000000000000000000000000000000000000000000000000000000003b6"
+    }
+  ]
+}

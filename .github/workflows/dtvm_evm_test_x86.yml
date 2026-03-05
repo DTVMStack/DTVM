@@ -218,7 +218,6 @@ jobs:
           export ENABLE_GAS_REGISTER=true
 
           bash .ci/run_test_suite.sh
-
   build_test_release_evmone_unittests_on_x86:
     name: Test DTVM-EVM multipass and interpreter using evmone unit tests in release mode on x86-64
     runs-on: ubuntu-latest

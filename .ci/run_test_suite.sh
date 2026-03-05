@@ -26,6 +26,10 @@ INPUT_FORMAT=${INPUT_FORMAT,,}
 
 CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TARGET"
 
+if [[ ${CMAKE_BUILD_TARGET} != "Release" && ${RUN_MODE} != "interpreter" && ${INPUT_FORMAT} == "evm" ]]; then
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_SPDLOG=ON -DZEN_ENABLE_JIT_LOGGING=ON"
+fi
+
 if [ "${ENABLE_ASAN:-false}" = true ]; then
     CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_ASAN=ON"
 fi
@@ -201,7 +205,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                     --output-summary "$BENCHMARK_SUMMARY_FILE" \
                     --lib ./libdtvmapi.so \
                     --mode "$BENCHMARK_MODE" \
-                    --benchmark-dir test/evm-benchmarks/benchmarks
+                    --benchmark-dir test/evm-benchmarks/benchmarks $OPCODE_BENCH_DIR
             elif [ -n "$BENCHMARK_BASELINE_LIB" ]; then
                 # No cache -- run baseline benchmarks with the pre-built
                 # baseline library, then run current benchmarks and compare.
@@ -212,7 +216,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                     --save-baseline "$SAVE_PATH" \
                     --lib ./libdtvmapi.so \
                     --mode "$BENCHMARK_MODE" \
-                    --benchmark-dir test/evm-benchmarks/benchmarks
+                    --benchmark-dir test/evm-benchmarks/benchmarks $OPCODE_BENCH_DIR
 
                 echo "Running current benchmarks with PR library..."
                 cp ../build/lib/libdtvmapi.so ./libdtvmapi.so
@@ -222,15 +226,15 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                     --output-summary "$BENCHMARK_SUMMARY_FILE" \
                     --lib ./libdtvmapi.so \
                     --mode "$BENCHMARK_MODE" \
-                    --benchmark-dir test/evm-benchmarks/benchmarks
+                    --benchmark-dir test/evm-benchmarks/benchmarks $OPCODE_BENCH_DIR
             elif [ -n "$BENCHMARK_SAVE_BASELINE" ]; then
                 echo "Saving performance baseline..."
                 python3 check_performance_regression.py \
-                    --save-baseline "$BENCHMARK_SAVE_BASELINE" \
+                    --save-baseline "$   ENCHMARK_SAVE_BASELINE" \
                     --output-summary "$BENCHMARK_SUMMARY_FILE" \
                     --lib ./libdtvmapi.so \
                     --mode "$BENCHMARK_MODE" \
-                    --benchmark-dir test/evm-benchmarks/benchmarks
+                    --benchmark-dir test/evm-benchmarks/benchmarks $OPCODE_BENCH_DIR
             elif [ -n "$BENCHMARK_BASELINE_FILE" ]; then
                 echo "Checking performance regression against baseline..."
                 python3 check_performance_regression.py \
@@ -239,7 +243,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                     --output-summary "$BENCHMARK_SUMMARY_FILE" \
                     --lib ./libdtvmapi.so \
                     --mode "$BENCHMARK_MODE" \
-                    --benchmark-dir test/evm-benchmarks/benchmarks
+                    --benchmark-dir test/evm-benchmarks/benchmarks $OPCODE_BENCH_DIR
             else
                 echo "Running benchmark suite without comparison..."
                 python3 check_performance_regression.py \
@@ -247,7 +251,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                     --output-summary "$BENCHMARK_SUMMARY_FILE" \
                     --lib ./libdtvmapi.so \
                     --mode "$BENCHMARK_MODE" \
-                    --benchmark-dir test/evm-benchmarks/benchmarks
+                    --benchmark-dir test/evm-benchmarks/benchmarks $OPCODE_BENCH_DIR
                 cat benchmark_results.json
             fi
 

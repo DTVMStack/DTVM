@@ -128,6 +128,14 @@ evmc_status_code executeSingleContractTest(const RuntimeConfig &Config,
   std::map<std::string, DeployedContract> DeployedContracts;
   std::map<std::string, evmc::address> DeployedAddresses;
 
+  // Precompute addresses for all contracts (needed for constructor args that
+  // reference not-yet-deployed contracts)
+  std::map<std::string, evmc::address> ResolvedAddresses;
+  for (size_t I = 0; I < ContractTest.DeployContracts.size(); ++I) {
+    ResolvedAddresses[ContractTest.DeployContracts[I]] =
+        TestEnv.MockedHost->computeCreateAddress(TestEnv.DeployerAddr, I);
+  }
+
   // Step 1: Deploy all specified contracts
   for (const std::string &NowContractName : ContractTest.DeployContracts) {
     auto ContractIt = ContractTest.ContractDataMap.find(NowContractName);
@@ -143,7 +151,7 @@ evmc_status_code executeSingleContractTest(const RuntimeConfig &Config,
     try {
       DeployedContract Deployed =
           deployContract(TestEnv, NowContractName, ContractData, Ctorargs,
-                         DeployedAddresses, GasLimit);
+                         ResolvedAddresses, GasLimit);
 
       DeployedContracts[NowContractName] = Deployed;
       DeployedAddresses[NowContractName] = Deployed.Address;
@@ -164,13 +172,20 @@ evmc_status_code executeSingleContractTest(const RuntimeConfig &Config,
                 << std::endl;
       return EVMC_FAILURE;
     }
-    if (TestCase.Calldata.empty()) {
+
+    std::string CalldataToUse;
+    if (!TestCase.Args.empty() && !TestCase.Function.empty()) {
+      CalldataToUse = computeFunctionSelector(TestCase.Function) +
+                      encodeConstructorParams(TestCase.Args, DeployedAddresses);
+    } else if (!TestCase.Calldata.empty()) {
+      CalldataToUse = TestCase.Calldata;
+    } else {
       throw getError(ErrorCode::InvalidRawData);
     }
 
     const auto &Contract = InstanceIt->second;
     evmc::Result CallResult =
-        executeContractCall(TestEnv, Contract, TestCase.Calldata, GasLimit);
+        executeContractCall(TestEnv, Contract, CalldataToUse, GasLimit);
     if (checkResult(TestCase, CallResult) != EVMC_SUCCESS) {
       AllCasePassed = false;
     }

@@ -1,0 +1,29 @@
+{
+  "skip": false,
+  "main_contract": "DeFiWrapper",
+  "deploy_contracts": [
+    "SimpleDEX",
+    "LendingPool",
+    "DeFiWrapper"
+  ],
+  "constructor_args": {
+    "DeFiWrapper": [
+      {"type": "address", "value": "SimpleDEX"},
+      {"type": "address", "value": "LendingPool"}
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "test_dex_swap",
+      "function": "testDexSwap()",
+      "calldata": "5412f010",
+      "expected": "00000000000000000000000000000000000000000000000000000000000003e4"
+    },
+    {
+      "name": "test_lending",
+      "function": "testLending()",
+      "calldata": "db3b1fdd",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000014"
+    }
+  ]
+}

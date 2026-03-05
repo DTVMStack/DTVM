@@ -157,8 +157,8 @@ TEST_F(EVMFallbackExecutionTest, MultipleFallbackTriggers) {
 
   evmc_result Result = executeBytecode(Bytecode);
 
-  // 0xEE is not a valid EVM opcode, so it should be undefined
-  EXPECT_EQ(Result.status_code, EVMC_UNDEFINED_INSTRUCTION);
+  // Should handle multiple fallbacks
+  EXPECT_EQ(Result.status_code, EVMC_INVALID_INSTRUCTION);
 
   // Verify gas consumption
   EXPECT_LT(Result.gas_left, 1000000);

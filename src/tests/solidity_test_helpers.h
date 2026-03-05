@@ -21,6 +21,7 @@ struct SolidityTestCase {
   std::string Expected;
   std::string Contract;
   std::string Calldata;
+  std::vector<std::pair<std::string, std::string>> Args;
 };
 
 // contract.json structures
