@@ -3102,7 +3102,7 @@ void JoinVals::eraseInstrs(SmallPtrSetImpl<CgInstruction *> &ErasedInstrs,
         if (Register::isVirtualRegister(Reg) && Reg != CP.getSrcReg() &&
             Reg != CP.getDstReg())
           ShrinkRegs.push_back(Reg);
-        else if (Register::isVirtualRegister(Reg))
+        else if (Register::isVirtualRegister(Reg) && MI->allDefsAreDead())
           ShrinkMainRange = true;
       }
       ErasedInstrs.insert(MI);
