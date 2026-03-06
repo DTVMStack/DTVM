@@ -2226,10 +2226,11 @@ public:
   /// Erase any machine instructions that have been coalesced away.
   /// Add erased instructions to ErasedInstrs.
   /// Add foreign virtual registers to ShrinkRegs if their live range ended at
-  /// the erased instrs.
+  /// the erased instrs. Set ShrinkMainRange when erasing a COPY whose source
+  /// is part of the coalesced pair, so the merged interval gets shrunk.
   void eraseInstrs(SmallPtrSetImpl<CgInstruction *> &ErasedInstrs,
                    SmallVectorImpl<CgRegister> &ShrinkRegs,
-                   CgLiveInterval *LI = nullptr);
+                   bool &ShrinkMainRange, CgLiveInterval *LI = nullptr);
 
   /// Remove liverange defs at places where implicit defs will be removed.
   void removeImplicitDefs();
@@ -3019,7 +3020,7 @@ void JoinVals::removeImplicitDefs() {
 
 void JoinVals::eraseInstrs(SmallPtrSetImpl<CgInstruction *> &ErasedInstrs,
                            SmallVectorImpl<CgRegister> &ShrinkRegs,
-                           CgLiveInterval *LI) {
+                           bool &ShrinkMainRange, CgLiveInterval *LI) {
   for (unsigned i = 0, e = LR.getNumValNums(); i != e; ++i) {
     // Get the def location before markUnused() below invalidates it.
     CgVNInfo *VNI = LR.getValNumInfo(i);
@@ -3101,6 +3102,8 @@ void JoinVals::eraseInstrs(SmallPtrSetImpl<CgInstruction *> &ErasedInstrs,
         if (Register::isVirtualRegister(Reg) && Reg != CP.getSrcReg() &&
             Reg != CP.getDstReg())
           ShrinkRegs.push_back(Reg);
+        else if (Register::isVirtualRegister(Reg) && MI->allDefsAreDead())
+          ShrinkMainRange = true;
       }
       ErasedInstrs.insert(MI);
       LLVM_DEBUG(dbgs() << "\t\terased:\t" << Def << '\t' << *MI);
@@ -3294,8 +3297,8 @@ bool CgRegisterCoalescer::joinVirtRegs(CgCoalescerPair &CP) {
   // Erase COPY and IMPLICIT_DEF instructions. This may cause some external
   // registers to require trimming.
   SmallVector<CgRegister, 8> ShrinkRegs;
-  LHSVals.eraseInstrs(ErasedInstrs, ShrinkRegs, &LHS);
-  RHSVals.eraseInstrs(ErasedInstrs, ShrinkRegs);
+  LHSVals.eraseInstrs(ErasedInstrs, ShrinkRegs, ShrinkMainRange, &LHS);
+  RHSVals.eraseInstrs(ErasedInstrs, ShrinkRegs, ShrinkMainRange);
   while (!ShrinkRegs.empty())
     shrinkToUses(&LIS->getInterval(ShrinkRegs.pop_back_val()));
 
