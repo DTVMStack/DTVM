@@ -4118,17 +4118,7 @@ void EVMMirBuilder::chargeDynamicGasIR(MInstruction *GasCost) {
     createInstruction<DassignInstruction>(true, &(Ctx.VoidType), NewGas,
                                           GasRegVar->getVarIdx());
 
-    // Sync updated gas to Instance->Gas memory so that a subsequent
-    // reloadGasFromMemory() (e.g. in handleMStore/handleMLoad after
-    // expandMemoryIR) picks up the correct post-deduction value.
-    MPointerType *I64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
-    MInstruction *GasOff = createIntConstInstruction(
-        I64Type, zen::runtime::EVMInstance::getGasFieldOffset());
-    MInstruction *GasAddr = createInstruction<BinaryInstruction>(
-        false, OP_add, I64Type, InstanceAddr, GasOff);
-    MInstruction *GasPtr = createInstruction<ConversionInstruction>(
-        false, OP_inttoptr, I64PtrType, GasAddr);
-    createInstruction<StoreInstruction>(true, &Ctx.VoidType, NewGas, GasPtr);
+    syncGasToMemory();
     return;
   }
 #endif
