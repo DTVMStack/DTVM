@@ -43,7 +43,13 @@ void EVMJITCompiler::compileEVMToMC(EVMFrontendContext &Ctx, MModule &Mod,
   CgFunction CgFunc(Ctx, MFunc);
   MFunc.setFunctionType(Mod.getFuncType(FuncIdx));
   EVMMirBuilder MIRBuilder(Ctx, MFunc);
-  MIRBuilder.compile(&Ctx);
+  if (FuncIdx == MAIN_EVM_FUNC_IDX) {
+    MIRBuilder.compile(&Ctx);
+  } else if (FuncIdx == MUL_HELPER_FUNC_IDX) {
+    MIRBuilder.buildMulHelperFunction();
+  } else {
+    ZEN_UNREACHABLE();
+  }
 
   // Apply MIR optimizations and generate machine code
   compileMIRToCgIR(Mod, MFunc, CgFunc, DisableGreedyRA);
@@ -69,6 +75,7 @@ void EagerEVMJITCompiler::compile() {
 
   MModule Mod(Ctx);
   buildEVMFunction(Ctx, Mod, *EVMMod);
+  Ctx.clearRequiredHelpers();
   Ctx.CodeMPool = &EVMMod->getJITCodeMemPool();
 
 #ifdef ZEN_ENABLE_LINUX_PERF
@@ -83,13 +90,15 @@ void EagerEVMJITCompiler::compile() {
   auto &CodeMPool = EVMMod->getJITCodeMemPool();
   uint8_t *JITCode = const_cast<uint8_t *>(CodeMPool.getMemStart());
 
-  // EVM has only 1 function, use direct single-threaded compilation
-  compileEVMToMC(Ctx, Mod, 0, Config.DisableMultipassGreedyRA);
+  compileEVMToMC(Ctx, Mod, MAIN_EVM_FUNC_IDX, Config.DisableMultipassGreedyRA);
+  if (Ctx.isMulHelperRequired()) {
+    compileEVMToMC(Ctx, Mod, MUL_HELPER_FUNC_IDX,
+                   Config.DisableMultipassGreedyRA);
+  }
   emitObjectBuffer(&Ctx);
   ZEN_ASSERT(Ctx.ExternRelocs.empty());
 
-  uint8_t *JITFuncPtr = Ctx.CodePtr + Ctx.FuncOffsetMap[0];
-  EVMMod->setJITCodeAndSize(JITFuncPtr, Ctx.CodeSize);
+  uint8_t *JITFuncPtr = JITCode + Ctx.FuncOffsetMap[MAIN_EVM_FUNC_IDX];
 #ifdef ZEN_ENABLE_LINUX_PERF
   // Write block symbols instead of EVM_Main
   // JIT_DUMP_WRITE_FUNC("EVM_Main", JITFuncPtr, Ctx.FuncSizeMap[0]);
@@ -104,7 +113,8 @@ void EagerEVMJITCompiler::compile() {
   size_t CodeSize = CodeMPool.getMemEnd() - JITCode;
   platform::mprotect(JITCode, TO_MPROTECT_CODE_SIZE(CodeSize),
                      PROT_READ | PROT_EXEC);
-  EVMMod->setJITCodeAndSize(JITCode, CodeSize);
+  EVMMod->setJITCodeAndSize(JITFuncPtr,
+                            CodeSize - Ctx.FuncOffsetMap[MAIN_EVM_FUNC_IDX]);
 
   Stats.stopRecord(Timer);
 }
