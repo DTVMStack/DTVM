@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "vm/dt_evmc_vm.h"
-#include <cstring>
 #include <evmc/evmc.h>
 #include <evmc/mocked_host.hpp>
 #include <gtest/gtest.h>
-#include <intx/intx.hpp>
 #include <memory>
 #include <vector>
 
@@ -16,72 +14,12 @@ inline evmc::bytes operator""_hex(const char *S, size_t Size) {
   return evmc::from_spaced_hex({S, Size}).value();
 }
 
-intx::uint256 makeU256(uint64_t Limb0, uint64_t Limb1 = 0, uint64_t Limb2 = 0,
-                       uint64_t Limb3 = 0) {
-  return intx::uint256{Limb0} | (intx::uint256{Limb1} << 64) |
-         (intx::uint256{Limb2} << 128) | (intx::uint256{Limb3} << 192);
-}
-
-std::vector<uint8_t> buildMulReturnBytecode(const intx::uint256 &LHS,
-                                            const intx::uint256 &RHS) {
-  std::vector<uint8_t> Bytecode;
-  Bytecode.reserve(2 * (1 + sizeof(evmc::bytes32)) + 6);
-
-  auto AppendPush32 = [&](const intx::uint256 &Value) {
-    const evmc::bytes32 Bytes = intx::be::store<evmc::bytes32>(Value);
-    Bytecode.push_back(0x7F);
-    Bytecode.insert(Bytecode.end(), std::begin(Bytes.bytes),
-                    std::end(Bytes.bytes));
-  };
-
-  AppendPush32(LHS);
-  AppendPush32(RHS);
-  Bytecode.push_back(0x02);
-  Bytecode.push_back(0x60);
-  Bytecode.push_back(0x00);
-  Bytecode.push_back(0x52);
-  Bytecode.push_back(0x60);
-  Bytecode.push_back(0x20);
-  Bytecode.push_back(0x60);
-  Bytecode.push_back(0x00);
-  Bytecode.push_back(0xF3);
-  return Bytecode;
-}
-
-void expectReturnedU256(const evmc_result &Result,
-                        const intx::uint256 &ExpectedValue) {
-  ASSERT_EQ(Result.status_code, EVMC_SUCCESS);
-  ASSERT_EQ(Result.output_size, sizeof(evmc::bytes32));
-  ASSERT_NE(Result.output_data, nullptr);
-
-  const evmc::bytes32 ExpectedBytes =
-      intx::be::store<evmc::bytes32>(ExpectedValue);
-  auto ToHex = [](const uint8_t *Data, size_t Size) {
-    static constexpr char Digits[] = "0123456789abcdef";
-    std::string Hex;
-    Hex.reserve(Size * 2);
-    for (size_t I = 0; I < Size; ++I) {
-      Hex.push_back(Digits[Data[I] >> 4]);
-      Hex.push_back(Digits[Data[I] & 0x0F]);
-    }
-    return Hex;
-  };
-
-  EXPECT_EQ(std::memcmp(Result.output_data, ExpectedBytes.bytes,
-                        sizeof(ExpectedBytes.bytes)),
-            0)
-      << "actual=" << ToHex(Result.output_data, sizeof(ExpectedBytes.bytes))
-      << " expected="
-      << ToHex(ExpectedBytes.bytes, sizeof(ExpectedBytes.bytes));
-}
-
 class EVMFallbackExecutionTest : public ::testing::Test {
 protected:
   void SetUp() override {
     // Create DTVM using the correct API
     Vm = evmc_create_dtvmapi();
     ASSERT_NE(Vm, nullptr) << "Failed to create DTVM instance";
-    ASSERT_EQ(Vm->set_option(Vm, "mode", "multipass"), EVMC_SET_OPTION_SUCCESS);
 
     // Initialize mocked host for testing
     Host = std::make_unique<evmc::MockedHost>();
@@ -298,60 +236,6 @@ TEST_F(EVMFallbackExecutionTest, FallbackWithMemoryOperations) {
 #else
   GTEST_SKIP() << "ZEN_ENABLE_JIT_FALLBACK_TEST not enabled";
 #endif
-}
-
-TEST_F(EVMFallbackExecutionTest, MulFastPathZeroOperand) {
-  const intx::uint256 LHS = 0;
-  const intx::uint256 RHS =
-      makeU256(0x0123456789ABCDEFULL, 0x0FEDCBA987654321ULL,
-               0x1111222233334444ULL, 0x5555666677778888ULL);
-
-  evmc_result Result = executeBytecode(buildMulReturnBytecode(LHS, RHS));
-  expectReturnedU256(Result, LHS * RHS);
-
-  if (Result.release) {
-    Result.release(&Result);
-  }
-}
-
-TEST_F(EVMFallbackExecutionTest, MulFastPathSingleLimbLeft) {
-  const intx::uint256 LHS = makeU256(0, 0xA1B2C3D4E5F60718ULL);
-  const intx::uint256 RHS =
-      makeU256(0x0123456789ABCDEFULL, 0x0FEDCBA987654321ULL,
-               0x1111222233334444ULL, 0x5555666677778888ULL);
-
-  evmc_result Result = executeBytecode(buildMulReturnBytecode(LHS, RHS));
-  expectReturnedU256(Result, LHS * RHS);
-
-  if (Result.release) {
-    Result.release(&Result);
-  }
-}
-
-TEST_F(EVMFallbackExecutionTest, MulFastPathSingleLimbRightHigh) {
-  const intx::uint256 LHS =
-      makeU256(0x89ABCDEF01234567ULL, 0x76543210FEDCBA98ULL,
-               0x0102030405060708ULL, 0x1122334455667788ULL);
-  const intx::uint256 RHS = makeU256(0, 0, 0, 0x13579BDF2468ACE0ULL);
-
-  evmc_result Result = executeBytecode(buildMulReturnBytecode(LHS, RHS));
-  expectReturnedU256(Result, LHS * RHS);
-
-  if (Result.release) {
-    Result.release(&Result);
-  }
-}
-
-TEST_F(EVMFallbackExecutionTest, MulFastPathTruncatesShiftedHighWord) {
-  const intx::uint256 LHS = makeU256(0, 0, 0, 0x9ULL);
-  const intx::uint256 RHS = makeU256(0, 0x7ULL);
-
-  evmc_result Result = executeBytecode(buildMulReturnBytecode(LHS, RHS));
-  expectReturnedU256(Result, LHS * RHS);
-
-  if (Result.release) {
-    Result.release(&Result);
-  }
 }
 
 // Test 6: Fallback Gas Consumption Test

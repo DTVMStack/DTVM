@@ -771,33 +771,6 @@ private:
   uint32_t ResultIdx = 0;
 };
 
-class CallResultInstruction : public NaryInstruction {
-public:
-  template <typename... Arguments>
-  static CallResultInstruction *create(CompileMemPool &MemPool,
-                                       Arguments &&...Args) {
-    return FixedOperandInstruction::create<CallResultInstruction>(
-        MemPool, std::forward<Arguments>(Args)...);
-  }
-
-  static bool classof(const MInstruction *Instr) {
-    return Instr->getKind() == CALL_RESULT;
-  }
-
-  MInstruction *getCallInst() const { return CallInst; }
-  uint32_t getResultIdx() const { return ResultIdx; }
-
-private:
-  friend class FixedOperandInstruction;
-  CallResultInstruction(MType *Type, MInstruction *CallInst,
-                        uint32_t ResultIdx)
-      : NaryInstruction(MInstruction::CALL_RESULT, OP_call_result, Type),
-        CallInst(CallInst), ResultIdx(ResultIdx) {}
-
-  MInstruction *CallInst = nullptr;
-  uint32_t ResultIdx = 0;
-};
-
 } // namespace COMPILER
 
 #endif // COMPILER_IR_INSTRUCTIONS_H

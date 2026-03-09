@@ -58,9 +58,6 @@ public:
       visitEvmU256MulResultInstruction(
           static_cast<EvmU256MulResultInstruction &>(I));
       break;
-    case MInstruction::CALL_RESULT:
-      visitCallResultInstruction(static_cast<CallResultInstruction &>(I));
-      break;
     case MInstruction::CMP:
       visitCmpInstruction(static_cast<CmpInstruction &>(I));
       break;
@@ -194,8 +191,8 @@ public:
   virtual void visitEvmU256MulInstruction(EvmU256MulInstruction &I) {
     VISIT_OPERANDS
   }
-  virtual void visitEvmU256MulResultInstruction(EvmU256MulResultInstruction &I) {}
-  virtual void visitCallResultInstruction(CallResultInstruction &I) {}
+  virtual void
+  visitEvmU256MulResultInstruction(EvmU256MulResultInstruction &I) {}
 
 protected:
   MModule &Module;

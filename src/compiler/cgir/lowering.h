@@ -119,7 +119,7 @@ protected:
       SELF.lowerSwitchStmt(llvm::cast<SwitchInstruction>(Inst));
       break;
     case MInstruction::CALL:
-      _expr_reg_map[&Inst] = SELF.lowerCall(llvm::cast<CallInstructionBase>(Inst));
+      SELF.lowerCall(llvm::cast<CallInstructionBase>(Inst));
       break;
     case MInstruction::RETURN:
       lowerReturnStmt(llvm::cast<ReturnInstruction>(Inst));
@@ -198,10 +198,6 @@ protected:
     case MInstruction::EVM_U256_MUL_RESULT:
       ResultReg = SELF.lowerEvmU256MulResultExpr(
           llvm::cast<EvmU256MulResultInstruction>(Inst));
-      break;
-    case MInstruction::CALL_RESULT:
-      ResultReg =
-          SELF.lowerCallResultExpr(llvm::cast<CallResultInstruction>(Inst));
       break;
     case MInstruction::ADC:
       ResultReg = SELF.lowerAdcExpr(llvm::cast<AdcInstruction>(Inst));

@@ -212,12 +212,6 @@ void MInstruction::print(llvm::raw_ostream &OS) const {
        << ", idx = " << MulResult->getResultIdx() << ')';
     break;
   }
-  case CALL_RESULT: {
-    auto *CallResult = llvm::cast<CallResultInstruction>(this);
-    OS << getOpcodeString(_opcode) << " (" << CallResult->getCallInst()
-       << ", idx = " << CallResult->getResultIdx() << ')';
-    break;
-  }
   case WASM_CHECK: {
     OS << getOpcodeString(_opcode) << " (";
     switch (_opcode) {

@@ -33,7 +33,6 @@ public:
     EVM_UMUL128_HI,
     EVM_U256_MUL,
     EVM_U256_MUL_RESULT,
-    CALL_RESULT,
 
     //===---------- Statement Instructions ----------===//
     DASSIGN,

@@ -1147,21 +1147,6 @@ CgRegister X86CgLowering::lowerEvmU256MulResultExpr(
   return It->second[ResultIdx - 1];
 }
 
-CgRegister
-X86CgLowering::lowerCallResultExpr(const CallResultInstruction &Inst) {
-  const MInstruction *CallInst = Inst.getCallInst();
-  CgRegister LowReg = lowerExpr(*CallInst);
-  uint32_t ResultIdx = Inst.getResultIdx();
-  if (ResultIdx == 0) {
-    return LowReg;
-  }
-
-  auto It = CallResultRegs.find(CallInst);
-  ZEN_ASSERT(It != CallResultRegs.end());
-  ZEN_ASSERT(ResultIdx <= It->second.size());
-  return It->second[ResultIdx - 1];
-}
-
 CgRegister X86CgLowering::lowerSelectExpr(const SelectInstruction &Inst) {
   const MType &Type = *Inst.getType();
   const MInstruction *Cond = Inst.getOperand<0>();
