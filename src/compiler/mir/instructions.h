@@ -713,6 +713,91 @@ private:
   }
 };
 
+class EvmU256MulInstruction : public FixedOperandInstruction<8> {
+public:
+  template <typename... Arguments>
+  static EvmU256MulInstruction *create(Arguments &&...Args) {
+    return FixedOperandInstruction::create<EvmU256MulInstruction>(
+        std::forward<Arguments>(Args)...);
+  }
+
+  static bool classof(const MInstruction *Instr) {
+    return Instr->getKind() == EVM_U256_MUL;
+  }
+
+private:
+  friend class FixedOperandInstruction;
+  EvmU256MulInstruction(MType *Type, MInstruction *A0, MInstruction *A1,
+                        MInstruction *A2, MInstruction *A3, MInstruction *B0,
+                        MInstruction *B1, MInstruction *B2, MInstruction *B3)
+      : FixedOperandInstruction(MInstruction::EVM_U256_MUL, OP_evm_u256_mul, 8,
+                                Type) {
+    setOperand<0>(A0);
+    setOperand<1>(A1);
+    setOperand<2>(A2);
+    setOperand<3>(A3);
+    setOperand<4>(B0);
+    setOperand<5>(B1);
+    setOperand<6>(B2);
+    setOperand<7>(B3);
+  }
+};
+
+class EvmU256MulResultInstruction : public NaryInstruction {
+public:
+  template <typename... Arguments>
+  static EvmU256MulResultInstruction *create(CompileMemPool &MemPool,
+                                             Arguments &&...Args) {
+    return FixedOperandInstruction::create<EvmU256MulResultInstruction>(
+        MemPool, std::forward<Arguments>(Args)...);
+  }
+
+  static bool classof(const MInstruction *Instr) {
+    return Instr->getKind() == EVM_U256_MUL_RESULT;
+  }
+
+  MInstruction *getMulInst() const { return MulInst; }
+  uint32_t getResultIdx() const { return ResultIdx; }
+
+private:
+  friend class FixedOperandInstruction;
+  EvmU256MulResultInstruction(MType *Type, MInstruction *MulInst,
+                              uint32_t ResultIdx)
+      : NaryInstruction(MInstruction::EVM_U256_MUL_RESULT,
+                        OP_evm_u256_mul_result, Type),
+        MulInst(MulInst), ResultIdx(ResultIdx) {}
+
+  MInstruction *MulInst = nullptr;
+  uint32_t ResultIdx = 0;
+};
+
+class CallResultInstruction : public NaryInstruction {
+public:
+  template <typename... Arguments>
+  static CallResultInstruction *create(CompileMemPool &MemPool,
+                                       Arguments &&...Args) {
+    return FixedOperandInstruction::create<CallResultInstruction>(
+        MemPool, std::forward<Arguments>(Args)...);
+  }
+
+  static bool classof(const MInstruction *Instr) {
+    return Instr->getKind() == CALL_RESULT;
+  }
+
+  MInstruction *getCallInst() const { return CallInst; }
+  uint32_t getResultIdx() const { return ResultIdx; }
+
+private:
+  friend class FixedOperandInstruction;
+  CallResultInstruction(MType *Type, MInstruction *CallInst,
+                        uint32_t ResultIdx)
+      : NaryInstruction(MInstruction::CALL_RESULT, OP_call_result, Type),
+        CallInst(CallInst), ResultIdx(ResultIdx) {}
+
+  MInstruction *CallInst = nullptr;
+  uint32_t ResultIdx = 0;
+};
+
 } // namespace COMPILER
 
 #endif // COMPILER_IR_INSTRUCTIONS_H

@@ -679,6 +679,7 @@ private:
       return;
     }
     InDeadCode = false;
+    Builder.clearConstCallDataLoadCache();
     Builder.createStackCheckBlock(-BlockInfo.MinStackHeight,
                                   1024 - BlockInfo.MaxStackHeight);
     int32_t TotalPopSize = -BlockInfo.MinPopHeight;
@@ -694,6 +695,7 @@ private:
   }
 
   void handleEndBlock() {
+    Builder.clearConstCallDataLoadCache();
     // Save unused stack elements to runtime
     EvalStack ReverseStack;
     while (!Stack.empty()) {

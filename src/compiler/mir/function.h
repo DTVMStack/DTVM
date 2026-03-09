@@ -11,6 +11,7 @@
 #include "compiler/mir/variable.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMapInfo.h"
+#include <array>
 #include <list>
 #include <stdio.h>
 
@@ -194,6 +195,17 @@ public:
 
   auto getFuncIdx() const { return FuncIdx; }
 
+  void setExtraReturnVarIdxs(const std::array<VariableIdx, 3> &VarIdxs) {
+    ExtraReturnVarIdxs = VarIdxs;
+    HasExtraReturnVarIdxs = true;
+  }
+
+  bool hasExtraReturnVarIdxs() const { return HasExtraReturnVarIdxs; }
+
+  const std::array<VariableIdx, 3> &getExtraReturnVarIdxs() const {
+    return ExtraReturnVarIdxs;
+  }
+
   MBasicBlock *getOrCreateExceptionSetBB(ErrorCode ErrCode) {
     auto It = ExceptionSetBBs.lower_bound(ErrCode);
     if (It == ExceptionSetBBs.end() || It->first != ErrCode) {
@@ -231,6 +243,9 @@ private:
   CompileMap<ErrorCode, MBasicBlock *> ExceptionSetBBs;
   MBasicBlock *ExceptionHandlingBB = nullptr;
   MBasicBlock *ExceptionReturnBB = nullptr;
+  std::array<VariableIdx, 3> ExtraReturnVarIdxs = {
+      VariableIdx(-1), VariableIdx(-1), VariableIdx(-1)};
+  bool HasExtraReturnVarIdxs = false;
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   VariableIdx GasRegisterVarIdx = VariableIdx(-1);
 #endif

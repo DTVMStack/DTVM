@@ -6,6 +6,8 @@
 #include "compiler/cgir/lowering.h"
 #include "compiler/llvm-prebuild/Target/X86/X86Subtarget.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
+#include <array>
 
 namespace COMPILER {
 
@@ -71,6 +73,9 @@ public:
       const WasmOverflowI128BinaryInstruction &Inst);
   CgRegister lowerEvmUmul128Expr(const EvmUmul128Instruction &Inst);
   CgRegister lowerEvmUmul128HiExpr(const EvmUmul128HiInstruction &Inst);
+  CgRegister lowerEvmU256MulExpr(const EvmU256MulInstruction &Inst);
+  CgRegister lowerEvmU256MulResultExpr(const EvmU256MulResultInstruction &Inst);
+  CgRegister lowerCallResultExpr(const CallResultInstruction &Inst);
   CgRegister lowerAdcExpr(const AdcInstruction &Inst);
 
   // ==================== Memory Instructions ====================
@@ -125,6 +130,11 @@ private:
   const X86Subtarget *Subtarget;
   const TargetRegisterInfo *TRI;
   llvm::DenseMap<const MInstruction *, CgRegister> Umul128HiRegs;
+  llvm::DenseSet<const MInstruction *> Umul128NeedHi;
+  llvm::DenseMap<const MInstruction *, std::array<CgRegister, 3>>
+      U256MulResultRegs;
+  llvm::DenseMap<const MInstruction *, std::array<CgRegister, 3>>
+      CallResultRegs;
 };
 
 } // namespace COMPILER

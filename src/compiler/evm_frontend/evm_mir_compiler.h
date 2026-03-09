@@ -26,8 +26,6 @@ class EVMInstance;
 namespace COMPILER {
 
 static constexpr uint32_t MAIN_EVM_FUNC_IDX = 0;
-static constexpr uint32_t MUL_HELPER_FUNC_IDX = 1;
-static constexpr uint32_t NUM_EVM_INTERNAL_FUNCTIONS = 2;
 
 enum class EVMType : uint8_t {
   VOID,    // No value
@@ -85,10 +83,6 @@ public:
   void setRevision(evmc_revision Rev) { Revision = Rev; }
   evmc_revision getRevision() const { return Revision; }
 
-  void clearRequiredHelpers() { MulHelperRequired = false; }
-  void markMulHelperRequired() { MulHelperRequired = true; }
-  bool isMulHelperRequired() const { return MulHelperRequired; }
-
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   void setGasRegisterEnabled(bool Enabled) { GasRegisterEnabled = Enabled; }
   bool isGasRegisterEnabled() const { return GasRegisterEnabled; }
@@ -102,7 +96,6 @@ private:
   const uint64_t *GasChunkCost = nullptr;
   size_t GasChunkSize = 0;
   evmc_revision Revision = zen::evm::DEFAULT_REVISION;
-  bool MulHelperRequired = false;
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   bool GasRegisterEnabled = false;
 #endif
@@ -129,8 +122,10 @@ public:
   class Operand {
   public:
     Operand() = default;
-    Operand(MInstruction *Instr, EVMType Type) : Instr(Instr), Type(Type) {}
-    Operand(Variable *Var, EVMType Type) : Var(Var), Type(Type) {}
+    Operand(MInstruction *Instr, EVMType Type, bool UsesHostArgScratch = false)
+        : Instr(Instr), Type(Type), UsesHostArgScratch(UsesHostArgScratch) {}
+    Operand(Variable *Var, EVMType Type, bool UsesHostArgScratch = false)
+        : Var(Var), Type(Type), UsesHostArgScratch(UsesHostArgScratch) {}
 
     // Constructor for EVMU256Type with 4 I64 components
     Operand(U256Inst Components, EVMType Type)
@@ -158,6 +153,7 @@ public:
 
     bool isU256MultiComponent() const { return IsU256MultiComponent; }
     bool isConstant() const { return IsConstant; }
+    bool usesHostArgScratch() const { return UsesHostArgScratch; }
 
     const U256Inst &getU256Components() const {
       ZEN_ASSERT(IsU256MultiComponent && "Not a multi-component U256");
@@ -187,10 +183,10 @@ public:
     U256Value ConstValue = {};
     bool IsConstant = false;
     bool IsU256MultiComponent = false;
+    bool UsesHostArgScratch = false;
   };
 
   bool compile(CompilerContext *Context);
-  void buildMulHelperFunction();
   void loadEVMInstanceAttr();
   void initEVM(CompilerContext *Context);
   void finalizeEVMBase();
@@ -209,6 +205,7 @@ public:
 
   // Block for stack check instructions
   void createStackCheckBlock(int32_t MinSize, int32_t MaxSize);
+  void clearConstCallDataLoadCache();
 
   // ==================== Stack Instruction Handlers ====================
 
@@ -588,19 +585,7 @@ private:
                                       MInstruction *ShiftAmount,
                                       MInstruction *IsLargeShift);
 
-  // Helper functions for inline U256 multiplication
-  MInstruction *createEvmUmul128(MInstruction *LHS, MInstruction *RHS);
-  MInstruction *createEvmUmul128Hi(MInstruction *MulInst);
-  U256Inst createU256MulSlowPath(const U256Inst &LHS, const U256Inst &RHS);
-  U256Inst createU256MulSingleLimbPath(MInstruction *SingleLimb,
-                                       size_t SingleLimbIndex,
-                                       const U256Inst &Other);
-  MInstruction *createU256IsZero(const U256Inst &Value);
-  MInstruction *createU256IsSingleLimbAt(const U256Inst &Value,
-                                         size_t LimbIndex);
-  MInstruction *loadFunctionParam(uint32_t ParamIdx);
-  MInstruction *getHostArgScratchPtr(std::size_t ScratchSlot);
-  void storeU256ToPointer(MInstruction *Ptr, const U256Inst &Value);
+  void copyU256PointerToPointer(MInstruction *DstPtr, MInstruction *SrcPtr);
 
   // ==================== EVM to MIR Opcode Mapping ====================
 
@@ -648,6 +633,8 @@ private:
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
   Operand convertBytes32ToU256Operand(const Operand &Bytes32Op);
+  bool isPointerBackedU256Operand(const Operand &Opnd) const;
+  MInstruction *getPointerBackedU256Operand(const Operand &Opnd);
 
   // Helper functions for operand conversion
   template <size_t N>
@@ -696,6 +683,7 @@ private:
   Variable *StackSizeVar = nullptr;
   Variable *MemoryBaseVar = nullptr;
   Variable *MemorySizeVar = nullptr;
+  std::map<uint64_t, U256Var> ConstCallDataLoadCache;
 
   // Helper methods for memory operations
   MInstruction *getMemoryDataPointer();
