@@ -240,10 +240,24 @@ EVMModule *findModuleCached(DTVM *VM, const uint8_t *Code, size_t CodeSize,
   return Mod;
 }
 
-/// Get or create a cached EVMInstance for the given module.
-/// Reuses the existing instance if it was created for the same module.
-/// Returns nullptr on failure.
-EVMInstance *getOrCreateInstance(DTVM *VM, EVMModule *Mod, evmc_revision Rev) {
+/// Get or create an EVMInstance for the given module.
+/// For top-level calls (depth == 0), reuses the cached instance if possible.
+/// For nested calls (depth > 0), creates a temporary instance that must be
+/// deleted by the caller after use (caller can check depth > 0).
+EVMInstance *getOrCreateInstance(DTVM *VM, EVMModule *Mod, evmc_revision Rev,
+                                 int32_t Depth) {
+  // For nested calls, we need a separate instance because each instance is
+  // bound to a specific Module. The nested call may execute different code.
+  if (Depth > 0) {
+    auto InstRet = VM->Iso->createEVMInstance(*Mod, 0);
+    if (!InstRet)
+      return nullptr;
+    EVMInstance *TempInst = *InstRet;
+    TempInst->resetForNewCall(Rev);
+    return TempInst; // Caller must delete this instance (when depth > 0)
+  }
+
+  // Top-level call: create or reuse cached instance
   EVMInstance *TheInst = VM->CachedInst;
   if (!TheInst || TheInst->getModule() != Mod) {
     if (TheInst) {
@@ -287,8 +301,8 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
 
-  // Instance reuse (shared)
-  EVMInstance *TheInst = getOrCreateInstance(VM, Mod, Rev);
+  // Instance reuse (shared for top-level, temporary for nested)
+  EVMInstance *TheInst = getOrCreateInstance(VM, Mod, Rev, Msg->depth);
   if (!TheInst) {
     VM->ExecHost->reinitialize(PrevInterface, PrevContext);
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
@@ -304,13 +318,26 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
   TheInst->setExeResult(evmc::Result{EVMC_SUCCESS, 0, 0});
   TheInst->pushMessage(&MsgWithCode);
 
-  // Reuse cached InterpreterExecContext to avoid ~32KB frame alloc per call
-  if (!VM->CachedCtx) {
-    VM->CachedCtx = std::make_unique<zen::evm::InterpreterExecContext>(TheInst);
+  // For nested calls, create a new InterpreterExecContext
+  // For top-level calls, reuse cached context
+  std::unique_ptr<zen::evm::InterpreterExecContext> TempCtx;
+  zen::evm::InterpreterExecContext *CtxPtr = nullptr;
+  if (Msg->depth > 0) {
+    // Nested call: create temporary context
+    TempCtx = std::make_unique<zen::evm::InterpreterExecContext>(TheInst);
+    CtxPtr = TempCtx.get();
   } else {
-    VM->CachedCtx->resetForNewCall(TheInst);
+    // Top-level call: reuse cached context
+    if (!VM->CachedCtx) {
+      VM->CachedCtx =
+          std::make_unique<zen::evm::InterpreterExecContext>(TheInst);
+    } else {
+      VM->CachedCtx->resetForNewCall(TheInst);
+    }
+    CtxPtr = VM->CachedCtx.get();
   }
-  auto &Ctx = *VM->CachedCtx;
+
+  auto &Ctx = *CtxPtr;
   zen::evm::BaseInterpreter Interpreter(Ctx);
   Ctx.allocTopFrame(&MsgWithCode);
   Interpreter.interpret();
@@ -318,6 +345,11 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
   evmc::Result Result =
       std::move(const_cast<evmc::Result &>(Ctx.getExeResult()));
   Result.gas_left = TheInst->getGas();
+
+  // Clean up temporary instance for nested calls
+  if (Msg->depth > 0) {
+    VM->Iso->deleteEVMInstance(TheInst);
+  }
 
   // Restore host context
   VM->ExecHost->reinitialize(PrevInterface, PrevContext);
@@ -384,8 +416,8 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
 
-  // Instance reuse (shared with interpreter path)
-  auto *TheInst = getOrCreateInstance(VM, Mod, Rev);
+  // Instance reuse (shared for top-level, temporary for nested)
+  auto *TheInst = getOrCreateInstance(VM, Mod, Rev, Msg->depth);
   if (!TheInst) {
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
@@ -394,6 +426,11 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
   evmc_message Message = *Msg;
   evmc::Result Result;
   VM->RT->callEVMMain(*TheInst, Message, Result);
+
+  // Clean up temporary instance for nested calls
+  if (Msg->depth > 0) {
+    VM->Iso->deleteEVMInstance(TheInst);
+  }
 
   return Result.release_raw();
 }
