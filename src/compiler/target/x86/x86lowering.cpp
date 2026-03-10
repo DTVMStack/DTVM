@@ -21,6 +21,10 @@ X86CgLowering::X86CgLowering(CgFunction &MF)
       Umul128NeedHi.insert(Inst->getOperand<0>());
     }
 
+    if (const auto *ICall = llvm::dyn_cast<ICallInstruction>(Inst)) {
+      Self(Self, ICall->getCalleeAddr());
+    }
+
     for (OperandNum I = 0; I < Inst->getNumOperands(); ++I) {
       Self(Self, Inst->getOperand(I));
     }
@@ -1056,7 +1060,7 @@ X86CgLowering::lowerEvmU256MulExpr(const EvmU256MulInstruction &Inst) {
     MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY),
                             CopyLoOperands);
 
-    CgRegister HiReg;
+    CgRegister HiReg = X86::NoRegister;
     if (NeedHigh) {
       HiReg = createReg(RC);
       SmallVector<CgOperand, 2> CopyHiOperands{
