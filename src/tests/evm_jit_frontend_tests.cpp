@@ -135,6 +135,8 @@ public:
     for (zen::common::Byte Byte : Data) {
       Low = (Low << 8) | static_cast<uint64_t>(std::to_integer<uint8_t>(Byte));
     }
+    LastPushValue = {Low, 0, 0, 0};
+    HasLastPushValue = true;
     return Operand(Low);
   }
 
@@ -300,6 +302,20 @@ public:
     return Stats[static_cast<uint8_t>(Opcode)];
   }
 
+  bool hasLastPushValue() const { return HasLastPushValue; }
+
+  MockOperand::U256Value lastPushValue() const {
+    ZEN_ASSERT(HasLastPushValue && "mock push value is missing");
+    return LastPushValue;
+  }
+
+  size_t runtimeStackDepth() const { return RuntimeStack.size(); }
+
+  MockOperand::U256Value topStackValue() const {
+    ZEN_ASSERT(!RuntimeStack.empty() && "mock runtime stack is empty");
+    return RuntimeStack.back().resolvedValue();
+  }
+
   bool Trapped = false;
   bool Undefined = false;
 
@@ -308,6 +324,8 @@ private:
   uint8_t CurrentOpcode = 0xff;
   std::array<MockStackAccessStats, 256> Stats = {};
   std::vector<Operand> RuntimeStack;
+  MockOperand::U256Value LastPushValue = {0, 0, 0, 0};
+  bool HasLastPushValue = false;
 
 #undef MOCK_OPERAND_STUB
 #undef MOCK_VOID_STUB
@@ -557,6 +575,33 @@ TEST(EVMJITFrontendVisitorTest,
   EXPECT_TRUE(Visitor.compile());
   EXPECT_FALSE(Builder.Trapped);
   EXPECT_FALSE(Builder.Undefined);
+}
+
+TEST(EVMJITFrontendVisitorTest, TruncatedPushIsRightPaddedWithZeros) {
+  const std::vector<uint8_t> Bytecode = {
+      0x62, 0x12, 0x34 // PUSH3 0x12 0x34 <missing byte>
+  };
+
+  const EVMAnalyzer Analyzer = analyzeBytecode(Bytecode);
+  const auto *EntryBlock = findBlock(Analyzer, 0);
+  ASSERT_NE(EntryBlock, nullptr);
+  EXPECT_EQ(EntryBlock->ResolvedExitStackDepth, 1);
+
+  COMPILER::EVMFrontendContext Ctx;
+  Ctx.setRevision(EVMC_CANCUN);
+  Ctx.setBytecode(reinterpret_cast<const zen::common::Byte *>(Bytecode.data()),
+                  Bytecode.size());
+
+  MockEVMBuilder Builder;
+  COMPILER::EVMByteCodeVisitor<MockEVMBuilder> Visitor(Builder, &Ctx);
+  EXPECT_TRUE(Visitor.compile());
+  EXPECT_FALSE(Builder.Trapped);
+  EXPECT_FALSE(Builder.Undefined);
+  ASSERT_TRUE(Builder.hasLastPushValue());
+  EXPECT_EQ(Builder.lastPushValue()[0], 0x123400ULL);
+  EXPECT_EQ(Builder.lastPushValue()[1], 0ULL);
+  EXPECT_EQ(Builder.lastPushValue()[2], 0ULL);
+  EXPECT_EQ(Builder.lastPushValue()[3], 0ULL);
 }
 
 } // namespace

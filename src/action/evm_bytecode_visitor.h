@@ -10,6 +10,7 @@
 #include "evmc/instructions.h"
 #include "runtime/evm_module.h"
 
+#include <array>
 #include <map>
 #include <vector>
 
@@ -37,6 +38,7 @@ public:
 
 private:
   static constexpr size_t EVM_MAX_STACK_SIZE = 1024;
+  static constexpr size_t EVM_MAX_PUSH_IMMEDIATE_SIZE = 32;
 
   struct BlockConstPrecheckPlan {
     bool Eligible = false;
@@ -1583,12 +1585,21 @@ private:
     uint64_t Available = (Start < BytecodeSize) ? (BytecodeSize - Start) : 0;
     uint64_t ReadCount = (Count < Available) ? Count : Available;
 
-    Bytes Result = ReadCount > 0
-                       ? Bytes(Bytecode + Start, static_cast<size_t>(ReadCount))
-                       : Bytes();
+    if (Count == 0) {
+      return Bytes();
+    }
+
+    ZEN_ASSERT(Count <= EVM_MAX_PUSH_IMMEDIATE_SIZE);
+    PushImmediateScratch.fill(Byte{0});
+    for (uint64_t I = 0; I < ReadCount; ++I) {
+      PushImmediateScratch[static_cast<size_t>(I)] = Bytecode[Start + I];
+    }
+
     PC += Count;
-    return Result;
+    return Bytes(PushImmediateScratch.data(), Count);
   }
+
+  std::array<Byte, EVM_MAX_PUSH_IMMEDIATE_SIZE> PushImmediateScratch = {};
 
   // DUP1-DUP16: Duplicate Nth stack item
   void handleDup(uint8_t Index) {

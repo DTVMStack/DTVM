@@ -199,7 +199,9 @@ private:
 
     static AbstractValue unknown() { return {}; }
 
-    static AbstractValue constFromPush(const uint8_t *Data, size_t Size) {
+    static AbstractValue constFromPush(const uint8_t *Bytecode,
+                                      size_t BytecodeSize, size_t Start,
+                                      size_t Size) {
       AbstractValue V;
       V.KnownConst = true;
       V.FitsU64 = true;
@@ -207,18 +209,28 @@ private:
       if (Size == 0) {
         return V;
       }
-      size_t Start = 0;
+
+      const size_t Available = Start < BytecodeSize ? (BytecodeSize - Start) : 0;
+      const size_t ReadCount = std::min(Size, Available);
+      auto readPushByte = [&](size_t Index) -> uint8_t {
+        if (Index >= ReadCount) {
+          return 0;
+        }
+        return Bytecode[Start + Index];
+      };
+
+      size_t ValueStart = 0;
       if (Size > sizeof(uint64_t)) {
         for (size_t I = 0; I < Size - sizeof(uint64_t); ++I) {
-          if (Data[I] != 0) {
+          if (readPushByte(I) != 0) {
             V.FitsU64 = false;
             break;
           }
         }
-        Start = Size - sizeof(uint64_t);
+        ValueStart = Size - sizeof(uint64_t);
       }
-      for (size_t I = Start; I < Size; ++I) {
-        V.Low = (V.Low << 8) | static_cast<uint64_t>(Data[I]);
+      for (size_t I = ValueStart; I < Size; ++I) {
+        V.Low = (V.Low << 8) | static_cast<uint64_t>(readPushByte(I));
       }
       return V;
     }
@@ -498,8 +510,8 @@ private:
         std::swap(Stack.back(), Stack[Stack.size() - RequiredDepth]);
         updateHeights();
       } else if (Opcode >= OP_PUSH0 && Opcode <= OP_PUSH32) {
-        Stack.push_back(
-            AbstractValue::constFromPush(Bytecode + ScanPC, PushBytes));
+        Stack.push_back(AbstractValue::constFromPush(
+            Bytecode, BytecodeSize, ScanPC, PushBytes));
         ScanPC += PushBytes;
         updateHeights();
       } else {
