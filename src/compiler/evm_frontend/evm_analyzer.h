@@ -174,7 +174,6 @@ public:
     return It == JumpDestCanonicalPCs.end() ? PC : It->second;
   }
 
-
   bool hasUnknownDynamicJumpTargets() const { return HasUnknownDynamicJump; }
 
   bool analyze(const uint8_t *Bytecode, size_t BytecodeSize) {
@@ -344,8 +343,8 @@ private:
     }
   }
 
-  void ensureAbstractDepth(std::vector<AbstractValue> &Stack, size_t &EntryDepth,
-                           size_t RequiredDepth) {
+  void ensureAbstractDepth(std::vector<AbstractValue> &Stack,
+                           size_t &EntryDepth, size_t RequiredDepth) {
     if (Stack.size() >= RequiredDepth) {
       return;
     }
@@ -385,7 +384,8 @@ private:
       Info.StackHeightDiff = RelativeHeight;
       Info.MaxStackHeight = std::max(Info.MaxStackHeight, RelativeHeight);
       Info.MinStackHeight = std::min(Info.MinStackHeight, RelativeHeight);
-      Info.MinPopHeight = std::min(Info.MinPopHeight, -static_cast<int32_t>(EntryDepth));
+      Info.MinPopHeight =
+          std::min(Info.MinPopHeight, -static_cast<int32_t>(EntryDepth));
     };
 
     HasNextBlock = false;
@@ -396,7 +396,8 @@ private:
       evmc_opcode Opcode = static_cast<evmc_opcode>(Bytecode[ScanPC]);
 
       if (Opcode == OP_JUMPDEST) {
-        uint64_t CanonicalPC = getCanonicalJumpDestPC(static_cast<uint64_t>(ScanPC));
+        uint64_t CanonicalPC =
+            getCanonicalJumpDestPC(static_cast<uint64_t>(ScanPC));
         Info.Successors.push_back(CanonicalPC);
         NextEntryPC = CanonicalPC;
         NextBodyStartPC = static_cast<size_t>(CanonicalPC) + 1;
@@ -497,7 +498,8 @@ private:
         std::swap(Stack.back(), Stack[Stack.size() - RequiredDepth]);
         updateHeights();
       } else if (Opcode >= OP_PUSH0 && Opcode <= OP_PUSH32) {
-        Stack.push_back(AbstractValue::constFromPush(Bytecode + ScanPC, PushBytes));
+        Stack.push_back(
+            AbstractValue::constFromPush(Bytecode + ScanPC, PushBytes));
         ScanPC += PushBytes;
         updateHeights();
       } else {
@@ -526,13 +528,14 @@ private:
         static_cast<int32_t>(Stack.size()) - static_cast<int32_t>(EntryDepth);
   }
 
-  void skipDeadCode(const uint8_t *Bytecode, size_t BytecodeSize, size_t &ScanPC,
-                    uint64_t &NextEntryPC, size_t &NextBodyStartPC,
-                    bool &HasNextBlock) {
+  void skipDeadCode(const uint8_t *Bytecode, size_t BytecodeSize,
+                    size_t &ScanPC, uint64_t &NextEntryPC,
+                    size_t &NextBodyStartPC, bool &HasNextBlock) {
     while (ScanPC < BytecodeSize) {
       evmc_opcode NextOp = static_cast<evmc_opcode>(Bytecode[ScanPC]);
       if (NextOp == OP_JUMPDEST) {
-        uint64_t CanonicalPC = getCanonicalJumpDestPC(static_cast<uint64_t>(ScanPC));
+        uint64_t CanonicalPC =
+            getCanonicalJumpDestPC(static_cast<uint64_t>(ScanPC));
         NextEntryPC = CanonicalPC;
         NextBodyStartPC = static_cast<size_t>(CanonicalPC) + 1;
         HasNextBlock = true;
@@ -594,7 +597,8 @@ private:
           continue;
         }
         auto &Preds = It->second.Predecessors;
-        if (std::find(Preds.begin(), Preds.end(), Info.EntryPC) == Preds.end()) {
+        if (std::find(Preds.begin(), Preds.end(), Info.EntryPC) ==
+            Preds.end()) {
           Preds.push_back(Info.EntryPC);
         }
       }
@@ -645,10 +649,9 @@ private:
       bool DynamicJumpDestConflict = HasUnknownDynamicJump && Info.IsJumpDest;
       bool NoHiddenEntryPrefix =
           Info.ResolvedEntryStackDepth <= Info.EntryStackDepth;
-      Info.CanLiftStack = EntryKnown && NoHiddenEntryPrefix &&
-                          !Info.HasUndefinedInstr &&
-                          !Info.HasInconsistentEntryDepth &&
-                          !DynamicJumpDestConflict;
+      Info.CanLiftStack =
+          EntryKnown && NoHiddenEntryPrefix && !Info.HasUndefinedInstr &&
+          !Info.HasInconsistentEntryDepth && !DynamicJumpDestConflict;
     }
   }
 

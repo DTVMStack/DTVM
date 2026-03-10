@@ -633,7 +633,8 @@ private:
           Operand Dest = pop();
           Operand Cond = pop();
           uint64_t JumpSuccPC = 0;
-          bool HasJumpSucc = tryGetConstantJumpSuccessorPC(Analyzer, Dest, JumpSuccPC);
+          bool HasJumpSucc =
+              tryGetConstantJumpSuccessorPC(Analyzer, Dest, JumpSuccPC);
           uint64_t FallthroughPC = PC;
           bool CanLiftFallthrough = isLiftedBlock(FallthroughPC);
           bool CanLiftJump = HasJumpSucc && isLiftedBlock(JumpSuccPC);
@@ -672,7 +673,8 @@ private:
           if (PC > RunStartPC && HasLiveFallthrough) {
             Builder.meterOpcodeRange(RunStartPC, PC);
           }
-          if (HasLiveFallthrough && tryAssignFallthroughEntryState(Analyzer, PC)) {
+          if (HasLiveFallthrough &&
+              tryAssignFallthroughEntryState(Analyzer, PC)) {
             // Keep runtime stack materialization elided on lifted fallthrough.
           } else {
             handleEndBlock();
@@ -752,7 +754,8 @@ private:
         continue;
       }
       auto &EntryState = LiftedEntryStates[EntryPC];
-      EntryState.reserve(static_cast<size_t>(BlockInfo.ResolvedEntryStackDepth));
+      EntryState.reserve(
+          static_cast<size_t>(BlockInfo.ResolvedEntryStackDepth));
       for (int32_t Depth = 0; Depth < BlockInfo.ResolvedEntryStackDepth;
            ++Depth) {
         EntryState.push_back(Builder.createStackEntryOperand());
@@ -871,7 +874,8 @@ private:
   bool tryAssignConstantJumpEntryState(const EVMAnalyzer &Analyzer,
                                        const Operand &Dest) {
     uint64_t SuccPC = 0;
-    if (!CurrentBlockLifted || !tryGetConstantJumpSuccessorPC(Analyzer, Dest, SuccPC) ||
+    if (!CurrentBlockLifted ||
+        !tryGetConstantJumpSuccessorPC(Analyzer, Dest, SuccPC) ||
         !isLiftedBlock(SuccPC)) {
       return false;
     }
@@ -897,8 +901,10 @@ private:
     ZEN_ASSERT(BlockInfo.ResolvedEntryStackDepth >= 0 &&
                "Lifted block must have resolved entry depth");
 
-    int64_t EntryDepth = static_cast<int64_t>(BlockInfo.ResolvedEntryStackDepth);
-    int64_t MinDepth = EntryDepth + static_cast<int64_t>(BlockInfo.MinStackHeight);
+    int64_t EntryDepth =
+        static_cast<int64_t>(BlockInfo.ResolvedEntryStackDepth);
+    int64_t MinDepth =
+        EntryDepth + static_cast<int64_t>(BlockInfo.MinStackHeight);
     if (MinDepth < 0) {
       Builder.handleTrap(common::ErrorCode::EVMStackUnderflow);
       InDeadCode = true;
@@ -906,7 +912,8 @@ private:
       return false;
     }
 
-    int64_t MaxDepth = EntryDepth + static_cast<int64_t>(BlockInfo.MaxStackHeight);
+    int64_t MaxDepth =
+        EntryDepth + static_cast<int64_t>(BlockInfo.MaxStackHeight);
     if (MaxDepth > static_cast<int64_t>(EVM_MAX_STACK_SIZE)) {
       Builder.handleTrap(common::ErrorCode::EVMStackOverflow);
       InDeadCode = true;

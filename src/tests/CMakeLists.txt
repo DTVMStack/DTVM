@@ -170,10 +170,7 @@ if(ZEN_ENABLE_SPEC_TEST)
         )
         target_link_libraries(
           evmJitFrontendTests
-          PRIVATE dtvmcore
-                  compiler
-                  gtest_main
-                  -fsanitize=address
+          PRIVATE dtvmcore compiler gtest_main -fsanitize=address
                   -static-libasan
           PUBLIC ${GTEST_BOTH_LIBRARIES}
         )

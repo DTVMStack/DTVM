@@ -49,7 +49,8 @@ struct MockOperand {
 
   MockOperand() = default;
   explicit MockOperand(uint64_t Low) : Value{Low, 0, 0, 0}, Constant(true) {}
-  explicit MockOperand(std::shared_ptr<U256Value> Slot) : Slot(std::move(Slot)) {}
+  explicit MockOperand(std::shared_ptr<U256Value> Slot)
+      : Slot(std::move(Slot)) {}
 
   bool isConstant() const { return Constant; }
 
@@ -91,7 +92,8 @@ public:
 #define MOCK_OPERAND_STUB(Name)                                                \
   template <typename... Args> Operand Name(Args...) { return Operand(0); }
 
-#define MOCK_VOID_STUB(Name) template <typename... Args> void Name(Args...) {}
+#define MOCK_VOID_STUB(Name)                                                   \
+  template <typename... Args> void Name(Args...) {}
 
   void initEVM(CompilerContext *) {
     CurrentOpcode = 0xff;
@@ -102,7 +104,8 @@ public:
   void finalizeEVMBase() {}
 
   bool isOpcodeDefined(evmc_opcode Opcode) const {
-    const auto *InstructionNames = evmc_get_instruction_names_table(EVMC_CANCUN);
+    const auto *InstructionNames =
+        evmc_get_instruction_names_table(EVMC_CANCUN);
     return InstructionNames && InstructionNames[Opcode] != nullptr;
   }
 
@@ -130,8 +133,7 @@ public:
   Operand handlePush(const zen::common::Bytes &Data) {
     uint64_t Low = 0;
     for (zen::common::Byte Byte : Data) {
-      Low = (Low << 8) |
-            static_cast<uint64_t>(std::to_integer<uint8_t>(Byte));
+      Low = (Low << 8) | static_cast<uint64_t>(std::to_integer<uint8_t>(Byte));
     }
     return Operand(Low);
   }

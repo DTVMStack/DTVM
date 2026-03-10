@@ -917,7 +917,8 @@ void EVMMirBuilder::assignStackEntryOperand(const Operand &Dest,
   }
 }
 
-void EVMMirBuilder::spillTrackedStack(const std::vector<Operand> &TrackedStack) {
+void EVMMirBuilder::spillTrackedStack(
+    const std::vector<Operand> &TrackedStack) {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MPointerType *U64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
   MInstruction *StackPtrOffset = createIntConstInstruction(
@@ -929,7 +930,8 @@ void EVMMirBuilder::spillTrackedStack(const std::vector<Operand> &TrackedStack) 
   for (size_t Slot = 0; Slot < TrackedStack.size(); ++Slot) {
     U256Inst Components = extractU256Operand(TrackedStack[Slot]);
     uint64_t SlotOffset = static_cast<uint64_t>(Slot) * 32ULL;
-    MInstruction *SlotOffsetInst = createIntConstInstruction(I64Type, SlotOffset);
+    MInstruction *SlotOffsetInst =
+        createIntConstInstruction(I64Type, SlotOffset);
     MInstruction *SlotAddr = createInstruction<BinaryInstruction>(
         false, OP_add, &Ctx.I64Type, StackBaseAddr, SlotOffsetInst);
     MInstruction *SlotPtr = createInstruction<ConversionInstruction>(
