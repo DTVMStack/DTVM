@@ -1409,8 +1409,17 @@ void X86CgLowering::lowerBrIfStmt(const BrIfInstruction &Inst) {
   const MInstruction *Operand = Inst.getOperand<0>();
   CgRegister OperandReg = lowerExpr(*Operand);
 
-  // Perform test instruction to determine the operand is zero or not
-  unsigned TESTOpc = Operand->getType()->isI8() ? X86::TEST8rr : X86::TEST32rr;
+  // Perform test instruction to determine whether the operand is zero.
+  unsigned TESTOpc;
+  if (Operand->getType()->isI8()) {
+    TESTOpc = X86::TEST8rr;
+  } else if (Operand->getType()->isI16()) {
+    TESTOpc = X86::TEST16rr;
+  } else if (Operand->getType()->isI64() || Operand->getType()->isPointer()) {
+    TESTOpc = X86::TEST64rr;
+  } else {
+    TESTOpc = X86::TEST32rr;
+  }
   fastEmitNoDefInst_rr(TESTOpc, OperandReg, OperandReg);
 
   // Jump to the true basic block if the operand is not zero

@@ -250,20 +250,6 @@ public:
     return static_cast<int32_t>(offsetof(evmc_message, depth));
   }
 
-  static constexpr int32_t getMessageInputDataOffset() {
-    static_assert(offsetof(evmc_message, input_data) <=
-                      std::numeric_limits<int32_t>::max(),
-                  "evmc_message offsets should fit in 32-bit signed range");
-    return static_cast<int32_t>(offsetof(evmc_message, input_data));
-  }
-
-  static constexpr int32_t getMessageInputSizeOffset() {
-    static_assert(offsetof(evmc_message, input_size) <=
-                      std::numeric_limits<int32_t>::max(),
-                  "evmc_message offsets should fit in 32-bit signed range");
-    return static_cast<int32_t>(offsetof(evmc_message, input_size));
-  }
-
   static constexpr size_t getHostArgScratchSlotSize() {
     return sizeof(intx::uint256);
   }

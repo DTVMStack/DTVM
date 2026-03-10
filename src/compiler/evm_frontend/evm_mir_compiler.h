@@ -199,7 +199,6 @@ public:
 
   // Block for stack check instructions
   void createStackCheckBlock(int32_t MinSize, int32_t MaxSize);
-  void clearConstCallDataLoadCache();
 
   // ==================== Stack Instruction Handlers ====================
 
@@ -579,8 +578,6 @@ private:
                                       MInstruction *ShiftAmount,
                                       MInstruction *IsLargeShift);
 
-  void copyU256PointerToPointer(MInstruction *DstPtr, MInstruction *SrcPtr);
-
   // ==================== EVM to MIR Opcode Mapping ====================
 
   Opcode getMirOpcode(BinaryOperator BinOpr);
@@ -627,8 +624,6 @@ private:
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
   Operand convertU256InstrToU256Operand(MInstruction *U256Instr);
   Operand convertBytes32ToU256Operand(const Operand &Bytes32Op);
-  bool isPointerBackedU256Operand(const Operand &Opnd) const;
-  MInstruction *getPointerBackedU256Operand(const Operand &Opnd);
 
   // Helper functions for operand conversion
   template <size_t N>
@@ -677,7 +672,6 @@ private:
   Variable *StackSizeVar = nullptr;
   Variable *MemoryBaseVar = nullptr;
   Variable *MemorySizeVar = nullptr;
-  std::map<uint64_t, U256Var> ConstCallDataLoadCache;
 
   // Helper methods for memory operations
   MInstruction *getMemoryDataPointer();
