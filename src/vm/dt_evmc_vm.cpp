@@ -42,6 +42,33 @@ private:
   RuntimeConfig PreviousConfig;
 };
 
+// Forward declaration for InstanceGuard
+struct DTVM;
+
+// RAII guard for temporary EVMInstance cleanup (exception safety for nested
+// calls). Ensures that temporary instances created for nested calls (depth > 0)
+// are properly deleted even if an exception occurs during execution.
+struct InstanceGuard {
+  DTVM *VM;
+  EVMInstance *Inst;
+  bool ShouldDelete;
+
+  InstanceGuard(DTVM *VM, EVMInstance *Inst, bool ShouldDelete)
+      : VM(VM), Inst(Inst), ShouldDelete(ShouldDelete) {}
+
+  InstanceGuard(const InstanceGuard &) = delete;
+  InstanceGuard &operator=(const InstanceGuard &) = delete;
+
+  InstanceGuard(InstanceGuard &&Other) noexcept
+      : VM(Other.VM), Inst(Other.Inst), ShouldDelete(Other.ShouldDelete) {
+    Other.ShouldDelete = false;
+  }
+
+  ~InstanceGuard();
+
+  void release() { ShouldDelete = false; }
+};
+
 // ---- Address-based module cache types ----
 
 struct CodeAddrRevKey {
@@ -132,6 +159,13 @@ struct DTVM : evmc_vm {
   // Cached InterpreterExecContext (interpreter mode only)
   std::unique_ptr<zen::evm::InterpreterExecContext> CachedCtx;
 };
+
+// InstanceGuard destructor (defined after DTVM is complete)
+InstanceGuard::~InstanceGuard() {
+  if (ShouldDelete && Inst && VM && VM->Iso) {
+    VM->Iso->deleteEVMInstance(Inst);
+  }
+}
 
 /// The implementation of the evmc_vm::destroy() method.
 void destroy(evmc_vm *VMInstance) { delete static_cast<DTVM *>(VMInstance); }
@@ -270,6 +304,7 @@ EVMInstance *getOrCreateInstance(DTVM *VM, EVMModule *Mod, evmc_revision Rev,
     TheInst = *InstRet;
     VM->CachedInst = TheInst;
   }
+
   TheInst->resetForNewCall(Rev);
   return TheInst;
 }
@@ -307,6 +342,10 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
     VM->ExecHost->reinitialize(PrevInterface, PrevContext);
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
+
+  // RAII guard for exception safety: ensures temporary instance cleanup
+  // even if an exception occurs during execution (e.g., std::bad_alloc)
+  InstanceGuard InstGuard(VM, TheInst, Msg->depth > 0);
 
   // Trigger bytecodeCache build if not yet done (lazy, cached on module)
   (void)Mod->getBytecodeCache();
@@ -346,10 +385,7 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
       std::move(const_cast<evmc::Result &>(Ctx.getExeResult()));
   Result.gas_left = TheInst->getGas();
 
-  // Clean up temporary instance for nested calls
-  if (Msg->depth > 0) {
-    VM->Iso->deleteEVMInstance(TheInst);
-  }
+  // InstanceGuard destructor handles cleanup for nested calls
 
   // Restore host context
   VM->ExecHost->reinitialize(PrevInterface, PrevContext);
@@ -422,15 +458,12 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
 
+  InstanceGuard InstGuard(VM, TheInst, Msg->depth > 0);
+
   // Execute via callEVMMain (handles both JIT and interpreter fallback)
   evmc_message Message = *Msg;
   evmc::Result Result;
   VM->RT->callEVMMain(*TheInst, Message, Result);
-
-  // Clean up temporary instance for nested calls
-  if (Msg->depth > 0) {
-    VM->Iso->deleteEVMInstance(TheInst);
-  }
 
   return Result.release_raw();
 }
