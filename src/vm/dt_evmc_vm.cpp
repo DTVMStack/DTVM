@@ -69,6 +69,28 @@ struct InstanceGuard {
   void release() { ShouldDelete = false; }
 };
 
+// RAII helper for host context save/restore (exception safety).
+// Ensures host context is always restored on all exit paths, including
+// exceptions.
+struct HostContextScope {
+  ::WrappedHost *ExecHost;
+  const evmc_host_interface *PrevInterface;
+  evmc_host_context *PrevContext;
+
+  HostContextScope(::WrappedHost *Host, const evmc_host_interface *Interface,
+                   evmc_host_context *Context)
+      : ExecHost(Host), PrevInterface(Host->getInterface()),
+        PrevContext(Host->getContext()) {
+    ExecHost->reinitialize(Interface, Context);
+  }
+
+  ~HostContextScope() { ExecHost->reinitialize(PrevInterface, PrevContext); }
+
+  // Non-copyable
+  HostContextScope(const HostContextScope &) = delete;
+  HostContextScope &operator=(const HostContextScope &) = delete;
+};
+
 // ---- Address-based module cache types ----
 
 struct CodeAddrRevKey {
@@ -141,7 +163,7 @@ struct DTVM : evmc_vm {
                           .Mode = RunMode::MultipassMode,
                           .EnableEvmGasMetering = true};
   std::unique_ptr<Runtime> RT;
-  std::unique_ptr<WrappedHost> ExecHost;
+  std::unique_ptr<::WrappedHost> ExecHost;
   Isolation *Iso = nullptr;
 
   // ---- Module & instance cache (shared by interpreter and multipass) ----
@@ -318,28 +340,23 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
                                        evmc_revision Rev,
                                        const evmc_message *Msg,
                                        const uint8_t *Code, size_t CodeSize) {
-  // Reinitialize host context
-  const auto *PrevInterface = VM->ExecHost->getInterface();
-  auto *PrevContext = VM->ExecHost->getContext();
-  VM->ExecHost->reinitialize(Host, Context);
+  // RAII guard for host context save/restore (exception safety)
+  HostContextScope HostScope(VM->ExecHost.get(), Host, Context);
 
   // Ensure runtime and isolation exist
   if (!ensureRuntimeAndIsolation(VM)) {
-    VM->ExecHost->reinitialize(PrevInterface, PrevContext);
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
 
   // Module lookup: L1 address-based cache -> Cold load
   EVMModule *Mod = findModuleCached(VM, Code, CodeSize, Rev, Msg);
   if (!Mod) {
-    VM->ExecHost->reinitialize(PrevInterface, PrevContext);
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
 
   // Instance reuse (shared for top-level, temporary for nested)
   EVMInstance *TheInst = getOrCreateInstance(VM, Mod, Rev, Msg->depth);
   if (!TheInst) {
-    VM->ExecHost->reinitialize(PrevInterface, PrevContext);
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
 
@@ -385,10 +402,8 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
       std::move(const_cast<evmc::Result &>(Ctx.getExeResult()));
   Result.gas_left = TheInst->getGas();
 
-  // InstanceGuard destructor handles cleanup for nested calls
-
-  // Restore host context
-  VM->ExecHost->reinitialize(PrevInterface, PrevContext);
+  // RAII guards handle cleanup: InstanceGuard for nested calls,
+  // HostContextScope for host context restoration
 
   return Result.release_raw();
 }
@@ -407,19 +422,7 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
   }
 
   // ---- Multipass / other modes: use callEVMMain for JIT execution ----
-  struct HostContextScope {
-    WrappedHost *ExecHost;
-    const evmc_host_interface *PrevInterface;
-    evmc_host_context *PrevContext;
-    HostContextScope(WrappedHost *Host, const evmc_host_interface *Interface,
-                     evmc_host_context *Context)
-        : ExecHost(Host), PrevInterface(Host->getInterface()),
-          PrevContext(Host->getContext()) {
-      ExecHost->reinitialize(Interface, Context);
-    }
-    ~HostContextScope() { ExecHost->reinitialize(PrevInterface, PrevContext); }
-  };
-
+  // RAII guard for host context save/restore (exception safety)
   HostContextScope HostScope(VM->ExecHost.get(), Host, Context);
 
   if (!ensureRuntimeAndIsolation(VM)) {
@@ -479,7 +482,7 @@ DTVM::DTVM()
     : evmc_vm{EVMC_ABI_VERSION, "dtvm",    PROJECT_VERSION,
               ::destroy,        ::execute, ::get_capabilities,
               ::set_option},
-      ExecHost(new WrappedHost) {}
+      ExecHost(new ::WrappedHost) {}
 } // namespace
 
 extern "C" evmc_vm *evmc_create_dtvmapi() { return new DTVM; }
