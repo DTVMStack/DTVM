@@ -10,6 +10,11 @@
 #include "evmc/instructions.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <map>
+#include <queue>
+#include <utility>
+#include <vector>
 
 namespace COMPILER {
 
@@ -121,41 +126,130 @@ static constexpr size_t MAX_DUP_FEEDBACK_PATTERN = 64;
 
 class EVMAnalyzer {
   using Byte = zen::common::Byte;
-  using Bytes = zen::common::Bytes;
 
 public:
   EVMAnalyzer(evmc_revision Rev = zen::evm::DEFAULT_REVISION) : Revision(Rev) {}
 
   struct BlockInfo {
     uint64_t EntryPC = 0;
+    uint64_t BodyStartPC = 0;
+    uint64_t BodyEndPC = 0;
     int32_t MaxStackHeight = 0;
     int32_t MinStackHeight = 0;
     int32_t MinPopHeight = 0;
     int32_t StackHeightDiff = 0;
+    int32_t EntryStackDepth = 0;
+    int32_t ResolvedEntryStackDepth = -1;
+    int32_t ResolvedExitStackDepth = -1;
+    bool HasInconsistentEntryDepth = false;
     bool IsJumpDest = false;
     bool HasUndefinedInstr = false;
+    bool HasDynamicJump = false;
+    bool HasConditionalJump = false;
+    bool HasConstantJump = false;
+    bool CanLiftStack = false;
+    uint64_t ConstantJumpTargetPC = 0;
     uint32_t RAExpensiveCount = 0;
+    std::vector<uint64_t> Successors;
+    std::vector<uint64_t> Predecessors;
 
     BlockInfo() = default;
-    BlockInfo(uint64_t PC) : EntryPC(PC) {}
+    BlockInfo(uint64_t PC, uint64_t StartPC = 0, bool JumpDest = false)
+        : EntryPC(PC), BodyStartPC(StartPC), BodyEndPC(StartPC),
+          IsJumpDest(JumpDest) {}
   };
 
   const std::map<uint64_t, BlockInfo> &getBlockInfos() const {
     return BlockInfos;
   }
 
-  /// Return the JIT suitability result computed during the last analyze() call.
   const JITSuitabilityResult &getJITSuitability() const { return JITResult; }
+
+  bool hasCanonicalJumpDest(uint64_t PC) const {
+    return JumpDestCanonicalPCs.count(PC) != 0;
+  }
+
+  uint64_t getCanonicalJumpDestPC(uint64_t PC) const {
+    auto It = JumpDestCanonicalPCs.find(PC);
+    return It == JumpDestCanonicalPCs.end() ? PC : It->second;
+  }
+
+
+  bool hasUnknownDynamicJumpTargets() const { return HasUnknownDynamicJump; }
 
   bool analyze(const uint8_t *Bytecode, size_t BytecodeSize) {
     BlockInfos.clear();
+    JumpDestCanonicalPCs.clear();
+    EntryBlockPC = 0;
+    HasUnknownDynamicJump = false;
+
+    analyzeSuitability(Bytecode, BytecodeSize);
+    buildJumpDestRuns(Bytecode, BytecodeSize);
+    buildBlocks(Bytecode, BytecodeSize);
+    linkPredecessors();
+    resolveEntryDepths();
+    finalizeLiftability();
+    return true;
+  }
+
+private:
+  struct AbstractValue {
+    bool KnownConst = false;
+    bool FitsU64 = false;
+    uint64_t Low = 0;
+
+    static AbstractValue unknown() { return {}; }
+
+    static AbstractValue constFromPush(const uint8_t *Data, size_t Size) {
+      AbstractValue V;
+      V.KnownConst = true;
+      V.FitsU64 = true;
+      V.Low = 0;
+      if (Size == 0) {
+        return V;
+      }
+      size_t Start = 0;
+      if (Size > sizeof(uint64_t)) {
+        for (size_t I = 0; I < Size - sizeof(uint64_t); ++I) {
+          if (Data[I] != 0) {
+            V.FitsU64 = false;
+            break;
+          }
+        }
+        Start = Size - sizeof(uint64_t);
+      }
+      for (size_t I = Start; I < Size; ++I) {
+        V.Low = (V.Low << 8) | static_cast<uint64_t>(Data[I]);
+      }
+      return V;
+    }
+  };
+
+  static bool isBlockTerminator(evmc_opcode Opcode) {
+    switch (Opcode) {
+    case OP_JUMP:
+    case OP_STOP:
+    case OP_RETURN:
+    case OP_INVALID:
+    case OP_REVERT:
+    case OP_SELFDESTRUCT:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  static size_t immediateSize(evmc_opcode Opcode) {
+    if (Opcode >= OP_PUSH0 && Opcode <= OP_PUSH32) {
+      return static_cast<size_t>(Opcode - OP_PUSH0);
+    }
+    return 0;
+  }
+
+  void analyzeSuitability(const uint8_t *Bytecode, size_t BytecodeSize) {
     JITResult = JITSuitabilityResult();
     JITResult.BytecodeSize = BytecodeSize;
 
-    const uint8_t *Ip = Bytecode;
-    const uint8_t *IpEnd = Bytecode + BytecodeSize;
-
-    // Get instruction tables based on revision
     const auto *InstructionMetrics =
         evmc_get_instruction_metrics_table(Revision);
     const auto *InstructionNames = evmc_get_instruction_names_table(Revision);
@@ -168,157 +262,400 @@ public:
           evmc_get_instruction_names_table(zen::evm::DEFAULT_REVISION);
     }
 
-    // Initialize block info for the first block
-    BlockInfo CurInfo(0);
-
-    // JIT suitability tracking state
     size_t CurConsecutiveExpensive = 0;
+    size_t CurBlockExpensiveCount = 0;
     bool PrevWasDup = false;
 
-    while (Ip < IpEnd) {
-      evmc_opcode Opcode = static_cast<evmc_opcode>(*Ip);
+    size_t PCIndex = 0;
+    while (PCIndex < BytecodeSize) {
+      evmc_opcode Opcode = static_cast<evmc_opcode>(Bytecode[PCIndex]);
       uint8_t OpcodeU8 = static_cast<uint8_t>(Opcode);
-      ptrdiff_t Diff = Ip - Bytecode;
-      PC = static_cast<uint64_t>(Diff >= 0 ? Diff : 0);
 
-      Ip++;
-
-      // --- JIT suitability: accumulate MIR estimate ---
       JITResult.MirEstimate += MIR_OPCODE_WEIGHT[OpcodeU8];
 
-      // --- JIT suitability: RA-expensive pattern tracking ---
       if (isRAExpensiveOpcode(OpcodeU8)) {
         JITResult.RAExpensiveCount++;
-        CurInfo.RAExpensiveCount++;
+        CurBlockExpensiveCount++;
         CurConsecutiveExpensive++;
-        // DUP feedback: previous opcode was DUP, now RA-expensive
         if (PrevWasDup) {
           JITResult.DupFeedbackPatternCount++;
         }
         PrevWasDup = false;
       } else if (isDupOrSwapOpcode(OpcodeU8)) {
-        // DUP/SWAP are transparent — don't break consecutive run
         PrevWasDup = isDupOpcode(OpcodeU8);
       } else {
-        // Any other opcode breaks the consecutive run
         JITResult.MaxConsecutiveExpensive = std::max(
             JITResult.MaxConsecutiveExpensive, CurConsecutiveExpensive);
         CurConsecutiveExpensive = 0;
         PrevWasDup = false;
       }
 
-      // Check if opcode is undefined for current revision
-      bool IsUndefined = (InstructionNames[Opcode] == nullptr);
-      if (IsUndefined) {
-        CurInfo.HasUndefinedInstr = true;
-#ifdef ZEN_ENABLE_JIT_FALLBACK_TEST
-        // Reset undefined instruction flag in fallback test
-        CurInfo.HasUndefinedInstr = false;
-#endif
-      }
-
-      // Get stack metrics from the instruction metrics table
-      const auto &Metrics = InstructionMetrics[Opcode];
-      // stack_height_required equals PopCount
-      int PopCount = Metrics.stack_height_required;
-      // PushCount = PopCount + stack_height_change
-      int PushCount = PopCount + Metrics.stack_height_change;
-
-      // Handle PUSH instructions - need to skip the immediate bytes
-      if (Opcode >= OP_PUSH1 && Opcode <= OP_PUSH32) {
-        uint8_t PushBytes = Opcode - OP_PUSH0;
-        Ip += PushBytes;
-      }
-
-      // Update stack height
-      CurInfo.StackHeightDiff -= PopCount;
-      if (CurInfo.StackHeightDiff < CurInfo.MinStackHeight) {
-        CurInfo.MinStackHeight = CurInfo.StackHeightDiff;
-      }
-      if (!(Opcode >= OP_SWAP1 && Opcode <= OP_SWAP16) &&
-          !(Opcode >= OP_DUP1 && Opcode <= OP_DUP16)) {
-        CurInfo.MinPopHeight =
-            std::min(CurInfo.StackHeightDiff, CurInfo.MinPopHeight);
-      }
-      CurInfo.StackHeightDiff += PushCount;
-      if (CurInfo.StackHeightDiff > CurInfo.MaxStackHeight) {
-        CurInfo.MaxStackHeight = CurInfo.StackHeightDiff;
-      }
-
-      // Check if this is a block starting opcode
-      bool IsBlockStart = (Opcode == OP_JUMPDEST || Opcode == OP_JUMPI);
-      // Check if this is a block ending opcode
-      bool IsBlockEnd = (Opcode == OP_JUMP || Opcode == OP_RETURN ||
-                         Opcode == OP_STOP || Opcode == OP_INVALID ||
-                         Opcode == OP_REVERT || Opcode == OP_SELFDESTRUCT);
-
-      if (IsBlockStart) {
-        if (PC != CurInfo.EntryPC) {
-          // Finalize block: update max block RA-expensive count
-          JITResult.MaxBlockExpensiveCount =
-              std::max(JITResult.MaxBlockExpensiveCount,
-                       static_cast<size_t>(CurInfo.RAExpensiveCount));
-          BlockInfos.emplace(CurInfo.EntryPC, CurInfo);
-        }
-        // Create new block info
-        CurInfo = BlockInfo(PC);
-        if (Opcode == OP_JUMPDEST) {
-          CurInfo.IsJumpDest = true;
-        }
-        // Block boundary also ends a consecutive run
-        JITResult.MaxConsecutiveExpensive = std::max(
-            JITResult.MaxConsecutiveExpensive, CurConsecutiveExpensive);
-        CurConsecutiveExpensive = 0;
-      } else if (IsBlockEnd) {
-        // Finalize block: update max block RA-expensive count
+      bool IsBlockBoundary = (Opcode == OP_JUMPI || Opcode == OP_JUMPDEST ||
+                              isBlockTerminator(Opcode));
+      if (IsBlockBoundary) {
         JITResult.MaxBlockExpensiveCount =
-            std::max(JITResult.MaxBlockExpensiveCount,
-                     static_cast<size_t>(CurInfo.RAExpensiveCount));
-        // Save current block info
-        BlockInfos.emplace(CurInfo.EntryPC, CurInfo);
-        // Block boundary ends consecutive run
+            std::max(JITResult.MaxBlockExpensiveCount, CurBlockExpensiveCount);
+        CurBlockExpensiveCount = 0;
         JITResult.MaxConsecutiveExpensive = std::max(
             JITResult.MaxConsecutiveExpensive, CurConsecutiveExpensive);
         CurConsecutiveExpensive = 0;
-        // Skip dead code
-        while (Ip < IpEnd) {
-          evmc_opcode NextOp = static_cast<evmc_opcode>(*Ip);
-          if (NextOp == OP_JUMPDEST) {
-            break;
-          }
-          Ip++;
-          if (NextOp >= OP_PUSH0 && NextOp <= OP_PUSH32) {
-            uint8_t NumBytes =
-                static_cast<uint8_t>(NextOp) - static_cast<uint8_t>(OP_PUSH0);
-            Ip += NumBytes;
-          }
-        }
+        PrevWasDup = false;
       }
+
+      size_t PushBytes = immediateSize(Opcode);
+      PCIndex += 1 + PushBytes;
+
+      (void)InstructionMetrics;
+      (void)InstructionNames;
     }
-    // Finalize last block and consecutive run
+
     JITResult.MaxConsecutiveExpensive =
         std::max(JITResult.MaxConsecutiveExpensive, CurConsecutiveExpensive);
-    if (BlockInfos.count(CurInfo.EntryPC) == 0) {
-      JITResult.MaxBlockExpensiveCount =
-          std::max(JITResult.MaxBlockExpensiveCount,
-                   static_cast<size_t>(CurInfo.RAExpensiveCount));
-      BlockInfos.emplace(CurInfo.EntryPC, CurInfo);
-    }
+    JITResult.MaxBlockExpensiveCount =
+        std::max(JITResult.MaxBlockExpensiveCount, CurBlockExpensiveCount);
 
-    // Compute final fallback verdict
     JITResult.ShouldFallback =
         BytecodeSize > MAX_JIT_BYTECODE_SIZE ||
         JITResult.MirEstimate > MAX_JIT_MIR_ESTIMATE ||
         JITResult.MaxConsecutiveExpensive > MAX_CONSECUTIVE_RA_EXPENSIVE ||
         JITResult.MaxBlockExpensiveCount > MAX_BLOCK_RA_EXPENSIVE ||
         JITResult.DupFeedbackPatternCount > MAX_DUP_FEEDBACK_PATTERN;
-
-    return true;
   }
 
-private:
+  void buildJumpDestRuns(const uint8_t *Bytecode, size_t BytecodeSize) {
+    size_t PCIndex = 0;
+    while (PCIndex < BytecodeSize) {
+      evmc_opcode Opcode = static_cast<evmc_opcode>(Bytecode[PCIndex]);
+      if (Opcode == OP_JUMPDEST) {
+        size_t RunStart = PCIndex;
+        size_t RunEnd = PCIndex;
+        while (RunEnd + 1 < BytecodeSize &&
+               static_cast<evmc_opcode>(Bytecode[RunEnd + 1]) == OP_JUMPDEST) {
+          ++RunEnd;
+        }
+        for (size_t PC = RunStart; PC <= RunEnd; ++PC) {
+          JumpDestCanonicalPCs[static_cast<uint64_t>(PC)] =
+              static_cast<uint64_t>(RunEnd);
+        }
+        PCIndex = RunEnd + 1;
+        continue;
+      }
+      PCIndex += 1 + immediateSize(Opcode);
+    }
+  }
+
+  void ensureAbstractDepth(std::vector<AbstractValue> &Stack, size_t &EntryDepth,
+                           size_t RequiredDepth) {
+    if (Stack.size() >= RequiredDepth) {
+      return;
+    }
+    size_t Deficit = RequiredDepth - Stack.size();
+    Stack.insert(Stack.begin(), Deficit, AbstractValue::unknown());
+    EntryDepth += Deficit;
+  }
+
+  void analyzeBlockBody(BlockInfo &Info, const uint8_t *Bytecode,
+                        size_t BytecodeSize, size_t &ScanPC,
+                        uint64_t &NextEntryPC, size_t &NextBodyStartPC,
+                        bool &HasNextBlock) {
+    const auto *InstructionMetrics =
+        evmc_get_instruction_metrics_table(Revision);
+    const auto *InstructionNames = evmc_get_instruction_names_table(Revision);
+    if (!InstructionMetrics) {
+      InstructionMetrics =
+          evmc_get_instruction_metrics_table(zen::evm::DEFAULT_REVISION);
+    }
+    if (!InstructionNames) {
+      InstructionNames =
+          evmc_get_instruction_names_table(zen::evm::DEFAULT_REVISION);
+    }
+
+    std::vector<AbstractValue> Stack;
+    size_t EntryDepth = 0;
+    Info.MaxStackHeight = 0;
+    Info.MinStackHeight = 0;
+    Info.MinPopHeight = 0;
+    Info.StackHeightDiff = 0;
+    Info.EntryStackDepth = 0;
+    Info.BodyEndPC = Info.BodyStartPC;
+
+    auto updateHeights = [&]() {
+      int32_t RelativeHeight =
+          static_cast<int32_t>(Stack.size()) - static_cast<int32_t>(EntryDepth);
+      Info.StackHeightDiff = RelativeHeight;
+      Info.MaxStackHeight = std::max(Info.MaxStackHeight, RelativeHeight);
+      Info.MinStackHeight = std::min(Info.MinStackHeight, RelativeHeight);
+      Info.MinPopHeight = std::min(Info.MinPopHeight, -static_cast<int32_t>(EntryDepth));
+    };
+
+    HasNextBlock = false;
+    NextEntryPC = 0;
+    NextBodyStartPC = BytecodeSize;
+
+    while (ScanPC < BytecodeSize) {
+      evmc_opcode Opcode = static_cast<evmc_opcode>(Bytecode[ScanPC]);
+
+      if (Opcode == OP_JUMPDEST) {
+        uint64_t CanonicalPC = getCanonicalJumpDestPC(static_cast<uint64_t>(ScanPC));
+        Info.Successors.push_back(CanonicalPC);
+        NextEntryPC = CanonicalPC;
+        NextBodyStartPC = static_cast<size_t>(CanonicalPC) + 1;
+        HasNextBlock = true;
+        Info.BodyEndPC = static_cast<uint64_t>(ScanPC);
+        break;
+      }
+
+      bool IsUndefined = (InstructionNames[Opcode] == nullptr);
+      if (IsUndefined) {
+        Info.HasUndefinedInstr = true;
+#ifdef ZEN_ENABLE_JIT_FALLBACK_TEST
+        Info.HasUndefinedInstr = false;
+#endif
+      }
+
+      uint8_t OpcodeU8 = static_cast<uint8_t>(Opcode);
+      if (isRAExpensiveOpcode(OpcodeU8)) {
+        Info.RAExpensiveCount++;
+      }
+
+      size_t CurPC = ScanPC;
+      ++ScanPC;
+      size_t PushBytes = immediateSize(Opcode);
+
+      if (Opcode == OP_JUMP) {
+        ensureAbstractDepth(Stack, EntryDepth, 1);
+        AbstractValue Dest = Stack.back();
+        Stack.pop_back();
+        updateHeights();
+
+        if (Dest.KnownConst && Dest.FitsU64 && hasCanonicalJumpDest(Dest.Low)) {
+          Info.HasConstantJump = true;
+          Info.ConstantJumpTargetPC = getCanonicalJumpDestPC(Dest.Low);
+          Info.Successors.push_back(Info.ConstantJumpTargetPC);
+        } else {
+          Info.HasDynamicJump = true;
+          HasUnknownDynamicJump = true;
+        }
+        Info.BodyEndPC = static_cast<uint64_t>(ScanPC);
+        skipDeadCode(Bytecode, BytecodeSize, ScanPC, NextEntryPC,
+                     NextBodyStartPC, HasNextBlock);
+        break;
+      }
+
+      if (Opcode == OP_JUMPI) {
+        ensureAbstractDepth(Stack, EntryDepth, 2);
+        AbstractValue Dest = Stack.back();
+        Stack.pop_back();
+        Stack.pop_back();
+        updateHeights();
+
+        Info.HasConditionalJump = true;
+        Info.Successors.push_back(static_cast<uint64_t>(CurPC));
+        if (Dest.KnownConst && Dest.FitsU64 && hasCanonicalJumpDest(Dest.Low)) {
+          Info.HasConstantJump = true;
+          Info.ConstantJumpTargetPC = getCanonicalJumpDestPC(Dest.Low);
+          if (Info.ConstantJumpTargetPC != static_cast<uint64_t>(CurPC)) {
+            Info.Successors.push_back(Info.ConstantJumpTargetPC);
+          }
+        } else if (!Dest.KnownConst || !Dest.FitsU64) {
+          Info.HasDynamicJump = true;
+          HasUnknownDynamicJump = true;
+        }
+        NextEntryPC = static_cast<uint64_t>(CurPC);
+        NextBodyStartPC = CurPC + 1;
+        HasNextBlock = true;
+        Info.BodyEndPC = static_cast<uint64_t>(ScanPC);
+        break;
+      }
+
+      if (isBlockTerminator(Opcode)) {
+        const auto &Metrics = InstructionMetrics[Opcode];
+        int PopCount = Metrics.stack_height_required;
+        int PushCount = PopCount + Metrics.stack_height_change;
+        ensureAbstractDepth(Stack, EntryDepth, static_cast<size_t>(PopCount));
+        for (int I = 0; I < PopCount; ++I) {
+          Stack.pop_back();
+        }
+        for (int I = 0; I < PushCount; ++I) {
+          Stack.push_back(AbstractValue::unknown());
+        }
+        updateHeights();
+        Info.BodyEndPC = static_cast<uint64_t>(ScanPC);
+        skipDeadCode(Bytecode, BytecodeSize, ScanPC, NextEntryPC,
+                     NextBodyStartPC, HasNextBlock);
+        break;
+      }
+
+      if (Opcode >= OP_DUP1 && Opcode <= OP_DUP16) {
+        size_t RequiredDepth = static_cast<size_t>(Opcode - OP_DUP1 + 1);
+        ensureAbstractDepth(Stack, EntryDepth, RequiredDepth);
+        Stack.push_back(Stack[Stack.size() - RequiredDepth]);
+        updateHeights();
+      } else if (Opcode >= OP_SWAP1 && Opcode <= OP_SWAP16) {
+        size_t RequiredDepth = static_cast<size_t>(Opcode - OP_SWAP1 + 2);
+        ensureAbstractDepth(Stack, EntryDepth, RequiredDepth);
+        std::swap(Stack.back(), Stack[Stack.size() - RequiredDepth]);
+        updateHeights();
+      } else if (Opcode >= OP_PUSH0 && Opcode <= OP_PUSH32) {
+        Stack.push_back(AbstractValue::constFromPush(Bytecode + ScanPC, PushBytes));
+        ScanPC += PushBytes;
+        updateHeights();
+      } else {
+        const auto &Metrics = InstructionMetrics[Opcode];
+        int PopCount = Metrics.stack_height_required;
+        int PushCount = PopCount + Metrics.stack_height_change;
+        ensureAbstractDepth(Stack, EntryDepth, static_cast<size_t>(PopCount));
+        for (int I = 0; I < PopCount; ++I) {
+          Stack.pop_back();
+        }
+        for (int I = 0; I < PushCount; ++I) {
+          Stack.push_back(AbstractValue::unknown());
+        }
+        updateHeights();
+      }
+    }
+
+    if (ScanPC >= BytecodeSize) {
+      Info.BodyEndPC = static_cast<uint64_t>(BytecodeSize);
+    }
+
+    Info.EntryStackDepth = static_cast<int32_t>(EntryDepth);
+    Info.MinStackHeight = std::min(Info.MinStackHeight, -Info.EntryStackDepth);
+    Info.MinPopHeight = std::min(Info.MinPopHeight, -Info.EntryStackDepth);
+    Info.StackHeightDiff =
+        static_cast<int32_t>(Stack.size()) - static_cast<int32_t>(EntryDepth);
+  }
+
+  void skipDeadCode(const uint8_t *Bytecode, size_t BytecodeSize, size_t &ScanPC,
+                    uint64_t &NextEntryPC, size_t &NextBodyStartPC,
+                    bool &HasNextBlock) {
+    while (ScanPC < BytecodeSize) {
+      evmc_opcode NextOp = static_cast<evmc_opcode>(Bytecode[ScanPC]);
+      if (NextOp == OP_JUMPDEST) {
+        uint64_t CanonicalPC = getCanonicalJumpDestPC(static_cast<uint64_t>(ScanPC));
+        NextEntryPC = CanonicalPC;
+        NextBodyStartPC = static_cast<size_t>(CanonicalPC) + 1;
+        HasNextBlock = true;
+        return;
+      }
+      ScanPC += 1 + immediateSize(NextOp);
+    }
+    HasNextBlock = false;
+  }
+
+  void buildBlocks(const uint8_t *Bytecode, size_t BytecodeSize) {
+    if (BytecodeSize == 0) {
+      BlockInfos.emplace(0, BlockInfo(0, 0, false));
+      EntryBlockPC = 0;
+      return;
+    }
+
+    size_t BodyStartPC = 0;
+    bool StartsWithJumpDest =
+        static_cast<evmc_opcode>(Bytecode[0]) == OP_JUMPDEST;
+    bool IsJumpDestBlock = false;
+    if (StartsWithJumpDest) {
+      EntryBlockPC = getCanonicalJumpDestPC(0);
+      BodyStartPC = static_cast<size_t>(EntryBlockPC) + 1;
+      IsJumpDestBlock = true;
+    } else {
+      EntryBlockPC = 0;
+    }
+
+    uint64_t CurEntryPC = EntryBlockPC;
+    while (true) {
+      BlockInfo Info(CurEntryPC, BodyStartPC, IsJumpDestBlock);
+      size_t ScanPC = BodyStartPC;
+      uint64_t NextEntryPC = 0;
+      size_t NextBodyStartPC = BytecodeSize;
+      bool HasNextBlock = false;
+      analyzeBlockBody(Info, Bytecode, BytecodeSize, ScanPC, NextEntryPC,
+                       NextBodyStartPC, HasNextBlock);
+      BlockInfos[CurEntryPC] = Info;
+      if (!HasNextBlock) {
+        break;
+      }
+      CurEntryPC = NextEntryPC;
+      BodyStartPC = NextBodyStartPC;
+      IsJumpDestBlock = hasCanonicalJumpDest(CurEntryPC) &&
+                        getCanonicalJumpDestPC(CurEntryPC) == CurEntryPC;
+      if (BodyStartPC > BytecodeSize) {
+        break;
+      }
+    }
+  }
+
+  void linkPredecessors() {
+    for (auto &[EntryPC, Info] : BlockInfos) {
+      (void)EntryPC;
+      for (uint64_t Succ : Info.Successors) {
+        auto It = BlockInfos.find(Succ);
+        if (It == BlockInfos.end()) {
+          continue;
+        }
+        auto &Preds = It->second.Predecessors;
+        if (std::find(Preds.begin(), Preds.end(), Info.EntryPC) == Preds.end()) {
+          Preds.push_back(Info.EntryPC);
+        }
+      }
+    }
+  }
+
+  void resolveEntryDepths() {
+    auto EntryIt = BlockInfos.find(EntryBlockPC);
+    if (EntryIt == BlockInfos.end()) {
+      return;
+    }
+
+    EntryIt->second.ResolvedEntryStackDepth = 0;
+    std::queue<uint64_t> WorkList;
+    WorkList.push(EntryBlockPC);
+
+    while (!WorkList.empty()) {
+      uint64_t EntryPC = WorkList.front();
+      WorkList.pop();
+      auto &Info = BlockInfos[EntryPC];
+      if (Info.ResolvedEntryStackDepth < 0) {
+        continue;
+      }
+
+      int32_t ExitDepth = Info.ResolvedEntryStackDepth + Info.StackHeightDiff;
+      Info.ResolvedExitStackDepth = ExitDepth;
+
+      for (uint64_t Succ : Info.Successors) {
+        auto SuccIt = BlockInfos.find(Succ);
+        if (SuccIt == BlockInfos.end()) {
+          continue;
+        }
+        auto &SuccInfo = SuccIt->second;
+        if (SuccInfo.ResolvedEntryStackDepth < 0) {
+          SuccInfo.ResolvedEntryStackDepth = ExitDepth;
+          WorkList.push(Succ);
+        } else if (SuccInfo.ResolvedEntryStackDepth != ExitDepth) {
+          SuccInfo.HasInconsistentEntryDepth = true;
+        }
+      }
+    }
+  }
+
+  void finalizeLiftability() {
+    for (auto &[EntryPC, Info] : BlockInfos) {
+      (void)EntryPC;
+      bool EntryKnown = Info.ResolvedEntryStackDepth >= 0;
+      bool DynamicJumpDestConflict = HasUnknownDynamicJump && Info.IsJumpDest;
+      bool NoHiddenEntryPrefix =
+          Info.ResolvedEntryStackDepth <= Info.EntryStackDepth;
+      Info.CanLiftStack = EntryKnown && NoHiddenEntryPrefix &&
+                          !Info.HasUndefinedInstr &&
+                          !Info.HasInconsistentEntryDepth &&
+                          !DynamicJumpDestConflict;
+    }
+  }
+
   std::map<uint64_t, BlockInfo> BlockInfos;
-  uint64_t PC = 0;
+  std::map<uint64_t, uint64_t> JumpDestCanonicalPCs;
+  uint64_t EntryBlockPC = 0;
+  bool HasUnknownDynamicJump = false;
   evmc_revision Revision = zen::evm::DEFAULT_REVISION;
   JITSuitabilityResult JITResult;
 };

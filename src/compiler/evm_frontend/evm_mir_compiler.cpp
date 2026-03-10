@@ -880,6 +880,74 @@ typename EVMMirBuilder::Operand EVMMirBuilder::stackGet(int32_t IndexFromTop) {
   return Operand(GetComponents, EVMType::UINT256);
 }
 
+void EVMMirBuilder::setTrackedStackDepth(uint32_t Depth) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  uint64_t StackBytes = static_cast<uint64_t>(Depth) * 32ULL;
+  MInstruction *StackSize = createIntConstInstruction(I64Type, StackBytes);
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), StackSize,
+                                        StackSizeVar->getVarIdx());
+
+  MInstruction *StackPtrOffset = createIntConstInstruction(
+      &Ctx.I64Type, zen::runtime::EVMInstance::getEVMStackOffset());
+  MInstruction *StackBaseAddr = createInstruction<BinaryInstruction>(
+      false, OP_add, &Ctx.I64Type, InstanceAddr, StackPtrOffset);
+  MInstruction *StackTopAddr = createInstruction<BinaryInstruction>(
+      false, OP_add, &Ctx.I64Type, StackBaseAddr, StackSize);
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), StackTopAddr,
+                                        StackTopVar->getVarIdx());
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::createStackEntryOperand() {
+  U256Var Vars = {};
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    Vars[I] = CurFunc->createVariable(&Ctx.I64Type);
+  }
+  return Operand(Vars, EVMType::UINT256);
+}
+
+void EVMMirBuilder::assignStackEntryOperand(const Operand &Dest,
+                                            const Operand &Value) {
+  ZEN_ASSERT(Dest.isU256MultiComponent() && "stack entry operand must be U256");
+  U256Var DestVars = Dest.getU256VarComponents();
+  U256Inst Src = extractU256Operand(Value);
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    ZEN_ASSERT(DestVars[I] != nullptr);
+    createInstruction<DassignInstruction>(true, &(Ctx.VoidType), Src[I],
+                                          DestVars[I]->getVarIdx());
+  }
+}
+
+void EVMMirBuilder::spillTrackedStack(const std::vector<Operand> &TrackedStack) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MPointerType *U64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
+  MInstruction *StackPtrOffset = createIntConstInstruction(
+      &Ctx.I64Type, zen::runtime::EVMInstance::getEVMStackOffset());
+  MInstruction *StackBaseAddr = createInstruction<BinaryInstruction>(
+      false, OP_add, &Ctx.I64Type, InstanceAddr, StackPtrOffset);
+
+  const int32_t InnerOffsets[EVM_ELEMENTS_COUNT] = {0, 8, 16, 24};
+  for (size_t Slot = 0; Slot < TrackedStack.size(); ++Slot) {
+    U256Inst Components = extractU256Operand(TrackedStack[Slot]);
+    uint64_t SlotOffset = static_cast<uint64_t>(Slot) * 32ULL;
+    MInstruction *SlotOffsetInst = createIntConstInstruction(I64Type, SlotOffset);
+    MInstruction *SlotAddr = createInstruction<BinaryInstruction>(
+        false, OP_add, &Ctx.I64Type, StackBaseAddr, SlotOffsetInst);
+    MInstruction *SlotPtr = createInstruction<ConversionInstruction>(
+        false, OP_inttoptr, U64PtrType, SlotAddr);
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      createInstruction<StoreInstruction>(true, &Ctx.VoidType, Components[I],
+                                          SlotPtr, InnerOffsets[I]);
+    }
+  }
+
+  setTrackedStackDepth(static_cast<uint32_t>(TrackedStack.size()));
+  const int32_t StackSizeOffset =
+      zen::runtime::EVMInstance::getEVMStackSizeOffset();
+  MInstruction *StackSize = createIntConstInstruction(
+      I64Type, static_cast<uint64_t>(TrackedStack.size()) * 32ULL);
+  setInstanceElement(&Ctx.I64Type, StackSize, StackSizeOffset);
+}
+
 void EVMMirBuilder::handleStop() {
   auto Zero = createU256ConstOperand(intx::uint256{0});
   handleReturn(Zero, Zero);

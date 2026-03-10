@@ -211,6 +211,10 @@ public:
 
   void stackSet(int32_t IndexFromTop, Operand SetValue);
   Operand stackGet(int32_t IndexFromTop);
+  void setTrackedStackDepth(uint32_t Depth);
+  Operand createStackEntryOperand();
+  void assignStackEntryOperand(const Operand &Dest, const Operand &Value);
+  void spillTrackedStack(const std::vector<Operand> &TrackedStack);
 
   // PUSH0: place value 0 on stack
   // PUSH1-PUSH32: Push N bytes onto stack

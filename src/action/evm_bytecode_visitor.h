@@ -10,6 +10,9 @@
 #include "evmc/instructions.h"
 #include "runtime/evm_module.h"
 
+#include <map>
+#include <vector>
+
 namespace COMPILER {
 
 template <typename IRBuilder> class EVMByteCodeVisitor {
@@ -56,13 +59,14 @@ private:
 
   void push(const Operand &Opnd) { Stack.push(Opnd); }
 
+  void requireLogicalStackDepth(uint32_t Depth) {
+    ZEN_ASSERT(Stack.getSize() >= Depth &&
+               "Logical EVM stack must be preloaded at block entry");
+  }
+
   Operand pop() {
-    Operand Opnd;
-    if (Stack.empty()) {
-      Opnd = Builder.stackPop();
-    } else {
-      Opnd = Stack.pop();
-    }
+    requireLogicalStackDepth(1);
+    Operand Opnd = Stack.pop();
     Builder.releaseOperand(Opnd);
     return Opnd;
   }
@@ -74,6 +78,7 @@ private:
       size_t BytecodeSize = Ctx->getBytecodeSize();
       EVMAnalyzer Analyzer(Ctx->getRevision());
       Analyzer.analyze(Bytecode, BytecodeSize);
+      initializeLiftedBlocks(Analyzer);
 
       const uint8_t *Ip = Bytecode;
       const bool StartsWithJumpDest =
@@ -611,7 +616,15 @@ private:
         // Control flow operations
         case OP_JUMP: {
           Operand Dest = pop();
-          handleEndBlock();
+          uint64_t SuccPC = 0;
+          bool HasLiftedSucc = tryAssignConstantJumpEntryState(Analyzer, Dest);
+          if (!HasLiftedSucc) {
+            handleEndBlock();
+            if (tryGetConstantJumpSuccessorPC(Analyzer, Dest, SuccPC) &&
+                isLiftedBlock(SuccPC)) {
+              assignLiftedEntryStateFromRuntime(Analyzer, SuccPC);
+            }
+          }
           Builder.handleJump(Dest);
           break;
         }
@@ -619,7 +632,28 @@ private:
         case OP_JUMPI: {
           Operand Dest = pop();
           Operand Cond = pop();
-          handleEndBlock();
+          uint64_t JumpSuccPC = 0;
+          bool HasJumpSucc = tryGetConstantJumpSuccessorPC(Analyzer, Dest, JumpSuccPC);
+          uint64_t FallthroughPC = PC;
+          bool CanLiftFallthrough = isLiftedBlock(FallthroughPC);
+          bool CanLiftJump = HasJumpSucc && isLiftedBlock(JumpSuccPC);
+          bool CanTransferWithoutMaterialize =
+              CurrentBlockLifted && CanLiftFallthrough && CanLiftJump;
+
+          if (CanTransferWithoutMaterialize) {
+            auto OutgoingStack = drainLogicalStack();
+            assignLiftedEntryState(FallthroughPC, OutgoingStack);
+            assignLiftedEntryState(JumpSuccPC, OutgoingStack);
+            finalizeBlockExit(std::move(OutgoingStack), false);
+          } else {
+            handleEndBlock();
+            if (CanLiftFallthrough) {
+              assignLiftedEntryStateFromRuntime(Analyzer, FallthroughPC);
+            }
+            if (CanLiftJump) {
+              assignLiftedEntryStateFromRuntime(Analyzer, JumpSuccPC);
+            }
+          }
           Builder.handleJumpI(Dest, Cond);
           handleBeginBlock(Analyzer);
           break;
@@ -629,15 +663,23 @@ private:
           // Consecutive JUMPDEST opcodes share one body BB in multipass.
           // Charge all skipped metering points before jumping to the shared
           // destination at the end of the run.
+          bool HasLiveFallthrough = !InDeadCode;
           uint64_t RunStartPC = PC;
           while (Ip < IpEnd && static_cast<evmc_opcode>(*Ip) == OP_JUMPDEST) {
             Ip++;
             PC++;
           }
-          if (PC > RunStartPC && !InDeadCode) {
+          if (PC > RunStartPC && HasLiveFallthrough) {
             Builder.meterOpcodeRange(RunStartPC, PC);
           }
-          handleEndBlock();
+          if (HasLiveFallthrough && tryAssignFallthroughEntryState(Analyzer, PC)) {
+            // Keep runtime stack materialization elided on lifted fallthrough.
+          } else {
+            handleEndBlock();
+            if (HasLiveFallthrough && isLiftedBlock(PC)) {
+              assignLiftedEntryStateFromRuntime(Analyzer, PC);
+            }
+          }
           Builder.handleJumpDest(PC);
           Builder.meterOpcode(Opcode, PC);
           handleBeginBlock(Analyzer);
@@ -697,6 +739,184 @@ private:
     return true;
   }
 
+  void initializeLiftedBlocks(const EVMAnalyzer &Analyzer) {
+    LiftedBlocks.clear();
+    LiftedEntryStates.clear();
+#ifdef ZEN_ENABLE_EVM_STACK_SSA_LIFT
+    for (const auto &[EntryPC, BlockInfo] : Analyzer.getBlockInfos()) {
+      if (!BlockInfo.CanLiftStack) {
+        continue;
+      }
+      LiftedBlocks[EntryPC] = true;
+      if (BlockInfo.ResolvedEntryStackDepth <= 0) {
+        continue;
+      }
+      auto &EntryState = LiftedEntryStates[EntryPC];
+      EntryState.reserve(static_cast<size_t>(BlockInfo.ResolvedEntryStackDepth));
+      for (int32_t Depth = 0; Depth < BlockInfo.ResolvedEntryStackDepth;
+           ++Depth) {
+        EntryState.push_back(Builder.createStackEntryOperand());
+      }
+    }
+#else
+    (void)Analyzer;
+#endif
+  }
+
+  bool isLiftedBlock(uint64_t BlockPC) const {
+#ifdef ZEN_ENABLE_EVM_STACK_SSA_LIFT
+    auto It = LiftedBlocks.find(BlockPC);
+    return It != LiftedBlocks.end() && It->second;
+#else
+    (void)BlockPC;
+    return false;
+#endif
+  }
+
+  std::vector<Operand> drainLogicalStack() {
+    EvalStack ReverseStack;
+    std::vector<Operand> Values;
+    while (!Stack.empty()) {
+      ReverseStack.push(Stack.pop());
+    }
+    while (!ReverseStack.empty()) {
+      Values.push_back(ReverseStack.pop());
+    }
+    return Values;
+  }
+
+  void restoreLogicalStack(const std::vector<Operand> &Values) {
+    for (const Operand &Opnd : Values) {
+      Stack.push(Opnd);
+    }
+  }
+
+  void finalizeBlockExit(std::vector<Operand> Values, bool Materialize) {
+    if (Materialize) {
+      if (CurrentBlockLifted) {
+        Builder.spillTrackedStack(Values);
+      } else {
+        for (const Operand &Opnd : Values) {
+          Builder.stackPush(Opnd);
+        }
+      }
+    }
+    InDeadCode = true;
+    CurrentBlockLifted = false;
+  }
+
+  bool tryGetConstantJumpSuccessorPC(const EVMAnalyzer &Analyzer,
+                                     const Operand &Dest,
+                                     uint64_t &SuccPC) const {
+    if (!Dest.isConstant()) {
+      return false;
+    }
+    const auto &ConstValue = Dest.getConstValue();
+    if ((ConstValue[3] | ConstValue[2] | ConstValue[1]) != 0) {
+      return false;
+    }
+    uint64_t RawDest = ConstValue[0];
+    if (!Analyzer.hasCanonicalJumpDest(RawDest)) {
+      return false;
+    }
+    SuccPC = Analyzer.getCanonicalJumpDestPC(RawDest);
+    return true;
+  }
+
+  void assignLiftedEntryState(uint64_t BlockPC,
+                              const std::vector<Operand> &Values) {
+#ifdef ZEN_ENABLE_EVM_STACK_SSA_LIFT
+    auto It = LiftedEntryStates.find(BlockPC);
+    if (It == LiftedEntryStates.end()) {
+      return;
+    }
+    auto &EntryState = It->second;
+    ZEN_ASSERT(EntryState.size() == Values.size() &&
+               "Lifted entry state size mismatch");
+    for (size_t Index = 0; Index < EntryState.size(); ++Index) {
+      Builder.assignStackEntryOperand(EntryState[Index], Values[Index]);
+    }
+#else
+    (void)BlockPC;
+    (void)Values;
+#endif
+  }
+
+  void assignLiftedEntryStateFromRuntime(const EVMAnalyzer &Analyzer,
+                                         uint64_t BlockPC) {
+#ifdef ZEN_ENABLE_EVM_STACK_SSA_LIFT
+    auto LiftedIt = LiftedEntryStates.find(BlockPC);
+    if (LiftedIt == LiftedEntryStates.end()) {
+      return;
+    }
+    const auto &BlockInfos = Analyzer.getBlockInfos();
+    auto InfoIt = BlockInfos.find(BlockPC);
+    ZEN_ASSERT(InfoIt != BlockInfos.end() && "Lifted block info missing");
+    const auto &BlockInfo = InfoIt->second;
+    ZEN_ASSERT(BlockInfo.ResolvedEntryStackDepth >= 0 &&
+               "Lifted block must have resolved entry depth");
+    auto &EntryState = LiftedIt->second;
+    for (size_t Index = 0; Index < EntryState.size(); ++Index) {
+      int32_t StackIndex =
+          BlockInfo.ResolvedEntryStackDepth - static_cast<int32_t>(Index) - 1;
+      Operand SlotValue = Builder.stackGet(StackIndex);
+      Builder.assignStackEntryOperand(EntryState[Index], SlotValue);
+    }
+#else
+    (void)Analyzer;
+    (void)BlockPC;
+#endif
+  }
+
+  bool tryAssignConstantJumpEntryState(const EVMAnalyzer &Analyzer,
+                                       const Operand &Dest) {
+    uint64_t SuccPC = 0;
+    if (!CurrentBlockLifted || !tryGetConstantJumpSuccessorPC(Analyzer, Dest, SuccPC) ||
+        !isLiftedBlock(SuccPC)) {
+      return false;
+    }
+    auto OutgoingStack = drainLogicalStack();
+    assignLiftedEntryState(SuccPC, OutgoingStack);
+    finalizeBlockExit(std::move(OutgoingStack), false);
+    return true;
+  }
+
+  bool tryAssignFallthroughEntryState(const EVMAnalyzer &Analyzer,
+                                      uint64_t SuccPC) {
+    (void)Analyzer;
+    if (!CurrentBlockLifted || !isLiftedBlock(SuccPC)) {
+      return false;
+    }
+    auto OutgoingStack = drainLogicalStack();
+    assignLiftedEntryState(SuccPC, OutgoingStack);
+    finalizeBlockExit(std::move(OutgoingStack), false);
+    return true;
+  }
+
+  bool validateLiftedBlockStackBounds(const EVMAnalyzer::BlockInfo &BlockInfo) {
+    ZEN_ASSERT(BlockInfo.ResolvedEntryStackDepth >= 0 &&
+               "Lifted block must have resolved entry depth");
+
+    int64_t EntryDepth = static_cast<int64_t>(BlockInfo.ResolvedEntryStackDepth);
+    int64_t MinDepth = EntryDepth + static_cast<int64_t>(BlockInfo.MinStackHeight);
+    if (MinDepth < 0) {
+      Builder.handleTrap(common::ErrorCode::EVMStackUnderflow);
+      InDeadCode = true;
+      CurrentBlockLifted = false;
+      return false;
+    }
+
+    int64_t MaxDepth = EntryDepth + static_cast<int64_t>(BlockInfo.MaxStackHeight);
+    if (MaxDepth > static_cast<int64_t>(EVM_MAX_STACK_SIZE)) {
+      Builder.handleTrap(common::ErrorCode::EVMStackOverflow);
+      InDeadCode = true;
+      CurrentBlockLifted = false;
+      return false;
+    }
+
+    return true;
+  }
+
   void handleBeginBlock(EVMAnalyzer &Analyzer) {
     const auto &BlockInfos = Analyzer.getBlockInfos();
     ZEN_ASSERT(BlockInfos.count(PC) > 0 && "Block info not found");
@@ -723,21 +943,43 @@ private:
     if (BlockInfo.HasUndefinedInstr) {
       Builder.handleUndefined();
       InDeadCode = true;
+      CurrentBlockLifted = false;
       return;
     }
+
+    bool LiftedBlock = isLiftedBlock(PC);
+    if (LiftedBlock && !validateLiftedBlockStackBounds(BlockInfo)) {
+      return;
+    }
+
     if (static_cast<size_t>(-BlockInfo.MinStackHeight) > EVM_MAX_STACK_SIZE) {
       Builder.handleTrap(common::ErrorCode::EVMStackUnderflow);
       InDeadCode = true;
+      CurrentBlockLifted = false;
       return;
     }
     if (static_cast<size_t>(BlockInfo.MaxStackHeight) > EVM_MAX_STACK_SIZE) {
       Builder.handleTrap(common::ErrorCode::EVMStackOverflow);
       InDeadCode = true;
+      CurrentBlockLifted = false;
       return;
     }
     InDeadCode = false;
-    Builder.createStackCheckBlock(-BlockInfo.MinStackHeight,
-                                  1024 - BlockInfo.MaxStackHeight);
+    if (!LiftedBlock) {
+      Builder.createStackCheckBlock(-BlockInfo.MinStackHeight,
+                                    1024 - BlockInfo.MaxStackHeight);
+    }
+
+    if (LiftedBlock) {
+      CurrentBlockLifted = true;
+      auto EntryIt = LiftedEntryStates.find(PC);
+      if (EntryIt != LiftedEntryStates.end()) {
+        restoreLogicalStack(EntryIt->second);
+      }
+      return;
+    }
+
+    CurrentBlockLifted = false;
     int32_t TotalPopSize = -BlockInfo.MinPopHeight;
     EvalStack ReverseStack;
     while (TotalPopSize > 0) {
@@ -750,21 +992,7 @@ private:
     }
   }
 
-  void handleEndBlock() {
-    Builder.endMemoryCompileBlock();
-    CurBlockLinearPrecheckPlan = BlockLinearPrecheckPlan();
-    // Save unused stack elements to runtime
-    EvalStack ReverseStack;
-    while (!Stack.empty()) {
-      Operand Opnd = Stack.pop();
-      ReverseStack.push(Opnd);
-    }
-    while (!ReverseStack.empty()) {
-      Operand Opnd = ReverseStack.pop();
-      Builder.stackPush(Opnd);
-    }
-    InDeadCode = true;
-  }
+  void handleEndBlock() { finalizeBlockExit(drainLogicalStack(), true); }
 
   void handleStop() { Builder.handleStop(); }
 
@@ -1357,13 +1585,8 @@ private:
 
   // DUP1-DUP16: Duplicate Nth stack item
   void handleDup(uint8_t Index) {
-    Operand Result;
-    if (Stack.getSize() < static_cast<uint32_t>(Index)) {
-      int32_t MemIndex = static_cast<int32_t>(Index) - Stack.getSize() - 1;
-      Result = Builder.stackGet(MemIndex);
-    } else {
-      Result = Stack.peek(Index - 1);
-    }
+    requireLogicalStackDepth(Index);
+    Operand Result = Stack.peek(Index - 1);
     push(Result);
   }
 
@@ -1375,20 +1598,8 @@ private:
 
   // SWAP1-SWAP16: Swap top with Nth+1 stack item
   void handleSwap(uint8_t Index) {
-    int32_t MemIndex = static_cast<int32_t>(Index) - Stack.getSize();
-    if (Stack.empty()) {
-      Operand A = Builder.stackGet(0);
-      Operand B = Builder.stackGet(MemIndex);
-      Builder.stackSet(0, B);
-      Builder.stackSet(MemIndex, A);
-    } else if (Stack.getSize() < static_cast<uint32_t>(Index) + 1u) {
-      Operand &A = Stack.peek(0);
-      Operand B = Builder.stackGet(MemIndex);
-      Builder.stackSet(MemIndex, A);
-      A = B;
-    } else {
-      std::swap(Stack.peek(0), Stack.peek(Index));
-    }
+    requireLogicalStackDepth(static_cast<uint32_t>(Index) + 1u);
+    std::swap(Stack.peek(0), Stack.peek(Index));
   }
 
   // ==================== Environment Instruction Handlers ====================
@@ -1496,6 +1707,9 @@ private:
   BlockLinearPrecheckPlan CurBlockLinearPrecheckPlan;
   bool InDeadCode = false;
   uint64_t PC = 0;
+  bool CurrentBlockLifted = false;
+  std::map<uint64_t, bool> LiftedBlocks;
+  std::map<uint64_t, std::vector<Operand>> LiftedEntryStates;
 };
 
 } // namespace COMPILER
