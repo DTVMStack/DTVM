@@ -200,8 +200,8 @@ private:
     static AbstractValue unknown() { return {}; }
 
     static AbstractValue constFromPush(const uint8_t *Bytecode,
-                                      size_t BytecodeSize, size_t Start,
-                                      size_t Size) {
+                                       size_t BytecodeSize, size_t Start,
+                                       size_t Size) {
       AbstractValue V;
       V.KnownConst = true;
       V.FitsU64 = true;
@@ -210,7 +210,8 @@ private:
         return V;
       }
 
-      const size_t Available = Start < BytecodeSize ? (BytecodeSize - Start) : 0;
+      const size_t Available =
+          Start < BytecodeSize ? (BytecodeSize - Start) : 0;
       const size_t ReadCount = std::min(Size, Available);
       auto readPushByte = [&](size_t Index) -> uint8_t {
         if (Index >= ReadCount) {
@@ -510,8 +511,8 @@ private:
         std::swap(Stack.back(), Stack[Stack.size() - RequiredDepth]);
         updateHeights();
       } else if (Opcode >= OP_PUSH0 && Opcode <= OP_PUSH32) {
-        Stack.push_back(AbstractValue::constFromPush(
-            Bytecode, BytecodeSize, ScanPC, PushBytes));
+        Stack.push_back(AbstractValue::constFromPush(Bytecode, BytecodeSize,
+                                                     ScanPC, PushBytes));
         ScanPC += PushBytes;
         updateHeights();
       } else {
