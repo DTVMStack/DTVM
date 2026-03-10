@@ -1379,13 +1379,6 @@ void X86CgLowering::lowerStoreStmt(const StoreInstruction &Instr) {
 
 // ==================== Control Statements ====================
 
-static bool isFallthroughMIRBlock(const MInstruction &Inst,
-                                  const MBasicBlock *TargetBB) {
-  const MBasicBlock *CurrentBB = Inst.getParentBB();
-  return CurrentBB != nullptr && TargetBB != nullptr &&
-         TargetBB->getIdx() == CurrentBB->getIdx() + 1;
-}
-
 void X86CgLowering::fastEmitBranch(CgBasicBlock *TargetBB) {
   constexpr unsigned MachineInstOpcode = X86::JMP_1;
   SmallVector<CgOperand, 1> Operands{
@@ -1408,10 +1401,6 @@ void X86CgLowering::fastEmitCondBranch(CgBasicBlock *TargetBB, unsigned CC) {
 void X86CgLowering::lowerBrStmt(const BrInstruction &Inst) {
   MBasicBlock *TargetBB = Inst.getTargetBlock();
   CgBasicBlock *TargetMBB = getOrCreateCgBB(TargetBB);
-  if (isFallthroughMIRBlock(Inst, TargetBB)) {
-    CurBB->addSuccessorWithoutProb(TargetMBB);
-    return;
-  }
   fastEmitBranch(TargetMBB);
 }
 
@@ -1424,30 +1413,15 @@ void X86CgLowering::lowerBrIfStmt(const BrIfInstruction &Inst) {
   unsigned TESTOpc = Operand->getType()->isI8() ? X86::TEST8rr : X86::TEST32rr;
   fastEmitNoDefInst_rr(TESTOpc, OperandReg, OperandReg);
 
+  // Jump to the true basic block if the operand is not zero
   CgBasicBlock *TrueMBB = getOrCreateCgBB(Inst.getTrueBlock());
+  fastEmitCondBranch(TrueMBB, X86::CondCode::COND_NE);
+
   if (Inst.hasFalseBlock()) {
-    MBasicBlock *FalseBB = Inst.getFalseBlock();
-    CgBasicBlock *FalseMBB = getOrCreateCgBB(FalseBB);
-
-    if (isFallthroughMIRBlock(Inst, FalseBB)) {
-      fastEmitCondBranch(TrueMBB, X86::CondCode::COND_NE);
-      CurBB->addSuccessorWithoutProb(FalseMBB);
-      return;
-    }
-
-    if (isFallthroughMIRBlock(Inst, Inst.getTrueBlock())) {
-      fastEmitCondBranch(FalseMBB, X86::CondCode::COND_E);
-      CurBB->addSuccessorWithoutProb(TrueMBB);
-      return;
-    }
-
-    // Jump to the true basic block if the operand is not zero
-    fastEmitCondBranch(TrueMBB, X86::CondCode::COND_NE);
-
     // Jump to the false basic block if the operand is zero
+    CgBasicBlock *FalseMBB = getOrCreateCgBB(Inst.getFalseBlock());
     fastEmitBranch(FalseMBB);
   } else {
-    fastEmitCondBranch(TrueMBB, X86::CondCode::COND_NE);
     startNewBlockAfterBranch();
   }
 }
@@ -1719,13 +1693,18 @@ CgRegister X86CgLowering::lowerCall(const CallInstructionBase &Inst) {
         CgOperand::createFuncOperand(DCallInst.getCalleeIdx()));
   }
 
-  OperandNum NumOperands = Inst.getNumOperands();
   // Add a register mask operand representing the call-preserved registers.
   CallOperands.push_back(CgOperand::createRegMask(CSR_64_RegMask));
-  SmallVector<CgRegister, 8> OperandRegs;
+
+  OperandNum NumOperands = Inst.getNumOperands();
+  SmallVector<CgRegister, 6> ArgVirtRegs;
   for (uint32_t i = 0; i < NumOperands; i++) {
     const MInstruction *Operand = Inst.getOperand(i);
-    OperandRegs.push_back(lowerExpr(*Operand));
+    MVT VT = getMVT(*Operand->getType());
+    const TargetRegisterClass *RC = TLI.getRegClassFor(VT);
+    CgRegister OperandReg = lowerExpr(*Operand);
+    CgRegister ArgVirtReg = fastEmitCopy(RC, OperandReg);
+    ArgVirtRegs.push_back(ArgVirtReg);
   }
 
   unsigned StackAdjustNumBytes = getCallFrameSize(Inst);
@@ -1745,7 +1724,7 @@ CgRegister X86CgLowering::lowerCall(const CallInstructionBase &Inst) {
   for (uint32_t i = 0; i < NumOperands; i++) {
     const MInstruction *Operand = Inst.getOperand(i);
     MType *Type = Operand->getType();
-    CgRegister OperandReg = OperandRegs[i];
+    CgRegister ArgVirtReg = ArgVirtRegs[i];
     bool NeedSpill = false;
     MCPhysReg ArgReg;
     if (Type->isI8() && GPRIdx < getArraySize(GPR8ArgRegs)) {
@@ -1757,9 +1736,6 @@ CgRegister X86CgLowering::lowerCall(const CallInstructionBase &Inst) {
     } else if ((Type->isI64() || Type->isPointer()) &&
                GPRIdx < getArraySize(GPR64ArgRegs)) {
       ArgReg = GPR64ArgRegs[GPRIdx++];
-    } else if ((Type->isI64() || Type->isPointer()) &&
-               GPRIdx < getArraySize(GPR64ArgRegs)) {
-      ArgReg = GPR64ArgRegs[GPRIdx++];
     } else if (Type->isFloat() && FPRIdx < getArraySize(XMMArgRegs)) {
       ArgReg = XMMArgRegs[FPRIdx++];
     } else {
@@ -1767,7 +1743,7 @@ CgRegister X86CgLowering::lowerCall(const CallInstructionBase &Inst) {
     }
 
     if (!NeedSpill) {
-      MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), OperandReg,
+      MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), ArgVirtReg,
                               ArgReg);
       CallOperands.push_back(CgOperand::createRegOperand(ArgReg, false, true));
     } else {
@@ -1777,7 +1753,7 @@ CgRegister X86CgLowering::lowerCall(const CallInstructionBase &Inst) {
           CgOperand::createRegOperand(X86::NoRegister, false),
           CgOperand::createImmOperand(SpillIdx * 8),
           CgOperand::createRegOperand(X86::NoRegister, false),
-          CgOperand::createRegOperand(OperandReg, false)};
+          CgOperand::createRegOperand(ArgVirtReg, false)};
       unsigned Opcode = getMovRegToMemOpcode(Type->getKind());
       MF->createCgInstruction(*CurBB, TII.get(Opcode), SpillOperands);
       SpillIdx++;
@@ -1790,7 +1766,20 @@ CgRegister X86CgLowering::lowerCall(const CallInstructionBase &Inst) {
   if (!Type->isVoid()) {
     // TODO: need more details of `setPhysRegsDeadExcept`
     CallOperands.push_back(CgOperand::createRegOperand(ReturnReg, true, true));
+  }
 
+  unsigned CALLOpc = IsIndirectCall ? X86::CALL64r : X86::CALL64pcrel32;
+  MF->createCgInstruction(*CurBB, TII.get(CALLOpc), CallOperands);
+
+  // Issue CALLSEQ_END
+  unsigned AdjStackUp = TII.getCallFrameDestroyOpcode();
+  SmallVector<CgOperand, 2> StackUpOperands{
+      CgOperand::createImmOperand(StackAdjustNumBytes),
+      CgOperand::createImmOperand(0),
+  };
+  MF->createCgInstruction(*CurBB, TII.get(AdjStackUp), StackUpOperands);
+
+  if (!Type->isVoid()) {
     const TargetRegisterClass *RC = TLI.getRegClassFor(VT);
     return fastEmitCopy(RC, ReturnReg);
   }
@@ -1819,9 +1808,6 @@ void X86CgLowering::lowerFormalArguments() {
       ParamReg = GPR16ArgRegs[GPRIdx++];
     } else if (Type->isI32() && GPRIdx < getArraySize(GPR32ArgRegs)) {
       ParamReg = GPR32ArgRegs[GPRIdx++];
-    } else if ((Type->isI64() || Type->isPointer()) &&
-               GPRIdx < getArraySize(GPR64ArgRegs)) {
-      ParamReg = GPR64ArgRegs[GPRIdx++];
     } else if ((Type->isI64() || Type->isPointer()) &&
                GPRIdx < getArraySize(GPR64ArgRegs)) {
       ParamReg = GPR64ArgRegs[GPRIdx++];
@@ -1878,15 +1864,18 @@ void X86CgLowering::lowerReturnStmt(llvm::MVT VT, CgRegister OperandReg) {
     MCPhysReg ResultReg = getReturnRegister(VT);
     MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), OperandReg,
                             ResultReg);
+    // The operand of ret instruction is implicit
     ReturnOperands.push_back(
         CgOperand::createRegOperand(ResultReg, false, true));
   }
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  // Insert explicit COPY from gas register variable back to R14
   VariableIdx GasVarIdx = _mir_func.getGasRegisterVarIdx();
   if (GasVarIdx != VariableIdx(-1)) {
     const TargetRegisterClass *RC = &X86::GR64RegClass;
     CgRegister GasVirtReg = getOrCreateVarReg(GasVarIdx, RC);
+    // COPY from gas virtual register to R14 (physical)
     MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), GasVirtReg,
                             X86::R14);
   }

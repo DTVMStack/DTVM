@@ -43,7 +43,6 @@ void EVMJITCompiler::compileEVMToMC(EVMFrontendContext &Ctx, MModule &Mod,
   CgFunction CgFunc(Ctx, MFunc);
   MFunc.setFunctionType(Mod.getFuncType(FuncIdx));
   EVMMirBuilder MIRBuilder(Ctx, MFunc);
-  ZEN_ASSERT(FuncIdx == MAIN_EVM_FUNC_IDX);
   MIRBuilder.compile(&Ctx);
 
   // Apply MIR optimizations and generate machine code
@@ -84,11 +83,13 @@ void EagerEVMJITCompiler::compile() {
   auto &CodeMPool = EVMMod->getJITCodeMemPool();
   uint8_t *JITCode = const_cast<uint8_t *>(CodeMPool.getMemStart());
 
-  compileEVMToMC(Ctx, Mod, MAIN_EVM_FUNC_IDX, Config.DisableMultipassGreedyRA);
+  // EVM has only 1 function, use direct single-threaded compilation
+  compileEVMToMC(Ctx, Mod, 0, Config.DisableMultipassGreedyRA);
   emitObjectBuffer(&Ctx);
   ZEN_ASSERT(Ctx.ExternRelocs.empty());
 
-  uint8_t *JITFuncPtr = JITCode + Ctx.FuncOffsetMap[MAIN_EVM_FUNC_IDX];
+  uint8_t *JITFuncPtr = Ctx.CodePtr + Ctx.FuncOffsetMap[0];
+  EVMMod->setJITCodeAndSize(JITFuncPtr, Ctx.CodeSize);
 #ifdef ZEN_ENABLE_LINUX_PERF
   // Write block symbols instead of EVM_Main
   // JIT_DUMP_WRITE_FUNC("EVM_Main", JITFuncPtr, Ctx.FuncSizeMap[0]);
@@ -103,8 +104,7 @@ void EagerEVMJITCompiler::compile() {
   size_t CodeSize = CodeMPool.getMemEnd() - JITCode;
   platform::mprotect(JITCode, TO_MPROTECT_CODE_SIZE(CodeSize),
                      PROT_READ | PROT_EXEC);
-  EVMMod->setJITCodeAndSize(JITFuncPtr,
-                            CodeSize - Ctx.FuncOffsetMap[MAIN_EVM_FUNC_IDX]);
+  EVMMod->setJITCodeAndSize(JITCode, CodeSize);
 
   Stats.stopRecord(Timer);
 }

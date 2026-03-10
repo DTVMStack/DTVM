@@ -54,9 +54,8 @@ MType *EVMFrontendContext::getMIRTypeFromEVMType(EVMType Type) {
 
 void buildEVMFunction(EVMFrontendContext &Context, MModule &MMod,
                       const runtime::EVMModule &EVMMod) {
-  auto *VoidPtrType = MPointerType::create(Context, Context.VoidType);
   CompileVector<MType *> MParamTypes(1, Context.ThreadMemPool);
-  MParamTypes[0] = VoidPtrType;
+  MParamTypes[0] = MPointerType::create(Context, Context.VoidType);
   MType *MRetType = Context.getMIRTypeFromEVMType(EVMType::VOID);
   MMod.addFuncType(MFunctionType::create(Context, *MRetType, MParamTypes));
 }
@@ -4046,13 +4045,8 @@ void EVMMirBuilder::appendRuntimeArg(std::vector<MInstruction *> &Args,
 
   if constexpr (std::is_same_v<BaseT, intx::uint256>) {
     ZEN_ASSERT(ScratchCursor < zen::runtime::EVMInstance::HostArgScratchSlots);
-    bool ReusedPointer = isPointerBackedU256Operand(Param);
     MInstruction *Ptr = packU256Argument(Param, ScratchCursor);
-    if (ReusedPointer && Param.usesHostArgScratch()) {
-      ScratchCursor = std::max<std::size_t>(ScratchCursor, 1);
-    } else {
-      ++ScratchCursor;
-    }
+    ++ScratchCursor;
     Args.push_back(Ptr);
   } else if constexpr (std::is_pointer_v<BaseT>) {
     bool NeedsScratch = Param.isConstant() || Param.isU256MultiComponent() ||

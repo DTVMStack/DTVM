@@ -25,8 +25,6 @@ class EVMInstance;
 
 namespace COMPILER {
 
-static constexpr uint32_t MAIN_EVM_FUNC_IDX = 0;
-
 enum class EVMType : uint8_t {
   VOID,    // No value
   UINT8,   // Byte operations
@@ -122,10 +120,8 @@ public:
   class Operand {
   public:
     Operand() = default;
-    Operand(MInstruction *Instr, EVMType Type, bool UsesHostArgScratch = false)
-        : Instr(Instr), Type(Type), UsesHostArgScratch(UsesHostArgScratch) {}
-    Operand(Variable *Var, EVMType Type, bool UsesHostArgScratch = false)
-        : Var(Var), Type(Type), UsesHostArgScratch(UsesHostArgScratch) {}
+    Operand(MInstruction *Instr, EVMType Type) : Instr(Instr), Type(Type) {}
+    Operand(Variable *Var, EVMType Type) : Var(Var), Type(Type) {}
 
     // Constructor for EVMU256Type with 4 I64 components
     Operand(U256Inst Components, EVMType Type)
@@ -153,7 +149,6 @@ public:
 
     bool isU256MultiComponent() const { return IsU256MultiComponent; }
     bool isConstant() const { return IsConstant; }
-    bool usesHostArgScratch() const { return UsesHostArgScratch; }
 
     const U256Inst &getU256Components() const {
       ZEN_ASSERT(IsU256MultiComponent && "Not a multi-component U256");
@@ -183,7 +178,6 @@ public:
     U256Value ConstValue = {};
     bool IsConstant = false;
     bool IsU256MultiComponent = false;
-    bool UsesHostArgScratch = false;
   };
 
   bool compile(CompilerContext *Context);
