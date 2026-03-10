@@ -743,31 +743,29 @@ private:
   }
 };
 
-class EvmU256MulResultInstruction : public NaryInstruction {
+class EvmU256MulResultInstruction : public UnaryInstruction {
 public:
   template <typename... Arguments>
-  static EvmU256MulResultInstruction *create(CompileMemPool &MemPool,
-                                             Arguments &&...Args) {
+  static EvmU256MulResultInstruction *create(Arguments &&...Args) {
     return FixedOperandInstruction::create<EvmU256MulResultInstruction>(
-        MemPool, std::forward<Arguments>(Args)...);
+        std::forward<Arguments>(Args)...);
   }
 
   static bool classof(const MInstruction *Instr) {
     return Instr->getKind() == EVM_U256_MUL_RESULT;
   }
 
-  MInstruction *getMulInst() const { return MulInst; }
+  const MInstruction *getMulInst() const { return getOperand<0>(); }
   uint32_t getResultIdx() const { return ResultIdx; }
 
 private:
   friend class FixedOperandInstruction;
   EvmU256MulResultInstruction(MType *Type, MInstruction *MulInst,
                               uint32_t ResultIdx)
-      : NaryInstruction(MInstruction::EVM_U256_MUL_RESULT,
-                        OP_evm_u256_mul_result, Type),
-        MulInst(MulInst), ResultIdx(ResultIdx) {}
+      : UnaryInstruction(MInstruction::EVM_U256_MUL_RESULT,
+                         OP_evm_u256_mul_result, Type, MulInst),
+        ResultIdx(ResultIdx) {}
 
-  MInstruction *MulInst = nullptr;
   uint32_t ResultIdx = 0;
 };
 

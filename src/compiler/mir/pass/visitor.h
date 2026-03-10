@@ -192,7 +192,9 @@ public:
     VISIT_OPERANDS
   }
   virtual void
-  visitEvmU256MulResultInstruction(EvmU256MulResultInstruction &I) {}
+  visitEvmU256MulResultInstruction(EvmU256MulResultInstruction &I) {
+    VISIT_OPERAND_1
+  }
 
 protected:
   MModule &Module;
