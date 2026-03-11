@@ -51,6 +51,19 @@ U256 = [limb0:i64(lo), limb1:i64(mid-lo), limb2:i64(mid-hi), limb3:i64(hi)]
 
 Every EVM arithmetic/logic operation on U256 expands to multiple dMIR instructions operating on these 4 limbs. This is the primary source of instruction expansion.
 
+## dMIR Design (from `docs/compiler/dmir.md`)
+
+Key design aspects relevant to optimization work:
+
+- **Inspired by Maple IR** (structure) and **LLVM** (data structures)
+- **Not SSA**: Variables allow multiple assignments (simplifies frontend construction)
+- **Instruction categories**: **Statements** (linked in BasicBlock, e.g. `dassign`, `store`, `br`) vs **Expressions** (produce values, used as operands, e.g. `add`, `cmp`, `load`)
+- **Instruction memory layout**: `[Operands Instruction*..., Instruction's own members]` -- operands are encapsulated as Instructions (unlike LLVM's Value)
+- **Module > Function > BasicBlock > Instruction** hierarchy
+- **Type system**: `i32`, `i64`, `f32`, `f64`, `FunctionType`, `PointerType`
+
+For full documentation, read `docs/compiler/dmir.md`. For WASM-to-dMIR mapping, read `docs/compiler/wasm_dmir.md`.
+
 ## dMIR Instruction Set
 
 Defined in `src/compiler/mir/opcodes.def`:
@@ -108,13 +121,14 @@ For each dMIR instruction, apply the x86 lowering from [dmir-to-x86.md](dmir-to-
 2. Note register constraints (e.g., div/rem require RAX:RDX, shifts require CL)
 3. Account for vreg-to-physical-register allocation overhead
 
-### Step 3: Performance Cost Evaluation
+### Step 3: Performance Cost Comparison
 
 Use the cost model from [cost-model.md](cost-model.md):
 
-1. Sum the MIR_OPCODE_WEIGHT for each EVM opcode (approximate dMIR count)
-2. Apply x86 expansion factors per dMIR instruction
-3. Flag RA-expensive opcodes (MUL, SHL, SHR, SAR, SIGNEXTEND) that cause superlinear register allocation cost in dense sequences
+1. For each dMIR instruction, look up its x86 cost (instruction count + latency)
+2. Sum total x86 cost for both baseline and proposed implementations
+3. Assess qualitative factors: register pressure, dependency chain length, CF chain integrity, select chain depth
+4. Compare: `improvement = (old_x86_cost - new_x86_cost) / old_x86_cost`
 
 ## Quick Reference: EVM -> dMIR -> x86
 
@@ -214,4 +228,4 @@ Evaluate overall impact:
 
 - For detailed EVM-to-dMIR pseudocode per opcode with **exact source locations**, see [evm-to-dmir.md](evm-to-dmir.md)
 - For dMIR-to-x86 lowering patterns with **exact lowering functions**, see [dmir-to-x86.md](dmir-to-x86.md)
-- For the cost model and performance evaluation framework, see [cost-model.md](cost-model.md)
+- For the dMIR instruction x86 cost table and implementation comparison methodology, see [cost-model.md](cost-model.md)
