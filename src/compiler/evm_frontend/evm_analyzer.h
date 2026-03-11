@@ -30,7 +30,7 @@ namespace COMPILER {
 // clang-format off
 static constexpr uint32_t MIR_OPCODE_WEIGHT[256] = {
   // 0x00 STOP    ADD     MUL     SUB     DIV     SDIV    MOD     SMOD
-         5,       12,     80,     20,     5,      5,      5,      5,
+         5,       12,     12,     20,     5,      5,      5,      5,
   // 0x08 ADDMOD  MULMOD  EXP     SIGNEXT (0x0c-0x0f undefined)
          5,       5,      5,      20,     2,      2,      2,      2,
   // 0x10 LT      GT      SLT     SGT     EQ      ISZERO  AND     OR
@@ -77,7 +77,6 @@ static constexpr uint32_t MIR_OPCODE_WEIGHT[256] = {
 /// allocation cost when they appear in high density.
 inline bool isRAExpensiveOpcode(uint8_t Op) {
   switch (Op) {
-  case 0x02: // MUL  — ~50-60 MIR, heavy partial-product fan-out
   case 0x0b: // SIGNEXTEND — ~21 Selects, two dependency chain loops
   case 0x1b: // SHL  — ~92 Selects, nested J,K loops
   case 0x1c: // SHR  — ~96 Selects, nested J,K loops
