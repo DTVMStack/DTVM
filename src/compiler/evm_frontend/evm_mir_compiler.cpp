@@ -2464,11 +2464,18 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handlePC(const uint64_t &PC) {
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleGas() {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
-  syncGasToMemory();
+  if (Ctx.isGasRegisterEnabled() && GasRegVar) {
+    MInstruction *GasValue =
+        protectUnsafeValue(loadVariable(GasRegVar), I64Type);
+    return convertSingleInstrToU256Operand(GasValue);
+  }
 #endif
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<uint64_t>(RuntimeFunctions.GetGas);
+  MInstruction *GasValue = getInstanceElement(
+      &Ctx.I64Type, zen::runtime::EVMInstance::getGasFieldOffset());
+  GasValue = protectUnsafeValue(GasValue, I64Type);
+  return convertSingleInstrToU256Operand(GasValue);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
