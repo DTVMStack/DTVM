@@ -58,6 +58,7 @@ OPCODE(dread)                       // OP_OTHER_EXPR_START
 OPCODE(const)
 OPCODE(cmp)
 OPCODE(adc)
+OPCODE(sbb)
 OPCODE(select)
 OPCODE(load)
 OPCODE(wasm_sadd128_overflow)

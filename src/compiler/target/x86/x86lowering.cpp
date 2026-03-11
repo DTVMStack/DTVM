@@ -942,6 +942,40 @@ CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
   }
 }
 
+CgRegister X86CgLowering::lowerSbbExpr(const SbbInstruction &Inst) {
+  const MInstruction *LHS = Inst.getOperand<0>();
+  const MInstruction *RHS = Inst.getOperand<1>();
+
+  MVT VT = getMVT(*Inst.getType());
+  ZEN_ASSERT(VT.isInteger());
+  const TargetRegisterClass *RC = TLI.getRegClassFor(VT);
+
+  CgRegister LHSReg = lowerExpr(*LHS);
+  CgRegister RHSReg = lowerExpr(*RHS);
+
+  CgRegister DiffReg = fastEmitCopy(RC, LHSReg);
+  switch (VT.SimpleTy) {
+  case MVT::i8:
+    MF->createCgInstruction(*CurBB, TII.get(X86::SBB8rr), DiffReg, RHSReg,
+                            DiffReg);
+    return DiffReg;
+  case MVT::i16:
+    MF->createCgInstruction(*CurBB, TII.get(X86::SBB16rr), DiffReg, RHSReg,
+                            DiffReg);
+    return DiffReg;
+  case MVT::i32:
+    MF->createCgInstruction(*CurBB, TII.get(X86::SBB32rr), DiffReg, RHSReg,
+                            DiffReg);
+    return DiffReg;
+  case MVT::i64:
+    MF->createCgInstruction(*CurBB, TII.get(X86::SBB64rr), DiffReg, RHSReg,
+                            DiffReg);
+    return DiffReg;
+  default:
+    throw getError(ErrorCode::NoMatchedInstruction);
+  }
+}
+
 CgRegister
 X86CgLowering::lowerEvmUmul128Expr(const EvmUmul128Instruction &Inst) {
   // 64x64->128 bit multiplication using x86 MUL64r

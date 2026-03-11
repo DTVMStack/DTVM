@@ -224,6 +224,33 @@ public:
 
   template <BinaryOperator Operator>
   Operand handleBinaryArithmetic(const Operand &LHSOp, const Operand &RHSOp) {
+    // Constant folding: if both operands are compile-time constants, compute
+    // the result directly and return a constant Operand.
+    if (LHSOp.isConstant() && RHSOp.isConstant()) {
+      intx::uint256 L = u256FromLimbs(LHSOp.getConstValue());
+      intx::uint256 R = u256FromLimbs(RHSOp.getConstValue());
+      intx::uint256 Res;
+      if constexpr (Operator == BinaryOperator::BO_ADD)
+        Res = L + R;
+      else if constexpr (Operator == BinaryOperator::BO_SUB)
+        Res = L - R;
+      else
+        ZEN_ASSERT_TODO();
+      return createU256ConstOperand(Res);
+    }
+
+    // Identity / annihilation shortcuts for single constant operand.
+    if constexpr (Operator == BinaryOperator::BO_ADD) {
+      if (LHSOp.isConstant() && isU256Zero(LHSOp.getConstValue()))
+        return RHSOp;
+      if (RHSOp.isConstant() && isU256Zero(RHSOp.getConstValue()))
+        return LHSOp;
+    }
+    if constexpr (Operator == BinaryOperator::BO_SUB) {
+      if (RHSOp.isConstant() && isU256Zero(RHSOp.getConstValue()))
+        return LHSOp;
+    }
+
     U256Inst Result = {};
     U256Inst LHS = extractU256Operand(LHSOp);
     U256Inst RHS = extractU256Operand(RHSOp);
@@ -266,31 +293,29 @@ public:
         }
       }
     } else if constexpr (Operator == BinaryOperator::BO_SUB) {
+      // Borrow placeholder (not consumed by x86 lowering; the hardware CF
+      // from the preceding SUB/SBB is used directly, mirroring the ADC
+      // carry chain pattern).
       MInstruction *Borrow = createIntConstInstruction(MirI64Type, 0);
 
+      // Pre-materialize all operand components into variables before the
+      // SUB/SBB borrow chain. This prevents lazy expression lowering from
+      // emitting flag-clobbering instructions between the SUB and SBB
+      // instructions that form the borrow chain.
       for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-        // Sub: LHS[I] - RHS[I] - Borrow
-        MInstruction *Diff1 = createInstruction<BinaryInstruction>(
-            false, OP_sub, MirI64Type, LHS[I], RHS[I]);
-        MInstruction *Diff2 = createInstruction<BinaryInstruction>(
-            false, OP_sub, MirI64Type, Diff1, Borrow);
+        LHS[I] = protectUnsafeValue(LHS[I], MirI64Type);
+        RHS[I] = protectUnsafeValue(RHS[I], MirI64Type);
+      }
 
-        Result[I] = protectUnsafeValue(Diff2, MirI64Type);
-
-        // (LHS[I] < RHS[I]) || (Diff1 < Borrow)
-        if (I < EVM_ELEMENTS_COUNT - 1) {
-          auto LTPredicate = CmpInstruction::Predicate::ICMP_ULT;
-          MInstruction *Borrow1 = createInstruction<CmpInstruction>(
-              false, LTPredicate, &Ctx.I64Type, LHS[I], RHS[I]);
-          MInstruction *Borrow2 = createInstruction<CmpInstruction>(
-              false, LTPredicate, &Ctx.I64Type, Diff1, Borrow);
-          // NOLINTBEGIN(readability-identifier-naming)
-          MInstruction *Borrow1_64 = zeroExtendToI64(Borrow1);
-          MInstruction *Borrow2_64 = zeroExtendToI64(Borrow2);
-          // NOLINTEND(readability-identifier-naming)
-
-          Borrow = createInstruction<BinaryInstruction>(
-              false, OP_or, MirI64Type, Borrow1_64, Borrow2_64);
+      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+        if (I == 0) {
+          MInstruction *LocalResult = createInstruction<BinaryInstruction>(
+              false, OP_sub, MirI64Type, LHS[I], RHS[I]);
+          Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
+        } else {
+          MInstruction *LocalResult = createInstruction<SbbInstruction>(
+              false, MirI64Type, LHS[I], RHS[I], Borrow);
+          Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
         }
       }
     } else {
@@ -317,6 +342,34 @@ public:
   // EVM bitwise opcode: and, or, xor
   template <BinaryOperator Operator>
   Operand handleBitwiseOp(const Operand &LHSOp, const Operand &RHSOp) {
+    if (LHSOp.isConstant() && RHSOp.isConstant()) {
+      intx::uint256 L = u256FromLimbs(LHSOp.getConstValue());
+      intx::uint256 R = u256FromLimbs(RHSOp.getConstValue());
+      intx::uint256 Res;
+      if constexpr (Operator == BinaryOperator::BO_AND)
+        Res = L & R;
+      else if constexpr (Operator == BinaryOperator::BO_OR)
+        Res = L | R;
+      else if constexpr (Operator == BinaryOperator::BO_XOR)
+        Res = L ^ R;
+      else
+        ZEN_ASSERT_TODO();
+      return createU256ConstOperand(Res);
+    }
+    // AND with 0 -> 0, OR/XOR with 0 -> identity
+    if constexpr (Operator == BinaryOperator::BO_AND) {
+      if ((LHSOp.isConstant() && isU256Zero(LHSOp.getConstValue())) ||
+          (RHSOp.isConstant() && isU256Zero(RHSOp.getConstValue())))
+        return createU256ConstOperand(intx::uint256{0});
+    }
+    if constexpr (Operator == BinaryOperator::BO_OR ||
+                  Operator == BinaryOperator::BO_XOR) {
+      if (LHSOp.isConstant() && isU256Zero(LHSOp.getConstValue()))
+        return RHSOp;
+      if (RHSOp.isConstant() && isU256Zero(RHSOp.getConstValue()))
+        return LHSOp;
+    }
+
     U256Inst Result = {};
     U256Inst LHS = extractU256Operand(LHSOp);
     U256Inst RHS = extractU256Operand(RHSOp);
@@ -481,6 +534,18 @@ private:
   MInstruction *getInstanceStackTopInt();
   MInstruction *getInstanceStackPeekInt(int32_t IndexFromTop);
   void drainGas();
+
+  static intx::uint256 u256FromLimbs(const U256Value &V) {
+    intx::uint256 R = 0;
+    for (int I = EVM_ELEMENTS_COUNT - 1; I >= 0; --I) {
+      R = (R << 64) | intx::uint256{V[static_cast<size_t>(I)]};
+    }
+    return R;
+  }
+
+  static bool isU256Zero(const U256Value &V) {
+    return (V[0] | V[1] | V[2] | V[3]) == 0;
+  }
 
   // Create a full U256 operand from intx::uint256 value
   Operand createU256ConstOperand(const intx::uint256 &V);
