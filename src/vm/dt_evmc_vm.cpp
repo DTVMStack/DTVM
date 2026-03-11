@@ -189,18 +189,6 @@ InstanceGuard::~InstanceGuard() {
   }
 }
 
-/// Returns true when the address-based module cache already contains the
-/// current bytecode for the given address/revision pair. Hot calls can skip the
-/// pre-JIT analyzer in this case because no new compilation decision is needed.
-bool hasMatchingCachedModule(const DTVM *VM, const uint8_t *Code,
-                             size_t CodeSize, evmc_revision Rev,
-                             const evmc_message *Msg) {
-  CodeAddrRevKey AddrKey{Msg->code_address, Rev};
-  auto It = VM->AddrCache.find(AddrKey);
-  return It != VM->AddrCache.end() &&
-         validateCodeMatch(Code, CodeSize, It->second);
-}
-
 /// The implementation of the evmc_vm::destroy() method.
 void destroy(evmc_vm *VMInstance) { delete static_cast<DTVM *>(VMInstance); }
 
@@ -442,12 +430,14 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
   }
 
 #ifdef ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
-  // Use interpreter mode for bytecode that would be too expensive to JIT. Run
-  // the analyzer only on cache misses, because hot cache hits have already paid
-  // any compilation or fallback decision during the initial load.
+  // Use interpreter mode for bytecode that would be too expensive to JIT.
+  // The EVMAnalyzer performs a pattern-aware O(n) scan that detects:
+  //  - raw bytecode size / estimated MIR instruction count too large
+  //  - high density of RA-expensive opcodes (SHL/SHR/SAR/MUL/SIGNEXTEND)
+  //  - long consecutive runs of RA-expensive ops
+  //  - DUP-induced feedback loops (b0 pattern)
   std::unique_ptr<ScopedConfig> TempConfig;
-  if (VM->Config.Mode == RunMode::MultipassMode &&
-      !hasMatchingCachedModule(VM, Code, CodeSize, Rev, Msg)) {
+  if (VM->Config.Mode == RunMode::MultipassMode) {
     COMPILER::EVMAnalyzer Analyzer(Rev);
     Analyzer.analyze(Code, CodeSize);
     const auto &JITResult = Analyzer.getJITSuitability();
