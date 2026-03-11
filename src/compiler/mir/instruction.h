@@ -23,6 +23,7 @@ public:
     UNARY,
     BINARY,
     ADC,
+    SBB,
     CMP,
     CONVERSION,
     SELECT,

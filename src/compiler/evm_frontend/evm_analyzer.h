@@ -30,11 +30,11 @@ namespace COMPILER {
 // clang-format off
 static constexpr uint32_t MIR_OPCODE_WEIGHT[256] = {
   // 0x00 STOP    ADD     MUL     SUB     DIV     SDIV    MOD     SMOD
-         5,       12,     80,     20,     5,      5,      5,      5,
+         5,       12,     80,     12,     5,      5,      5,      5,
   // 0x08 ADDMOD  MULMOD  EXP     SIGNEXT (0x0c-0x0f undefined)
          5,       5,      5,      20,     2,      2,      2,      2,
   // 0x10 LT      GT      SLT     SGT     EQ      ISZERO  AND     OR
-         12,      12,     12,     12,     12,     8,      8,      8,
+         8,       8,      12,     12,     12,     8,      8,      8,
   // 0x18 XOR     NOT     BYTE    SHL     SHR     SAR     CLZ     (0x1f)
          8,       8,      8,      15,     15,     15,     8,      2,
   // 0x20 KECCAK256  (0x21-0x2f undefined)
@@ -79,9 +79,6 @@ inline bool isRAExpensiveOpcode(uint8_t Op) {
   switch (Op) {
   case 0x02: // MUL  — ~50-60 MIR, heavy partial-product fan-out
   case 0x0b: // SIGNEXTEND — ~21 Selects, two dependency chain loops
-  case 0x1b: // SHL  — ~92 Selects, nested J,K loops
-  case 0x1c: // SHR  — ~96 Selects, nested J,K loops
-  case 0x1d: // SAR  — ~52 Selects, sign-extended variant
     return true;
   default:
     return false;

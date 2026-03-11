@@ -86,6 +86,11 @@ void MInstruction::print(llvm::raw_ostream &OS) const {
        << getOperand<2>() << ')';
     break;
   }
+  case SBB: {
+    OS << "sbb (" << getOperand<0>() << ", " << getOperand<1>() << ", "
+       << getOperand<2>() << ')';
+    break;
+  }
   case BR: {
     auto *br = llvm::cast<BrInstruction>(this);
     OS << "br @" << br->getTargetBlock()->getIdx() << '\n';
