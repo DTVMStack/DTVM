@@ -24,6 +24,13 @@ EVMAnalyzer analyzeBytecode(const std::vector<uint8_t> &Bytecode) {
   return Analyzer;
 }
 
+EVMAnalyzer analyzeSuitabilityOnlyBytecode(const std::vector<uint8_t> &Bytecode) {
+  EVMAnalyzer Analyzer(EVMC_CANCUN);
+  const uint8_t *Data = Bytecode.empty() ? nullptr : Bytecode.data();
+  Analyzer.analyzeSuitabilityOnly(Data, Bytecode.size());
+  return Analyzer;
+}
+
 const EVMAnalyzer::BlockInfo *findBlock(const EVMAnalyzer &Analyzer,
                                         uint64_t EntryPC) {
   const auto &Blocks = Analyzer.getBlockInfos();
@@ -359,6 +366,40 @@ TEST(EVMJITFrontendAnalyzerTest, ConstantJumpCanonicalizesJumpDestRuns) {
 
   EXPECT_TRUE(JumpDestBlock->IsJumpDest);
   expectPCList(JumpDestBlock->Predecessors, {0});
+}
+
+TEST(EVMJITFrontendAnalyzerTest,
+     SuitabilityOnlyKeepsFallbackMetricsWithoutBuildingCfg) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0x04, // PUSH1 0x04
+      0x56,       // JUMP
+      0x5b,       // JUMPDEST
+      0x5b,       // JUMPDEST
+      0x00        // STOP
+  };
+
+  const EVMAnalyzer FullAnalyzer = analyzeBytecode(Bytecode);
+  const EVMAnalyzer SuitabilityOnlyAnalyzer =
+      analyzeSuitabilityOnlyBytecode(Bytecode);
+
+  const auto &Full = FullAnalyzer.getJITSuitability();
+  const auto &SuitabilityOnly = SuitabilityOnlyAnalyzer.getJITSuitability();
+
+  EXPECT_EQ(SuitabilityOnly.ShouldFallback, Full.ShouldFallback);
+  EXPECT_EQ(SuitabilityOnly.BytecodeSize, Full.BytecodeSize);
+  EXPECT_EQ(SuitabilityOnly.MirEstimate, Full.MirEstimate);
+  EXPECT_EQ(SuitabilityOnly.RAExpensiveCount, Full.RAExpensiveCount);
+  EXPECT_EQ(SuitabilityOnly.MaxConsecutiveExpensive,
+            Full.MaxConsecutiveExpensive);
+  EXPECT_EQ(SuitabilityOnly.MaxBlockExpensiveCount,
+            Full.MaxBlockExpensiveCount);
+  EXPECT_EQ(SuitabilityOnly.DupFeedbackPatternCount,
+            Full.DupFeedbackPatternCount);
+
+  EXPECT_TRUE(SuitabilityOnlyAnalyzer.getBlockInfos().empty());
+  EXPECT_FALSE(SuitabilityOnlyAnalyzer.hasCanonicalJumpDest(3));
+  EXPECT_FALSE(SuitabilityOnlyAnalyzer.hasCanonicalJumpDest(4));
+  EXPECT_FALSE(SuitabilityOnlyAnalyzer.hasUnknownDynamicJumpTargets());
 }
 
 TEST(EVMJITFrontendAnalyzerTest,

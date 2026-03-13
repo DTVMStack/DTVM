@@ -176,12 +176,14 @@ public:
 
   bool hasUnknownDynamicJumpTargets() const { return HasUnknownDynamicJump; }
 
-  bool analyze(const uint8_t *Bytecode, size_t BytecodeSize) {
-    BlockInfos.clear();
-    JumpDestCanonicalPCs.clear();
-    EntryBlockPC = 0;
-    HasUnknownDynamicJump = false;
+  bool analyzeSuitabilityOnly(const uint8_t *Bytecode, size_t BytecodeSize) {
+    resetAnalysisState();
+    analyzeSuitability(Bytecode, BytecodeSize);
+    return true;
+  }
 
+  bool analyze(const uint8_t *Bytecode, size_t BytecodeSize) {
+    resetAnalysisState();
     analyzeSuitability(Bytecode, BytecodeSize);
     buildJumpDestRuns(Bytecode, BytecodeSize);
     buildBlocks(Bytecode, BytecodeSize);
@@ -192,6 +194,13 @@ public:
   }
 
 private:
+  void resetAnalysisState() {
+    BlockInfos.clear();
+    JumpDestCanonicalPCs.clear();
+    EntryBlockPC = 0;
+    HasUnknownDynamicJump = false;
+  }
+
   struct AbstractValue {
     bool KnownConst = false;
     bool FitsU64 = false;
