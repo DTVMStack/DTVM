@@ -464,6 +464,7 @@ private:
                                           int32_t Offset);
   Operand loadProtectedAddressFieldAsU256(MInstruction *BasePtr,
                                           int32_t Offset);
+  MInstruction *getHostArgScratchPtr(std::size_t ScratchSlot);
 
   template <class T, typename... Arguments>
   T *createInstruction(bool IsStmt, Arguments &&...Args) {
