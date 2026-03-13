@@ -418,8 +418,8 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
 
   // Module lookup: L1 address-based cache -> Cold load
   bool IsTransientMod = false;
-  EVMModule *Mod = findModuleCached(VM, Code, CodeSize, Rev, Msg,
-                                    IsTransientMod);
+  EVMModule *Mod =
+      findModuleCached(VM, Code, CodeSize, Rev, Msg, IsTransientMod);
   if (!Mod) {
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
@@ -526,8 +526,8 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
 
   // Module lookup: L0 -> L1 -> Cold (shared with interpreter path)
   bool IsTransientMod = false;
-  EVMModule *Mod = findModuleCached(VM, Code, CodeSize, Rev, Msg,
-                                    IsTransientMod);
+  EVMModule *Mod =
+      findModuleCached(VM, Code, CodeSize, Rev, Msg, IsTransientMod);
   if (!Mod) {
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
