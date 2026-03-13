@@ -456,6 +456,14 @@ private:
   Variable *storeInstructionInTemp(MInstruction *Value, MType *Type);
   MInstruction *loadVariable(Variable *Var);
   MInstruction *protectUnsafeValue(MInstruction *Value, MType *Type);
+  MInstruction *loadProtectedInstancePointer(int32_t Offset);
+  MInstruction *getProtectedFieldAddress(MInstruction *BasePtr, int32_t Offset,
+                                         MType *PointerType);
+  MInstruction *loadProtectedU64Field(MInstruction *BasePtr, int32_t Offset);
+  Operand loadProtectedBytes32FieldAsU256(MInstruction *BasePtr,
+                                          int32_t Offset);
+  Operand loadProtectedAddressFieldAsU256(MInstruction *BasePtr,
+                                          int32_t Offset);
 
   template <class T, typename... Arguments>
   T *createInstruction(bool IsStmt, Arguments &&...Args) {

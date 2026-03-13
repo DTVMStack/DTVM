@@ -7,6 +7,7 @@
 #include "evm/evm_cache.h"
 #include "evmc/evmc.hpp"
 #include "runtime/module.h"
+#include <limits>
 
 #ifdef ZEN_ENABLE_JIT
 namespace COMPILER {
@@ -36,6 +37,12 @@ public:
   const evm::EVMBytecodeCache &getBytecodeCache() const;
   evmc_revision getRevision() const { return Revision; }
   void setRevision(evmc_revision Rev) { Revision = Rev; }
+  static constexpr int32_t getCodeSizeOffset() {
+    static_assert(offsetof(EVMModule, CodeSize) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "EVMModule offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(EVMModule, CodeSize));
+  }
 
 #ifdef ZEN_ENABLE_JIT
   common::CodeMemPool &getJITCodeMemPool() { return JITCodeMemPool; }

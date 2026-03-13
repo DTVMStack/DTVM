@@ -201,11 +201,46 @@ public:
     return static_cast<int32_t>(offsetof(EVMInstance, CurrentMessage));
   }
 
+  static constexpr int32_t getModuleOffset() {
+    static_assert(offsetof(EVMInstance, Mod) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "EVMInstance offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(EVMInstance, Mod));
+  }
+
   static constexpr int32_t getMessageGasOffset() {
     static_assert(offsetof(evmc_message, gas) <=
                       std::numeric_limits<int32_t>::max(),
                   "evmc_message offsets should fit in 32-bit signed range");
     return static_cast<int32_t>(offsetof(evmc_message, gas));
+  }
+
+  static constexpr int32_t getMessageRecipientOffset() {
+    static_assert(offsetof(evmc_message, recipient) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "evmc_message offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(evmc_message, recipient));
+  }
+
+  static constexpr int32_t getMessageSenderOffset() {
+    static_assert(offsetof(evmc_message, sender) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "evmc_message offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(evmc_message, sender));
+  }
+
+  static constexpr int32_t getMessageInputSizeOffset() {
+    static_assert(offsetof(evmc_message, input_size) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "evmc_message offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(evmc_message, input_size));
+  }
+
+  static constexpr int32_t getMessageValueOffset() {
+    static_assert(offsetof(evmc_message, value) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "evmc_message offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(evmc_message, value));
   }
 
   static constexpr int32_t getMessageDepthOffset() {

@@ -2472,8 +2472,10 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleGas() {
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleAddress() {
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor(RuntimeFunctions.GetAddress);
+  MInstruction *MsgPtr = loadProtectedInstancePointer(
+      zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
+  return loadProtectedAddressFieldAsU256(
+      MsgPtr, zen::runtime::EVMInstance::getMessageRecipientOffset());
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleBalance(Operand Address) {
@@ -2495,13 +2497,17 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleOrigin() {
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCaller() {
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor(RuntimeFunctions.GetCaller);
+  MInstruction *MsgPtr = loadProtectedInstancePointer(
+      zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
+  return loadProtectedAddressFieldAsU256(
+      MsgPtr, zen::runtime::EVMInstance::getMessageSenderOffset());
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallValue() {
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor(RuntimeFunctions.GetCallValue);
+  MInstruction *MsgPtr = loadProtectedInstancePointer(
+      zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
+  return loadProtectedBytes32FieldAsU256(
+      MsgPtr, zen::runtime::EVMInstance::getMessageValueOffset());
 }
 
 typename EVMMirBuilder::Operand
@@ -2519,13 +2525,19 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleGasPrice() {
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCallDataSize() {
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor(RuntimeFunctions.GetCallDataSize);
+  MInstruction *MsgPtr = loadProtectedInstancePointer(
+      zen::runtime::EVMInstance::getCurrentMessagePointerOffset());
+  MInstruction *InputSize = loadProtectedU64Field(
+      MsgPtr, zen::runtime::EVMInstance::getMessageInputSizeOffset());
+  return convertSingleInstrToU256Operand(InputSize);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleCodeSize() {
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor(RuntimeFunctions.GetCodeSize);
+  MInstruction *ModulePtr = loadProtectedInstancePointer(
+      zen::runtime::EVMInstance::getModuleOffset());
+  MInstruction *CodeSize = loadProtectedU64Field(
+      ModulePtr, zen::runtime::EVMModule::getCodeSizeOffset());
+  return convertSingleInstrToU256Operand(CodeSize);
 }
 
 void EVMMirBuilder::handleCodeCopy(Operand DestOffsetComponents,
@@ -3383,6 +3395,90 @@ MInstruction *EVMMirBuilder::protectUnsafeValue(MInstruction *Value,
                                         ReusableVarIdx);
   return createInstruction<DreadInstruction>(false, ReusableVar->getType(),
                                              ReusableVarIdx);
+}
+
+MInstruction *EVMMirBuilder::loadProtectedInstancePointer(int32_t Offset) {
+  MPointerType *VoidPtrType = createVoidPtrType();
+  MInstruction *Ptr = getInstanceElement(VoidPtrType, Offset);
+  return protectUnsafeValue(Ptr, VoidPtrType);
+}
+
+MInstruction *EVMMirBuilder::getProtectedFieldAddress(MInstruction *BasePtr,
+                                                      int32_t Offset,
+                                                      MType *PointerType) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *BaseAddr = BasePtr;
+
+  if (BasePtr->getType()->isPointer()) {
+    BaseAddr = createInstruction<ConversionInstruction>(false, OP_ptrtoint,
+                                                        I64Type, BasePtr);
+  } else if (!BasePtr->getType()->isI64()) {
+    BaseAddr = zeroExtendToI64(BasePtr);
+  }
+
+  BaseAddr = protectUnsafeValue(BaseAddr, I64Type);
+  MInstruction *OffsetValue =
+      createIntConstInstruction(I64Type, static_cast<uint64_t>(Offset));
+  MInstruction *FieldAddr = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, BaseAddr, OffsetValue);
+  MInstruction *FieldPtr = createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, PointerType, FieldAddr);
+  return protectUnsafeValue(FieldPtr, PointerType);
+}
+
+MInstruction *EVMMirBuilder::loadProtectedU64Field(MInstruction *BasePtr,
+                                                   int32_t Offset) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MPointerType *I64PtrType = MPointerType::create(Ctx, *I64Type);
+  MInstruction *FieldPtr =
+      getProtectedFieldAddress(BasePtr, Offset, I64PtrType);
+  MInstruction *Value =
+      createInstruction<LoadInstruction>(false, I64Type, FieldPtr);
+  return protectUnsafeValue(Value, I64Type);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::loadProtectedBytes32FieldAsU256(MInstruction *BasePtr,
+                                               int32_t Offset) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *FieldPtr =
+      getProtectedFieldAddress(BasePtr, Offset, createVoidPtrType());
+  Operand Bytes32Op(FieldPtr, EVMType::BYTES32);
+  U256Inst Components =
+      convertBytes32ToU256Operand(Bytes32Op).getU256Components();
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    Components[I] = protectUnsafeValue(Components[I], I64Type);
+  }
+  return Operand(Components, EVMType::UINT256);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::loadProtectedAddressFieldAsU256(MInstruction *BasePtr,
+                                               int32_t Offset) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MPointerType *I64PtrType = MPointerType::create(Ctx, *I64Type);
+  MInstruction *AddressPtr =
+      getProtectedFieldAddress(BasePtr, Offset, I64PtrType);
+
+  auto LoadAddressChunk = [&](int32_t InnerOffset) -> MInstruction * {
+    MInstruction *Raw = createInstruction<LoadInstruction>(
+        false, I64Type, AddressPtr, 1, nullptr, InnerOffset);
+    MInstruction *Swapped =
+        createInstruction<UnaryInstruction>(false, OP_bswap, I64Type, Raw);
+    return protectUnsafeValue(Swapped, I64Type);
+  };
+
+  MInstruction *Low64 = LoadAddressChunk(12);
+  MInstruction *Mid64 = LoadAddressChunk(4);
+  MInstruction *High64 = LoadAddressChunk(0);
+  MInstruction *Shift = createIntConstInstruction(I64Type, 32);
+  MInstruction *High32 = createInstruction<BinaryInstruction>(
+      false, OP_ushr, I64Type, High64, Shift);
+  High32 = protectUnsafeValue(High32, I64Type);
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+
+  U256Inst Components = {Low64, Mid64, High32, Zero};
+  return Operand(Components, EVMType::UINT256);
 }
 
 typename EVMMirBuilder::Operand
