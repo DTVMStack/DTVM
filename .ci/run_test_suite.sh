@@ -190,6 +190,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 ls -la "$WORKSPACE_ROOT/build/lib" | sed -n '1,120p'
                 exit 1
             fi
+            ln -sf "$DTVM_VM_SO" "$WORKSPACE_ROOT/libdtvmapi.so"
 
             if [ ! -d "$EVMONE_DIR" ]; then
                 git clone --depth 1 --recurse-submodules -b "$EVMONE_BRANCH" "$EVMONE_REPO" "$EVMONE_DIR"
@@ -256,12 +257,16 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 echo "Running evmone-statetest mode=${EVMONE_MODE}, filter=${EVMONE_STATETEST_FILTER}"
                 if [ -n "$EVMONE_MODE_TIMEOUT_SECONDS" ]; then
                     timeout --foreground "$EVMONE_MODE_TIMEOUT_SECONDS" env \
+                        DTVM_EVM_MODE="$EVMONE_MODE" \
+                        DTVM_EVM_ENABLE_GAS_METERING=true \
                         EVMONE_EXTERNAL_OPTIONS="$VM_ARG" \
                         "$EVMONE_STATETEST_BIN" "$EVMONE_STATETEST_PATH" \
                         --vm external_vm \
                         -k "$EVMONE_STATETEST_FILTER"
                 else
                     env EVMONE_EXTERNAL_OPTIONS="$VM_ARG" \
+                        DTVM_EVM_MODE="$EVMONE_MODE" \
+                        DTVM_EVM_ENABLE_GAS_METERING=true \
                         "$EVMONE_STATETEST_BIN" "$EVMONE_STATETEST_PATH" \
                         --vm external_vm \
                         -k "$EVMONE_STATETEST_FILTER"
