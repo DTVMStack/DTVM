@@ -24,7 +24,8 @@ EVMAnalyzer analyzeBytecode(const std::vector<uint8_t> &Bytecode) {
   return Analyzer;
 }
 
-EVMAnalyzer analyzeSuitabilityOnlyBytecode(const std::vector<uint8_t> &Bytecode) {
+EVMAnalyzer
+analyzeSuitabilityOnlyBytecode(const std::vector<uint8_t> &Bytecode) {
   EVMAnalyzer Analyzer(EVMC_CANCUN);
   const uint8_t *Data = Bytecode.empty() ? nullptr : Bytecode.data();
   Analyzer.analyzeSuitabilityOnly(Data, Bytecode.size());
