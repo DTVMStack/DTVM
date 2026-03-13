@@ -734,6 +734,7 @@ private:
         PC++; // offset 1 byte for opcode
       }
       if (!InDeadCode) {
+        handleEndBlock();
         handleStop();
       }
     } catch (const common::Error &E) {

@@ -619,6 +619,32 @@ TEST(EVMJITFrontendVisitorTest,
   EXPECT_FALSE(Builder.Undefined);
 }
 
+TEST(EVMJITFrontendVisitorTest,
+     ImplicitStopMaterializesLiftedStackOnFallthrough) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0xaa // PUSH1 0xaa
+  };
+
+  const EVMAnalyzer Analyzer = analyzeBytecode(Bytecode);
+  const auto *EntryBlock = findBlock(Analyzer, 0);
+  ASSERT_NE(EntryBlock, nullptr);
+  EXPECT_TRUE(EntryBlock->CanLiftStack);
+  EXPECT_EQ(EntryBlock->ResolvedExitStackDepth, 1);
+
+  COMPILER::EVMFrontendContext Ctx;
+  Ctx.setRevision(EVMC_CANCUN);
+  Ctx.setBytecode(reinterpret_cast<const zen::common::Byte *>(Bytecode.data()),
+                  Bytecode.size());
+
+  MockEVMBuilder Builder;
+  COMPILER::EVMByteCodeVisitor<MockEVMBuilder> Visitor(Builder, &Ctx);
+  EXPECT_TRUE(Visitor.compile());
+  EXPECT_FALSE(Builder.Trapped);
+  EXPECT_FALSE(Builder.Undefined);
+  EXPECT_EQ(Builder.runtimeStackDepth(), 1U);
+  EXPECT_EQ(Builder.topStackValue()[0], 0xaaU);
+}
+
 TEST(EVMJITFrontendVisitorTest, TruncatedPushIsRightPaddedWithZeros) {
   const std::vector<uint8_t> Bytecode = {
       0x62, 0x12, 0x34 // PUSH3 0x12 0x34 <missing byte>
