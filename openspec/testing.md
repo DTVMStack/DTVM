@@ -125,7 +125,7 @@ DTVM_TEST_REVISION=Cancun ./build/evmStateTests
 Located in `tests/evm_solidity/`. End-to-end contract tests with real Solidity contracts.
 
 Test directories include:
-- `basic/` - Basic contract operations
+- `Counter/` - Counter contract operations
 - `erc20/` - ERC-20 token tests
 - `fibonacci/` - Computation tests
 - `caller/`, `callee/` - Cross-contract calls
