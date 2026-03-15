@@ -523,10 +523,46 @@ TEST(EVMJITFrontendAnalyzerTest, MergeDepthConflictDisablesLiftedEntry) {
   EXPECT_TRUE(FallthroughBlock->CanLiftStack);
 
   EXPECT_TRUE(MergeBlock->IsJumpDest);
-  EXPECT_EQ(MergeBlock->ResolvedEntryStackDepth, 0);
+  EXPECT_EQ(MergeBlock->ResolvedEntryStackDepth, -1);
+  EXPECT_EQ(MergeBlock->ResolvedExitStackDepth, -1);
   EXPECT_TRUE(MergeBlock->HasInconsistentEntryDepth);
   EXPECT_FALSE(MergeBlock->CanLiftStack);
   expectPCList(MergeBlock->Predecessors, {0, 4});
+}
+
+TEST(EVMJITFrontendAnalyzerTest,
+     InconsistentMergeInvalidatesReachableSuccessors) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0x01, // PUSH1 0x01
+      0x60, 0x0a, // PUSH1 0x0a
+      0x57,       // JUMPI
+      0x60, 0x02, // PUSH1 0x02
+      0x60, 0x0a, // PUSH1 0x0a
+      0x56,       // JUMP
+      0x5b,       // JUMPDEST
+      0x60, 0x03, // PUSH1 0x03
+      0x5b,       // JUMPDEST
+      0x00        // STOP
+  };
+
+  const EVMAnalyzer Analyzer = analyzeBytecode(Bytecode);
+
+  const auto *MergeBlock = findBlock(Analyzer, 10);
+  const auto *SuccessorBlock = findBlock(Analyzer, 13);
+  ASSERT_NE(MergeBlock, nullptr);
+  ASSERT_NE(SuccessorBlock, nullptr);
+
+  EXPECT_EQ(MergeBlock->ResolvedEntryStackDepth, -1);
+  EXPECT_EQ(MergeBlock->ResolvedExitStackDepth, -1);
+  EXPECT_TRUE(MergeBlock->HasInconsistentEntryDepth);
+  EXPECT_FALSE(MergeBlock->CanLiftStack);
+
+  EXPECT_TRUE(SuccessorBlock->IsJumpDest);
+  EXPECT_EQ(SuccessorBlock->ResolvedEntryStackDepth, -1);
+  EXPECT_EQ(SuccessorBlock->ResolvedExitStackDepth, -1);
+  EXPECT_TRUE(SuccessorBlock->HasInconsistentEntryDepth);
+  EXPECT_FALSE(SuccessorBlock->CanLiftStack);
+  expectPCList(SuccessorBlock->Predecessors, {10});
 }
 
 TEST(EVMJITFrontendVisitorTest,
@@ -552,7 +588,8 @@ TEST(EVMJITFrontendVisitorTest,
   const auto *TargetBlock = findBlock(Analyzer, 14);
   ASSERT_NE(TargetBlock, nullptr);
   EXPECT_FALSE(TargetBlock->CanLiftStack);
-  EXPECT_EQ(TargetBlock->ResolvedEntryStackDepth, 2);
+  EXPECT_EQ(TargetBlock->ResolvedEntryStackDepth, -1);
+  EXPECT_EQ(TargetBlock->ResolvedExitStackDepth, -1);
   EXPECT_TRUE(TargetBlock->HasInconsistentEntryDepth);
 
   COMPILER::EVMFrontendContext Ctx;

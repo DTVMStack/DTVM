@@ -627,6 +627,31 @@ private:
     }
   }
 
+  void invalidateReachableEntryDepths(uint64_t EntryPC) {
+    std::queue<uint64_t> InvalidateWorkList;
+    std::map<uint64_t, bool> InvalidateVisited;
+    InvalidateWorkList.push(EntryPC);
+    InvalidateVisited[EntryPC] = true;
+
+    while (!InvalidateWorkList.empty()) {
+      uint64_t InvalidPC = InvalidateWorkList.front();
+      InvalidateWorkList.pop();
+      auto InvalidIt = BlockInfos.find(InvalidPC);
+      if (InvalidIt == BlockInfos.end()) {
+        continue;
+      }
+      auto &InvalidInfo = InvalidIt->second;
+      InvalidInfo.HasInconsistentEntryDepth = true;
+      InvalidInfo.ResolvedEntryStackDepth = -1;
+      InvalidInfo.ResolvedExitStackDepth = -1;
+      for (uint64_t NextSucc : InvalidInfo.Successors) {
+        if (InvalidateVisited.emplace(NextSucc, true).second) {
+          InvalidateWorkList.push(NextSucc);
+        }
+      }
+    }
+  }
+
   void resolveEntryDepths() {
     auto EntryIt = BlockInfos.find(EntryBlockPC);
     if (EntryIt == BlockInfos.end()) {
@@ -654,11 +679,14 @@ private:
           continue;
         }
         auto &SuccInfo = SuccIt->second;
+        if (SuccInfo.HasInconsistentEntryDepth) {
+          continue;
+        }
         if (SuccInfo.ResolvedEntryStackDepth < 0) {
           SuccInfo.ResolvedEntryStackDepth = ExitDepth;
           WorkList.push(Succ);
         } else if (SuccInfo.ResolvedEntryStackDepth != ExitDepth) {
-          SuccInfo.HasInconsistentEntryDepth = true;
+          invalidateReachableEntryDepths(Succ);
         }
       }
     }
