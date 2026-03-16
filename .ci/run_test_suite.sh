@@ -204,7 +204,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             fi
             cd "$EVMONE_DIR"
             cmake -S . -B build -DEVMONE_TESTING=ON -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TARGET"
-            cmake --build build --parallel -j 16
+            cmake --build build --parallel 16
             EVMONE_STATETEST_BIN="$PWD/build/bin/evmone-statetest"
             cd "$WORKSPACE_ROOT"
 
