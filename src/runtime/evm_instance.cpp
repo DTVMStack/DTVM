@@ -102,6 +102,11 @@ void EVMInstance::resetForNewCall(evmc_revision NewRev) {
   EVMStackSize = 0;
 }
 
+void EVMInstance::resetForNewCall(evmc_revision NewRev, const EVMModule &M) {
+  resetForNewCall(NewRev);
+  Mod = &M;
+}
+
 void EVMInstance::setGas(uint64_t NewGas) { Gas = NewGas; }
 
 void EVMInstance::pushMessage(evmc_message *Msg) {
