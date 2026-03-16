@@ -193,10 +193,8 @@ const intx::uint256 *evmGetAddMod(zen::runtime::EVMInstance *Instance,
     return storeUint256Result(intx::uint256{0});
   }
 
-  // (Augend + Addend) % Modulus
-  // Use 512-bit intermediate to prevent overflow
-  intx::uint512 Sum = intx::uint512(Augend) + intx::uint512(Addend);
-  intx::uint256 Result = intx::uint256(Sum % Modulus);
+  // Use intx::addmod to avoid unnecessary 512-bit division.
+  auto Result = intx::addmod(Augend, Addend, Modulus);
   return storeUint256Result(Result);
 }
 
