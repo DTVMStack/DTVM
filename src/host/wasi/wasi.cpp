@@ -137,7 +137,6 @@ static void *vnmi_init_ctx(VNMIEnv *vmenv, const char *dir_list[],
     if (!fd_prestats_insert(prestats, dir_list[i], wasm_fd)) {
       goto fail;
     }
-    wasm_fd++;
   }
 
   wasi_ctx->curfds = curfds;
