@@ -8,6 +8,17 @@
 using namespace COMPILER;
 using namespace llvm;
 
+static void assertZeroFlagChainOperand(const MInstruction *Operand) {
+  const auto *ConstInst = dyn_cast<ConstantInstruction>(Operand);
+  ZEN_ASSERT(ConstInst &&
+             "x86 ADC/SBB lowering requires a constant carry/borrow operand");
+
+  const auto *IntConst = dyn_cast<MConstantInt>(&ConstInst->getConstant());
+  ZEN_ASSERT(
+      IntConst && IntConst->getValue().isZero() &&
+      "x86 ADC/SBB lowering requires carry/borrow operand to be constant 0");
+}
+
 X86CgLowering::X86CgLowering(CgFunction &MF)
     : CgLowering(MF), Subtarget(&MF.getSubtarget<X86Subtarget>()),
       TRI(Subtarget->getRegisterInfo()) {
@@ -930,15 +941,18 @@ CgRegister X86CgLowering::lowerCmpExpr(const CmpInstruction &Inst) {
 }
 
 CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
-  // Use x86 flags with direct ADC without carry on operands
-  // We can be certain that CF will always be produced by the preceding add or
-  // by a chain of consecutive adc instructions, so CF injection can be omitted.
+  // Use x86 flags with direct ADC and rely on the existing carry chain.
+  // The required invariant is that no flag-clobbering instruction is emitted
+  // between the ADD/ADC instructions that produce and consume CF.
   const MInstruction *LHS = Inst.getOperand<0>();
   const MInstruction *RHS = Inst.getOperand<1>();
+  const MInstruction *Carry = Inst.getOperand<2>();
 
   MVT VT = getMVT(*Inst.getType());
   ZEN_ASSERT(VT.isInteger());
   const TargetRegisterClass *RC = TLI.getRegClassFor(VT);
+
+  assertZeroFlagChainOperand(Carry);
 
   CgRegister LHSReg = lowerExpr(*LHS);
   CgRegister RHSReg = lowerExpr(*RHS);
@@ -963,22 +977,24 @@ CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
                             SumReg);
     return SumReg;
   default:
-    // Should be unreachable: VT was validated in CF injection above.
+    // Should be unreachable: only i8/i16/i32/i64 integer ADC is supported.
     throw getError(ErrorCode::NoMatchedInstruction);
   }
 }
 
 CgRegister X86CgLowering::lowerSbbExpr(const SbbInstruction &Inst) {
-  // Use x86 flags with direct SBB without borrow on operands.
-  // We can be certain that CF will always be produced by the preceding sub or
-  // by a chain of consecutive sbb instructions, so CF injection can be
-  // omitted.
+  // Use x86 flags with direct SBB and rely on the existing borrow chain.
+  // The required invariant is that no flag-clobbering instruction is emitted
+  // between the SUB/SBB instructions that produce and consume CF.
   const MInstruction *LHS = Inst.getOperand<0>();
   const MInstruction *RHS = Inst.getOperand<1>();
+  const MInstruction *Borrow = Inst.getOperand<2>();
 
   MVT VT = getMVT(*Inst.getType());
   ZEN_ASSERT(VT.isInteger());
   const TargetRegisterClass *RC = TLI.getRegClassFor(VT);
+
+  assertZeroFlagChainOperand(Borrow);
 
   CgRegister LHSReg = lowerExpr(*LHS);
   CgRegister RHSReg = lowerExpr(*RHS);
@@ -1003,7 +1019,7 @@ CgRegister X86CgLowering::lowerSbbExpr(const SbbInstruction &Inst) {
                             DiffReg);
     return DiffReg;
   default:
-    // Should be unreachable: VT was validated in CF injection above.
+    // Should be unreachable: only i8/i16/i32/i64 integer SBB is supported.
     throw getError(ErrorCode::NoMatchedInstruction);
   }
 }
