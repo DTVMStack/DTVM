@@ -194,7 +194,7 @@ const intx::uint256 *evmGetAddMod(zen::runtime::EVMInstance *Instance,
   }
 
   // Use intx::addmod to avoid unnecessary 512-bit division.
-  auto Result = intx::addmod(Augend, Addend, Modulus);
+  intx::uint256 Result = intx::addmod(Augend, Addend, Modulus);
   return storeUint256Result(Result);
 }
 
