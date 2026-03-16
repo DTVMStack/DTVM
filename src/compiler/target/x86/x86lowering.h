@@ -116,6 +116,9 @@ private:
   static unsigned X86ChooseCmpImmediateOpcode(MVT VT, const APInt &Value);
   static unsigned X86ChooseCmpOpcode(MVT VT);
 
+  CgRegister lowerEvmU256MulExprLegacy(const EvmU256MulInstruction &Inst);
+  CgRegister lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst);
+
   void lowerFastCompareExpr(const MInstruction *LHS, const MInstruction *RHS,
                             MVT VT);
 

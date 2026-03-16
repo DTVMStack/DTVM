@@ -1083,6 +1083,14 @@ X86CgLowering::lowerEvmUmul128HiExpr(const EvmUmul128HiInstruction &Inst) {
 
 CgRegister
 X86CgLowering::lowerEvmU256MulExpr(const EvmU256MulInstruction &Inst) {
+  if (Subtarget->hasBMI2() && Subtarget->hasADX()) {
+    return lowerEvmU256MulExprAdx(Inst);
+  }
+  return lowerEvmU256MulExprLegacy(Inst);
+}
+
+CgRegister
+X86CgLowering::lowerEvmU256MulExprLegacy(const EvmU256MulInstruction &Inst) {
   static constexpr size_t NumLimbs = 4;
   const TargetRegisterClass *RC = &X86::GR64RegClass;
   CgRegister ZeroReg = X86MaterializeInt(0, MVT::i64);
@@ -1186,6 +1194,123 @@ X86CgLowering::lowerEvmU256MulExpr(const EvmU256MulInstruction &Inst) {
   R3 = addNoCarry(R3, L21);
   R3 = addNoCarry(R3, L30);
   R3 = addNoCarry(R3, C2);
+
+  U256MulResultRegs[&Inst] = {R1, R2, R3};
+  return R0;
+}
+
+CgRegister
+X86CgLowering::lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst) {
+  static constexpr size_t NumLimbs = 4;
+  const TargetRegisterClass *RC = &X86::GR64RegClass;
+  CgRegister ZeroReg = X86MaterializeInt(0, MVT::i64);
+
+  std::array<CgRegister, NumLimbs> A = {};
+  std::array<CgRegister, NumLimbs> B = {};
+  for (size_t I = 0; I < NumLimbs; ++I) {
+    A[I] = lowerExpr(*Inst.getOperand(I));
+    B[I] = lowerExpr(*Inst.getOperand(NumLimbs + I));
+  }
+
+  auto emitMulx64 = [&](CgRegister LHSReg, CgRegister RHSReg,
+                        bool NeedHigh) -> std::pair<CgRegister, CgRegister> {
+    SmallVector<CgOperand, 2> CopyToRDXOperands{
+        CgOperand::createRegOperand(X86::RDX, true),
+        CgOperand::createRegOperand(RHSReg, false),
+    };
+    MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY),
+                            CopyToRDXOperands);
+
+    CgRegister HiReg = createReg(RC);
+    CgRegister LoReg = createReg(RC);
+    SmallVector<CgOperand, 3> MulxOperands{
+        CgOperand::createRegOperand(HiReg, true, false, false, !NeedHigh),
+        CgOperand::createRegOperand(LoReg, true),
+        CgOperand::createRegOperand(LHSReg, false),
+    };
+    MF->createCgInstruction(*CurBB, TII.get(X86::MULX64rr), MulxOperands);
+    return {LoReg, NeedHigh ? HiReg : X86::NoRegister};
+  };
+
+  auto addWithCF = [&](CgRegister DstReg, CgRegister SrcReg) {
+    return fastEmitInst_rr(X86::ADCX64rr, RC, DstReg, SrcReg);
+  };
+
+  auto addWithOF = [&](CgRegister DstReg, CgRegister SrcReg) {
+    return fastEmitInst_rr(X86::ADOX64rr, RC, DstReg, SrcReg);
+  };
+
+  auto addNoCarry = [&](CgRegister LHSReg, CgRegister RHSReg) {
+    return fastEmitInst_rr(X86::ADD64rr, RC, LHSReg, RHSReg);
+  };
+
+  auto clearCarryChains = [&]() {
+    fastEmitNoDefInst_rr(X86::TEST64rr, ZeroReg, ZeroReg);
+  };
+
+  auto [R0, H00] = emitMulx64(A[0], B[0], true);
+  auto [L01, H01] = emitMulx64(A[0], B[1], true);
+  auto [L10, H10] = emitMulx64(A[1], B[0], true);
+
+  // Fixed 4x4 truncating schoolbook schedule: one carry counter runs on CF via
+  // ADCX, the other on OF via ADOX. Each chain consumes its own flag after
+  // every partial-product accumulation so multi-carry columns remain exact.
+  clearCarryChains();
+  CgRegister R1 = H00;
+  CgRegister C1CF = fastEmitCopy(RC, ZeroReg);
+  CgRegister C1OF = fastEmitCopy(RC, ZeroReg);
+  R1 = addWithCF(R1, L01);
+  R1 = addWithOF(R1, L10);
+  C1CF = addWithCF(C1CF, ZeroReg);
+  C1OF = addWithOF(C1OF, ZeroReg);
+  CgRegister C1 = addNoCarry(C1CF, C1OF);
+
+  auto [L02, H02] = emitMulx64(A[0], B[2], true);
+  auto [L11, H11] = emitMulx64(A[1], B[1], true);
+  auto [L20, H20] = emitMulx64(A[2], B[0], true);
+
+  clearCarryChains();
+  CgRegister R2 = H01;
+  CgRegister C2CF = fastEmitCopy(RC, ZeroReg);
+  CgRegister C2OF = fastEmitCopy(RC, ZeroReg);
+  R2 = addWithCF(R2, H10);
+  R2 = addWithOF(R2, L02);
+  C2CF = addWithCF(C2CF, ZeroReg);
+  C2OF = addWithOF(C2OF, ZeroReg);
+  R2 = addWithCF(R2, L11);
+  R2 = addWithOF(R2, L20);
+  C2CF = addWithCF(C2CF, ZeroReg);
+  C2OF = addWithOF(C2OF, ZeroReg);
+  R2 = addWithCF(R2, C1);
+  C2CF = addWithCF(C2CF, ZeroReg);
+  CgRegister C2 = addNoCarry(C2CF, C2OF);
+
+  auto [L03, Unused03] = emitMulx64(A[0], B[3], false);
+  auto [L12, Unused12] = emitMulx64(A[1], B[2], false);
+  auto [L21, Unused21] = emitMulx64(A[2], B[1], false);
+  auto [L30, Unused30] = emitMulx64(A[3], B[0], false);
+  (void)Unused03;
+  (void)Unused12;
+  (void)Unused21;
+  (void)Unused30;
+
+  clearCarryChains();
+  CgRegister R3 = H02;
+  CgRegister C3CF = fastEmitCopy(RC, ZeroReg);
+  CgRegister C3OF = fastEmitCopy(RC, ZeroReg);
+  R3 = addWithCF(R3, H11);
+  R3 = addWithOF(R3, H20);
+  C3CF = addWithCF(C3CF, ZeroReg);
+  C3OF = addWithOF(C3OF, ZeroReg);
+  R3 = addWithCF(R3, L03);
+  R3 = addWithOF(R3, L12);
+  C3CF = addWithCF(C3CF, ZeroReg);
+  C3OF = addWithOF(C3OF, ZeroReg);
+  R3 = addWithCF(R3, L21);
+  R3 = addWithOF(R3, L30);
+  C3CF = addWithCF(C3CF, ZeroReg);
+  C3OF = addWithOF(C3OF, ZeroReg);
+  R3 = addWithCF(R3, C2);
 
   U256MulResultRegs[&Inst] = {R1, R2, R3};
   return R0;

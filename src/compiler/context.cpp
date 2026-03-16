@@ -32,9 +32,7 @@ static std::string getX86FeaturesStr() {
       "sse",   "sse2", "sse3", "ssse3", "sse4.1",
   };
   static std::vector<std::string> OptionalFeatures = {
-      "bmi",
-      "lzcnt",
-      "popcnt",
+      "adx", "bmi", "bmi2", "lzcnt", "popcnt",
   };
 
   llvm::StringMap<bool> HostFeatures;
