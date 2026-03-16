@@ -265,10 +265,13 @@ bool ensureRuntimeAndIsolation(DTVM *VM) {
 }
 
 bool shouldUsePersistentModuleCache(const evmc_message *Msg) {
-  // CREATE/CREATE2 initcode and nested execution can change code frequently
-  // and may recurse. Reusing address-keyed cached modules for those cases can
-  // evict a module that is still active on the current execution stack.
-  return Msg != nullptr && Msg->depth == 0 && Msg->kind != EVMC_CREATE &&
+  // CREATE/CREATE2 initcode must not be cached: the same address can receive
+  // different initcode across transactions, and initcode is one-shot.
+  // Regular calls (CALL/DELEGATECALL/STATICCALL/CALLCODE) at any depth are
+  // safe to cache: the module is keyed by (code_address, revision) and
+  // validated against the actual bytecode content before reuse.  Each
+  // nested call gets its own EVMInstance so reentrancy is safe.
+  return Msg != nullptr && Msg->kind != EVMC_CREATE &&
          Msg->kind != EVMC_CREATE2;
 }
 
