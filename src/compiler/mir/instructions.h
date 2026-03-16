@@ -94,6 +94,32 @@ private:
   }
 };
 
+class SbbInstruction : public FixedOperandInstruction<3> {
+public:
+  template <typename... Arguments>
+  static SbbInstruction *create(Arguments &&...Args) {
+    return FixedOperandInstruction::create<SbbInstruction>(
+        std::forward<Arguments>(Args)...);
+  }
+
+  static bool classof(const MInstruction *Inst) {
+    return Inst->getOpcode() == OP_sbb;
+  }
+
+private:
+  friend class FixedOperandInstruction;
+  SbbInstruction(MType *Type, MInstruction *Operand1, MInstruction *Operand2,
+                 MInstruction *Borrow)
+      : FixedOperandInstruction(MInstruction::SBB, OP_sbb, 3, Type) {
+    setOperand<0>(Operand1);
+    setOperand<1>(Operand2);
+    setOperand<2>(Borrow);
+    // Although borrow is not used in the current x86lowering, the sbb
+    // instruction still retains the borrow for potential use in future
+    // lowering on other architectures.
+  }
+};
+
 class UnaryInstruction : public FixedOperandInstruction<1> {
 public:
   template <typename... Arguments>

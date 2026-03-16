@@ -41,6 +41,9 @@ public:
     case MInstruction::ADC:
       visitAdcInstruction(static_cast<AdcInstruction &>(I));
       break;
+    case MInstruction::SBB:
+      visitSbbInstruction(static_cast<SbbInstruction &>(I));
+      break;
     case MInstruction::OVERFLOW_I128_BINARY:
       visitWasmOverflowI128BinaryInstruction(
           static_cast<WasmOverflowI128BinaryInstruction &>(I));
@@ -139,6 +142,7 @@ public:
   virtual void visitBinaryInstruction(BinaryInstruction &I) { VISIT_OPERAND_2 }
   virtual void visitCmpInstruction(CmpInstruction &I) { VISIT_OPERAND_2 }
   virtual void visitAdcInstruction(AdcInstruction &I) { VISIT_OPERAND_3 }
+  virtual void visitSbbInstruction(SbbInstruction &I) { VISIT_OPERAND_3 }
   virtual void visitSelectInstruction(SelectInstruction &I) { VISIT_OPERAND_3 }
   virtual void visitDassignInstruction(DassignInstruction &I) {
     VISIT_OPERAND_1

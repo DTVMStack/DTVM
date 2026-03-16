@@ -266,31 +266,37 @@ public:
         }
       }
     } else if constexpr (Operator == BinaryOperator::BO_SUB) {
+      // The borrow here is only used for constructing the sbb instruction.
+      // We currently use sbb only in bo_sub, and since we can guarantee the
+      // instructions are consecutive, there's no need to compute the borrow
+      // in DMIR.
       MInstruction *Borrow = createIntConstInstruction(MirI64Type, 0);
 
+      // Pre-materialize all operand components into variables before the
+      // SUB/SBB borrow chain. This ensures that during x86 lowering, no
+      // flag-modifying instructions (e.g. ADD for address computation in
+      // BYTES32-to-U256 conversion) are emitted between the SUB and SBB
+      // instructions that form the borrow chain. Without this, lazy
+      // expression lowering of operands like BSWAP(LOAD(ADD(ptr, offset)))
+      // would emit x86 ADD instructions that clobber the carry flag (CF).
       for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-        // Sub: LHS[I] - RHS[I] - Borrow
-        MInstruction *Diff1 = createInstruction<BinaryInstruction>(
-            false, OP_sub, MirI64Type, LHS[I], RHS[I]);
-        MInstruction *Diff2 = createInstruction<BinaryInstruction>(
-            false, OP_sub, MirI64Type, Diff1, Borrow);
+        LHS[I] = protectUnsafeValue(LHS[I], MirI64Type);
+        RHS[I] = protectUnsafeValue(RHS[I], MirI64Type);
+      }
 
-        Result[I] = protectUnsafeValue(Diff2, MirI64Type);
-
-        // (LHS[I] < RHS[I]) || (Diff1 < Borrow)
-        if (I < EVM_ELEMENTS_COUNT - 1) {
-          auto LTPredicate = CmpInstruction::Predicate::ICMP_ULT;
-          MInstruction *Borrow1 = createInstruction<CmpInstruction>(
-              false, LTPredicate, &Ctx.I64Type, LHS[I], RHS[I]);
-          MInstruction *Borrow2 = createInstruction<CmpInstruction>(
-              false, LTPredicate, &Ctx.I64Type, Diff1, Borrow);
-          // NOLINTBEGIN(readability-identifier-naming)
-          MInstruction *Borrow1_64 = zeroExtendToI64(Borrow1);
-          MInstruction *Borrow2_64 = zeroExtendToI64(Borrow2);
-          // NOLINTEND(readability-identifier-naming)
-
-          Borrow = createInstruction<BinaryInstruction>(
-              false, OP_or, MirI64Type, Borrow1_64, Borrow2_64);
+      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+        if (I == 0) {
+          // First component: use regular SUB without borrow
+          MInstruction *LocalResult = createInstruction<BinaryInstruction>(
+              false, OP_sub, MirI64Type, LHS[I], RHS[I]);
+          Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
+        } else {
+          // Subsequent components: use SBB (without borrow)
+          // The borrow here is only used for constructing the sbb
+          // instruction.
+          MInstruction *LocalResult = createInstruction<SbbInstruction>(
+              false, MirI64Type, LHS[I], RHS[I], Borrow);
+          Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
         }
       }
     } else {

@@ -76,6 +76,7 @@ public:
   CgRegister lowerEvmU256MulExpr(const EvmU256MulInstruction &Inst);
   CgRegister lowerEvmU256MulResultExpr(const EvmU256MulResultInstruction &Inst);
   CgRegister lowerAdcExpr(const AdcInstruction &Inst);
+  CgRegister lowerSbbExpr(const SbbInstruction &Inst);
 
   // ==================== Memory Instructions ====================
 

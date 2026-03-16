@@ -120,6 +120,21 @@ void MVerifier::visitAdcInstruction(AdcInstruction &I) {
   MVisitor::visitAdcInstruction(I);
 }
 
+void MVerifier::visitSbbInstruction(SbbInstruction &I) {
+  MType *Operand1Type = I.getOperand<0>()->getType();
+  MType *Operand2Type = I.getOperand<1>()->getType();
+  MType *BorrowType = I.getOperand<2>()->getType();
+
+  CHECK(Operand1Type->getKind() == Operand2Type->getKind(),
+        "The first two operands of sbb instruction must be of the same type");
+  CHECK(BorrowType->isInteger(),
+        "The borrow operand of sbb instruction must be integer");
+  CHECK(Operand1Type->isInteger(),
+        "The first two operands of sbb instruction must be integer");
+
+  MVisitor::visitSbbInstruction(I);
+}
+
 void MVerifier::visitCmpInstruction(CmpInstruction &I) {
   MType *Type = I.getType();
   CHECK(Type->isI8() || Type->isI32() || Type->isI64(),

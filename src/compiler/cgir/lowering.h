@@ -202,6 +202,9 @@ protected:
     case MInstruction::ADC:
       ResultReg = SELF.lowerAdcExpr(llvm::cast<AdcInstruction>(Inst));
       break;
+    case MInstruction::SBB:
+      ResultReg = SELF.lowerSbbExpr(llvm::cast<SbbInstruction>(Inst));
+      break;
     case MInstruction::CMP:
       ResultReg = SELF.lowerCmpExpr(llvm::cast<CmpInstruction>(Inst));
       break;

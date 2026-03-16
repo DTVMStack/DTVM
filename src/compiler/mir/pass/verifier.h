@@ -44,6 +44,7 @@ public:
   void visitUnaryInstruction(UnaryInstruction &I) override;
   void visitBinaryInstruction(BinaryInstruction &I) override;
   void visitAdcInstruction(AdcInstruction &I) override;
+  void visitSbbInstruction(SbbInstruction &I) override;
   void visitCmpInstruction(CmpInstruction &I) override;
   void visitSelectInstruction(SelectInstruction &I) override;
   void visitDassignInstruction(DassignInstruction &I) override;
