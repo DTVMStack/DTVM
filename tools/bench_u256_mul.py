@@ -95,6 +95,7 @@ def run_case(
     mode: str,
     revision: Optional[str],
     case: BenchmarkCase,
+    cpu: Optional[str] = None,
 ) -> BenchmarkSample:
     cmd = [
         str(evmc_bin),
@@ -108,6 +109,8 @@ def run_case(
     ]
     if revision:
         cmd.extend(["--rev", revision])
+    if cpu is not None:
+        cmd = ["taskset", "-c", cpu, *cmd]
     proc = subprocess.run(
         cmd,
         stdout=subprocess.PIPE,
@@ -137,14 +140,57 @@ def benchmark_library(
     revision: Optional[str],
     cases: Iterable[BenchmarkCase],
     repeat: int,
+    warmup: int,
+    cpu: Optional[str],
 ) -> Dict[str, List[BenchmarkSample]]:
     results: Dict[str, List[BenchmarkSample]] = {}
     for case in cases:
         samples: List[BenchmarkSample] = []
+        for _ in range(warmup):
+            run_case(evmc_bin, library, mode, revision, case, cpu)
         for _ in range(repeat):
-            samples.append(run_case(evmc_bin, library, mode, revision, case))
+            samples.append(run_case(evmc_bin, library, mode, revision, case, cpu))
         results[case.name] = samples
     return results
+
+
+def benchmark_libraries_interleaved(
+    evmc_bin: Path,
+    current_library: Path,
+    baseline_library: Path,
+    mode: str,
+    revision: Optional[str],
+    cases: Iterable[BenchmarkCase],
+    repeat: int,
+    warmup: int,
+    cpu: Optional[str],
+) -> tuple[Dict[str, List[BenchmarkSample]], Dict[str, List[BenchmarkSample]]]:
+    current_results: Dict[str, List[BenchmarkSample]] = {}
+    baseline_results: Dict[str, List[BenchmarkSample]] = {}
+    for case in cases:
+        current_samples: List[BenchmarkSample] = []
+        baseline_samples: List[BenchmarkSample] = []
+        for _ in range(warmup):
+            run_case(evmc_bin, current_library, mode, revision, case, cpu)
+            run_case(evmc_bin, baseline_library, mode, revision, case, cpu)
+        for rep in range(repeat):
+            if rep % 2 == 0:
+                current_samples.append(
+                    run_case(evmc_bin, current_library, mode, revision, case, cpu)
+                )
+                baseline_samples.append(
+                    run_case(evmc_bin, baseline_library, mode, revision, case, cpu)
+                )
+            else:
+                baseline_samples.append(
+                    run_case(evmc_bin, baseline_library, mode, revision, case, cpu)
+                )
+                current_samples.append(
+                    run_case(evmc_bin, current_library, mode, revision, case, cpu)
+                )
+        current_results[case.name] = current_samples
+        baseline_results[case.name] = baseline_samples
+    return current_results, baseline_results
 
 
 def median_time_ns(samples: List[BenchmarkSample]) -> float:
@@ -226,6 +272,17 @@ def parse_args() -> argparse.Namespace:
         help="How many full evmc runs to execute per case",
     )
     parser.add_argument(
+        "--warmup",
+        type=int,
+        default=1,
+        help="How many warmup runs to discard per case/library",
+    )
+    parser.add_argument(
+        "--taskset-cpu",
+        default=None,
+        help="Optional CPU affinity passed to `taskset -c` for every evmc run",
+    )
+    parser.add_argument(
         "--case",
         action="append",
         dest="case_names",
@@ -250,23 +307,29 @@ def main() -> int:
     for case in cases:
         print(f"{case.name}: {case.description}")
 
-    current_results = benchmark_library(
-        args.evmc_bin,
-        args.library,
-        args.mode,
-        args.revision,
-        cases,
-        args.repeat,
-    )
     baseline_results = None
     if args.baseline_library is not None:
-        baseline_results = benchmark_library(
+        current_results, baseline_results = benchmark_libraries_interleaved(
             args.evmc_bin,
+            args.library,
             args.baseline_library,
             args.mode,
             args.revision,
             cases,
             args.repeat,
+            args.warmup,
+            args.taskset_cpu,
+        )
+    else:
+        current_results = benchmark_library(
+            args.evmc_bin,
+            args.library,
+            args.mode,
+            args.revision,
+            cases,
+            args.repeat,
+            args.warmup,
+            args.taskset_cpu,
         )
 
     print_report("current", args.library, cases, current_results, baseline_results)
