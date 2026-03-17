@@ -1,34 +1,34 @@
 ---
 name: speckit-implement
-description: 执行实现计划，处理和执行 tasks.md 中定义的所有任务。
+description: Execute the implementation plan, processing and executing all tasks defined in tasks.md.
 ---
 
-# 代码实现
+# Code Implementation
 
-执行实现计划，处理和执行 tasks.md 中定义的所有任务。
+Execute the implementation plan, processing and executing all tasks defined in tasks.md.
 
-## 用户输入
+## User Input
 
-你输入的内容即为上下文。
+Your input serves as the context.
 
-## 执行步骤
+## Execution Steps
 
-### 1. 设置
+### 1. Setup
 
-从仓库根目录运行 `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks` 并解析：
+Run `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks` from the repo root and parse:
 - FEATURE_DIR
-- AVAILABLE_DOCS 列表
+- AVAILABLE_DOCS list
 
-所有路径必须是绝对路径。
+All paths must be absolute paths.
 
-### 2. 检查清单状态（如果 FEATURE_DIR/checklists/ 存在）
+### 2. Checklist Status (if FEATURE_DIR/checklists/ exists)
 
-- 扫描 checklists/ 目录中的所有清单文件
-- 对于每个清单，计数：
-  - 总项目：所有匹配 `- [ ]` 或 `- [X]` 或 `- [x]` 的行
-  - 已完成项目：匹配 `- [X]` 或 `- [x]` 的行
-  - 未完成项目：匹配 `- [ ]` 的行
-- 创建状态表：
+- Scan all checklist files in the checklists/ directory
+- For each checklist, count:
+  - Total items: all lines matching `- [ ]` or `- [X]` or `- [x]`
+  - Completed items: lines matching `- [X]` or `- [x]`
+  - Incomplete items: lines matching `- [ ]`
+- Create status table:
 
 ```text
 | Checklist | Total | Completed | Incomplete | Status |
@@ -37,76 +37,76 @@ description: 执行实现计划，处理和执行 tasks.md 中定义的所有任
 | test.md   | 8     | 5         | 3          | ✗ FAIL |
 ```
 
-- 计算总体状态：
-  - **PASS**：所有清单有 0 个未完成项目
-  - **FAIL**：一个或多个清单有未完成项目
+- Determine overall status:
+  - **PASS**: all checklists have 0 incomplete items
+  - **FAIL**: one or more checklists have incomplete items
 
-- **如果任何清单未完成**：
-  - 显示带有未完成项目计数的表
-  - **停止**并询问："Some checklists are incomplete. Do you want to proceed with implementation anyway? (yes/no)"
-  - 等待用户响应后再继续
-  - 如果用户说 "no" 或 "wait" 或 "stop"，停止执行
-  - 如果用户说 "yes" 或 "proceed" 或 "continue"，继续步骤 3
+- **If any checklist is incomplete**:
+  - Display the table with incomplete item counts
+  - **Stop** and ask: "Some checklists are incomplete. Do you want to proceed with implementation anyway? (yes/no)"
+  - Wait for user response before continuing
+  - If the user says "no" or "wait" or "stop", halt execution
+  - If the user says "yes" or "proceed" or "continue", continue to step 3
 
-- **如果所有清单完成**：
-  - 显示所有清单通过的表
-  - 自动继续步骤 3
+- **If all checklists are complete**:
+  - Display the table showing all checklists passed
+  - Automatically continue to step 3
 
-### 3. 加载和分析实现上下文
+### 3. Load and Analyze Implementation Context
 
-- **必需**：读取 tasks.md 获取完整任务列表和执行计划
-- **必需**：读取 plan.md 获取技术栈、架构和文件结构
-- **如果存在**：读取 data-model.md 获取实体和关系
-- **如果存在**：读取 contracts/ 获取 API 规范和测试要求
-- **如果存在**：读取 research.md 获取技术决策和约束
-- **如果存在**：读取 quickstart.md 获取集成场景
+- **Required**: read tasks.md for the full task list and execution plan
+- **Required**: read plan.md for tech stack, architecture, and file structure
+- **If exists**: read data-model.md for entities and relationships
+- **If exists**: read contracts/ for API specifications and test requirements
+- **If exists**: read research.md for technical decisions and constraints
+- **If exists**: read quickstart.md for integration scenarios
 
-### 4. 项目设置验证
+### 4. Project Setup Verification
 
-- **必需**：基于实际项目设置创建/验证忽略文件
+- **Required**: create/verify ignore files based on actual project setup
 
-**检测和创建逻辑**：
-- 检查仓库是否为 git 仓库（如果是则创建/验证 .gitignore）
-- 根据项目技术创建相应的忽略文件
+**Detection and creation logic**:
+- Check if the repo is a git repository (if so, create/verify .gitignore)
+- Create appropriate ignore files based on the project's technologies
 
-### 5. 解析 tasks.md 结构并提取
+### 5. Parse tasks.md Structure and Extract
 
-- 任务阶段：Setup、Tests、Core、Integration、Polish
-- 任务依赖：顺序与并行执行规则
-- 任务详细信息：ID、描述、文件路径、并行标记 [P]
-- 执行流程：顺序和依赖要求
+- Task phases: Setup, Tests, Core, Integration, Polish
+- Task dependencies: sequential vs. parallel execution rules
+- Task details: ID, description, file paths, parallel marker [P]
+- Execution flow: order and dependency requirements
 
-### 6. 按任务计划执行实现
+### 6. Execute Implementation by Task Plan
 
-- **逐阶段执行**：在进入下一阶段之前完成每个阶段
-- **尊重依赖**：按顺序运行顺序任务，并行任务 [P] 可以一起运行
-- **遵循 TDD 方法**：在其相应的实现任务之前执行测试任务
-- **基于文件的协调**：影响相同文件的任务必须按顺序运行
-- **验证检查点**：在继续之前验证每个阶段完成
+- **Execute phase by phase**: complete each phase before moving to the next
+- **Respect dependencies**: run sequential tasks in order; parallel tasks [P] can run together
+- **Follow TDD methodology**: execute test tasks before their corresponding implementation tasks
+- **File-based coordination**: tasks affecting the same file must run sequentially
+- **Validation checkpoints**: verify each phase completion before continuing
 
-### 7. 实现执行规则
+### 7. Implementation Execution Rules
 
-- **首先设置**：初始化项目结构、依赖、配置
-- **测试优先**：如果需要为合约、实体和集成场景编写测试
-- **核心开发**：实现模型、服务、CLI 命令、端点
-- **集成工作**：数据库连接、中间件、日志记录、外部服务
-- **完善和验证**：单元测试、性能优化、文档
+- **Setup first**: initialize project structure, dependencies, configuration
+- **Tests first**: write tests for contracts, entities, and integration scenarios if needed
+- **Core development**: implement models, services, CLI commands, endpoints
+- **Integration work**: database connections, middleware, logging, external services
+- **Polish and verification**: unit tests, performance optimization, documentation
 
-### 8. 进度跟踪和错误处理
+### 8. Progress Tracking and Error Handling
 
-- 在每个完成的任务后报告进度
-- 如果任何非并行任务失败，停止执行
-- 对于并行任务 [P]，继续成功的任务，报告失败的任务
-- 提供清晰的错误消息和调试上下文
-- 如果实现无法继续，建议后续步骤
-- **重要**：对于已完成的任务，确保在 tasks 文件中将任务标记为 [X]
+- Report progress after each completed task
+- If any non-parallel task fails, halt execution
+- For parallel tasks [P], continue successful tasks and report failed ones
+- Provide clear error messages and debugging context
+- If implementation cannot continue, suggest next steps
+- **Important**: for completed tasks, ensure the task is marked as [X] in the tasks file
 
-### 9. 完成验证
+### 9. Completion Verification
 
-- 验证所有必需任务已完成
-- 检查实现的功能是否与原始规格匹配
-- 验证测试通过且覆盖率满足要求
-- 确认实现遵循技术计划
-- 报告最终状态和已完成工作的摘要
+- Verify all required tasks are completed
+- Check that implemented features match the original spec
+- Verify tests pass and coverage meets requirements
+- Confirm implementation follows the technical plan
+- Report final status and a summary of completed work
 
-**注意**：此命令假设 tasks.md 中存在完整的任务分解。如果任务不完整或缺失，建议先运行 `speckit-tasks` 重新生成任务列表。
+**Note**: this command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `speckit-tasks` first to regenerate the task list.

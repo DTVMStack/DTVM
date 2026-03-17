@@ -1,6 +1,6 @@
-# cli 模块数据模型
+# cli Module Data Model
 
-## 实体关系图 (Mermaid classDiagram)
+## Entity Relationship Diagram (Mermaid classDiagram)
 
 ```mermaid
 classDiagram
@@ -25,84 +25,84 @@ classDiagram
     }
 
     EVMMessageConfig ..> evmc_message : createEvmMessage
-    CLI11_App ..> RuntimeConfig : 解析填充
+    CLI11_App ..> RuntimeConfig : parse and populate
 ```
 
-说明：`EVMMessageConfig` 为 cli 模块内定义的 DTO，用于构造 `evmc_message`；`CLI11_App` 代表 CLI11 解析器，将命令行参数映射到内部类型。
+Note: `EVMMessageConfig` is a DTO defined in the cli module for constructing `evmc_message`; `CLI11_App` represents the CLI11 parser, which maps command-line arguments to internal types.
 
-## 核心实体
+## Core Entities
 
 ### EVMMessageConfig
 
-仅在 `ZEN_ENABLE_EVM` 下使用，位于 `src/cli/dtvm.cpp` 中的局部结构体，用于描述单次 EVM 调用的消息配置。
+Used only under `ZEN_ENABLE_EVM`, a local struct in `src/cli/dtvm.cpp` describing the message configuration for a single EVM call.
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `Kind` | `evmc_call_kind` | `EVMC_CREATE`（部署）或 `EVMC_CALL`（调用） |
-| `GasLimit` | `uint64_t` | Gas 上限 |
-| `Calldata` | `std::vector<uint8_t>` | 调用数据（hex 解码后） |
-| `SenderAddress` | `std::string` | 发送方地址 hex 字符串 |
-| `ContractAddress` | `std::string` | 调用模式下目标合约地址 hex 字符串 |
+| `Kind` | `evmc_call_kind` | `EVMC_CREATE` (deploy) or `EVMC_CALL` (invoke) |
+| `GasLimit` | `uint64_t` | Gas limit |
+| `Calldata` | `std::vector<uint8_t>` | Call data (after hex decoding) |
+| `SenderAddress` | `std::string` | Sender address hex string |
+| `ContractAddress` | `std::string` | Target contract address hex string in call mode |
 
-由 `createEvmMessage(MockedHost, EVMMessageConfig, Bytecode)` 转为标准 `evmc_message`。
+Converted to standard `evmc_message` via `createEvmMessage(MockedHost, EVMMessageConfig, Bytecode)`.
 
-## 枚举
+## Enumerations
 
-### 命令行到内部类型的映射（cli 内定义）
+### Command-Line to Internal Type Mapping (defined in cli)
 
-| 映射名 | 键类型 | 值类型 | 用途 |
+| Map Name | Key Type | Value Type | Purpose |
 |--------|--------|--------|------|
-| `FormatMap` | `std::string` | `InputFormat` | `wasm` → `WASM`，`evm` → `EVM` |
-| `ModeMap` | `std::string` | `RunMode` | `interpreter`、`singlepass`（非 EVM）、`multipass` |
-| `LogMap` | `std::string` | `LoggerLevel` | `trace`、`debug`、`info`、`warn`、`error`、`fatal`、`off` |
-| `EvmRevisionMap` | `std::string` | `evmc_revision` | `frontier` ~ `osaka` 等 EVM 硬分叉版本 |
+| `FormatMap` | `std::string` | `InputFormat` | `wasm` → `WASM`, `evm` → `EVM` |
+| `ModeMap` | `std::string` | `RunMode` | `interpreter`, `singlepass` (non-EVM), `multipass` |
+| `LogMap` | `std::string` | `LoggerLevel` | `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `off` |
+| `EvmRevisionMap` | `std::string` | `evmc_revision` | `frontier` ~ `osaka` and other EVM hard fork versions |
 
-上述映射均使用 `CLI::CheckedTransformer` 做大小写不敏感转换。
+All maps use `CLI::CheckedTransformer` for case-insensitive conversion.
 
-### 引用自其他模块的枚举
+### Enumerations Referenced from Other Modules
 
-| 枚举 | 模块 | 说明 |
+| Enum | Module | Description |
 |------|------|------|
-| `InputFormat` | common | `WASM`、`EVM` |
-| `RunMode` | common | `InterpMode`、`SinglepassMode`、`MultipassMode`、`UnknownMode` |
-| `LoggerLevel` | utils | `Trace`、`Debug`、`Info`、`Warn`、`Error`、`Fatal`、`Off` |
-| `evmc_call_kind` | evmc | `EVMC_CALL`、`EVMC_CREATE`、`EVMC_CREATE2` |
+| `InputFormat` | common | `WASM`, `EVM` |
+| `RunMode` | common | `InterpMode`, `SinglepassMode`, `MultipassMode`, `UnknownMode` |
+| `LoggerLevel` | utils | `Trace`, `Debug`, `Info`, `Warn`, `Error`, `Fatal`, `Off` |
+| `evmc_call_kind` | evmc | `EVMC_CALL`, `EVMC_CREATE`, `EVMC_CREATE2` |
 | `evmc_revision` | evmc | `EVMC_FRONTIER` ~ `EVMC_OSAKA` |
-| `evmc_status_code` | evmc | 执行结果状态，直接用作 EVM 模式进程退出码 |
+| `evmc_status_code` | evmc | Execution result status, used directly as EVM mode process exit code |
 
-## DTO / 共享类型
+## DTO / Shared Types
 
-### 命令行解析后的局部变量（概念性 DTO）
+### Local Variables After Command-Line Parsing (Conceptual DTO)
 
-cli 在 `main()` 中解析得到的变量，相当于“命令行 DTO”：
+Variables obtained in `main()` after parsing; conceptually the "command-line DTO":
 
-| 变量 | 类型 | 对应选项 | 默认值 |
+| Variable | Type | Option | Default |
 |------|------|----------|--------|
-| `Filename` | `std::string` | `INPUT_FILE` | 必填 |
-| `FuncName` | `std::string` | `-f/--function` | 空 |
-| `EntryHint` | `std::string` | `--entry-hint` | 空 |
-| `Calldata` | `std::string` | `--calldata` | 空 |
-| `Args` | `std::vector<std::string>` | `--args` | 空 |
-| `Envs` | `std::vector<std::string>` | `--env` | 空 |
-| `Dirs` | `std::vector<std::string>` | `--dir` | 空 |
-| `SaveStateFile` | `std::string` | `--save-state` | 空 |
-| `LoadStateFile` | `std::string` | `--load-state` | 空 |
+| `Filename` | `std::string` | `INPUT_FILE` | Required |
+| `FuncName` | `std::string` | `-f/--function` | Empty |
+| `EntryHint` | `std::string` | `--entry-hint` | Empty |
+| `Calldata` | `std::string` | `--calldata` | Empty |
+| `Args` | `std::vector<std::string>` | `--args` | Empty |
+| `Envs` | `std::vector<std::string>` | `--env` | Empty |
+| `Dirs` | `std::vector<std::string>` | `--dir` | Empty |
+| `SaveStateFile` | `std::string` | `--save-state` | Empty |
+| `LoadStateFile` | `std::string` | `--load-state` | Empty |
 | `GasLimit` | `uint64_t` | `--gas-limit` | `UINT64_MAX` |
 | `LogLevel` | `LoggerLevel` | `--log-level` | `Info` |
 | `NumExtraCompilations` | `uint32_t` | `--num-extra-compilations` | 0 |
 | `NumExtraExecutions` | `uint32_t` | `--num-extra-executions` | 0 |
 | `EnableBenchmark` | `bool` | `--benchmark` | false |
 | `DeployMode` | `bool` | `--deploy` | false |
-| `ContractAddress` | `std::string` | `--contract-address` | 空 |
-| `SenderAddress` | `std::string` | `--sender` | `"1000...0000"`（20 字节 0） |
-| `Config` | `RuntimeConfig` | 多个选项 | 见 runtime 模块 |
+| `ContractAddress` | `std::string` | `--contract-address` | Empty |
+| `SenderAddress` | `std::string` | `--sender` | `"1000...0000"` (20 zero bytes) |
+| `Config` | `RuntimeConfig` | Multiple options | See runtime module |
 | `EvmRevision` | `evmc_revision` | `--evm-revision` | `zen::evm::DEFAULT_REVISION` |
 
-### 外部 DTO 引用
+### External DTO References
 
-| 类型 | 模块 | 用途 |
+| Type | Module | Purpose |
 |------|------|------|
-| `RuntimeConfig` | runtime | 运行时配置，由 CLI 选项填充 |
-| `TypedValue` | common | WASM 函数返回值，经 `printTypedValueArray` 输出 |
-| `evmc_message` | evmc | EVM 调用消息 |
-| `evmc::Result` | evmc | EVM 执行结果，含 `status_code`、`output_data`、`output_size` |
+| `RuntimeConfig` | runtime | Runtime configuration, populated by CLI options |
+| `TypedValue` | common | WASM function return value, output via `printTypedValueArray` |
+| `evmc_message` | evmc | EVM call message |
+| `evmc::Result` | evmc | EVM execution result, contains `status_code`, `output_data`, `output_size` |

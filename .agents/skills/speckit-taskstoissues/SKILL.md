@@ -1,89 +1,89 @@
 ---
 name: speckit-taskstoissues
-description: 将 tasks.md 中的任务转换为 issue 工单，支持 GitHub、GitLab 等平台。
+description: Convert tasks in tasks.md into issue tickets, supporting platforms such as GitHub and GitLab.
 ---
 
-# 任务转工单
+# Tasks to Issues
 
-将 tasks.md 中的任务转换为 issue 工单，支持 GitHub、GitLab 等平台。
+Convert tasks in tasks.md into issue tickets, supporting platforms such as GitHub and GitLab.
 
-## 用户输入
+## User Input
 
-你输入的内容即为上下文。
+Your input serves as the context.
 
-## 执行步骤
+## Execution Steps
 
-### 1. 加载任务文件
+### 1. Load Task File
 
-从 `FEATURE_DIR/tasks.md` 加载任务列表。
+Load the task list from `FEATURE_DIR/tasks.md`.
 
-### 2. 解析任务
+### 2. Parse Tasks
 
-解析任务文件，提取：
-- 任务 ID
-- 任务描述
-- 任务标签（如 [US1]、[P]）
-- 文件路径
-- 依赖关系
+Parse the task file and extract:
+- Task ID
+- Task description
+- Task labels (e.g., [US1], [P])
+- File paths
+- Dependencies
 
-### 3. 确定目标平台
+### 3. Determine Target Platform
 
-确定 issue 创建的目标平台：
-- GitHub（通过 `gh` CLI 或 API）
-- GitLab（通过 `glab` CLI 或 API）
-- 其他平台（生成通用格式）
+Determine the target platform for issue creation:
+- GitHub (via `gh` CLI or API)
+- GitLab (via `glab` CLI or API)
+- Other platforms (generate a generic format)
 
-### 4. 转换任务为 Issue
+### 4. Convert Tasks to Issues
 
-为每个任务创建 issue，包括：
+Create an issue for each task, including:
 
-#### Issue 标题
-- 任务 ID + 简短描述
-- 移除文件路径（放在正文中）
+#### Issue Title
+- Task ID + short description
+- Remove file paths (place in the body instead)
 
-#### Issue 正文
-- 完整任务描述
-- 文件路径
-- 相关User Story（如有）
-- 依赖任务（如有）
-- 验收标准（从 tasks.md 提取）
+#### Issue Body
+- Full task description
+- File paths
+- Related User Story (if any)
+- Dependent tasks (if any)
+- Acceptance criteria (extracted from tasks.md)
 
 #### Labels
-- 优先级（从任务推导）
-- User Story标签
-- 阶段标签（Setup、Core、Integration 等）
-- 技术标签（从文件路径推导）
+- Priority (inferred from the task)
+- User Story label
+- Phase label (Setup, Core, Integration, etc.)
+- Technical labels (inferred from file paths)
 
-### 5. 管理 Issue 依赖
+### 5. Manage Issue Dependencies
 
-- 按顺序创建 issue
-- 使用 issue 引用设置依赖
-- 考虑平台的依赖管理功能
+- Create issues in order
+- Set dependencies using issue references
+- Consider the platform's dependency management features
 
-### 6. 创建 Issue
+### 6. Create Issues
 
-使用适当的方法创建 issue：
+Create issues using the appropriate method:
 
-**GitHub（通过 CLI）**：
+**GitHub (via CLI)**:
 ```bash
 gh issue create --title "TITLE" --body "BODY" --labels "LABELS"
 ```
 
-**GitLab（通过 CLI）**：
+**GitLab (via CLI)**:
 ```bash
 glab issue create --title "TITLE" --description "BODY" --labels "LABELS"
 ```
 
-**备用**：生成可导入的 CSV/JSON 文件
+**Fallback**: generate an importable CSV/JSON file
 
-### 7. 报告
+### 7. Report
 
-报告：
-- 创建的 issue 数量
-- Issue URL 列表
-- 任何失败或警告
-- 任务 ID 到 issue 编号的映射
+Report:
+- Number of issues created
+- Issue URL list
+- Any failures or warnings
+- Task ID to issue number mapping
 
-### 8. 更新任务文件（可选）
+### 8. Update Task File (Optional)
 
-如果用户请求，更新 `tasks.md` 以包含 issue 引用。
+If the user requests, update `tasks.md` to include issue references.

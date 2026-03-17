@@ -1,95 +1,95 @@
 ---
 name: speckit-plan
-description: 执行实现计划工作流程，使用计划模板生成设计工件（research.md、data-model.md、contracts/、quickstart.md、plan.md）。
+description: Execute the implementation planning workflow, generating design artifacts (research.md, data-model.md, contracts/, quickstart.md, plan.md) using plan templates.
 ---
 
-# 技术设计规划
+# Technical Design Planning
 
-执行实现计划工作流程，生成设计工件。
+Execute the implementation planning workflow and generate design artifacts.
 
-## 用户输入
+## User Input
 
-你输入的内容即为上下文。
+Your input serves as the context.
 
-## 交接点
+## Handoff Points
 
-- **Create Tasks** → 调用 `/speckit-tasks`："Break the plan into tasks"（send: true）
-- **Create Checklist** → 调用 `/speckit-checklist`："Create a checklist for the following domain..."
+- **Create Tasks** → invoke `/speckit-tasks`: "Break the plan into tasks" (send: true)
+- **Create Checklist** → invoke `/speckit-checklist`: "Create a checklist for the following domain..."
 
-## 执行步骤
+## Execution Steps
 
-### 1. 设置
+### 1. Setup
 
-从仓库根目录运行 `.specify/scripts/bash/setup-plan.sh --json` 并解析 JSON 获取：
+Run `.specify/scripts/bash/setup-plan.sh --json` from the repo root and parse the JSON for:
 - FEATURE_SPEC
 - IMPL_PLAN
 - SPECS_DIR
 - BRANCH
 
-### 2. 加载上下文
+### 2. Load Context
 
-读取：
-- FEATURE_SPEC（功能规格）
-- `.specify/memory/constitution.md`（项目原则）
-- IMPL_PLAN 模板（已复制）
+Read:
+- FEATURE_SPEC (feature spec)
+- `.specify/memory/constitution.md` (project principles)
+- IMPL_PLAN template (already copied)
 
-### 3. 执行计划工作流程
+### 3. Execute Planning Workflow
 
-按照 IMPL_PLAN 模板结构：
-- 填写技术上下文（标记未知项为 "NEEDS CLARIFICATION"）
-- 从 constitution 填写原则检查部分
-- 评估门槛（违规未证明时错误）
-- **阶段 0**：生成 research.md（解决所有 NEEDS CLARIFICATION）
-- **阶段 1**：生成 data-model.md、contracts/、quickstart.md
-- **阶段 1**：运行 agent 脚本更新 agent 上下文
-- 设计后重新评估原则检查
+Follow the IMPL_PLAN template structure:
+- Fill in the technical context (mark unknowns as "NEEDS CLARIFICATION")
+- Fill in the principles check section from the constitution
+- Evaluate gate criteria (error if violations are unproven)
+- **Phase 0**: generate research.md (resolve all NEEDS CLARIFICATION)
+- **Phase 1**: generate data-model.md, contracts/, quickstart.md
+- **Phase 1**: run agent script to update agent context
+- Re-evaluate principles check after design
 
-### 4. 停止并报告
+### 4. Stop and Report
 
-命令在阶段 2 规划后结束。报告分支、IMPL_PLAN 路径和生成的工件。
+The command ends after Phase 2 planning. Report the branch, IMPL_PLAN path, and generated artifacts.
 
-## 阶段详情
+## Phase Details
 
-### 阶段 0: 大纲与研究
+### Phase 0: Outline and Research
 
-1. 从技术上下文提取未知项：
-   - 每个 NEEDS CLARIFICATION → 研究任务
-   - 每个依赖 → 最佳实践任务
-   - 每个集成 → 模式任务
+1. Extract unknowns from technical context:
+   - Each NEEDS CLARIFICATION → research task
+   - Each dependency → best practices task
+   - Each integration → patterns task
 
-2. 生成并派发研究代理
+2. Generate and dispatch research agents
 
-3. 在 `research.md` 中整合发现，使用格式：
-   - Decision: [选择了什么]
-   - Rationale: [为什么选择]
-   - Alternatives considered: [还评估了什么]
+3. Consolidate findings in `research.md` using the format:
+   - Decision: [what was chosen]
+   - Rationale: [why it was chosen]
+   - Alternatives considered: [what else was evaluated]
 
-**输出**：research.md，所有 NEEDS CLARIFICATION 已解决
+**Output**: research.md with all NEEDS CLARIFICATION resolved
 
-### 阶段 1: 设计与合约
+### Phase 1: Design and Contracts
 
-**前置条件**：`research.md` 完成
+**Prerequisite**: `research.md` complete
 
-1. 从功能规格提取实体 → `data-model.md`：
-   - 实体名称、字段、关系
-   - 来自需求的验证规则
-   - 状态转换（如适用）
+1. Extract entities from the feature spec → `data-model.md`:
+   - Entity names, fields, relationships
+   - Validation rules from requirements
+   - State transitions (if applicable)
 
-2. 从功能需求生成 API 合约：
-   - 每个用户操作 → 端点
-   - 使用标准 REST/GraphQL 模式
-   - 将 OpenAPI/GraphQL schema 输出到 `/contracts/`
+2. Generate API contracts from functional requirements:
+   - Each user action → endpoint
+   - Use standard REST/GraphQL patterns
+   - Output OpenAPI/GraphQL schemas to `/contracts/`
 
-3. Agent 上下文更新：
-   - 运行 `.specify/scripts/bash/update-agent-context.sh cursor-agent`
-   - 脚本检测使用的是哪个 AI agent
-   - 更新相应的 agent 特定上下文文件
-   - 只添加当前计划中的新技术
-   - 保留标记之间的手动添加
+3. Agent context update:
+   - Run `.specify/scripts/bash/update-agent-context.sh cursor-agent`
+   - The script detects which AI agent is being used
+   - Update the corresponding agent-specific context file
+   - Only add new technologies from the current plan
+   - Preserve manual additions between markers
 
-**输出**：data-model.md、/contracts/*、quickstart.md、agent 特定文件
+**Output**: data-model.md, /contracts/*, quickstart.md, agent-specific files
 
-## 关键规则
+## Key Rules
 
-- 使用绝对路径
-- 门槛失败或未解决的澄清时错误
+- Use absolute paths
+- Error on gate failure or unresolved clarifications

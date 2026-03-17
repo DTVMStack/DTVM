@@ -1,93 +1,93 @@
 ---
 name: speckit-archive
-description: 功能归档。验证前置条件后将已完成功能从 specs/features/ 移至 specs/_archive/，并清理分支和 worktree。
+description: Feature archival. Archive completed features from specs/features/ to specs/_archive/ after verifying preconditions, and clean up branches and worktrees.
 ---
 
-# 功能归档
+# Feature Archival
 
-将已完成并合并的功能规格从 `specs/features/` 归档到 `specs/_archive/<YYYY-MM>/`，确保归档前所有前置条件已满足。
+Archive completed and merged feature specs from `specs/features/` to `specs/_archive/<YYYY-MM>/`, ensuring all preconditions are met before archival.
 
-## 何时使用
+## When to Use
 
-- 功能开发、测试、审查全部完成，PR 已合并后
-- 作为 `speckit-dev-workflow` 的最后一步（Phase 8）
-- 定期清理已完成但未归档的功能
+- After feature development, testing, and review are all complete, and the PR has been merged
+- As the final step (Phase 8) of `speckit-dev-workflow`
+- Periodic cleanup of completed but unarchived features
 
-## 归档前置条件
+## Archival Preconditions
 
-**以下条件必须全部满足才能归档：**
+**All of the following conditions must be met before archival:**
 
-| # | 条件 | 验证方式 |
+| # | Condition | Verification Method |
 |---|------|---------|
-| 1 | 所有任务已完成 | `tasks.md` 中所有任务标记为 `[X]` |
-| 2 | 测试/lint/构建通过 | 运行项目约定的验证命令 |
-| 3 | 代码审查通过 | PR 已获批准（approved） |
-| 4 | PR 已合并 | 功能分支已合并到目标分支 |
-| 5 | SSOT 模块已更新 | `specs/modules/` 中的相关模块已同步变更 |
+| 1 | All tasks completed | All tasks in `tasks.md` are marked `[X]` |
+| 2 | Tests/lint/build pass | Run the project's designated verification commands |
+| 3 | Code review approved | PR has been approved |
+| 4 | PR merged | Feature branch has been merged into the target branch |
+| 5 | SSOT modules updated | Related modules in `specs/modules/` have synced changes |
 
-如果条件不满足，向用户报告缺失项并建议先完成。
+If conditions are not met, report the missing items to the user and suggest completing them first.
 
-## 执行步骤
+## Execution Steps
 
-### 步骤 1：识别待归档功能
+### Step 1: Identify Features to Archive
 
-如果用户指定了功能编号或名称，直接定位。否则扫描 `specs/features/` 目录，列出所有功能及其状态供用户选择。
+If the user specifies a feature number or name, locate it directly. Otherwise, scan the `specs/features/` directory and list all features with their status for the user to choose from.
 
-### 步骤 2：验证前置条件
+### Step 2: Verify Preconditions
 
-逐项检查上述 5 个前置条件：
+Check the 5 preconditions one by one:
 
-1. 读取 `specs/features/<NNN>-<slug>/tasks.md`，统计已完成和未完成任务数
-2. 检查 Git 状态：功能分支是否已合并（`git branch --merged`）
-3. 检查 `specs/modules/` 相关文件的最近修改（是否在功能开发期间有更新）
+1. Read `specs/features/<NNN>-<slug>/tasks.md` and count completed vs. incomplete tasks
+2. Check Git status: whether the feature branch has been merged (`git branch --merged`)
+3. Check recent modifications to related files in `specs/modules/` (whether they were updated during feature development)
 
-将检查结果汇总展示给用户：
-
-```
-归档前置条件检查：<NNN>-<slug>
-
-✅ 任务完成：15/15（全部完成）
-✅ 分支已合并：feature/<NNN>-<slug> → main
-⚠️ SSOT 更新：请确认 specs/modules/ 已同步
-⬜ 测试/审查：需用户确认
-
-是否继续归档？
-```
-
-### 步骤 3：执行归档
-
-确认后执行：
-
-1. 创建归档目录 `specs/_archive/<YYYY-MM>/`（如不存在）
-2. 移动功能目录：`specs/features/<NNN>-<slug>/` → `specs/_archive/<YYYY-MM>/<NNN>-<slug>/`
-
-### 步骤 4：清理（可选）
-
-询问用户是否需要清理：
-
-- **Worktree 清理**：`git worktree remove <worktree-path>`（如果使用了 worktree 模式）
-- **分支清理**：`git branch -d feature/<NNN>-<slug>`（如果分支已合并）
-
-### 步骤 5：完成报告
+Summarize the check results for the user:
 
 ```
-归档完成：<NNN>-<slug>
+Archival precondition check: <NNN>-<slug>
 
-📦 已归档到：specs/_archive/<YYYY-MM>/<NNN>-<slug>/
-🧹 分支 feature/<NNN>-<slug> 已删除（如选择清理）
-🧹 Worktree 已移除（如选择清理）
+✅ Tasks completed: 15/15 (all complete)
+✅ Branch merged: feature/<NNN>-<slug> → main
+⚠️ SSOT update: please confirm specs/modules/ has been synced
+⬜ Tests/review: user confirmation required
+
+Proceed with archival?
 ```
 
-## 批量归档
+### Step 3: Execute Archival
 
-如果有多个待归档功能，支持批量操作：
+After confirmation, execute:
 
-1. 列出所有满足条件的功能
-2. 用户选择要归档的功能（全部或部分）
-3. 逐个执行归档步骤
+1. Create archive directory `specs/_archive/<YYYY-MM>/` (if it does not exist)
+2. Move the feature directory: `specs/features/<NNN>-<slug>/` → `specs/_archive/<YYYY-MM>/<NNN>-<slug>/`
 
-## 注意事项
+### Step 4: Cleanup (Optional)
 
-- 归档后的功能规格**不再修改**，仅作历史参考
-- 如果发现归档的功能需要返工，应创建新的功能提案引用原始规格
-- `_archive/` 目录应纳入版本控制，作为项目历史的一部分
+Ask the user if cleanup is needed:
+
+- **Worktree cleanup**: `git worktree remove <worktree-path>` (if worktree mode was used)
+- **Branch cleanup**: `git branch -d feature/<NNN>-<slug>` (if the branch has been merged)
+
+### Step 5: Completion Report
+
+```
+Archival complete: <NNN>-<slug>
+
+📦 Archived to: specs/_archive/<YYYY-MM>/<NNN>-<slug>/
+🧹 Branch feature/<NNN>-<slug> deleted (if cleanup was selected)
+🧹 Worktree removed (if cleanup was selected)
+```
+
+## Batch Archival
+
+If there are multiple features to archive, batch operations are supported:
+
+1. List all features that meet the conditions
+2. User selects features to archive (all or some)
+3. Execute archival steps for each feature sequentially
+
+## Notes
+
+- Archived feature specs **should not be modified**; they serve as historical reference only
+- If an archived feature needs rework, create a new feature proposal referencing the original spec
+- The `_archive/` directory should be under version control as part of the project history

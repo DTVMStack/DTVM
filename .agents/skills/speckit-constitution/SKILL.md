@@ -1,87 +1,87 @@
 ---
 name: speckit-constitution
-description: 定义项目开发原则和约束。生成或更新项目宪法文档，为所有后续开发活动提供指导原则。
+description: Define project development principles and constraints. Generate or update the project constitution document to provide guiding principles for all subsequent development activities.
 ---
 
-# 项目原则
+# Project Principles
 
-定义项目开发原则和约束，为所有后续开发活动提供指导原则。
+Define project development principles and constraints to provide guiding principles for all subsequent development activities.
 
-## 用户输入
+## User Input
 
-你输入的内容即为上下文。
+Your input serves as the context.
 
-## 执行步骤
+## Execution Steps
 
-### 1. 检查现有宪法文档
+### 1. Check Existing Constitution Document
 
-检查是否存在以下文件：
+Check if the following files exist:
 - `.specify/memory/constitution.md`
 - `specs/constitution.md`
 - `CONSTITUTION.md`
 
-如果存在，读取现有内容并准备更新。
+If one exists, read its content and prepare for updates.
 
-### 2. 收集项目上下文
+### 2. Gather Project Context
 
-分析项目以确定适当的约束：
-- 编程语言和框架
-- 目标平台和部署环境
-- 性能要求
-- 安全和合规要求
-- 团队规模和协作模式
+Analyze the project to determine appropriate constraints:
+- Programming languages and frameworks
+- Target platforms and deployment environments
+- Performance requirements
+- Security and compliance requirements
+- Team size and collaboration patterns
 
-### 3. 生成宪法文档结构
+### 3. Generate Constitution Document Structure
 
-创建或更新包含以下部分的宪法文档：
+Create or update the constitution document with the following sections:
 
-#### 项目愿景
-- 项目目的和目标
-- 目标用户/用例
-- 成功定义
+#### Project Vision
+- Project purpose and goals
+- Target users/use cases
+- Definition of success
 
-#### 技术约束
-- 允许的编程语言
-- 允许的框架和库
-- 架构模式要求
-- 平台要求
+#### Technical Constraints
+- Allowed programming languages
+- Allowed frameworks and libraries
+- Architecture pattern requirements
+- Platform requirements
 
-#### 质量标准
-- 代码风格指南
-- 测试覆盖率要求
-- 文档标准
-- 性能基准
+#### Quality Standards
+- Code style guides
+- Test coverage requirements
+- Documentation standards
+- Performance benchmarks
 
-#### 开发流程
-- Git 工作流
-- 代码审查要求
-- CI/CD 要求
-- 发布流程
+#### Development Process
+- Git workflow
+- Code review requirements
+- CI/CD requirements
+- Release process
 
-#### 安全和合规
-- 数据保护要求
-- 访问控制标准
-- 审计要求
-- 法律合规考虑
+#### Security and Compliance
+- Data protection requirements
+- Access control standards
+- Audit requirements
+- Legal compliance considerations
 
-#### 团队协作
-- 沟通协议
-- 决策制定流程
-- 争议解决
-- 知识共享
+#### Team Collaboration
+- Communication protocols
+- Decision-making process
+- Dispute resolution
+- Knowledge sharing
 
-### 4. 写入文档
+### 4. Write Document
 
-将宪法文档写入 `.specify/memory/constitution.md`。
+Write the constitution document to `.specify/memory/constitution.md`.
 
-### 5. 验证
+### 5. Validate
 
-确认文档包含：
-- 所有必需的部分
-- 清晰、可执行的约束
-- 与项目目标一致
-- 团队共识（如果适用）
+Confirm the document includes:
+- All required sections
+- Clear, actionable constraints
+- Alignment with project goals
+- Team consensus (if applicable)
 
-### 6. 报告
+### 6. Report
 
-报告宪法文档的位置和任何需要人工审查的关键决策。
+Report the location of the constitution document and any critical decisions requiring human review.

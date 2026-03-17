@@ -1,103 +1,103 @@
 ---
 name: speckit-dev-workflow
-description: 完整的 Spec-Kit 功能开发工作流。从自然语言描述到实现完成，先批量完成需求澄清和规划，再一次性推进实现，最后同步 SSOT、路线图和文档。
+description: Full Spec-Kit feature development workflow. From natural language description to implementation completion, batch requirements clarification and planning first, then push implementation through in one pass, and finally sync SSOT, roadmap, and documentation.
 ---
 
-# 完整开发工作流
+# Full Development Workflow
 
-从一句需求描述出发，经过批量澄清、规划确认，一次性推进到实现完成，并同步所有相关文档。
+Starting from a single requirements description, proceed through batch clarification, planning confirmation, push through to implementation completion, and sync all related documentation.
 
-## 工作流概述
+## Workflow Overview
 
 ```
-Phase 1: Specify    — 生成功能规格草稿（调用 /speckit-specify）
-Phase 2: Clarify    — 批量提出歧义问题，等待用户一次性确认（调用 /speckit-clarify）
-Phase 3: Plan       — 生成技术设计产物（调用 /speckit-plan）
-Phase 4: Tasks      — 生成可执行任务列表（调用 /speckit-tasks）
-Phase 5: Implement  — 按任务执行实现（调用 /speckit-implement）
-Phase 6: Doc Sync   — 同步 SSOT / roadmap / README / AGENTS.md
-Phase 7: Validate   — lint + build + test 验证
+Phase 1: Specify    — Generate feature spec draft (invoke /speckit-specify)
+Phase 2: Clarify    — Batch ambiguity questions, await user confirmation (invoke /speckit-clarify)
+Phase 3: Plan       — Generate technical design artifacts (invoke /speckit-plan)
+Phase 4: Tasks      — Generate executable task list (invoke /speckit-tasks)
+Phase 5: Implement  — Execute implementation by tasks (invoke /speckit-implement)
+Phase 6: Doc Sync   — Sync SSOT / roadmap / README / AGENTS.md
+Phase 7: Validate   — lint + build + test verification
 ```
 
-**关键节点**：
-- Phase 2 一次性提出所有歧义问题，**等用户回答后立即进入 Phase 3，无需再次确认**
-- Phase 4 结束后向用户展示任务摘要确认，**确认后**才开始实现
-- Phase 7 全部通过后工作流结束
+**Key Checkpoints**:
+- Phase 2 presents all ambiguity questions at once. **After the user answers, proceed immediately to Phase 3 without additional confirmation**
+- Phase 4 presents a task summary to the user for confirmation. **Implementation begins only after confirmation**
+- Workflow ends after Phase 7 passes completely
 
-各阶段的具体执行细节参见对应的独立 skill；本 workflow 负责编排和节点控制。
+Refer to the corresponding standalone skill for detailed execution logic of each phase; this workflow handles orchestration and checkpoint control.
 
-## 用户输入
+## User Input
 
-你输入的内容即为功能描述。
+Your input serves as the feature description.
 
-## 执行步骤
+## Execution Steps
 
 ### Phase 1 — Specify
 
-调用 `create-new-feature.sh` 创建功能目录脚手架，脚本会**自动生成 `spec.md` 模板文件**。
+Invoke `create-new-feature.sh` to create the feature directory scaffold. The script **automatically generates the `spec.md` template file**.
 
-> ⚠️ **`spec.md` 已由脚本创建**，后续填写规格内容时必须使用编辑工具编辑，**不能使用创建文件工具**（会报 "File already exists" 错误）。
+> ⚠️ **`spec.md` has already been created by the script**. When filling in spec content later, you must use edit tools. **Do not use file creation tools** (this will cause a "File already exists" error).
 
-### Phase 2 — Clarify（本 workflow 的核心差异点）
+### Phase 2 — Clarify (Key Differentiator of This Workflow)
 
-**标准 speckit-clarify 的行为是可以多轮追问的；本 workflow 要求一次性批量提问。**
+**Standard speckit-clarify behavior allows multi-round follow-ups; this workflow requires batch questioning in one pass.**
 
-扫描 spec.md，识别影响架构或实现路径的不确定项（技术栈、进程模型、数据模型、API 契约、构建/发布、范围边界等），**一次性**提出所有问题（最多 5 个），每题附 2-4 个选项和推荐默认值，等用户全部回答后再继续。
+Scan spec.md, identify uncertainties that affect architecture or implementation paths (tech stack, process model, data model, API contracts, build/release, scope boundaries, etc.), and present **all questions at once** (up to 5), each with 2-4 options and a recommended default. Wait for the user to answer all before continuing.
 
-答案确认后：
-1. 写回 `spec.md` 的 `## Clarifications` 节
-2. 将关键约束同步到对应 FR 和 Assumptions
-3. **立即进入 Phase 3（Plan）**，无需等待进一步指令
+After answers are confirmed:
+1. Write back to the `## Clarifications` section of `spec.md`
+2. Sync key constraints to corresponding FR and Assumptions
+3. **Proceed immediately to Phase 3 (Plan)** without waiting for further instructions
 
-### Phase 3 — Plan（产物清单）
+### Phase 3 — Plan (Artifact Checklist)
 
-参考 `speckit-plan` skill 执行，**必须在功能目录下生成以下全部产物**：
+Follow the `speckit-plan` skill. **The following artifacts must all be generated in the feature directory**:
 
-| 文件 | 说明 |
+| File | Description |
 |------|------|
-| `research.md` | 关键技术决策（Decision / Rationale / Alternatives considered） |
-| `data-model.md` | 新增实体、DTO 类型、字段说明、状态机枚举 |
-| `contracts/` | API 端点 OpenAPI 或 interface 描述（如有新端点） |
-| `quickstart.md` | 开发者快速上手：启动步骤、完整流程示例、API 调用示例 |
-| `plan.md` | 架构概览、阶段划分、关键伪代码 |
+| `research.md` | Key technical decisions (Decision / Rationale / Alternatives considered) |
+| `data-model.md` | New entities, DTO types, field descriptions, state machine enums |
+| `contracts/` | API endpoint OpenAPI or interface descriptions (if new endpoints exist) |
+| `quickstart.md` | Developer quickstart: setup steps, end-to-end flow examples, API call examples |
+| `plan.md` | Architecture overview, phase breakdown, key pseudocode |
 
-所有产物生成完成后，无需等待确认，**立即进入 Phase 4**。
+After all artifacts are generated, **proceed immediately to Phase 4** without waiting for confirmation.
 
 ### Phase 4 — Tasks
 
-生成 `tasks.md` 后，向用户展示任务摘要（任务数、分阶段概览），**等用户确认后**才开始 Phase 5 实现。
+After generating `tasks.md`, present a task summary (task count, phase overview) to the user. **Begin Phase 5 implementation only after user confirmation**.
 
 ### Phase 5 — Implement
 
-按任务列表执行实现，每个任务完成后标记为 `[X]`。
+Execute implementation according to the task list, marking each task as `[X]` upon completion.
 
 ### Phase 6 — Doc Sync
 
-实现完成后审查，**有变更才修改**：
+Review after implementation is complete. **Modify only if there are changes**:
 
-| 文件 | 何时修改 |
+| File | When to Modify |
 |------|---------|
-| `specs/modules/*/contracts/interfaces.md` | 新增/变更 API 端点、SSE 契约、错误码 |
-| `specs/modules/*/data-model.md` | 新增实体或 DTO 类型 |
-| `specs/mvp-roadmap.md` | 将功能行状态从 `🚧 规划中` 改为 `✅ 已完成` |
-| `README.md` | 新增用户可见命令、URL 或安装步骤变化 |
-| `AGENTS.md` | 新增开发命令、Agent 可调用 API、常见错误码 |
+| `specs/modules/*/contracts/interfaces.md` | New/changed API endpoints, SSE contracts, error codes |
+| `specs/modules/*/data-model.md` | New entities or DTO types |
+| `specs/mvp-roadmap.md` | Change feature status from `🚧 In Progress` to `✅ Completed` |
+| `README.md` | New user-facing commands, URLs, or installation step changes |
+| `AGENTS.md` | New dev commands, Agent-callable APIs, common error codes |
 
-**不确定是否需要修改时**：明确说明判断依据，不强行修改。
+**When unsure whether modification is needed**: state the rationale explicitly; do not force modifications.
 
 ### Phase 7 — Validate
 
-按项目约定的 lint / test / build 命令依次执行，任一失败则**就地修复**后重新运行，不跳过。全部通过后工作流结束。
+Run lint / test / build commands per project conventions sequentially. If any fail, **fix in place** and re-run. Do not skip. Workflow ends after all pass.
 
-## 完成检查清单
+## Completion Checklist
 
-- [ ] `spec.md` 含 FR 编号和 `## Clarifications` 节
-- [ ] `research.md` 已生成，含关键技术决策及备选方案
-- [ ] `data-model.md` 已生成，含新增实体、DTO 类型、状态机枚举
-- [ ] `contracts/` 已生成（如有新 API 端点）
-- [ ] `quickstart.md` 已生成，含启动步骤和完整流程示例
-- [ ] `plan.md` 已生成，含架构描述和分阶段路径
-- [ ] 所有实现任务已完成
-- [ ] 受影响的 `specs/modules/` SSOT 已更新
-- [ ] `specs/mvp-roadmap.md` 状态已更新
-- [ ] lint / test / build 验证全部通过
+- [ ] `spec.md` contains FR numbering and `## Clarifications` section
+- [ ] `research.md` generated with key technical decisions and alternatives
+- [ ] `data-model.md` generated with new entities, DTO types, state machine enums
+- [ ] `contracts/` generated (if new API endpoints exist)
+- [ ] `quickstart.md` generated with setup steps and end-to-end flow examples
+- [ ] `plan.md` generated with architecture description and phased path
+- [ ] All implementation tasks completed
+- [ ] Affected `specs/modules/` SSOT updated
+- [ ] `specs/mvp-roadmap.md` status updated
+- [ ] lint / test / build verification all passed

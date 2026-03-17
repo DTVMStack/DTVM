@@ -1,28 +1,28 @@
-# [项目名称] 开发指南
+# [Project Name] Development Guide
 
-从所有功能计划自动生成。最近更新：[DATE]
+Auto-generated from all feature plans. Last updated: [DATE]
 
-## 当前技术栈
+## Current Technology Stack
 
-[从所有 PLAN.MD 文件中提取]
+[Extracted from all PLAN.MD files]
 
-## 项目结构
+## Project Structure
 
 ```text
-[来自计划的实际结构]
+[Actual structure from plans]
 ```
 
-## 常用命令
+## Common Commands
 
-[仅包含当前技术栈的命令]
+[Commands for current technology stack only]
 
-## 编码规范
+## Coding Standards
 
-[仅包含当前使用的语言的规范]
+[Standards for currently used language only]
 
-## 最近变更
+## Recent Changes
 
-[最近 3 个功能及其新增内容]
+[Last 3 features and their additions]
 
-<!-- 手动补充内容开始 -->
-<!-- 手动补充内容结束 -->
+<!-- Manual content start -->
+<!-- Manual content end -->

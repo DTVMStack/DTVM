@@ -1,6 +1,6 @@
-# action 模块数据模型
+# action Module Data Model
 
-## 实体关系图 (Mermaid classDiagram)
+## Entity Relationship Diagram (Mermaid classDiagram)
 
 ```mermaid
 classDiagram
@@ -138,179 +138,180 @@ classDiagram
     EVMByteCodeVisitor --> VMEvalStack
 ```
 
-## 核心实体 (关键字段和方法)
+## Core Entities (Key Fields and Methods)
 
 ### LoaderCommon
 
-基类，提供字节流读取能力。
+Base class providing byte stream reading capability.
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |-----|------|------|
-| Mod | runtime::Module& | 目标模块 |
-| Start, End, Ptr | const Byte* | 当前解析区间与游标 |
+| Mod | runtime::Module& | Target module |
+| Start, End, Ptr | const Byte* | Current parsing range and cursor |
 
-| 方法 | 说明 |
+| Method | Description |
 |-----|------|
-| readByte/readBytes | 读取原始字节 |
-| readI32/readI64/readU32 | LEB128 整数 |
-| readValType/readBlockType/readRefType | WASM 类型 |
-| readF32/readF64 | 浮点数 |
-| readPlainU32 | 原始 4 字节 |
+| readByte/readBytes | Read raw bytes |
+| readI32/readI64/readU32 | LEB128 integers |
+| readValType/readBlockType/readRefType | WASM types |
+| readF32/readF64 | Floating-point numbers |
+| readPlainU32 | Raw 4 bytes |
 
 ### ModuleLoader
 
-WASM 模块解析器，继承 LoaderCommon。
+WASM module parser, inherits LoaderCommon.
 
-| 内部类型 | 说明 |
+| Internal Type | Description |
 |---------|------|
 | Limits | pair&lt;uint32_t, Optional&lt;uint32_t&gt;&gt; |
 | TableType | pair&lt;uint32_t, uint32_t&gt; |
 | MemoryType | pair&lt;uint32_t, uint32_t&gt; |
 | GlobalType | pair&lt;WASMType, bool&gt; |
 
-| 方法 | 说明 |
+| Method | Description |
 |-----|------|
-| load | 入口，解析 header 与 body |
-| loadModuleHeader/Body | 魔数、版本、各 section |
-| loadTypeSection 等 | 各 section 具体解析 |
-| resolveImportFunction | 从 Host 模块解析导入函数 |
+| load | Entry point, parses header and body |
+| loadModuleHeader/Body | Magic number, version, sections |
+| loadTypeSection etc. | Per-section parsing |
+| resolveImportFunction | Resolve import functions from Host module |
 
 ### FunctionLoader
 
-单函数体验证与元数据提取，继承 LoaderCommon。
+Single-function validation and metadata extraction, inherits LoaderCommon.
 
-| 内部类型 | 说明 |
+| Internal Type | Description |
 |---------|------|
-| ControlBlockType | Variant&lt;WASMType, const TypeEntry*&gt;，块类型 |
-| ControlBlock | 控制块（StackPolymorphic、LabelType、StartPtr、ElsePtr、EndPtr、InitStackSize 等） |
+| ControlBlockType | Variant&lt;WASMType, const TypeEntry*&gt;, block type |
+| ControlBlock | Control block (StackPolymorphic, LabelType, StartPtr, ElsePtr, EndPtr, InitStackSize, etc.) |
 
-| 字段 | 说明 |
+| Field | Description |
 |-----|------|
-| FuncIdx, FuncTypeEntry, FuncCodeEntry | 当前函数索引与类型/代码入口 |
-| StackSize, MaxStackSize, MaxBlockDepth | 栈与块深度统计 |
-| ControlBlocks, ValueTypes | 控制栈与值类型栈 |
+| FuncIdx, FuncTypeEntry, FuncCodeEntry | Current function index and type/code entries |
+| StackSize, MaxStackSize, MaxBlockDepth | Stack and block depth statistics |
+| ControlBlocks, ValueTypes | Control stack and value type stack |
 
-| 方法 | 说明 |
+| Method | Description |
 |-----|------|
-| load | 遍历 opcode，做类型与结构校验 |
-| pushBlock/popBlock | 控制块压栈/出栈 |
-| popValueType/pushValueType | 值类型栈操作 |
-| checkBranch | 校验 br/br_if/br_table 目标 |
+| load | Traverse opcodes, perform type and structure validation |
+| pushBlock/popBlock | Control block push/pop |
+| popValueType/pushValueType | Value type stack operations |
+| checkBranch | Validate br/br_if/br_table targets |
 
 ### InterpFrame
 
-单解释帧，包含函数、IP、值栈与控制栈指针。
+Single interpretation frame, contains function, IP, value stack and control stack pointers.
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |-----|------|------|
-| FuncInst | FunctionInstance* | 当前函数实例 |
-| Ip | const uint8_t* | 指令指针 |
-| ValueBasePtr/ValueStackPtr/ValueBoundary | uint32_t* | 值栈 |
-| CtrlBasePtr/CtrlStackPtr/CtrlBoundary | BlockInfo* | 控制栈 |
-| LocalPtr | uint32_t* | 局部变量基址 |
-| PrevFrame | InterpFrame* | 调用者帧 |
+| FuncInst | FunctionInstance* | Current function instance |
+| Ip | const uint8_t* | Instruction pointer |
+| ValueBasePtr/ValueStackPtr/ValueBoundary | uint32_t* | Value stack |
+| CtrlBasePtr/CtrlStackPtr/CtrlBoundary | BlockInfo* | Control stack |
+| LocalPtr | uint32_t* | Local variable base address |
+| PrevFrame | InterpFrame* | Caller frame |
 
-| 方法 | 说明 |
+| Method | Description |
 |-----|------|
-| valuePeek/valuePush/valuePop/valueGet/valueSet | 值栈访问 |
-| blockPush/blockPop | 控制栈操作 |
+| valuePeek/valuePush/valuePop/valueGet/valueSet | Value stack access |
+| blockPush/blockPop | Control stack operations |
 
 ### InterpStack
 
-解释器物理栈，由 Runtime 分配。
+Interpreter physical stack, allocated by Runtime.
 
-| 字段 | 说明 |
+| Field | Description |
 |-----|------|
-| TopBoundary, Top, Bottom | 栈边界与当前顶 |
+| TopBoundary, Top, Bottom | Stack boundaries and current top |
 
-| 方法 | 说明 |
+| Method | Description |
 |-----|------|
-| push&lt;T&gt;/pop&lt;T&gt; | 类型化压栈/弹栈 |
-| top | 返回 Top 指针 |
+| push&lt;T&gt;/pop&lt;T&gt; | Typed push/pop |
+| top | Return Top pointer |
 
 ### InterpreterExecContext
 
-解释执行上下文，持有栈与当前帧。
+Interpretation execution context, holds stack and current frame.
 
-| 方法 | 说明 |
+| Method | Description |
 |-----|------|
-| allocFrame | 在栈上分配新帧 |
-| freeFrame | 回收帧并回退栈顶 |
-| getCurFrame/setCurFrame | 当前帧读写 |
+| allocFrame | Allocate new frame on stack |
+| freeFrame | Reclaim frame and roll back stack top |
+| getCurFrame/setCurFrame | Current frame read/write |
 
 ### Instantiator
 
-将 Module 实例化为 Instance。
+Instantiate Module into Instance.
 
-| 方法 | 说明 |
+| Method | Description |
 |-----|------|
-| instantiate | 依次实例化全局、函数、表、内存，可选 WASI，执行 start |
-| instantiateGlobals/Functions/Tables/Memories | 各子步骤 |
-| initMemoryByDataSegments | 数据段初始化 |
-| instantiateWasi | WASI 上下文（ZEN_ENABLE_BUILTIN_WASI） |
+| instantiate | Sequentially instantiate globals, functions, tables, memory; optional WASI; execute start |
+| instantiateGlobals/Functions/Tables/Memories | Sub-steps |
+| initMemoryByDataSegments | Data segment initialization |
+| instantiateWasi | WASI context (ZEN_ENABLE_BUILTIN_WASI) |
 
 ### VMEvalStack&lt;Operand&gt;
 
-JIT 编译时使用的泛型值栈。
+Generic value stack used during JIT compilation.
 
-| 方法 | 说明 |
+| Method | Description |
 |-----|------|
-| push/pop | 压栈/弹栈 |
-| peek(Index) | 距栈顶 Index 处的元素 |
-| getTop | 栈顶元素 |
-| getSize/empty | 大小与空判断 |
+| push/pop | Push/pop |
+| peek(Index) | Element at Index from stack top |
+| getTop | Top element |
+| getSize/empty | Size and empty check |
 
 ### WASMByteCodeVisitor&lt;IRBuilder&gt;
 
-WASM 字节码遍历器，将指令转成 IRBuilder 调用。
+WASM bytecode visitor, converts instructions to IRBuilder calls.
 
-| 字段 | 说明 |
+| Field | Description |
 |-----|------|
-| Builder | IRBuilder 引用 |
-| Ctx | CompilerContext 指针 |
+| Builder | IRBuilder reference |
+| Ctx | CompilerContext pointer |
 | Stack | VMEvalStack&lt;Operand&gt; |
-| CurMod, CurFunc | 当前模块与函数代码 |
+| CurMod, CurFunc | Current module and function code |
 
-| 方法 | 说明 |
+| Method | Description |
 |-----|------|
-| compile | 入口，initFunction + decode + finalizeFunctionBase |
-| decode | 主循环，按 opcode 分发到 handle* |
-| handleBlock/handleLoop/handleIf/handleCall/handleLoad/... | 各类指令处理 |
+| compile | Entry, initFunction + decode + finalizeFunctionBase |
+| decode | Main loop, dispatch by opcode to handle* |
+| handleBlock/handleLoop/handleIf/handleCall/handleLoad/... | Per-instruction handling |
 
 ### EVMByteCodeVisitor&lt;IRBuilder&gt;
 
-EVM 字节码遍历器（COMPILER 命名空间）。
+EVM bytecode visitor (COMPILER namespace).
 
-| 字段 | 说明 |
+| Field | Description |
 |-----|------|
-| Builder, Ctx | IRBuilder 与 CompilerContext |
+| Builder, Ctx | IRBuilder and CompilerContext |
 | Stack | VMEvalStack&lt;Operand&gt; |
-| InDeadCode | 死代码标记 |
-| PC | 程序计数器 |
+| InDeadCode | Dead code flag |
+| PC | Program counter |
 
-| 方法 | 说明 |
+| Method | Description |
 |-----|------|
 | compile | initEVM + decode + finalizeEVMBase |
-| decode | 主循环，结合 EVMAnalyzer 做基本块与栈高检查 |
-| handleBeginBlock/handleEndBlock | 块边界处理 |
-| handlePush/handleDup/handleSwap/handleJump/... | 各类 EVM 指令处理 |
+| decode | Main loop, with EVMAnalyzer for basic block and stack height checks |
+| handleBeginBlock/handleEndBlock | Block boundary handling |
+| handlePush/handleDup/handleSwap/handleJump/... | Per-EVM-instruction handling |
 
-## 枚举
+## Enumerations
 
-| 枚举 | 来源 | 说明 |
+| Enum | Source | Description |
 |-----|------|------|
-| BinaryOperator | interpreter.cpp（内部） | BO_ADD, BO_SUB, BO_MUL, BO_DIV, BO_DIV_S, BO_REM_S/U, BO_AND/OR/XOR, BO_SHL/SHR, BO_ROTL/ROTR, BO_MIN/MAX, BO_COPYSIGN, BC_CLZ/CTZ/POP_COUNT_*, BM_SQRT/FLOOR/CEIL/TRUNC/NEAREST/ABS/NEG 等 |
+| BinaryOperator | interpreter.cpp (internal) | BO_ADD, BO_SUB, BO_MUL, BO_DIV, BO_DIV_S, BO_REM_S/U, BO_AND/OR/XOR, BO_SHL/SHR, BO_ROTL/ROTR, BO_MIN/MAX, BO_COPYSIGN, BC_CLZ/CTZ/POP_COUNT_*, BM_SQRT/FLOOR/CEIL/TRUNC/NEAREST/ABS/NEG, etc. |
 | LabelType | common | LABEL_BLOCK, LABEL_LOOP, LABEL_IF, LABEL_FUNCTION |
 | SectionType | common | SEC_CUSTOM, SEC_TYPE, SEC_IMPORT, SEC_FUNC, SEC_TABLE, SEC_MEMORY, SEC_GLOBAL, SEC_EXPORT, SEC_START, SEC_ELEM, SEC_DATACOUNT, SEC_CODE, SEC_DATA |
-| NameSectionType | common | NAMESEC_FUNCTION, NAMESEC_MODULE, NAMESEC_LOCAL 等 |
+| NameSectionType | common | NAMESEC_FUNCTION, NAMESEC_MODULE, NAMESEC_LOCAL, etc. |
 
-## DTO / 共享类型
+## DTO / Shared Types
 
-| 类型 | 定义位置 | 说明 |
+| Type | Definition Location | Description |
 |-----|----------|------|
-| BlockInfo | interpreter.h | 控制块元数据（TargetAddr, ValueStackPtr, CellNum, LabelType） |
-| ControlBlock | function_loader.h | FunctionLoader 内部控制块（StackPolymorphic, LabelType, BlockType, StartPtr, ElsePtr, EndPtr, InitStackSize, InitNumValues） |
-| ControlBlockType | function_loader.h | 块类型（Variant&lt;WASMType, const TypeEntry*&gt;） |
-| CacheValue | interpreter.cpp | BaseInterpreterImpl 内块地址缓存（ElsePtr, EndPtr） |
-| Limits | module_loader.cpp | pair&lt;uint32_t, Optional&lt;uint32_t&gt;&gt;（min, max?） |
-| TableType / MemoryType / GlobalType | module_loader.h | 类型/大小对 |
+| BlockInfo | interpreter.h | Control block metadata (TargetAddr, ValueStackPtr, CellNum, LabelType) |
+| ControlBlock | function_loader.h | FunctionLoader internal control block (StackPolymorphic, LabelType, BlockType, StartPtr, ElsePtr, EndPtr, InitStackSize, InitNumValues) |
+| ControlBlockType | function_loader.h | Block type (Variant&lt;WASMType, const TypeEntry*&gt;) |
+| CacheValue | interpreter.cpp | BaseInterpreterImpl block address cache (ElsePtr, EndPtr) |
+| Limits | module_loader.cpp | pair&lt;uint32_t, Optional&lt;uint32_t&gt;&gt; (min, max?) |
+| TableType / MemoryType / GlobalType | module_loader.h | Type/size pair |
+

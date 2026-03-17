@@ -1,6 +1,6 @@
-# host 模块数据模型
+# host Module Data Model
 
-## 实体关系图 (Mermaid classDiagram)
+## Entity Relationship Diagram (Mermaid classDiagram)
 
 ```mermaid
 classDiagram
@@ -83,100 +83,100 @@ classDiagram
     CryptoHost ..|> CryptoInterface : implements
 ```
 
-## 核心实体 (关键字段和方法)
+## Core Entities (Key Fields and Methods)
 
 ### BuiltinModuleDesc
 
-宿主模块描述符，由 runtime 加载。
+Host module descriptor, loaded by runtime.
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `_name` | `const char*` | 模块名，如 "env"、"wasi_snapshot_preview1"、"spectest" |
-| `_load_func` | `LOAD_FUNC_PTR` | 加载时分配 `NativeFuncDesc` 数组并填充函数信息 |
-| `_unload_func` | `UNLOAD_FUNC_PTR` | 卸载时释放符号和函数类型内存 |
-| `_init_ctx_func` | `INITCTX_FUNC_PTR` | 实例化时创建模块上下文，返回 `void*` 或 `nullptr` |
-| `_destroy_ctx_func` | `DESTROYCTX_FUNC_PTR` | 实例销毁时释放上下文 |
-| `NumFunctions` | `uint32_t` | C-API 预留 |
-| `Functions` | `NativeFuncDesc*` | C-API 预留 |
+| `_name` | `const char*` | Module name, e.g., "env", "wasi_snapshot_preview1", "spectest" |
+| `_load_func` | `LOAD_FUNC_PTR` | On load, allocate `NativeFuncDesc` array and fill function info |
+| `_unload_func` | `UNLOAD_FUNC_PTR` | On unload, free symbols and function type memory |
+| `_init_ctx_func` | `INITCTX_FUNC_PTR` | On instantiation, create module context, return `void*` or `nullptr` |
+| `_destroy_ctx_func` | `DESTROYCTX_FUNC_PTR` | On instance destruction, free context |
+| `NumFunctions` | `uint32_t` | C-API reserved |
+| `Functions` | `NativeFuncDesc*` | C-API reserved |
 
 ### NativeFuncDesc
 
-单个宿主函数的元数据。
+Metadata for a single host function.
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `_name` | `VMSymbol` | 符号 ID，由 `newSymbol` 创建 |
-| `_ptr` | `void*` | 函数指针 |
-| `_param_count` | `uint32_t` | 参数个数 |
-| `_ret_count` | `uint32_t` | 返回值个数 |
-| `_func_type` | `WASMType*` | 参数和返回值的 WASM 类型数组 |
-| `_isReserved` | `bool` | 是否为保留函数（vnmi_init_ctx / vnmi_destroy_ctx） |
+| `_name` | `VMSymbol` | Symbol ID, created by `newSymbol` |
+| `_ptr` | `void*` | Function pointer |
+| `_param_count` | `uint32_t` | Parameter count |
+| `_ret_count` | `uint32_t` | Return value count |
+| `_func_type` | `WASMType*` | WASM type array for parameters and returns |
+| `_isReserved` | `bool` | Whether reserved function (vnmi_init_ctx / vnmi_destroy_ctx) |
 
 ### WASIContext
 
-WASI 模块的实例级上下文，由 `vnmi_init_ctx` 创建。
+WASI module instance-level context, created by `vnmi_init_ctx`.
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `curfds` | `fd_table*` | WASM fd 到原生 fd 的映射表 |
-| `prestats` | `fd_prestats*` | 预打开目录的预统计信息 |
-| `argv_environ` | `argv_environ_values*` | 命令行参数和环境变量 |
-| `argv_buf` | `char*` | argv 字符串缓冲区 |
-| `argv_list` | `char**` | argv 指针数组 |
-| `env_buf` | `char*` | 环境变量字符串缓冲区 |
-| `env_list` | `char**` | 环境变量指针数组 |
-| `vnmi_env` | `VNMIEnv*` | 用于 allocMem/freeMem |
+| `curfds` | `fd_table*` | WASM fd to native fd mapping |
+| `prestats` | `fd_prestats*` | Pre-opened directory prestat info |
+| `argv_environ` | `argv_environ_values*` | Command-line arguments and environment variables |
+| `argv_buf` | `char*` | argv string buffer |
+| `argv_list` | `char**` | argv pointer array |
+| `env_buf` | `char*` | Environment variable string buffer |
+| `env_list` | `char**` | Environment variable pointer array |
+| `vnmi_env` | `VNMIEnv*` | For allocMem/freeMem |
 
 ### EVMAbiMockContext
 
-EVM ABI Mock 模块的合约级上下文。
+EVM ABI Mock module contract-level context.
 
-| 方法 | 签名 | 说明 |
+| Method | Signature | Description |
 |------|------|------|
-| `create` | `static shared_ptr create(vector<uint8_t>& WasmCode)` | 用 4 字节大端长度前缀包装 Wasm 代码，创建上下文 |
-| `setCurContractStore` | `void setCurContractStore(const string& Key, const vector<uint8_t>& Value)` | 设置存储槽，Key 为 bytes32 hex（无 0x） |
-| `getCurContractStore` | `const vector<uint8_t>& getCurContractStore(const string& Key)` | 读取存储槽，未找到返回 32 字节零 |
-| `getCurContractCode` | `const vector<uint8_t>& getCurContractCode()` | 返回当前合约代码（含前缀） |
+| `create` | `static shared_ptr create(vector<uint8_t>& WasmCode)` | Wrap Wasm code with 4-byte big-endian length prefix and create context |
+| `setCurContractStore` | `void setCurContractStore(const string& Key, const vector<uint8_t>& Value)` | Set storage slot, Key is bytes32 hex (no 0x) |
+| `getCurContractStore` | `const vector<uint8_t>& getCurContractStore(const string& Key)` | Read storage slot, returns 32 zero bytes if not found |
+| `getCurContractCode` | `const vector<uint8_t>& getCurContractCode()` | Return current contract code (with prefix) |
 
 ### CryptoInterface / CryptoHost / CryptoProvider
 
-EVM Keccak-256 密码学抽象。
+EVM Keccak-256 cryptography abstraction.
 
-| 类 | 方法 | 说明 |
+| Class | Method | Description |
 |----|------|------|
-| `CryptoInterface` | `keccak256(Input, InputLen, Output)` | 纯虚，计算哈希写入 Output（至少 32 字节） |
-| `CryptoInterface` | `keccak256(Input)` | 纯虚，返回 32 字节 vector |
-| `CryptoHost` | 同上 | 使用 `ethash::keccak256` 实现 |
-| `CryptoProvider` | `getInstance()` | 单例获取，懒初始化 |
-| `CryptoProvider` | `setInstance(unique_ptr)` | 注入自定义实现 |
+| `CryptoInterface` | `keccak256(Input, InputLen, Output)` | Pure virtual, compute hash into Output (at least 32 bytes) |
+| `CryptoInterface` | `keccak256(Input)` | Pure virtual, return 32-byte vector |
+| `CryptoHost` | Same as above | Implementation using `ethash::keccak256` |
+| `CryptoProvider` | `getInstance()` | Singleton access, lazy initialization |
+| `CryptoProvider` | `setInstance(unique_ptr)` | Inject custom implementation |
 
-## 枚举
+## Enumerations
 
-### WASI 相关（来自 wasmtime_ssp.h）
+### WASI Related (from wasmtime_ssp.h)
 
-| 枚举/宏 | 值示例 | 说明 |
+| Enum/Macro | Value Examples | Description |
 |--------|--------|------|
-| `__wasi_errno_t` | `__WASI_ESUCCESS`, `__WASI_EBADF`, `__WASI_EFAULT` 等 | WASI 错误码 |
-| `__wasi_clockid_t` | `__WASI_CLOCK_REALTIME`, `__WASI_CLOCK_MONOTONIC` | 时钟 ID |
-| `__wasi_filetype_t` | `__WASI_FILETYPE_DIRECTORY`, `__WASI_FILETYPE_REGULAR_FILE` | 文件类型 |
-| `__wasi_fdflags_t` | `__WASI_FDFLAG_APPEND`, `__WASI_FDFLAG_SYNC` | 文件描述符标志 |
-| `__wasi_whence_t` | `__WASI_WHENCE_SET`, `__WASI_WHENCE_CUR`, `__WASI_WHENCE_END` | seek 基准 |
-| `__wasi_preopentype_t` | `__WASI_PREOPENTYPE_DIR` | 预打开类型 |
-| `__wasi_signal_t` | `__WASI_SIGKILL`, `__WASI_SIGSEGV` 等 | 信号编号 |
+| `__wasi_errno_t` | `__WASI_ESUCCESS`, `__WASI_EBADF`, `__WASI_EFAULT`, etc. | WASI error codes |
+| `__wasi_clockid_t` | `__WASI_CLOCK_REALTIME`, `__WASI_CLOCK_MONOTONIC` | Clock ID |
+| `__wasi_filetype_t` | `__WASI_FILETYPE_DIRECTORY`, `__WASI_FILETYPE_REGULAR_FILE` | File type |
+| `__wasi_fdflags_t` | `__WASI_FDFLAG_APPEND`, `__WASI_FDFLAG_SYNC` | File descriptor flags |
+| `__wasi_whence_t` | `__WASI_WHENCE_SET`, `__WASI_WHENCE_CUR`, `__WASI_WHENCE_END` | Seek basis |
+| `__wasi_preopentype_t` | `__WASI_PREOPENTYPE_DIR` | Pre-open type |
+| `__wasi_signal_t` | `__WASI_SIGKILL`, `__WASI_SIGSEGV`, etc. | Signal numbers |
 
-### ErrorCode（common 模块，host 使用）
+### ErrorCode (common module, used by host)
 
-| 值 | 说明 |
+| Value | Description |
 |----|------|
-| `EnvAbort` | 宿主 API 异常终止 |
-| `WASIProcRaise` | WASI proc_raise 收到信号 |
-| `InstanceExit` | 实例正常或通过 finish 退出 |
+| `EnvAbort` | Host API abnormal termination |
+| `WASIProcRaise` | WASI proc_raise received signal |
+| `InstanceExit` | Instance normal exit or exit via finish |
 
-## DTO / 共享类型
+## DTO / Shared Types
 
 ### wasi_prestat_app_t
 
-WASI 预打开目录信息的应用侧布局（32 位兼容）。
+WASI pre-open directory info application-side layout (32-bit compatible).
 
 ```c
 typedef struct wasi_prestat_app {
@@ -187,7 +187,7 @@ typedef struct wasi_prestat_app {
 
 ### iovec_app_t
 
-WASI iovec/ciovec 的应用侧布局（使用偏移而非指针）。
+WASI iovec/ciovec application-side layout (uses offset instead of pointer).
 
 ```c
 typedef struct iovec_app {
@@ -198,7 +198,7 @@ typedef struct iovec_app {
 
 ### ethash_hash256
 
-Keccak-256 输出类型（来自 hash_types.h）。
+Keccak-256 output type (from hash_types.h).
 
 ```c
 union ethash_hash256 {
@@ -209,7 +209,7 @@ union ethash_hash256 {
 };
 ```
 
-### VNMI 保留函数签名
+### VNMI Reserved Function Signatures
 
 ```c
 typedef void *(*VNMI_RESERVED_INIT_CTX_TYPE)(

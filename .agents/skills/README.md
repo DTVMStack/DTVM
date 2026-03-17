@@ -1,67 +1,67 @@
-# Spec-Kit 子技能集
+# Spec-Kit Sub-skills
 
-本目录包含完整的 Spec-Kit 工作流子技能，用于规范驱动开发。
+This directory contains the complete set of Spec-Kit workflow sub-skills for specification-driven development.
 
-## 技能列表
+## Skill List
 
-| 技能 | 中文名称 | 功能描述 |
+| Skill | Name | Description |
 |------|----------|----------|
-| `speckit-specify` | 功能规格生成 | 从自然语言描述生成 spec.md |
-| `speckit-clarify` | 需求澄清 | 批量提问澄清规格中的歧义点 |
-| `speckit-plan` | 技术设计规划 | 生成设计产物（research.md, data-model.md, plan.md 等） |
-| `speckit-tasks` | 任务列表生成 | 生成可执行的 tasks.md |
-| `speckit-implement` | 代码实现 | 按任务列表执行实现 |
-| `speckit-dev-workflow` | 完整开发工作流 | 编排所有阶段，一次性完成 |
-| `speckit-constitution` | 项目原则 | 定义项目开发原则和约束 |
-| `speckit-checklist` | 检查清单 | 生成领域特定的检查清单 |
-| `speckit-analyze` | 项目分析 | 分析项目一致性 |
-| `speckit-taskstoissues` | 任务转工单 | 将 tasks.md 转为 issue 工单 |
-| `speckit-archive` | 功能归档 | 验证前置条件后将已完成功能移至归档 |
+| `speckit-specify` | Feature Spec Generation | Generate spec.md from natural language descriptions |
+| `speckit-clarify` | Requirements Clarification | Batch questions to clarify ambiguities in specs |
+| `speckit-plan` | Technical Design Planning | Generate design artifacts (research.md, data-model.md, plan.md, etc.) |
+| `speckit-tasks` | Task List Generation | Generate executable tasks.md |
+| `speckit-implement` | Code Implementation | Execute implementation according to the task list |
+| `speckit-dev-workflow` | Full Development Workflow | Orchestrate all phases end-to-end |
+| `speckit-constitution` | Project Principles | Define project development principles and constraints |
+| `speckit-checklist` | Checklists | Generate domain-specific checklists |
+| `speckit-analyze` | Project Analysis | Analyze project consistency |
+| `speckit-taskstoissues` | Tasks to Issues | Convert tasks.md into issue tickets |
+| `speckit-archive` | Feature Archival | Archive completed features after verifying preconditions |
 
-## 快速开始
+## Quick Start
 
-### 单独使用子技能
+### Using Sub-skills Individually
 
 ```bash
-# 1. 创建功能规格
+# 1. Create a feature spec
 /skills/speckit-specify "Add user authentication"
 
-# 2. 澄清需求（如有歧义）
+# 2. Clarify requirements (if ambiguities exist)
 /skills/speckit-clarify
 
-# 3. 技术设计
+# 3. Technical design
 /skills/speckit-plan
 
-# 4. 生成任务列表
+# 4. Generate task list
 /skills/speckit-tasks
 
-# 5. 执行实现
+# 5. Execute implementation
 /skills/speckit-implement
 
-# 6. 归档已完成功能
+# 6. Archive completed features
 /skills/speckit-archive
 ```
 
-### 使用完整工作流
+### Using the Full Workflow
 
 ```bash
-# 一次性完成所有步骤
+# Complete all steps in one go
 /skills/speckit-dev-workflow "Add user authentication"
 ```
 
-### 现有项目 SDD 初始化
+### SDD Initialization for Existing Projects
 
 ```bash
-# 分析项目并生成 SDD 初始化计划（配套技能，位于 claude/skills/speckit-ssot-sdd-init-plan）
+# Analyze the project and generate an SDD initialization plan (companion skill at claude/skills/speckit-ssot-sdd-init-plan)
 /skills/speckit-ssot-sdd-init-plan
 ```
 
-## 目录结构
+## Directory Structure
 
-将这些技能复制到项目的 `.agents/skills/` 目录：
+Copy these skills to the project's `.agents/skills/` directory:
 
 ```
-项目根目录/
+project-root/
 └── .agents/
     └── skills/
         ├── speckit-specify/
@@ -88,26 +88,26 @@
             └── SKILL.md
 ```
 
-## 技能设计原则
+## Skill Design Principles
 
-### 中文优先
+### English-First
 
-- 元数据（name, description）使用英文，便于 Claude Code 识别
-- 内容全部使用中文，便于国内团队使用
+- Metadata (name, description) uses English for Claude Code recognition
+- Content is in English for broader accessibility
 
-### 独立可组合
+### Independent and Composable
 
-每个子技能都是独立的，可以：
-- 单独调用
-- 按顺序组合
-- 在工作流中编排
+Each sub-skill is independent and can be:
+- Invoked individually
+- Combined sequentially
+- Orchestrated within a workflow
 
-### 模板和脚本依赖
+### Template and Script Dependencies
 
-这些技能依赖于项目中的以下资源：
+These skills depend on the following project resources:
 
-- `.specify/scripts/bash/*.sh` - 辅助脚本
-- `.specify/templates/*.md` - 文档模板
-- `specs/` - SSOT 目录结构
+- `.specify/scripts/bash/*.sh` - Helper scripts
+- `.specify/templates/*.md` - Document templates
+- `specs/` - SSOT directory structure
 
-确保在调用这些技能之前，这些资源已经就位。
+Ensure these resources are in place before invoking these skills.

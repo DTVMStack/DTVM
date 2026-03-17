@@ -289,19 +289,19 @@ fi
 
 if [ "$HAS_GIT" = true ]; then
     if [ "$WORKTREE_MODE" = true ]; then
-        # 创建 worktree
+        # Create worktree
         WORKTREE_PATH=$(get_worktree_path "$REPO_ROOT" "$FEATURE_NAME")
 
-        # 确保父目录存在
+        # Ensure parent directory exists
         mkdir -p "$(dirname "$WORKTREE_PATH")"
 
-        # 创建 worktree 并在新分支上 (-b 必须放在路径之前)
+        # Create worktree on new branch (-b must come before path)
         git worktree add -b "$GIT_BRANCH_NAME" "$WORKTREE_PATH"
 
         echo "[specify] Worktree created at: $WORKTREE_PATH"
         echo "[specify] Please navigate to this directory to continue."
     else
-        # 普通分支创建
+        # Regular branch creation
         git checkout -b "$GIT_BRANCH_NAME"
     fi
 else

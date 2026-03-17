@@ -1,119 +1,119 @@
-# runtime 模块规范
+# runtime Module Specification
 
-> 目录: `src/runtime/` + `src/entrypoint/`
+> Directory: `src/runtime/` + `src/entrypoint/`
 
-## 边界与职责
+## Boundaries and Responsibilities
 
-runtime 模块是 DTVM 的**核心运行时**，负责：
+The runtime module is DTVM's **core runtime**, responsible for:
 
-1. **Runtime 生命周期**：单例 Runtime 的创建、初始化、清理
-2. **Module 管理**：WASM 模块 (Module)、EVM 模块 (EVMModule)、宿主模块 (HostModule) 的加载、合并、卸载
-3. **Instance 生命周期**：通过 Isolation 创建和管理 WASM Instance、EVMInstance
-4. **Memory**：WASM 线性内存分配器 (WasmMemoryAllocator)，支持 malloc、single mmap、bucket mmap 三种后端
-5. **Isolation 域**：实例隔离域，管理实例池和 WNI 环境
-6. **VNMI / WNI 接口**：原生模块接口 (VNMIEnv) 与 WASM 原生接口 (WNIEnv)，供宿主函数和 native 模块调用
-7. **JIT 调用桥接**：entrypoint 提供 `callNative` 汇编桩，实现 JIT 编译代码与宿主/实例之间的调用边界
+1. **Runtime lifecycle**: Create, initialize, and clean up singleton Runtime
+2. **Module management**: Load, merge, and unload WASM modules (Module), EVM modules (EVMModule), and host modules (HostModule)
+3. **Instance lifecycle**: Create and manage WASM Instance and EVMInstance through Isolation
+4. **Memory**: WASM linear memory allocator (WasmMemoryAllocator); malloc, single mmap, bucket mmap backends
+5. **Isolation domain**: Instance isolation; manages instance pool and WNI environment
+6. **VNMI / WNI interfaces**: VNMIEnv (native module interface) and WNIEnv (WASM native interface) for host functions and native modules
+7. **JIT call bridging**: entrypoint provides `callNative` assembly stubs for call boundary between JIT code and host/instance
 
-## 核心概念
+## Core Concepts
 
 ### Runtime
 
-- **创建**：`Runtime::newRuntime(Config)` / `Runtime::newEVMRuntime(Config, EVMHost)`（仅当 ZEN_ENABLE_EVM）
-- **职责**：符号池、内存池、模块池、Isolation 池、WASI 环境（可选）
-- **线程安全**：大部分方法标注 `not thread-safe`；`createManagedIsolation` / `deleteManagedIsolation` 使用 `Mtx` 保护
+- **Creation**: `Runtime::newRuntime(Config)` / `Runtime::newEVMRuntime(Config, EVMHost)` (when ZEN_ENABLE_EVM)
+- **Responsibilities**: Symbol pool, memory pool, module pool, Isolation pool, WASI environment (optional)
+- **Thread safety**: Most methods marked `not thread-safe`; `createManagedIsolation` / `deleteManagedIsolation` guarded by `Mtx`
 
-### Module 与 Instance
+### Module and Instance
 
-- **Module**：WASM 字节码的解析结果，持有类型表、导入/导出表、代码段、数据段、JIT 元数据
-- **HostModule**：原生宿主模块，由 `BuiltinModuleDesc` 描述，通过 VNMI 加载/卸载函数
-- **EVMModule**：EVM 字节码模块，持有 Code、CodeSize、evmc::Host、JIT 代码（可选）
-- **Instance**：Module 的实例化结果，包含函数表、表、内存、全局变量等运行时状态
-- **EVMInstance**：EVM 专用实例，持有 EVM 栈、内存、消息栈、执行缓存等
+- **Module**: Parsed WASM bytecode; type table, import/export table, code segment, data segment, JIT metadata
+- **HostModule**: Native host module; described by `BuiltinModuleDesc`; load/unload functions via VNMI
+- **EVMModule**: EVM bytecode module; Code, CodeSize, evmc::Host, JIT code (optional)
+- **Instance**: Instantiated Module; function table, tables, memory, globals, etc.
+- **EVMInstance**: EVM-specific instance; EVM stack, memory, message stack, execution cache, etc.
 
 ### Isolation
 
-- **托管**：`createManagedIsolation` / `deleteManagedIsolation`，由 Runtime 管理生命周期
-- **非托管**：`createUnmanagedIsolation`，调用方需保证生命周期为 Runtime 子集
-- **实例池**：`InstancePool`、`EVMInstancePool`，Isolation 持有实例所有权
+- **Managed**: `createManagedIsolation` / `deleteManagedIsolation`; lifecycle owned by Runtime
+- **Unmanaged**: `createUnmanagedIsolation`; caller must ensure lifecycle subset of Runtime
+- **Instance pools**: `InstancePool`, `EVMInstancePool`; Isolation owns instances
 
 ### Memory
 
-- **WasmMemoryAllocator**：按模块/线程局部分配，支持：
-  - `WM_MEMORY_DATA_TYPE_MALLOC`：普通堆分配
-  - `WM_MEMORY_DATA_TYPE_SINGLE_MMAP`：单块 mmap（用于 CPU trap 内存检查）
-  - `WM_MEMORY_DATA_TYPE_BUCKET_MMAP`：多副本 bucket mmap（共享初始化数据、加速实例创建）
+- **WasmMemoryAllocator**: Per module/thread-local; supports:
+  - `WM_MEMORY_DATA_TYPE_MALLOC`: Ordinary heap allocation
+  - `WM_MEMORY_DATA_TYPE_SINGLE_MMAP`: Single mmap block (for CPU trap memory checks)
+  - `WM_MEMORY_DATA_TYPE_BUCKET_MMAP`: Multi-copy bucket mmap (shared init data, faster instance creation)
 
 ### VNMI / WNI
 
-- **VNMIEnv**：宿主模块 (HostModule) 使用的运行时接口，提供 `allocMem`、`freeMem`、`newSymbol`、`freeSymbol`
-- **WNIEnv**：WASM 实例内 native 模块使用的接口，提供地址转换 (`getNativeAddr` / `getAppAddr`)、用户上下文 (`getUserDefinedCtx`)、异常抛出等
+- **VNMIEnv**: Runtime interface for host modules (HostModule); `allocMem`, `freeMem`, `newSymbol`, `freeSymbol`
+- **WNIEnv**: Interface for native modules inside WASM instance; address conversion (`getNativeAddr` / `getAppAddr`), user context (`getUserDefinedCtx`), exception throw, etc.
 
 ### Entrypoint
 
-- **callNative**：汇编实现的 JIT 调用桩，负责：
-  - 保存/恢复被调用者保存寄存器
-  - 根据 ABI 布局参数（浮点寄存器、整数寄存器、栈参数）
-  - 设置 Instance 的 `JITStackBoundary`、`GlobalVarData`、`Memories` 等（Singlepass JIT）
-- **平台**：x86_64 (`callNative_x86_64.S`)、aarch64 (`callNative_aarch64.S`)
-- **辅助**：`rollbackWasmVirtualStack`、`startWasmFuncStack`（虚拟栈场景）
+- **callNative**: Assembly JIT call stub:
+  - Save/restore callee-saved registers
+  - Layout parameters by ABI (FP regs, GPRs, stack params)
+  - Set Instance `JITStackBoundary`, `GlobalVarData`, `Memories`, etc. (Singlepass JIT)
+- **Platforms**: x86_64 (`callNative_x86_64.S`), aarch64 (`callNative_aarch64.S`)
+- **Helpers**: `rollbackWasmVirtualStack`, `startWasmFuncStack` (virtual stack)
 
-## 外部契约
+## External Contracts
 
-### 依赖
+### Dependencies
 
-- **common**：`Error`、`ErrorCode`、`TypedValue`、`WASMType`、`ConstStringPool`、`SysMemPool`
-- **action**：`Interpreter`、`ModuleLoader`、`HostModuleLoader`、`FunctionLoader`、`Instantiator`、`performJITCompile`
-- **platform**：`mapFile`、`unmapFile`、内存相关
-- **evm**（可选）：`evm::DEFAULT_REVISION`、`evm::Interpreter`、EVM 执行逻辑
-- **evmc**（可选）：`evmc::Host`、`evmc::Result`、`evmc_message`
+- **common**: `Error`, `ErrorCode`, `TypedValue`, `WASMType`, `ConstStringPool`, `SysMemPool`
+- **action**: `Interpreter`, `ModuleLoader`, `HostModuleLoader`, `FunctionLoader`, `Instantiator`, `performJITCompile`
+- **platform**: `mapFile`, `unmapFile`, memory-related
+- **evm** (optional): `evm::DEFAULT_REVISION`, `evm::Interpreter`, EVM execution logic
+- **evmc** (optional): `evmc::Host`, `evmc::Result`, `evmc_message`
 
-### 被依赖
+### Depended By
 
-- **action**：加载、实例化、JIT 编译
-- **host**：WASI、spectest 等宿主模块，使用 VNMIEnv
-- **compiler**：Multipass JIT 使用 Module 的 JIT 元数据、Instance 布局
-- **evm**：EVM 解释器、EVM JIT 使用 EVMInstance、EVMModule
+- **action**: Loading, instantiation, JIT compilation
+- **host**: WASI, spectest host modules; VNMIEnv
+- **compiler**: Multipass JIT uses Module JIT metadata, Instance layout
+- **evm**: EVM interpreter and JIT use EVMInstance, EVMModule
 
-## 权限与不变量
+## Invariants and Permissions
 
-1. **Instance 与 Runtime**：Instance 必须在 Runtime 存活期内使用，且 Isolation 生命周期为 Runtime 子集
-2. **Module 与 Instance**：Instance 持有 Module 只读引用；卸载 Module 前须确保无活跃 Instance 引用
-3. **内存**：`WasmMemoryAllocator` 非线程安全，每个线程通过 `ThreadLocalMemAllocatorMap` 获取独立 allocator
-4. **JIT 调用**：`callNative` 入口须满足 ABI 约定；`callNative` / `callNative_end` 用于 JIT 栈回溯
-5. **符号**：`newSymbol` / `freeSymbol` 非线程安全；释放 Module 时由 `RuntimeObjectDestroyer` 统一释放符号
+1. **Instance and Runtime**: Instance must be used within Runtime lifetime; Isolation lifetime must be subset of Runtime
+2. **Module and Instance**: Instance holds read-only Module reference; before unloading Module, ensure no live Instance references
+3. **Memory**: `WasmMemoryAllocator` is not thread-safe; each thread gets its own allocator via `ThreadLocalMemAllocatorMap`
+4. **JIT calls**: `callNative` entry must satisfy ABI; `callNative` / `callNative_end` used for JIT stack unwinding
+5. **Symbols**: `newSymbol` / `freeSymbol` not thread-safe; symbols released by `RuntimeObjectDestroyer` when unloading Module
 
-## 错误码
+## Error Codes
 
-runtime 模块通过 `common::Error` / `common::ErrorCode` 传播错误，常见与 runtime 相关者包括：
+runtime propagates errors via `common::Error` / `common::ErrorCode`; common runtime-related:
 
-- `InvalidFilePath`、`InvalidRawData`、`FileAccessFailed`：加载失败
-- `OutOfBoundsMemory`、`CallStackExhausted`：执行期内存/栈越界
-- `GasLimitExceeded`：Gas 耗尽
-- `InstanceExit`：实例主动退出 (`Instance::exit`)
-- EVM 相关：`EVMStackOverflow`、`EVMStackUnderflow`、`EVMBadJumpDestination`、`EVMInvalidInstruction`、`EVMStaticModeViolation` 等
+- `InvalidFilePath`, `InvalidRawData`, `FileAccessFailed`: Load failures
+- `OutOfBoundsMemory`, `CallStackExhausted`: Execution memory/stack overflow
+- `GasLimitExceeded`: Gas exhausted
+- `InstanceExit`: Instance exit via `Instance::exit`
+- EVM: `EVMStackOverflow`, `EVMStackUnderflow`, `EVMBadJumpDestination`, `EVMInvalidInstruction`, `EVMStaticModeViolation`, etc.
 
-## 兼容性策略
+## Compatibility Strategy
 
-1. **配置**：`RuntimeConfig` 控制 RunMode (Interp / Singlepass / Multipass)、WASI、统计、JIT 线程数等；变更需验证 `validate()`
-2. **编译选项**：大量行为受 `ZEN_ENABLE_EVM`、`ZEN_ENABLE_JIT`、`ZEN_ENABLE_SINGLEPASS_JIT`、`ZEN_ENABLE_MULTIPASS_JIT`、`ZEN_ENABLE_BUILTIN_WASI`、`ZEN_ENABLE_CPU_EXCEPTION`、`ZEN_ENABLE_VIRTUAL_STACK`、`ZEN_ENABLE_DWASM` 等宏影响
-3. **ABI**：entrypoint 汇编依赖 `Instance`、`MemoryInstance` 等结构体布局；修改 layout 须同步更新汇编中的 offset
+1. **Config**: `RuntimeConfig` controls RunMode (Interp / Singlepass / Multipass), WASI, statistics, JIT thread count; changes require `validate()`
+2. **Compile options**: Behavior controlled by `ZEN_ENABLE_EVM`, `ZEN_ENABLE_JIT`, `ZEN_ENABLE_SINGLEPASS_JIT`, `ZEN_ENABLE_MULTIPASS_JIT`, `ZEN_ENABLE_BUILTIN_WASI`, `ZEN_ENABLE_CPU_EXCEPTION`, `ZEN_ENABLE_VIRTUAL_STACK`, `ZEN_ENABLE_DWASM`, etc.
+3. **ABI**: entrypoint assembly depends on `Instance`, `MemoryInstance` layout; layout changes require offset updates in assembly
 
-## 交叉引用
+## Cross-References
 
-| 依赖 | 说明 |
-|------|------|
-| [common](../common/) | 错误码与 Error 类型 |
-| [action](../action/) | 加载、实例化、JIT 触发 |
-| [evm](../evm/) | EVM 执行与缓存 |
-| [platform](../platform/) | 内存映射与平台抽象 |
-| [compiler](../compiler/) | Multipass JIT 与 EVM JIT |
+| Dependency | Description |
+|------------|-------------|
+| [common](../common/) | Error codes and Error type |
+| [action](../action/) | Loading, instantiation, JIT trigger |
+| [evm](../evm/) | EVM execution and cache |
+| [platform](../platform/) | Memory mapping and platform abstraction |
+| [compiler](../compiler/) | Multipass JIT and EVM JIT |
 
-| 被依赖 | 说明 |
-|--------|------|
-| action | 加载、实例化、JIT 编排 |
-| host | HostModule、VNMIEnv、BuiltinModuleDesc |
-| compiler | Module、Instance、EVMModule、CodeMemPool |
-| evm | EVMInstance、EVMModule |
-| cli | Runtime、Module、Instance、Isolation、HostModule |
-| vm-interface | EVMModule、EVMInstance、托管隔离、callEVMMain |
-| tests | 执行环境与实例 |
+| Depended By | Description |
+|-------------|-------------|
+| action | Loading, instantiation, JIT orchestration |
+| host | HostModule, VNMIEnv, BuiltinModuleDesc |
+| compiler | Module, Instance, EVMModule, CodeMemPool |
+| evm | EVMInstance, EVMModule |
+| cli | Runtime, Module, Instance, Isolation, HostModule |
+| vm-interface | EVMModule, EVMInstance, managed isolation, callEVMMain |
+| tests | Execution environment and instances |

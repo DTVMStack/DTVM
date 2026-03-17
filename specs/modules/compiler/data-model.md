@@ -1,12 +1,12 @@
-# compiler 模块数据模型
+# compiler Module Data Model
 
-## 实体关系图 (Mermaid classDiagram)
+## Entity Relationship Diagram (Mermaid classDiagram)
 
 ```mermaid
 classDiagram
     direction TB
 
-    subgraph 编译上下文
+    subgraph Compilation Context
         CompileContext
         WasmFrontendContext
         EVMFrontendContext
@@ -33,13 +33,13 @@ classDiagram
         CgRegisterInfo
     end
 
-    subgraph EVM 前端
+    subgraph EVM Frontend
         EVMAnalyzer
         EVMMirBuilder
         JITSuitabilityResult
     end
 
-    subgraph JIT 编译器
+    subgraph JIT Compiler
         JITCompilerBase
         WasmJITCompiler
         EagerJITCompiler
@@ -64,8 +64,8 @@ classDiagram
     MInstruction --> "1" MType : Type
     Variable --> "1" MType : Type
 
-    CompileContext "1" --> "1" CgFunction : 构建
-    MFunction "1" --> "1" CgFunction : 对应
+    CompileContext "1" --> "1" CgFunction : builds
+    MFunction "1" --> "1" CgFunction : corresponds to
     CgFunction "1" --> "*" CgBasicBlock : CgBasicBlocks
     CgBasicBlock "1" --> "*" CgInstruction : CgInstructions
     CgInstruction --> "*" CgOperand : Operands
@@ -84,48 +84,48 @@ classDiagram
 
 ---
 
-## 核心实体 (关键字段和方法)
+## Core Entities (Key Fields and Methods)
 
-### 编译上下文
+### Compilation Context
 
-| 实体 | 关键字段 | 关键方法 |
+| Entity | Key Fields | Key Methods |
 |------|----------|----------|
 | **CompileContext** | `MemPool`, `ThreadMemPool`, `CodeMPool`, `FuncTypeSet`, `PtrTypeSet`, `IntConstants`, `FPConstants`, `CodePtr`, `CodeSize`, `FuncOffsetMap`, `ExternRelocs`, `MCCtx`, `MCL` | `initialize()`, `finalize()`, `reinitialize()`, `getMCLowering()`, `getOrCreateFuncMCSymbol()` |
-| **WasmFrontendContext** | 继承 `CompileContext`，引用 `runtime::Module` | 用于 WASM 前端 |
+| **WasmFrontendContext** | Extends `CompileContext`, references `runtime::Module` | Used for WASM frontend |
 | **EVMFrontendContext** | `Bytecode`, `BytecodeSize`, `GasMeteringEnabled`, `GasChunkEnd`, `GasChunkCost`, `GasChunkSize`, `Revision`, `GasRegisterEnabled` | `setBytecode()`, `setGasMeteringEnabled()`, `setGasChunkInfo()`, `setRevision()`, `getMIRTypeFromEVMType()` |
 
-### dMIR 层
+### dMIR Layer
 
-| 实体 | 关键字段 | 关键方法 |
+| Entity | Key Fields | Key Methods |
 |------|----------|----------|
 | **MModule** | `FuncTypes`, `Functions` | `addFuncType()`, `getFuncType()`, `addFunction()`, `getFunction()`, `getNumFunctions()` |
-| **MFunction** | `FuncIdx`, `FuncType`, `Variables`, `BasicBlocks`, `Instructions`, `ExceptionSetBBs` | `createBasicBlock()`, `appendBlock()`, `createVariable()`, `createInstruction()`, `getGasRegisterVarIdx()`（EVM） |
-| **MFunctionType** | `RetType`, `ParamTypes`（通过 `getSubTypes()` 存储） | `getNumParams()`, `param_begin()`, `param_end()`, `getReturnType()` |
+| **MFunction** | `FuncIdx`, `FuncType`, `Variables`, `BasicBlocks`, `Instructions`, `ExceptionSetBBs` | `createBasicBlock()`, `appendBlock()`, `createVariable()`, `createInstruction()`, `getGasRegisterVarIdx()` (EVM) |
+| **MFunctionType** | `RetType`, `ParamTypes` (via `getSubTypes()`) | `getNumParams()`, `param_begin()`, `param_end()`, `getReturnType()` |
 | **MBasicBlock** | `Idx`, `Instructions`, `Successors` | `addSuccessor()`, `getIdx()` |
-| **MInstruction** | `_opcode`, `_kind`, `_type`, `_operand_num`, `_parent`（BB 或父指令） | `getOpcode()`, `getKind()`, `getType()`, `getOperand()`, `setOperand()`, `isStatement()`, `isTerminator()` |
+| **MInstruction** | `_opcode`, `_kind`, `_type`, `_operand_num`, `_parent` (BB or parent instruction) | `getOpcode()`, `getKind()`, `getType()`, `getOperand()`, `setOperand()`, `isStatement()`, `isTerminator()` |
 | **Variable** | `VarIdx`, `Type` | `getVarIdx()`, `getType()` |
-| **MType** | 静态 `I8`, `I16`, `I32`, `I64`, `F32`, `F64`, `VOID` | - |
+| **MType** | Static `I8`, `I16`, `I32`, `I64`, `F32`, `F64`, `VOID` | - |
 
-### CgIR 层
+### CgIR Layer
 
-| 实体 | 关键字段 | 关键方法 |
+| Entity | Key Fields | Key Methods |
 |------|----------|----------|
 | **CgFunction** | `MIRFunc`, `CgBasicBlocks`, `RegInfo`, `EvictAdvisor` | `createCgBasicBlock()`, `appendCgBasicBlock()`, `createCgInstruction()`, `getRegInfo()` |
 | **CgBasicBlock** | `CgInstructions`, `Successors` | `addSuccessor()`, `getIdx()` |
-| **CgInstruction** | 机器指令操作码、操作数列表 | `getOpcode()`, `getOperand()` |
+| **CgInstruction** | Machine instruction opcode, operand list | `getOpcode()`, `getOperand()` |
 | **CgOperand** | `createRegOperand()`, `createImmOperand()`, `createMemOperand()` | - |
 
-### EVM 前端
+### EVM Frontend
 
-| 实体 | 关键字段 | 关键方法 |
+| Entity | Key Fields | Key Methods |
 |------|----------|----------|
 | **EVMAnalyzer** | `BlockInfos`, `JITResult`, `Revision` | `analyze()`, `getBlockInfos()`, `getJITSuitability()` |
-| **EVMMirBuilder** | `Ctx`, `CurFunc`, `CurBB`, `InstanceAddr`, `JumpDestTable`, `JumpDestBodyTable`, `GasRegVar` | `compile()`, `loadEVMInstanceAttr()`, `meterOpcode()`, `handlePush()`, `handleMul()`, `handleShift()` 等 |
+| **EVMMirBuilder** | `Ctx`, `CurFunc`, `CurBB`, `InstanceAddr`, `JumpDestTable`, `JumpDestBodyTable`, `GasRegVar` | `compile()`, `loadEVMInstanceAttr()`, `meterOpcode()`, `handlePush()`, `handleMul()`, `handleShift()`, etc. |
 | **EVMMirBuilder::Operand** | `Instr`, `Var`, `Type`, `U256Components`, `U256VarComponents`, `ConstValue`, `IsConstant`, `IsU256MultiComponent` | `getInstr()`, `getVar()`, `getType()`, `getU256Components()`, `isU256MultiComponent()` |
 
-### JIT 编译器
+### JIT Compiler
 
-| 实体 | 关键字段 | 关键方法 |
+| Entity | Key Fields | Key Methods |
 |------|----------|----------|
 | **JITCompilerBase** | - | `compileMIRToCgIR()`, `emitObjectBuffer()` |
 | **WasmJITCompiler** | `WasmMod`, `NumInternalFunctions`, `Config`, `Stats` | `compileWasmToMC()` |
@@ -136,58 +136,58 @@ classDiagram
 
 ---
 
-## 枚举
+## Enumerations
 
-### EVMType（EVM 前端类型）
+### EVMType (EVM Frontend Types)
 
-| 值 | 说明 |
+| Value | Description |
 |----|------|
-| `VOID` | 无值 |
-| `UINT8` | 字节 |
-| `UINT32` | 中间值 |
-| `UINT64` | Gas 计算 |
-| `UINT256` | 主 256 位整数 |
-| `BYTES32` | 32 字节固定数组 |
-| `ADDRESS` | 20 字节地址 |
-| `BYTES` | 动态字节数组 |
+| `VOID` | No value |
+| `UINT8` | Byte |
+| `UINT32` | Intermediate value |
+| `UINT64` | Gas calculation |
+| `UINT256` | Primary 256-bit integer |
+| `BYTES32` | 32-byte fixed array |
+| `ADDRESS` | 20-byte address |
+| `BYTES` | Dynamic byte array |
 
 ### MInstruction::Kind
 
-| 值 | 说明 |
+| Value | Description |
 |----|------|
-| `CONSTANT` | 常量 |
-| `UNARY` | 一元运算 |
-| `BINARY` | 二元运算 |
-| `ADC` | 带进位加 |
-| `CMP` | 比较 |
-| `CONVERSION` | 类型转换 |
+| `CONSTANT` | Constant |
+| `UNARY` | Unary operation |
+| `BINARY` | Binary operation |
+| `ADC` | Add with carry |
+| `CMP` | Compare |
+| `CONVERSION` | Type conversion |
 | `SELECT` | Select |
-| `DREAD` | 读变量 |
-| `LOAD` | 加载 |
-| `OVERFLOW_I128_BINARY` | WASM 溢出二元 |
-| `EVM_UMUL128` | EVM 128 位无符号乘 |
-| `EVM_UMUL128_HI` | EVM 128 位乘高位 |
-| `DASSIGN` | 赋值 |
-| `STORE` | 存储 |
-| `BR` | 无条件跳转 |
-| `BR_IF` | 条件跳转 |
-| `SWITCH` | 开关 |
-| `RETURN` | 返回 |
-| `WASM_CHECK` | WASM 检查 |
-| `CALL` | 调用 |
+| `DREAD` | Read variable |
+| `LOAD` | Load |
+| `OVERFLOW_I128_BINARY` | WASM overflow binary |
+| `EVM_UMUL128` | EVM 128-bit unsigned multiply |
+| `EVM_UMUL128_HI` | EVM 128-bit multiply high |
+| `DASSIGN` | Assignment |
+| `STORE` | Store |
+| `BR` | Unconditional branch |
+| `BR_IF` | Conditional branch |
+| `SWITCH` | Switch |
+| `RETURN` | Return |
+| `WASM_CHECK` | WASM check |
+| `CALL` | Call |
 
 ### LazyJITCompiler::CompileStatus
 
-| 值 | 说明 |
+| Value | Description |
 |----|------|
-| `None` | 未编译 |
-| `Pending` | 待编译 |
-| `InProgress` | 编译中 |
-| `Done` | 已完成 |
+| `None` | Not compiled |
+| `Pending` | Pending compilation |
+| `InProgress` | Compiling |
+| `Done` | Completed |
 
 ---
 
-## DTO / 共享类型
+## DTO / Shared Types
 
 ### JITSuitabilityResult
 
@@ -230,18 +230,18 @@ struct ExternRelocations {
 
 ### FunctionTypeKeyInfo / PointerTypeKeyInfo
 
-用于 `DenseSet` 去重 `MFunctionType`、`MPointerType` 的 key 与 hash。
+Used for `DenseSet` deduplication of `MFunctionType`, `MPointerType` key and hash.
 
 ### EVMMirBuilder::U256Value / U256Inst / U256Var / U256ConstInt
 
-- `U256Value`：`std::array<uint64_t, 4>`，小端 [low, mid-low, mid-high, high]
-- `U256Inst`：`std::array<MInstruction*, 4>`
-- `U256Var`：`std::array<Variable*, 4>`
-- `U256ConstInt`：`std::array<MConstantInt*, 4>`
+- `U256Value`: `std::array<uint64_t, 4>`, little-endian [low, mid-low, mid-high, high]
+- `U256Inst`: `std::array<MInstruction*, 4>`
+- `U256Var`: `std::array<Variable*, 4>`
+- `U256ConstInt`: `std::array<MConstantInt*, 4>`
 
-### 类型别名（common_defs.h）
+### Type Aliases (common_defs.h)
 
-| 别名 | 定义 |
+| Alias | Definition |
 |------|------|
 | `VariableIdx` | `uint32_t` |
 | `OperandNum` | `uint16_t` |
@@ -250,9 +250,9 @@ struct ExternRelocations {
 | `CompileVector` | `std::vector<T, CompileAllocator<T>>` |
 | `CompileUnorderedMap` | `std::unordered_map<... CompileAllocator<...>>` |
 
-### RA-expensive 阈值常量（evm_analyzer.h）
+### RA-expensive Threshold Constants (evm_analyzer.h)
 
-| 常量 | 值 |
+| Constant | Value |
 |------|-----|
 | `MAX_JIT_BYTECODE_SIZE` | 0x6000 |
 | `MAX_JIT_MIR_ESTIMATE` | 50000 |

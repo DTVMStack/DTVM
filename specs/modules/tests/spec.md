@@ -1,116 +1,116 @@
-# tests 模块规范
+# tests Module Specification
 
-> 目录: `src/tests/` + `tests/`
+> Directory: `src/tests/` + `tests/`
 
-## 边界与职责
+## Boundaries and Responsibilities
 
-tests 模块为 DTVM 提供**测试基础设施**，负责：
+The tests module provides DTVM **test infrastructure**, responsible for:
 
-- **WAST 规范测试**：WebAssembly 规范一致性测试，解析 `.wast`/`.json`，执行 `assert_return`、`assert_trap` 等断言
-- **EVM Assembly 单元测试**：单操作码级别的 EVM 字节码测试（`.easm` → `.hex` + `.expected` YAML）
-- **Ethereum State 测试**：官方 Ethereum 状态转换测试套件（JSON pre/post 状态、交易执行）
-- **Solidity 合约测试**：端到端智能合约测试（编译后 JSON + `test_cases.json`）
-- **dMIR 测试**：中间表示验证（`.ir` + lit/FileCheck）
-- **C API 测试**：`zetaengine-c.h` 对外接口验证
-- **Evmone 集成测试**：Evmone 单元测试框架对接（`ZEN_ENABLE_LIBEVM`）
+- **WAST spec tests**: WebAssembly spec consistency; parse `.wast`/`.json`; run `assert_return`, `assert_trap`, etc.
+- **EVM Assembly unit tests**: Single-opcode EVM bytecode tests (`.easm` → `.hex` + `.expected` YAML)
+- **Ethereum State tests**: Official Ethereum state transition suite (JSON pre/post, transaction execution)
+- **Solidity contract tests**: End-to-end smart contract tests (compiled JSON + `test_cases.json`)
+- **dMIR tests**: Intermediate representation verification (`.ir` + lit/FileCheck)
+- **C API tests**: `zetaengine-c.h` interface validation
+- **Evmone integration**: Evmone unit test framework integration (`ZEN_ENABLE_LIBEVM`)
 
-本模块不包含：EVM 解释器实现（evm）、Host 实现（host）、编译器实现（compiler）。
+This module does not include: EVM interpreter (evm), Host implementation (host), compiler implementation (compiler).
 
-## 核心概念
+## Core Concepts
 
-### 1. WAST 规范测试 (specUnitTests)
+### 1. WAST Spec Tests (specUnitTests)
 
-- **SpecTest**：解析 `.wast` 转 JSON，枚举测试用例 `(category, unit)`，执行 `module`/`action`/`assert_*` 命令
-- **CommandID**：`Module`、`Action`、`Register`、`AssertReturn`、`AssertTrap`、`AssertExhaustion`、`AssertMalformed`、`AssertInvalid`、`AssertUnlinkable`、`AssertUninstantiable`
-- **运行模式**：通过 `RuntimeConfig` 选择 interpreter / singlepass / multipass，`specUnitTests <case> <mode>`
-- **目录**：`tests/wast/`（`spec/test/core`、`proposals`、`gas`、`exception`、`multipass`、`dwasm` 等）
-- **依赖**：`wast2json` 将 `.wast` 转为 JSON，`RunSpecTests.cmake` 作为 CTest 包装
+- **SpecTest**: Parse `.wast` to JSON; enumerate `(category, unit)`; run `module`/`action`/`assert_*` commands
+- **CommandID**: `Module`, `Action`, `Register`, `AssertReturn`, `AssertTrap`, `AssertExhaustion`, `AssertMalformed`, `AssertInvalid`, `AssertUnlinkable`, `AssertUninstantiable`
+- **Run mode**: Select interpreter / singlepass / multipass via `RuntimeConfig`; `specUnitTests <case> <mode>`
+- **Directory**: `tests/wast/` (`spec/test/core`, `proposals`, `gas`, `exception`, `multipass`, `dwasm`, etc.)
+- **Dependencies**: `wast2json` converts `.wast` to JSON; `RunSpecTests.cmake` as CTest wrapper
 
 ### 2. EVM Assembly Sample Tests
 
-- **evmInterpTests**：遍历 `tests/evm_asm/*.hex`，按 `.expected` YAML 校验 `status`、`stack`、`memory`、`storage`、`transient_storage`、`return`、`events`
-- **输入格式**：`.easm`（文本指令）经 `tools/easm2bytecode.py` 转为 `.hex` 字节码
-- **期望格式**：YAML，支持 `status`（SUCCESS/REVERT 等）、`error_code`、`stack`、`memory`、`storage`、`transient_storage`、`return`、`events`
-- **Host**：`ZenMockedEVMHost` 提供 Mock 账户、存储、调用能力
+- **evmInterpTests**: Iterate `tests/evm_asm/*.hex`; validate `status`, `stack`, `memory`, `storage`, `transient_storage`, `return`, `events` per `.expected` YAML
+- **Input format**: `.easm` (text instructions) converted to `.hex` by `tools/easm2bytecode.py`
+- **Expected format**: YAML; supports `status` (SUCCESS/REVERT, etc.), `error_code`, `stack`, `memory`, `storage`, `transient_storage`, `return`, `events`
+- **Host**: `ZenMockedEVMHost` for mock account, storage, call
 
 ### 3. Ethereum State Test Execution
 
-- **evmStateTests**：加载 `tests/evm_spec_test/state_tests/` 下 JSON，按 `pre`/`env`/`transaction`/`post` 执行
-- **StateTestFixture**：`TestName`、`PreState`、`Environment`、`Transaction`、`Post`
-- **Fork 支持**：`post` 按 fork（Frontier~Prague）索引，`DTVM_TEST_REVISION` 环境变量过滤
-- **验证**：`verifyPostState` 比对状态根、日志哈希；`verifyStateRoot`、`verifyLogsHash`
-- **预置**：`parsePreAccounts`、`parseStateTestFile`、`createTransactionFromIndex`
+- **evmStateTests**: Load JSON from `tests/evm_spec_test/state_tests/`; execute per `pre`/`env`/`transaction`/`post`
+- **StateTestFixture**: `TestName`, `PreState`, `Environment`, `Transaction`, `Post`
+- **Fork support**: `post` indexed by fork (Frontier~Prague); filtered by `DTVM_TEST_REVISION` env var
+- **Verification**: `verifyPostState` compares state root, log hash; `verifyStateRoot`, `verifyLogsHash`
+- **Setup**: `parsePreAccounts`, `parseStateTestFile`, `createTransactionFromIndex`
 
 ### 4. Test Utilities and Fixtures
 
-- **evm_test_helpers.h**：`TempHexFile`、`addAccountToMockedHost`、`calculateLogsHash`、`verifyStateRoot`、`verifyPostState`、`mapForkToRevision`、`decimalToHex`、`padAddressTo32Bytes`
-- **evm_test_fixtures.h**：`ParsedAccount`、`ParsedTransaction`、`StateTestFixture`、`ForkPostResult`、`parsePreAccounts`、`parseStateTestFile`、`findJsonFiles`
-- **evm_test_host.hpp**：`ZenMockedEVMHost`（递归 Host、CALL 子调用、Gas 计费、预暖存储、自毁等）
-- **solidity_test_helpers.h**：`SolidityTestCase`、`SolcContractData`、`SolidityContractTestData`、`EVMTestEnvironment`、`DeployedContract`、`deployContract`、`executeContractCall`、`parseTestCaseJson`、`computeFunctionSelector`、`encodeAbiParam`
-- **test_utils.h**：`findExecutableDir()` 定位可执行目录
+- **evm_test_helpers.h**: `TempHexFile`, `addAccountToMockedHost`, `calculateLogsHash`, `verifyStateRoot`, `verifyPostState`, `mapForkToRevision`, `decimalToHex`, `padAddressTo32Bytes`
+- **evm_test_fixtures.h**: `ParsedAccount`, `ParsedTransaction`, `StateTestFixture`, `ForkPostResult`, `parsePreAccounts`, `parseStateTestFile`, `findJsonFiles`
+- **evm_test_host.hpp**: `ZenMockedEVMHost` (recursive Host, CALL subcalls, Gas metering, storage pre-warm, selfdestruct, etc.)
+- **solidity_test_helpers.h**: `SolidityTestCase`, `SolcContractData`, `SolidityContractTestData`, `EVMTestEnvironment`, `DeployedContract`, `deployContract`, `executeContractCall`, `parseTestCaseJson`, `computeFunctionSelector`, `encodeAbiParam`
+- **test_utils.h**: `findExecutableDir()` for executable directory
 
 ### 5. Solidity Contract Tests
 
-- **solidityContractTests**：按 `RunSpecTests.cmake` 驱动，遍历 `tests/evm_solidity/*/` 目录
-- **结构**：每目录含 `*.sol`、`contract.json`（solc 输出）、`test_cases.json`（函数名、calldata、期望）
-- **准备**：`tools/solc_batch_compile.sh` 批量编译
-- **执行**：部署合约 → 调用函数 → 校验 `evmc_status_code` 与返回值
+- **solidityContractTests**: Driven by `RunSpecTests.cmake`; iterate `tests/evm_solidity/*/`
+- **Structure**: Each dir has `*.sol`, `contract.json` (solc output), `test_cases.json` (function name, calldata, expected)
+- **Preparation**: `tools/solc_batch_compile.sh` batch compile
+- **Execution**: Deploy contract → call function → check `evmc_status_code` and return value
 
-### 6. MIR 测试
+### 6. MIR Tests
 
-- **目录**：`tests/mir/*.ir`
-- **工具**：`lit` + `ircompiler`，`test_mir.sh`
-- **格式**：dMIR 文本 + FileCheck 指令
+- **Directory**: `tests/mir/*.ir`
+- **Tools**: `lit` + `ircompiler`, `test_mir.sh`
+- **Format**: dMIR text + FileCheck directives
 
-### 7. C API 测试
+### 7. C API Tests
 
-- **cAPITests**：使用 `ZenRuntimeRef`、`ZenCreateRuntime`、`ZenLoadHostModule`、`ZenCreateInstance` 等 C API
-- **用例**：加载内嵌 WASM、注册 Host 函数、调用导出函数
+- **cAPITests**: Use `ZenRuntimeRef`, `ZenCreateRuntime`, `ZenLoadHostModule`, `ZenCreateInstance`, etc.
+- **Cases**: Load embedded WASM, register Host functions, call exported functions
 
-### 8. Evmone Fallback 测试
+### 8. Evmone Fallback Tests
 
-- **evmFallbackExecutionTests**：需 `ZEN_ENABLE_LIBEVM`，验证 JIT 异常时回退到解释器
-- **依赖**：dtvmapi 库
+- **evmFallbackExecutionTests**: Requires `ZEN_ENABLE_LIBEVM`; verify interpreter fallback on JIT exception
+- **Dependency**: dtvmapi library
 
-## 外部契约
+## External Contracts
 
-| 依赖模块   | 契约说明 |
-|------------|----------|
-| runtime    | `Runtime`、`EVMInstance`、`Isolation`、`EVMModule` 提供执行环境 |
-| evm        | `Interpreter`、`ZenMockedEVMHost`、`evmc_revision` |
-| host       | `evm::crypto::keccak256`、预编译实现 |
-| common     | `TypedValue`、`RunMode`、`ErrorCode` |
-| utils      | `toHex`、`parseUint256`、`parseAddress`、`parseBytes32`、`parseHexData`、`stripHexPrefix`、RLP 编码 |
-| evmc       | `evmc::MockedHost`、`evmc_message`、`evmc_tx_context`、`evmc_revision` |
-| rapidjson  | JSON 解析与生成 |
-| yaml-cpp   | EVM `.expected` 解析 |
-| googletest | `gtest`、`TestWithParam` |
+| Dependent Module | Contract |
+|------------------|----------|
+| runtime | `Runtime`, `EVMInstance`, `Isolation`, `EVMModule` for execution |
+| evm | `Interpreter`, `ZenMockedEVMHost`, `evmc_revision` |
+| host | `evm::crypto::keccak256`, precompiled implementation |
+| common | `TypedValue`, `RunMode`, `ErrorCode` |
+| utils | `toHex`, `parseUint256`, `parseAddress`, `parseBytes32`, `parseHexData`, `stripHexPrefix`, RLP encoding |
+| evmc | `evmc::MockedHost`, `evmc_message`, `evmc_tx_context`, `evmc_revision` |
+| rapidjson | JSON parse and generation |
+| yaml-cpp | EVM `.expected` parsing |
+| googletest | `gtest`, `TestWithParam` |
 
-## 权限与不变量
+## Invariants and Permissions
 
-- **确定性**：测试结果与执行顺序无关，无主机相关非确定性行为
-- **隔离性**：各测试用例间状态隔离，无共享可变全局
-- **前置条件**：EVM 测试需 `tools/easm2bytecode.sh`/`solc_batch_compile.sh` 预处理；State 测试需 JSON 符合 Ethereum 规范
-- **构建开关**：`ZEN_ENABLE_SPEC_TEST` 启用测试目标；`ZEN_ENABLE_EVM` 启用 EVM 相关；`ZEN_ENABLE_LIBEVM` 启用 evmone 集成
+- **Determinism**: Test results independent of execution order; no host-dependent non-determinism
+- **Isolation**: State isolated per test case; no shared mutable globals
+- **Prerequisites**: EVM tests need `tools/easm2bytecode.sh`/`solc_batch_compile.sh`; State tests need JSON conforming to Ethereum spec
+- **Build switches**: `ZEN_ENABLE_SPEC_TEST` enables test targets; `ZEN_ENABLE_EVM` for EVM; `ZEN_ENABLE_LIBEVM` for evmone integration
 
-## 错误码
+## Error Codes
 
-| 错误码           | 来源          | 说明 |
-|------------------|---------------|------|
-| 测试失败         | gtest         | 断言失败、期望不匹配 |
-| JSON 解析失败    | rapidjson     | `HasParseError` |
-| 文件 I/O 失败    | evm_test_*    | 临时文件创建失败、目录不存在 |
-| EVMC 状态码      | evmc          | `EVMC_*` 执行结果 |
+| Error Code | Source | Description |
+|------------|--------|-------------|
+| Test failure | gtest | Assert failure, expectation mismatch |
+| JSON parse failure | rapidjson | `HasParseError` |
+| File I/O failure | evm_test_* | Temp file creation failure, dir not found |
+| EVMC status | evmc | `EVMC_*` execution result |
 
-## 兼容性策略
+## Compatibility Strategy
 
-- **Fork 兼容**：State 测试按 `evmc_revision` 选择 `post` 分支，新 fork 需扩展 `mapForkToRevision`
-- **格式兼容**：EVM `.expected` YAML、State JSON 遵循 Ethereum 测试套件约定；WAST 遵循 WebAssembly 规范
-- **工具链**：`wast2json`、`solc`、`lit` 版本依赖见 `docs/start.md`、`tools/requirements.txt`
+- **Fork compatibility**: State tests select `post` by `evmc_revision`; new forks need `mapForkToRevision` extension
+- **Format compatibility**: EVM `.expected` YAML and State JSON follow Ethereum test suite conventions; WAST follows WebAssembly spec
+- **Toolchain**: `wast2json`, `solc`, `lit` versions in `docs/start.md`, `tools/requirements.txt`
 
-## 交叉引用
+## Cross-References
 
-- [specs/testing/README.md](../testing/README.md) — 完整测试指南
-- [specs/modules/evm/spec.md](./evm/spec.md) — EVM 解释器规范
-- [specs/modules/runtime/spec.md](./runtime/spec.md) — 运行时与实例
-- [AGENTS.md](../../AGENTS.md) — 构建与测试命令
+- [specs/testing/README.md](../testing/README.md) — Full testing guide
+- [specs/modules/evm/spec.md](./evm/spec.md) — EVM interpreter spec
+- [specs/modules/runtime/spec.md](./runtime/spec.md) — Runtime and instances
+- [AGENTS.md](../../AGENTS.md) — Build and test commands

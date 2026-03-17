@@ -1,86 +1,86 @@
 ---
 name: speckit-checklist
-description: 为特定领域生成检查清单，确保开发过程中的质量控制和完整性验证。
+description: Generate checklists for specific domains to ensure quality control and completeness verification during development.
 ---
 
-# 检查清单生成
+# Checklist Generation
 
-为特定领域生成检查清单，确保开发过程中的质量控制和完整性验证。
+Generate checklists for specific domains to ensure quality control and completeness verification during development.
 
-## 用户输入
+## User Input
 
-你输入的内容即为上下文。应指定需要生成检查清单的领域或功能。
+Your input serves as the context. Specify the domain or feature for which to generate the checklist.
 
-## 执行步骤
+## Execution Steps
 
-### 1. 确定清单领域
+### 1. Determine Checklist Domain
 
-分析用户输入以确定：
-- 清单的领域（例如：UX、安全、性能、可访问性）
-- 项目的具体上下文
-- 任何相关标准或法规
+Analyze user input to determine:
+- The domain of the checklist (e.g., UX, security, performance, accessibility)
+- The project's specific context
+- Any relevant standards or regulations
 
-### 2. 检查清单模板
+### 2. Checklist Template
 
-检查是否存在相关的清单模板：
+Check if a relevant checklist template exists:
 - `.specify/templates/checklist-template.md`
-- 任何特定领域的清单模板
+- Any domain-specific checklist templates
 
-### 3. 生成清单项目
+### 3. Generate Checklist Items
 
-为确定的领域生成适当的清单项目。清单应包括：
+Generate appropriate checklist items for the identified domain. The checklist should include:
 
-#### 内容质量
-- 内容完整性和准确性
-- 清晰度和简洁性
-- 适当的详细程度
+#### Content Quality
+- Content completeness and accuracy
+- Clarity and conciseness
+- Appropriate level of detail
 
-#### 功能性
-- 功能完整性
-- 边缘情况处理
-- 错误处理
+#### Functionality
+- Feature completeness
+- Edge case handling
+- Error handling
 
-#### 用户体验
-- 可用性
-- 可访问性
-- 性能
-- 响应式设计
+#### User Experience
+- Usability
+- Accessibility
+- Performance
+- Responsive design
 
-#### 技术质量
-- 代码质量
-- 测试覆盖率
-- 文档完整性
-- 安全考虑
+#### Technical Quality
+- Code quality
+- Test coverage
+- Documentation completeness
+- Security considerations
 
-#### 合规性
-- 法律/法规要求
-- 组织标准
-- 行业最佳实践
+#### Compliance
+- Legal/regulatory requirements
+- Organizational standards
+- Industry best practices
 
-### 4. 创建清单文件
+### 4. Create Checklist File
 
-在适当的位置创建清单文件：
-- 功能清单：`FEATURE_DIR/checklists/requirements.md`
-- 领域清单：`specs/checklists/DOMAIN.md`
+Create the checklist file at the appropriate location:
+- Feature checklist: `FEATURE_DIR/checklists/requirements.md`
+- Domain checklist: `specs/checklists/DOMAIN.md`
 
-### 5. 格式化清单
+### 5. Format Checklist
 
-使用一致的格式：
+Use a consistent format:
 
 ```markdown
-# Checklist: [名称]
+# Checklist: [Name]
 
-## [类别]
+## [Category]
 
-- [ ] 检查项目 1
-- [ ] 检查项目 2
-- [ ] 检查项目 3
+- [ ] Check item 1
+- [ ] Check item 2
+- [ ] Check item 3
 
 ## Notes
 
-[任何额外说明或上下文]
+[Any additional notes or context]
 ```
 
-### 6. 报告
+### 6. Report
 
-报告清单文件的位置和项目总数。
+Report the location of the checklist file and the total number of items.

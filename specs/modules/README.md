@@ -1,69 +1,69 @@
-# DTVM 模块索引
+# DTVM Module Index
 
-本目录是所有模块规范的 SSOT (Single Source of Truth)。每个模块包含 `spec.md`（边界与契约）和 `data-model.md`（数据模型）。
+This directory is the SSOT (Single Source of Truth) for all module specifications. Each module contains `spec.md` (boundaries and contracts) and `data-model.md` (data model).
 
-**划分原则：严格按目录划分。** 每个模块对应一个（或少数紧密关联的）目录，spec 只描述该目录下的代码。跨模块的功能链路通过交叉引用描述。
+**Division principle: Strictly by directory.** Each module corresponds to one (or a few closely related) directory; specs describe only the code under that directory. Cross-module functional chains are described through cross-references.
 
-## 模块清单
+## Module List
 
-### 基础能力层 (Foundation)
+### Foundation Layer
 
-| 模块 | 目录 | 职责 |
-|------|------|------|
-| [common](common/) | `src/common/` | 共享类型、错误体系、内存池、操作码定义、trap 处理 |
-| [platform](platform/) | `src/platform/` | OS/硬件抽象层 (POSIX 内存映射、SGX enclave 支持) |
-| [utils](utils/) | `src/utils/` | 日志、回溯、线程安全容器、统计、perf 集成、WASM/EVM 工具函数 |
+| Module | Directory | Responsibility |
+|--------|-----------|----------------|
+| [common](common/) | `src/common/` | Shared types, error system, memory pools, opcode definitions, trap handling |
+| [platform](platform/) | `src/platform/` | OS/hardware abstraction layer (POSIX memory mapping, SGX enclave support) |
+| [utils](utils/) | `src/utils/` | Logging, backtrace, thread-safe containers, statistics, perf integration, WASM/EVM utility functions |
 
-### 核心运行时层 (Core Runtime)
+### Core Runtime Layer
 
-| 模块 | 目录 | 职责 |
-|------|------|------|
-| [runtime](runtime/) | `src/runtime/` + `src/entrypoint/` | 核心运行时 (Runtime/Instance/Module/Memory/Isolation/VNMI/WNI)，含 EVMModule/EVMInstance 生命周期管理、JIT 原生调用桥接 |
+| Module | Directory | Responsibility |
+|--------|-----------|----------------|
+| [runtime](runtime/) | `src/runtime/` + `src/entrypoint/` | Core runtime (Runtime/Instance/Module/Memory/Isolation/VNMI/WNI), including EVMModule/EVMInstance lifecycle management, JIT native call bridging |
 
-### 执行引擎层 (Execution Engines)
+### Execution Engine Layer
 
-| 模块 | 目录 | 职责 |
-|------|------|------|
-| [action](action/) | `src/action/` | 模块/函数加载（WASM + EVM）、WASM 解释器、JIT 编排入口、EVM 字节码遍历 |
-| [evm](evm/) | `src/evm/` | EVM 解释器核心：操作码处理、Gas 计算、字节码缓存、EVM 常量与修订版本定义 |
-| [singlepass](singlepass/) | `src/singlepass/` | 单遍 JIT 编译器 (AsmJit，x64/AArch64 后端) |
-| [compiler](compiler/) | `src/compiler/` | 多遍编译流水线：WASM 前端 + EVM 前端 -> dMIR -> CgIR -> 寄存器分配 -> x86 后端 |
+| Module | Directory | Responsibility |
+|--------|-----------|----------------|
+| [action](action/) | `src/action/` | Module/function loading (WASM + EVM), WASM interpreter, JIT orchestration entry, EVM bytecode traversal |
+| [evm](evm/) | `src/evm/` | EVM interpreter core: opcode handling, Gas calculation, bytecode cache, EVM constants and revision definitions |
+| [singlepass](singlepass/) | `src/singlepass/` | Single-pass JIT compiler (AsmJit, x64/AArch64 backends) |
+| [compiler](compiler/) | `src/compiler/` | Multi-pass compilation pipeline: WASM frontend + EVM frontend -> dMIR -> CgIR -> register allocation -> x86 backend |
 
-### 宿主接口层 (Host Interface)
+### Host Interface Layer
 
-| 模块 | 目录 | 职责 |
-|------|------|------|
-| [host](host/) | `src/host/` + `src/wni/` | 宿主模块 (WASI, env, spectest, EVM ABI mock, EVM 密码学/Keccak, WNI 接口) |
+| Module | Directory | Responsibility |
+|--------|-----------|----------------|
+| [host](host/) | `src/host/` + `src/wni/` | Host modules (WASI, env, spectest, EVM ABI mock, EVM crypto/Keccak, WNI interface) |
 
-### 应用集成层 (Application and Integration)
+### Application and Integration Layer
 
-| 模块 | 目录 | 职责 | spec 粒度 |
-|------|------|------|-----------|
-| [cli](cli/) | `src/cli/` | dtvm 命令行工具 | spec + data-model |
-| [vm-interface](vm-interface/) | `src/vm/` + `evmc/` | EVMC 共享库接口 (dtvmapi.so)，WrappedHost 桥接 | spec + data-model |
-| [rust-bindings](rust-bindings/) | `rust_crate/` | Rust FFI 绑定和 Rust API | spec + data-model |
-| [tests](tests/) | `src/tests/` + `tests/` | 测试基础设施 (WAST spec/EVM state/Solidity/MIR/C API) | spec + data-model |
-| [tools](tools/) | `tools/` | 开发辅助脚本 (格式化、编译、性能检查等) | 仅 spec |
+| Module | Directory | Responsibility | Spec Granularity |
+|--------|-----------|----------------|------------------|
+| [cli](cli/) | `src/cli/` | dtvm CLI tool | spec + data-model |
+| [vm-interface](vm-interface/) | `src/vm/` + `evmc/` | EVMC shared library interface (dtvmapi.so), WrappedHost bridging | spec + data-model |
+| [rust-bindings](rust-bindings/) | `rust_crate/` | Rust FFI bindings and Rust API | spec + data-model |
+| [tests](tests/) | `src/tests/` + `tests/` | Test infrastructure (WAST spec/EVM state/Solidity/MIR/C API) | spec + data-model |
+| [tools](tools/) | `tools/` | Development helper scripts (formatting, compilation, performance checks, etc.) | spec only |
 
-## 模块间依赖关系
+## Inter-Module Dependencies
 
-依赖方向: 下层 -> 上层
+Dependency direction: lower layer -> upper layer
 
 ```
-common, platform, utils (基础)
-    -> runtime (核心)
-        -> action, evm (执行)
+common, platform, utils (foundation)
+    -> runtime (core)
+        -> action, evm (execution)
             -> singlepass, compiler (JIT)
-        -> host (宿主)
-    -> cli, vm-interface, rust-bindings (应用)
+        -> host (host)
+    -> cli, vm-interface, rust-bindings (application)
 ```
 
-## EVM 执行全链路（跨模块）
+## EVM Execution Chain (Cross-Module)
 
-EVM 的完整执行流程跨越多个模块，各 spec 通过交叉引用描述：
+EVM's complete execution flow spans multiple modules; specs describe it through cross-references:
 
-1. **vm-interface**: EVMC execute() 入口
-2. **runtime**: EVMModule/EVMInstance 生命周期
-3. **action**: EVMModuleLoader 加载、performEVMJITCompile 编排
-4. **evm**: BaseInterpreter 解释执行、操作码处理、Gas 计算
-5. **compiler**: evm_frontend/ EVM->dMIR 编译、evm_compiler.* JIT 编排
+1. **vm-interface**: EVMC execute() entry point
+2. **runtime**: EVMModule/EVMInstance lifecycle
+3. **action**: EVMModuleLoader loading, performEVMJITCompile orchestration
+4. **evm**: BaseInterpreter interpretation execution, opcode handling, Gas calculation
+5. **compiler**: evm_frontend/ EVM->dMIR compilation, evm_compiler.* JIT orchestration

@@ -1,87 +1,87 @@
 ---
 name: speckit-analyze
-description: 分析项目一致性，检查规格、设计和实现之间的一致性和完整性。
+description: Analyze project consistency, checking consistency and completeness between specs, designs, and implementations.
 ---
 
-# 项目分析
+# Project Analysis
 
-分析项目一致性，检查规格、设计和实现之间的一致性和完整性。
+Analyze project consistency, checking consistency and completeness between specs, designs, and implementations.
 
-## 用户输入
+## User Input
 
-你输入的内容即为上下文。
+Your input serves as the context.
 
-## 执行步骤
+## Execution Steps
 
-### 1. 收集项目工件
+### 1. Collect Project Artifacts
 
-识别并收集所有相关项目工件：
-- 功能规格（`specs/features/*/spec.md`）
-- 模块规格（`specs/modules/*/spec.md`）
-- 设计文档（`research.md`, `data-model.md`, `plan.md`）
-- 任务列表（`tasks.md`）
-- 实现代码
+Identify and collect all relevant project artifacts:
+- Feature specs (`specs/features/*/spec.md`)
+- Module specs (`specs/modules/*/spec.md`)
+- Design documents (`research.md`, `data-model.md`, `plan.md`)
+- Task lists (`tasks.md`)
+- Implementation code
 
-### 2. 分析一致性
+### 2. Analyze Consistency
 
-检查以下一致性方面：
+Check the following consistency aspects:
 
-#### 规格到设计
-- 功能规格中的所有需求都在设计中有对应
-- 数据模型与规格中定义的实体匹配
-- API 合约与User Story一致
+#### Spec to Design
+- All requirements in the feature spec have corresponding entries in the design
+- Data model matches entities defined in the spec
+- API contracts are consistent with User Stories
 
-#### 设计到任务
-- 设计中的所有组件都有对应的实现任务
-- 任务依赖关系与设计中的依赖关系一致
-- 测试任务覆盖所有设计组件
+#### Design to Tasks
+- All components in the design have corresponding implementation tasks
+- Task dependencies are consistent with design dependencies
+- Test tasks cover all design components
 
-#### 任务到实现
-- 所有任务都已完成（或正确跟踪）
-- 实现与任务描述匹配
-- 文档与实现一致
+#### Tasks to Implementation
+- All tasks are completed (or correctly tracked)
+- Implementation matches task descriptions
+- Documentation is consistent with the implementation
 
-#### SSOT 一致性
-- 功能规格正确引用模块 SSOT
-- 没有重复定义
-- 更新正确传播到模块规格
+#### SSOT Consistency
+- Feature specs correctly reference module SSOT
+- No duplicate definitions
+- Updates are correctly propagated to module specs
 
-### 3. 识别问题
+### 3. Identify Issues
 
-标记以下类型的问题：
-- 缺失的需求或功能
-- 不一致的命名或术语
-- 冲突的定义
-- 孤立或未连接的组件
-- 过时的文档
+Flag the following types of issues:
+- Missing requirements or features
+- Inconsistent naming or terminology
+- Conflicting definitions
+- Orphaned or unconnected components
+- Outdated documentation
 
-### 4. 生成报告
+### 4. Generate Report
 
-生成包含以下内容的分析报告：
+Generate an analysis report containing:
 
-#### 摘要
-- 总体一致性评分
-- 问题数量和严重程度
+#### Summary
+- Overall consistency score
+- Number and severity of issues
 
-#### 详细发现
-- 每个问题的描述
-- 受影响的文件
-- 建议的修复
+#### Detailed Findings
+- Description of each issue
+- Affected files
+- Suggested fixes
 
-#### 建议
-- 优先修复的问题
-- 改进建议
+#### Recommendations
+- Issues to fix with priority
+- Improvement suggestions
 
-### 5. 输出报告
+### 5. Output Report
 
-将报告写入：
-- 控制台输出（摘要）
-- 文件（详细报告）：`FEATURE_DIR/analysis/CONSISTENCY_REPORT.md`
+Write the report to:
+- Console output (summary)
+- File (detailed report): `FEATURE_DIR/analysis/CONSISTENCY_REPORT.md`
 
-### 6. 报告
+### 6. Report
 
-报告分析结果，包括：
-- 一致性评分
-- 发现的问题数量
-- 高优先级问题
-- 建议的后续步骤
+Report analysis results, including:
+- Consistency score
+- Number of issues found
+- High-priority issues
+- Suggested next steps

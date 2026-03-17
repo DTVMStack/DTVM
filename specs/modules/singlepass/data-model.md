@@ -1,6 +1,6 @@
-# singlepass 模块数据模型
+# singlepass Module Data Model
 
-## 实体关系图 (Mermaid classDiagram)
+## Entity Relationship Diagram (Mermaid classDiagram)
 
 ```mermaid
 classDiagram
@@ -127,192 +127,192 @@ classDiagram
     OnePassDataLayout *-- X64MachineState : VmState x64
 ```
 
-## 核心实体 (关键字段和方法)
+## Core Entities (Key Fields and Methods)
 
 ### JITCompiler
 
-| 成员 | 类型 | 说明 |
+| Member | Type | Description |
 |------|------|------|
-| `compile(Module *Mod)` | static void | 唯一对外接口，将模块内所有内部函数编译为 JIT 代码 |
+| `compile(Module *Mod)` | static void | Sole external interface, compiles all internal functions in module to JIT code |
 
 ### JITCompilerContext
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `Mod` | `Module*` | 当前编译的 WASM 模块 |
-| `UseSoftMemCheck` | `bool` | 是否使用软件内存边界检查 |
-| `Func` | `CodeEntry*` | 当前编译函数的代码条目 |
-| `FuncType` | `TypeEntry*` | 当前函数的类型信息 |
-| `InternalFuncIdx` | `uint32_t` | 内部函数索引（不含导入） |
+| `Mod` | `Module*` | Currently compiled WASM module |
+| `UseSoftMemCheck` | `bool` | Whether to use software memory boundary check |
+| `Func` | `CodeEntry*` | Current function's code entry |
+| `FuncType` | `TypeEntry*` | Current function's type info |
+| `InternalFuncIdx` | `uint32_t` | Internal function index (excluding imports) |
 
 ### OnePassCodeGen / BlockInfo
 
-| 实体 | 关键成员 | 说明 |
+| Entity | Key Member | Description |
 |------|----------|------|
 | `BlockInfo` | `Kind` | CtrlBlockKind: FUNC_ENTRY / BLOCK / LOOP / IF |
-| | `Result` | 块结果操作数 |
-| | `Label` | 块结束标签；IF 时 Label+1 为 else 标签 |
-| | `StackSize` | 块对应的栈大小 |
+| | `Result` | Block result operand |
+| | `Label` | Block end label; for IF, Label+1 is else label |
+| | `StackSize` | Stack size for block |
 
 ### FunctionState
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `ExceptionExitLabel` | `uint32_t` | 异常出口标签 |
-| `ExceptLabels` | `map<ErrorCode, asmjit::Label>` | 各错误码对应陷阱标签 |
-| `FrameSizePatchOffset` | `int32_t` | prolog 中帧大小补丁偏移 |
-| `GasCheckPatchOffset` | `int32_t` | Gas 检查补丁偏移（若使用） |
+| `ExceptionExitLabel` | `uint32_t` | Exception exit label |
+| `ExceptLabels` | `map<ErrorCode, asmjit::Label>` | Trap labels per error code |
+| `FrameSizePatchOffset` | `int32_t` | Prolog frame size patch offset |
+| `GasCheckPatchOffset` | `int32_t` | Gas check patch offset (if used) |
 
 ### X64OnePassDataLayout / LocalInfo
 
-| 实体 | 关键成员 | 说明 |
+| Entity | Key Member | Description |
 |------|----------|------|
-| `LocalInfo` | `Type` | WASM 类型 |
-| | `Reg` | 寄存器号（若在寄存器中） |
-| | `Offset` | 栈帧偏移（若在栈上） |
-| `X64OnePassDataLayout` | `VmState` | X64MachineState，跟踪寄存器可用性 |
-| | `StackIncrement` | 栈增长步长 32 字节 |
+| `LocalInfo` | `Type` | WASM type |
+| | `Reg` | Register number (if in register) |
+| | `Offset` | Stack frame offset (if on stack) |
+| `X64OnePassDataLayout` | `VmState` | X64MachineState, tracks register availability |
+| | `StackIncrement` | Stack growth step 32 bytes |
 
 ### X64CodePatcher / PatchInfo
 
-| 实体 | 关键成员 | 说明 |
+| Entity | Key Member | Description |
 |------|----------|------|
 | `PatchEntry` | `PatKind` | PKCall |
-| | `Ofst` | 补丁偏移（24bit） |
-| | `PatSize` | 补丁大小（最大 15 字节） |
-| | `PatArg` | 被调函数内部索引 |
-| `X64CodePatcher` | `finalizeModule()` | 遍历 PatchInfo，写入 call rel32 编码 |
+| | `Ofst` | Patch offset (24bit) |
+| | `PatSize` | Patch size (max 15 bytes) |
+| | `PatArg` | Callee internal index |
+| `X64CodePatcher` | `finalizeModule()` | Iterate PatchInfo, emit call rel32 encoding |
 
 ### X64MachineState
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `GpRegParamState` | 6bit | 整数参数是否在寄存器 |
-| `FpRegParamState` | 8bit | 浮点参数是否在寄存器 |
-| `NativeStackSize` | 18bit | 本机栈大小 |
-| `GpRegState` | 16bit | 整数临时寄存器可用性 |
-| `FpRegState` | 16bit | 浮点临时寄存器可用性 |
+| `GpRegParamState` | 6bit | Whether integer params in registers |
+| `FpRegParamState` | 8bit | Whether float params in registers |
+| `NativeStackSize` | 18bit | Native stack size |
+| `GpRegState` | 16bit | Integer temp register availability |
+| `FpRegState` | 16bit | Float temp register availability |
 
 ### X64InstOperand
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `OpKind` | `uint8_t` | X64OperandKind 与 OperandFlags 组合 |
-| `WType` | `WASMType` | WASM 值类型 |
-| `Reg1` | `uint8_t` | 主寄存器/基址寄存器 |
-| `Reg2` | `uint8_t` | 索引寄存器（SIB 形式） |
-| `Value` | `int32_t` | 立即数或偏移 |
+| `OpKind` | `uint8_t` | X64OperandKind combined with OperandFlags |
+| `WType` | `WASMType` | WASM value type |
+| `Reg1` | `uint8_t` | Primary/base register |
+| `Reg2` | `uint8_t` | Index register (SIB form) |
+| `Value` | `int32_t` | Immediate or offset |
 
-## 枚举
+## Enumerations
 
 ### CtrlBlockKind
 
-| 值 | 含义 |
+| Value | Meaning |
 |----|------|
-| `FUNC_ENTRY` | 函数入口块 |
-| `BLOCK` | 普通 block |
-| `LOOP` | loop 块 |
-| `IF` | if 块 |
+| `FUNC_ENTRY` | Function entry block |
+| `BLOCK` | Ordinary block |
+| `LOOP` | loop block |
+| `IF` | if block |
 
 ### X64OperandKind
 
-| 值 | 含义 |
+| Value | Meaning |
 |----|------|
-| `OK_None` | 无操作数 |
-| `OK_Register` | 寄存器 |
-| `OK_IntConst` | 32 位整数立即数 |
-| `OK_BaseOffset` | 基址加偏移 |
-| `OK_BaseIndexScale1/2/4/8` | 基址加索引乘 scale 加偏移 |
-| `OK_Label` | 标签 |
-| `OK_Function` | 函数 |
+| `OK_None` | No operand |
+| `OK_Register` | Register |
+| `OK_IntConst` | 32-bit integer immediate |
+| `OK_BaseOffset` | Base plus offset |
+| `OK_BaseIndexScale1/2/4/8` | Base plus index times scale plus offset |
+| `OK_Label` | Label |
+| `OK_Function` | Function |
 
 ### X64InstOperand::OperandFlags
 
-| 值 | 含义 |
+| Value | Meaning |
 |----|------|
-| `FLAG_NONE` | 无标记 |
-| `FLAG_TEMP_MEM` | 栈上临时 |
-| `FLAG_TEMP_REG` | 临时寄存器 |
+| `FLAG_NONE` | No flag |
+| `FLAG_TEMP_MEM` | Stack temporary |
+| `FLAG_TEMP_REG` | Temporary register |
 
 ### PatchInfo::PatchKind
 
-| 值 | 含义 |
+| Value | Meaning |
 |----|------|
-| `PKCall` | 直接调用补丁 |
+| `PKCall` | Direct call patch |
 
 ### X64::Type
 
-| 值 | 含义 |
+| Value | Meaning |
 |----|------|
-| `I8` | 8 位整数 |
-| `I16` | 16 位整数 |
-| `I32` | 32 位整数 |
-| `I64` | 64 位整数 |
-| `F32` | 32 位浮点 |
-| `F64` | 64 位浮点 |
-| `V128` | 128 位向量 |
-| `VOID` | 占位 |
+| `I8` | 8-bit integer |
+| `I16` | 16-bit integer |
+| `I32` | 32-bit integer |
+| `I64` | 64-bit integer |
+| `F32` | 32-bit float |
+| `F64` | 64-bit float |
+| `V128` | 128-bit vector |
+| `VOID` | Placeholder |
 
-### ScopedTempReg 索引
+### ScopedTempReg Indices
 
-| 值 | 含义 |
+| Value | Meaning |
 |----|------|
 | `ScopedTempReg0` | 0 |
 | `ScopedTempReg1` | 1 |
 | `ScopedTempReg2` | 2 |
 | `ScopedTempRegLast` | 3 |
 
-## DTO / 共享类型
+## DTO / Shared Types
 
 ### ArgumentInfo::Argument
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `Type` | `WASMType` | 形式参数类型 |
-| `Reg` | `RegNumType` | 参数寄存器号 |
-| `Offset` | `uint16_t` | 栈上偏移 |
+| `Type` | `WASMType` | Formal parameter type |
+| `Reg` | `RegNumType` | Parameter register number |
+| `Offset` | `uint16_t` | Stack offset |
 
 ### DataLayout::GlobalInfo
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `Type` | `WASMType` | 全局变量类型 |
-| `Mutable` | `bool` | 是否可变 |
-| `Offset` | `uint32_t` | 相对 global_data 的偏移 |
+| `Type` | `WASMType` | Global variable type |
+| `Mutable` | `bool` | Whether mutable |
+| `Offset` | `uint32_t` | Offset relative to global_data |
 
 ### OnePassDataLayout::LocalInfo
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `Type` | `WASMType` | 局部变量类型 |
-| `Reg` | `uint32_t` | 寄存器号（InvalidParamReg 表示在栈上） |
-| `Offset` | `int32_t` | 栈帧偏移 |
+| `Type` | `WASMType` | Local variable type |
+| `Reg` | `uint32_t` | Register number (InvalidParamReg means on stack) |
+| `Offset` | `int32_t` | Stack frame offset |
 
 ### FloatAttr (WASMType::F32 / F64)
 
-模板特化，提供浮点转整数边界常量：
+Template specialization providing float-to-int boundary constants:
 
-| 静态成员 | 说明 |
+| Static Member | Description |
 |----------|------|
-| `IntType` | 对应整数类型 I32 或 I64 |
-| `NegZero` | 负零位模式 |
-| `CanonicalNan` | 规范 NaN 位模式 |
-| `SignMask` | 符号位掩码 |
-| `int_max<Int>()` / `int_min<Int>()` | 有符号边界 |
-| `uint_max<Int>()` / `uint_min<Int>()` | 无符号边界 |
+| `IntType` | Corresponding integer type I32 or I64 |
+| `NegZero` | Negative zero bit pattern |
+| `CanonicalNan` | Canonical NaN bit pattern |
+| `SignMask` | Sign bit mask |
+| `int_max<Int>()` / `int_min<Int>()` | Signed bounds |
+| `uint_max<Int>()` / `uint_min<Int>()` | Unsigned bounds |
 
-### Instance 偏移常量 (OnePassCodeGen 中)
+### Instance Offset Constants (in OnePassCodeGen)
 
-| 常量 | 值 | 说明 |
+| Constant | Value | Description |
 |------|-----|------|
-| `GlobalBaseOffset` | offsetof(Instance, GlobalVarData) | 全局数据基址 |
-| `MemoriesOffset` | offsetof(Instance, Memories) | 内存数组 |
-| `MemoryBaseOffset` | offsetof(MemoryInstance, MemBase) | 内存基址 |
-| `MemorySizeOffset` | offsetof(MemoryInstance, MemSize) | 内存大小 |
-| `TablesOffset` | offsetof(Instance, Tables) | 表数组 |
-| `TableSizeOffset` | offsetof(TableInstance, CurSize) | 表大小 |
-| `TableBaseOffset` | offsetof(TableInstance, Elements) | 表元素基址 |
-| `FunctionPointersOffset` | offsetof(Instance, JITFuncPtrs) | JIT 函数指针数组 |
-| `ExceptionOffset` | offsetof(Instance, Err.ErrCode) | 异常码 |
-| `StackBoundaryOffset` | offsetof(Instance, JITStackBoundary) | 栈边界 |
-| `GasLeftOffset` | offsetof(Instance, Gas) | 剩余 Gas |
+| `GlobalBaseOffset` | offsetof(Instance, GlobalVarData) | Global data base |
+| `MemoriesOffset` | offsetof(Instance, Memories) | Memory array |
+| `MemoryBaseOffset` | offsetof(MemoryInstance, MemBase) | Memory base |
+| `MemorySizeOffset` | offsetof(MemoryInstance, MemSize) | Memory size |
+| `TablesOffset` | offsetof(Instance, Tables) | Table array |
+| `TableSizeOffset` | offsetof(TableInstance, CurSize) | Table size |
+| `TableBaseOffset` | offsetof(TableInstance, Elements) | Table element base |
+| `FunctionPointersOffset` | offsetof(Instance, JITFuncPtrs) | JIT function pointer array |
+| `ExceptionOffset` | offsetof(Instance, Err.ErrCode) | Exception code |
+| `StackBoundaryOffset` | offsetof(Instance, JITStackBoundary) | Stack boundary |
+| `GasLeftOffset` | offsetof(Instance, Gas) | Remaining Gas |

@@ -1,135 +1,135 @@
-# 功能规格说明：[功能名称]
+# Feature Specification: [Feature Name]
 
-**功能分支**：`[###-feature-name]`
-**创建日期**：[DATE]
-**状态**：草稿
+**Feature Branch**: `[###-feature-name]`
+**Created**: [DATE]
+**Status**: Draft
 
 ---
 
-## 权威引用
+## Authoritative References
 
 <!--
-  目的：
-  - 保持 `specs/modules/*` 作为可复用领域模块契约和数据模型的唯一事实来源（SSOT）。
-  - 功能规格不应重复完整的 OpenAPI / DTO / 实体定义。
+  Purpose:
+  - Keep `specs/modules/*` as the single source of truth (SSOT) for reusable domain module contracts and data models.
+  - Feature specifications should not duplicate full OpenAPI / DTO / entity definitions.
 
-  填写方法：
-  - 如果本功能是消费方（如管理后台），列出所消费的模块并链接到 `specs/modules/MODULE/`。
-  - 如果本功能引入/变更了可复用的 API 契约或数据模型，权威定义必须在相关模块 SSOT 中更新。
+  How to fill:
+  - If this feature is a consumer (e.g. admin panel), list consumed modules and link to `specs/modules/MODULE/`.
+  - If this feature introduces/changes reusable API contracts or data models, authoritative definitions must be updated in the relevant module SSOT.
 -->
 
-- **消费的模块**：
-  - **[模块名称]**：[specs/modules/MODULE/](../../modules/MODULE/)
+- **Consumed Modules**:
+  - **[Module Name]**: [specs/modules/MODULE/](../../modules/MODULE/)
 
 ---
 
-**输入**：用户描述："$ARGUMENTS"
+**Input**: User description: "$ARGUMENTS"
 
-## User Scenarios & Testing *(必填)*
+## User Scenarios & Testing *(Required)*
 
 <!--
-  重要：User Story 应按重要性排列为用户旅程优先级。
-  每个 User Story / 旅程必须是可独立测试的——即使只实现其中一个，
-  也应该有一个可行的 MVP 能够交付价值。
+  Important: User Stories should be ordered by user journey priority.
+  Each User Story / journey must be independently testable—even if only one is implemented,
+  there should be a viable MVP that delivers value.
 
-  为每个 Story 分配优先级（P1、P2、P3 等），其中 P1 最关键。
-  将每个 Story 视为独立的功能切片，可以：
-  - 独立开发
-  - 独立测试
-  - 独立部署
-  - 独立向用户演示
+  Assign priority (P1, P2, P3, etc.) to each Story, where P1 is most critical.
+  Treat each Story as an independent feature slice that can:
+  - Be developed independently
+  - Be tested independently
+  - Be deployed independently
+  - Be demonstrated to users independently
 -->
 
-### User Story 1 - [简要标题] (Priority: P1)
+### User Story 1 - [Brief Title] (Priority: P1)
 
-[用自然语言描述此用户旅程]
+[Describe this user journey in natural language]
 
-**优先级理由**：[解释价值以及为什么是此优先级]
+**Priority Rationale**: [Explain the value and why this priority]
 
-**独立测试**：[描述如何独立测试——例如"可通过 [具体操作] 完整测试，交付 [具体价值]"]
+**Independent Testing**: [Describe how to test independently—e.g. "Can be fully tested via [specific action], delivering [specific value]"]
 
-**Acceptance Scenarios**：
+**Acceptance Scenarios**:
 
-1. **Given** [初始状态]，**When** [操作]，**Then** [预期结果]
-2. **Given** [初始状态]，**When** [操作]，**Then** [预期结果]
-
----
-
-### User Story 2 - [简要标题] (Priority: P2)
-
-[用自然语言描述此用户旅程]
-
-**优先级理由**：[解释价值以及为什么是此优先级]
-
-**独立测试**：[描述如何独立测试]
-
-**Acceptance Scenarios**：
-
-1. **Given** [初始状态]，**When** [操作]，**Then** [预期结果]
+1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+2. **Given** [initial state], **When** [action], **Then** [expected outcome]
 
 ---
 
-### User Story 3 - [简要标题] (Priority: P3)
+### User Story 2 - [Brief Title] (Priority: P2)
 
-[用自然语言描述此用户旅程]
+[Describe this user journey in natural language]
 
-**优先级理由**：[解释价值以及为什么是此优先级]
+**Priority Rationale**: [Explain the value and why this priority]
 
-**独立测试**：[描述如何独立测试]
+**Independent Testing**: [Describe how to test independently]
 
-**Acceptance Scenarios**：
+**Acceptance Scenarios**:
 
-1. **Given** [初始状态]，**When** [操作]，**Then** [预期结果]
+1. **Given** [initial state], **When** [action], **Then** [expected outcome]
 
 ---
 
-[根据需要添加更多 User Story，每个都分配优先级]
+### User Story 3 - [Brief Title] (Priority: P3)
+
+[Describe this user journey in natural language]
+
+**Priority Rationale**: [Explain the value and why this priority]
+
+**Independent Testing**: [Describe how to test independently]
+
+**Acceptance Scenarios**:
+
+1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+
+---
+
+[Add more User Stories as needed, each with a priority assigned]
 
 ### Edge Cases
 
 <!--
-  必填：以下内容为占位符。
-  请替换为实际的 Edge Cases。
+  Required: The following are placeholders.
+  Replace with actual Edge Cases.
 -->
 
-- 当 [边界条件] 时会发生什么？
-- 系统如何处理 [错误场景]？
+- What happens when [boundary condition]?
+- How does the system handle [error scenario]?
 
-## 需求 *(必填)*
+## Requirements *(Required)*
 
 <!--
-  必填：以下内容为占位符。
-  请替换为实际的功能需求。
+  Required: The following are placeholders.
+  Replace with actual functional requirements.
 -->
 
 ### Functional Requirements
 
-- **FR-001**：系统必须 [具体能力，例如"允许用户创建账户"]
-- **FR-002**：系统必须 [具体能力，例如"验证邮箱地址"]
-- **FR-003**：用户必须能够 [关键交互，例如"重置密码"]
-- **FR-004**：系统必须 [数据需求，例如"持久化用户偏好"]
-- **FR-005**：系统必须 [行为，例如"记录所有安全事件"]
+- **FR-001**: The system must [specific capability, e.g. "allow users to create accounts"]
+- **FR-002**: The system must [specific capability, e.g. "validate email addresses"]
+- **FR-003**: Users must be able to [key interaction, e.g. "reset password"]
+- **FR-004**: The system must [data requirement, e.g. "persist user preferences"]
+- **FR-005**: The system must [behavior, e.g. "log all security events"]
 
-*标记不明确需求的示例：*
+*Example of marking underspecified requirements:*
 
-- **FR-006**：系统必须通过 [待澄清：未指定认证方式——邮箱密码、SSO、OAuth？] 认证用户
-- **FR-007**：系统必须保留用户数据 [待澄清：未指定保留期限]
+- **FR-006**: The system must authenticate users via [TBD: authentication method not specified—email/password, SSO, OAuth?]
+- **FR-007**: The system must retain user data [TBD: retention period not specified]
 
-### 关键实体 *(如功能涉及数据则必填)*
+### Key Entities *(Required if feature involves data)*
 
-- **[实体 1]**：[代表什么，关键属性（不含实现细节）]
-- **[实体 2]**：[代表什么，与其他实体的关系]
+- **[Entity 1]**: [What it represents, key attributes (no implementation details)]
+- **[Entity 2]**: [What it represents, relationship with other entities]
 
-## Success Criteria *(必填)*
+## Success Criteria *(Required)*
 
 <!--
-  必填：定义可度量的 Success Criteria。
-  这些标准必须与技术无关且可度量。
+  Required: Define measurable Success Criteria.
+  These criteria must be technology-agnostic and measurable.
 -->
 
 ### Measurable Outcomes
 
-- **SC-001**：[可度量指标，例如"用户可在 2 分钟内完成账户创建"]
-- **SC-002**：[可度量指标，例如"系统在 1000 并发用户下无性能退化"]
-- **SC-003**：[用户满意度指标，例如"90% 的用户首次尝试即可完成主要任务"]
-- **SC-004**：[业务指标，例如"将 [X] 相关的工单减少 50%"]
+- **SC-001**: [Measurable metric, e.g. "Users can complete account creation within 2 minutes"]
+- **SC-002**: [Measurable metric, e.g. "No performance degradation under 1000 concurrent users"]
+- **SC-003**: [User satisfaction metric, e.g. "90% of users complete the main task on first attempt"]
+- **SC-004**: [Business metric, e.g. "Reduce [X]-related tickets by 50%"]
