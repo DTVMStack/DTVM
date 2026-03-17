@@ -278,9 +278,9 @@ EVMModule *loadTransientModule(DTVM *VM, const uint8_t *Code, size_t CodeSize,
 }
 
 /// Find or load a cached EVMModule using two-level cache:
-///   L0 (code pointer+size) -> L1 (address map) -> Cold load.
-/// Shared by both interpreter and multipass paths.
-/// Returns nullptr on failure.
+///   L1 address-based lookup (code_address + revision) + validateCodeMatch()
+///   followed by a cold module load on miss or validation failure.
+/// Shared by both interpreter and multipass paths. Returns nullptr on failure.
 EVMModule *findModuleCached(DTVM *VM, const uint8_t *Code, size_t CodeSize,
                             evmc_revision Rev, const evmc_message *Msg,
                             bool &IsTransient) {
