@@ -185,10 +185,6 @@ struct DTVM : evmc_vm {
   Isolation *Iso = nullptr;
 
   // ---- Module & instance cache (shared by interpreter and multipass) ----
-  // L0: pointer-based inline cache (fastest, 2 integer comparisons)
-  const uint8_t *LastCodePtr = nullptr;
-  size_t LastCodeSize = 0;
-  EVMModule *L0Mod = nullptr;
   // L1: address-based cache map (code_address + rev -> module)
   std::unordered_map<CodeAddrRevKey, EVMModule *, CodeAddrRevHash,
                      CodeAddrRevEqual>
@@ -312,8 +308,6 @@ EVMModule *findModuleCached(DTVM *VM, const uint8_t *Code, size_t CodeSize,
     // If validation failed for an existing entry, evict the stale module
     if (It != VM->AddrCache.end()) {
       EVMModule *OldMod = It->second;
-      if (VM->L0Mod == OldMod && Msg->depth == 0)
-        VM->L0Mod = nullptr;
       VM->RT->unloadEVMModule(OldMod);
       VM->AddrCache.erase(It);
     }
@@ -325,16 +319,6 @@ EVMModule *findModuleCached(DTVM *VM, const uint8_t *Code, size_t CodeSize,
     VM->AddrCache[AddrKey] = Mod;
   }
 
-  // Update L0 cache members. Even though L0 lookup is disabled, we maintain
-  // these state variables for two reasons:
-  // 1. Eviction tracking: If a stale L1 entry is replaced, we need to
-  // invalidate
-  //    L0Mod if it pointed to the old module (done in the eviction path above).
-  // 2. Future extensibility: It keeps the door open for re-enabling L0 later
-  //    with a safer validation scheme (e.g., pointer + size + hash).
-  VM->LastCodePtr = Code;
-  VM->LastCodeSize = CodeSize;
-  VM->L0Mod = Mod;
   return Mod;
 }
 
