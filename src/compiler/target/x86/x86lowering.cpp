@@ -8,6 +8,8 @@
 using namespace COMPILER;
 using namespace llvm;
 
+namespace {
+
 static void assertZeroFlagChainOperand(const MInstruction *Operand) {
   const auto *ConstInst = dyn_cast<ConstantInstruction>(Operand);
   ZEN_ASSERT(ConstInst &&
@@ -19,6 +21,139 @@ static void assertZeroFlagChainOperand(const MInstruction *Operand) {
       "x86 ADC/SBB lowering requires carry/borrow operand to be constant 0");
 }
 
+using ExprEquivalenceKey =
+    std::pair<const MInstruction *, const MInstruction *>;
+
+static bool areEquivalentTypes(const MType *LHS, const MType *RHS) {
+  if (LHS == RHS) {
+    return true;
+  }
+
+  if (LHS == nullptr || RHS == nullptr) {
+    return false;
+  }
+
+  if (LHS->getKind() != RHS->getKind()) {
+    return false;
+  }
+
+  if (LHS->isInteger()) {
+    return LHS->isSigned() == RHS->isSigned() &&
+           LHS->getBitWidth() == RHS->getBitWidth();
+  }
+
+  return true;
+}
+
+static bool areEquivalentConstants(const MConstant &LHS, const MConstant &RHS) {
+  if (!areEquivalentTypes(&LHS.getType(), &RHS.getType())) {
+    return false;
+  }
+
+  if (const auto *LHSInt = dyn_cast<MConstantInt>(&LHS)) {
+    const auto *RHSInt = dyn_cast<MConstantInt>(&RHS);
+    return RHSInt != nullptr && LHSInt->getValue() == RHSInt->getValue();
+  }
+
+  if (const auto *LHSFloat = dyn_cast<MConstantFloat>(&LHS)) {
+    const auto *RHSFloat = dyn_cast<MConstantFloat>(&RHS);
+    return RHSFloat != nullptr &&
+           LHSFloat->getValue().bitwiseIsEqual(RHSFloat->getValue());
+  }
+
+  return false;
+}
+
+static bool areEquivalentExprTrees(const MInstruction *LHS,
+                                   const MInstruction *RHS,
+                                   DenseMap<ExprEquivalenceKey, bool> &Memo) {
+  if (LHS == RHS) {
+    return true;
+  }
+
+  if (LHS == nullptr || RHS == nullptr) {
+    return false;
+  }
+
+  ExprEquivalenceKey Key{LHS, RHS};
+  if (auto It = Memo.find(Key); It != Memo.end()) {
+    return It->second;
+  }
+
+  bool Result = false;
+  if (LHS->getKind() != RHS->getKind() ||
+      LHS->getOpcode() != RHS->getOpcode() ||
+      !areEquivalentTypes(LHS->getType(), RHS->getType()) ||
+      LHS->getNumOperands() != RHS->getNumOperands()) {
+    Memo[Key] = false;
+    Memo[{RHS, LHS}] = false;
+    return false;
+  }
+
+  switch (LHS->getKind()) {
+  case MInstruction::CONSTANT:
+    Result =
+        areEquivalentConstants(cast<ConstantInstruction>(LHS)->getConstant(),
+                               cast<ConstantInstruction>(RHS)->getConstant());
+    break;
+  case MInstruction::DREAD:
+    Result = cast<DreadInstruction>(LHS)->getVarIdx() ==
+             cast<DreadInstruction>(RHS)->getVarIdx();
+    break;
+  case MInstruction::LOAD: {
+    const auto *LHSLoad = cast<LoadInstruction>(LHS);
+    const auto *RHSLoad = cast<LoadInstruction>(RHS);
+    Result =
+        LHSLoad->getScale() == RHSLoad->getScale() &&
+        LHSLoad->getOffset() == RHSLoad->getOffset() &&
+        LHSLoad->getSext() == RHSLoad->getSext() &&
+        areEquivalentTypes(LHSLoad->getSrcType(), RHSLoad->getSrcType()) &&
+        areEquivalentExprTrees(LHSLoad->getBase(), RHSLoad->getBase(), Memo) &&
+        areEquivalentExprTrees(LHSLoad->getIndex(), RHSLoad->getIndex(), Memo);
+    break;
+  }
+  case MInstruction::CMP: {
+    const auto *LHSCmp = cast<CmpInstruction>(LHS);
+    const auto *RHSCmp = cast<CmpInstruction>(RHS);
+    Result = LHSCmp->getPredicate() == RHSCmp->getPredicate();
+    for (OperandNum I = 0; Result && I < LHS->getNumOperands(); ++I) {
+      Result =
+          areEquivalentExprTrees(LHS->getOperand(I), RHS->getOperand(I), Memo);
+    }
+    break;
+  }
+  case MInstruction::UNARY:
+  case MInstruction::CONVERSION:
+  case MInstruction::ADC:
+  case MInstruction::SELECT:
+    Result = true;
+    for (OperandNum I = 0; Result && I < LHS->getNumOperands(); ++I) {
+      Result =
+          areEquivalentExprTrees(LHS->getOperand(I), RHS->getOperand(I), Memo);
+    }
+    break;
+  case MInstruction::BINARY:
+    Result =
+        areEquivalentExprTrees(LHS->getOperand(0), RHS->getOperand(0), Memo) &&
+        areEquivalentExprTrees(LHS->getOperand(1), RHS->getOperand(1), Memo);
+    if (!Result && LHS->isCommutative()) {
+      Result =
+          areEquivalentExprTrees(LHS->getOperand(0), RHS->getOperand(1),
+                                 Memo) &&
+          areEquivalentExprTrees(LHS->getOperand(1), RHS->getOperand(0), Memo);
+    }
+    break;
+  default:
+    Result = false;
+    break;
+  }
+
+  Memo[Key] = Result;
+  Memo[{RHS, LHS}] = Result;
+  return Result;
+}
+
+} // namespace
 X86CgLowering::X86CgLowering(CgFunction &MF)
     : CgLowering(MF), Subtarget(&MF.getSubtarget<X86Subtarget>()),
       TRI(Subtarget->getRegisterInfo()) {
@@ -1083,8 +1218,28 @@ X86CgLowering::lowerEvmUmul128HiExpr(const EvmUmul128HiInstruction &Inst) {
 
 CgRegister
 X86CgLowering::lowerEvmU256MulExpr(const EvmU256MulInstruction &Inst) {
-  if (Subtarget->hasBMI2() && Subtarget->hasADX()) {
-    return lowerEvmU256MulExprAdx(Inst);
+  if (Subtarget->hasBMI2()) {
+    DenseMap<ExprEquivalenceKey, bool> ExprEquivalenceMemo;
+    bool IsSquare = true;
+    static constexpr size_t NumLimbs = 4;
+    for (size_t I = 0; I < NumLimbs; ++I) {
+      if (!areEquivalentExprTrees(Inst.getOperand(I),
+                                  Inst.getOperand(NumLimbs + I),
+                                  ExprEquivalenceMemo)) {
+        IsSquare = false;
+        break;
+      }
+    }
+    if (IsSquare) {
+      if (Subtarget->hasADX()) {
+        return lowerEvmU256SquareExprAdx(Inst);
+      }
+      return lowerEvmU256SquareExprMulx(Inst);
+    }
+    if (Subtarget->hasADX()) {
+      return lowerEvmU256MulExprAdx(Inst);
+    }
+    return lowerEvmU256MulExprMulx(Inst);
   }
   return lowerEvmU256MulExprLegacy(Inst);
 }
@@ -1144,7 +1299,7 @@ X86CgLowering::lowerEvmU256MulExprLegacy(const EvmU256MulInstruction &Inst) {
   auto addWithCarryCounter = [&](CgRegister SumReg, CgRegister CarryReg,
                                  CgRegister TermReg) {
     CgRegister NewSum = fastEmitInst_rr(X86::ADD64rr, RC, SumReg, TermReg);
-    CgRegister NewCarry = fastEmitInst_rr(X86::ADC64rr, RC, CarryReg, ZeroReg);
+    CgRegister NewCarry = fastEmitInst_ri(X86::ADC64ri32, RC, CarryReg, 0);
     return std::pair<CgRegister, CgRegister>(NewSum, NewCarry);
   };
 
@@ -1212,24 +1367,46 @@ X86CgLowering::lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst) {
     B[I] = lowerExpr(*Inst.getOperand(NumLimbs + I));
   }
 
-  auto emitMulx64 = [&](CgRegister LHSReg, CgRegister RHSReg,
+  CgRegister MulxSourceReg = X86::NoRegister;
+  CgRegister DeadMulxHiReg = X86::NoRegister;
+  auto getDeadMulxHiReg = [&]() {
+    if (DeadMulxHiReg == X86::NoRegister) {
+      DeadMulxHiReg = createReg(RC);
+    }
+    return DeadMulxHiReg;
+  };
+  auto emitMulx64 = [&](CgRegister SourceReg, CgRegister OperandReg,
                         bool NeedHigh) -> std::pair<CgRegister, CgRegister> {
-    SmallVector<CgOperand, 2> CopyToRDXOperands{
-        CgOperand::createRegOperand(X86::RDX, true),
-        CgOperand::createRegOperand(RHSReg, false),
-    };
-    MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY),
-                            CopyToRDXOperands);
+    if (MulxSourceReg != SourceReg) {
+      SmallVector<CgOperand, 2> CopyToRDXOperands{
+          CgOperand::createRegOperand(X86::RDX, true),
+          CgOperand::createRegOperand(SourceReg, false),
+      };
+      MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY),
+                              CopyToRDXOperands);
+      MulxSourceReg = SourceReg;
+    }
 
-    CgRegister HiReg = createReg(RC);
     CgRegister LoReg = createReg(RC);
+    CgRegister HiReg = NeedHigh ? createReg(RC) : getDeadMulxHiReg();
     SmallVector<CgOperand, 3> MulxOperands{
         CgOperand::createRegOperand(HiReg, true, false, false, !NeedHigh),
         CgOperand::createRegOperand(LoReg, true),
-        CgOperand::createRegOperand(LHSReg, false),
+        CgOperand::createRegOperand(OperandReg, false),
     };
     MF->createCgInstruction(*CurBB, TII.get(X86::MULX64rr), MulxOperands);
     return {LoReg, NeedHigh ? HiReg : X86::NoRegister};
+  };
+
+  auto addNoCarry = [&](CgRegister LHSReg, CgRegister RHSReg) {
+    return fastEmitInst_rr(X86::ADD64rr, RC, LHSReg, RHSReg);
+  };
+
+  auto addWithCarryCounter = [&](CgRegister SumReg, CgRegister CarryReg,
+                                 CgRegister TermReg) {
+    CgRegister NewSum = fastEmitInst_rr(X86::ADD64rr, RC, SumReg, TermReg);
+    CgRegister NewCarry = fastEmitInst_ri(X86::ADC64ri32, RC, CarryReg, 0);
+    return std::pair<CgRegister, CgRegister>(NewSum, NewCarry);
   };
 
   auto addWithCF = [&](CgRegister DstReg, CgRegister SrcReg) {
@@ -1240,50 +1417,48 @@ X86CgLowering::lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst) {
     return fastEmitInst_rr(X86::ADOX64rr, RC, DstReg, SrcReg);
   };
 
-  auto addNoCarry = [&](CgRegister LHSReg, CgRegister RHSReg) {
-    return fastEmitInst_rr(X86::ADD64rr, RC, LHSReg, RHSReg);
-  };
-
   auto clearCarryChains = [&]() {
     fastEmitNoDefInst_rr(X86::TEST64rr, ZeroReg, ZeroReg);
+  };
+
+  auto sumTwoWithAdcx = [&](CgRegister LHSReg, CgRegister RHSReg) {
+    clearCarryChains();
+    CgRegister SumReg = addWithCF(LHSReg, RHSReg);
+    CgRegister CarryReg = fastEmitCopy(RC, ZeroReg);
+    CarryReg = addWithCF(CarryReg, ZeroReg);
+    return std::pair<CgRegister, CgRegister>(SumReg, CarryReg);
+  };
+
+  auto sumTwoWithAdox = [&](CgRegister LHSReg, CgRegister RHSReg) {
+    clearCarryChains();
+    CgRegister SumReg = addWithOF(LHSReg, RHSReg);
+    CgRegister CarryReg = fastEmitCopy(RC, ZeroReg);
+    CarryReg = addWithOF(CarryReg, ZeroReg);
+    return std::pair<CgRegister, CgRegister>(SumReg, CarryReg);
   };
 
   auto [R0, H00] = emitMulx64(A[0], B[0], true);
   auto [L01, H01] = emitMulx64(A[0], B[1], true);
   auto [L10, H10] = emitMulx64(A[1], B[0], true);
-
-  // Fixed 4x4 truncating schoolbook schedule: one carry counter runs on CF via
-  // ADCX, the other on OF via ADOX. Each chain consumes its own flag after
-  // every partial-product accumulation so multi-carry columns remain exact.
-  clearCarryChains();
-  CgRegister R1 = H00;
-  CgRegister C1CF = fastEmitCopy(RC, ZeroReg);
-  CgRegister C1OF = fastEmitCopy(RC, ZeroReg);
-  R1 = addWithCF(R1, L01);
-  R1 = addWithOF(R1, L10);
-  C1CF = addWithCF(C1CF, ZeroReg);
-  C1OF = addWithOF(C1OF, ZeroReg);
-  CgRegister C1 = addNoCarry(C1CF, C1OF);
+  auto [K1Lo, K1Carry] = sumTwoWithAdcx(L01, L10);
+  auto [R1, R1Carry] = sumTwoWithAdox(H00, K1Lo);
+  auto [B2Lo, B2Carry] = sumTwoWithAdcx(H01, H10);
 
   auto [L02, H02] = emitMulx64(A[0], B[2], true);
   auto [L11, H11] = emitMulx64(A[1], B[1], true);
   auto [L20, H20] = emitMulx64(A[2], B[0], true);
 
-  clearCarryChains();
-  CgRegister R2 = H01;
-  CgRegister C2CF = fastEmitCopy(RC, ZeroReg);
-  CgRegister C2OF = fastEmitCopy(RC, ZeroReg);
-  R2 = addWithCF(R2, H10);
-  R2 = addWithOF(R2, L02);
-  C2CF = addWithCF(C2CF, ZeroReg);
-  C2OF = addWithOF(C2OF, ZeroReg);
-  R2 = addWithCF(R2, L11);
-  R2 = addWithOF(R2, L20);
-  C2CF = addWithCF(C2CF, ZeroReg);
-  C2OF = addWithOF(C2OF, ZeroReg);
-  R2 = addWithCF(R2, C1);
-  C2CF = addWithCF(C2CF, ZeroReg);
-  CgRegister C2 = addNoCarry(C2CF, C2OF);
+  CgRegister K2Lo = L02;
+  CgRegister K2Carry = ZeroReg;
+  auto [K2SumA, K2CarryA] = addWithCarryCounter(K2Lo, K2Carry, L11);
+  auto [K2SumB, K2CarryB] = addWithCarryCounter(K2SumA, K2CarryA, L20);
+  auto [K2SumC, K2CarryC] = addWithCarryCounter(K2SumB, K2CarryB, K1Carry);
+  auto [K2SumD, K2CarryD] = addWithCarryCounter(K2SumC, K2CarryC, R1Carry);
+  K2Lo = K2SumD;
+  K2Carry = K2CarryD;
+  auto [R2, R2Carry] = sumTwoWithAdox(B2Lo, K2Lo);
+  CgRegister R23Carry = addNoCarry(B2Carry, K2Carry);
+  R23Carry = addNoCarry(R23Carry, R2Carry);
 
   auto [L03, Unused03] = emitMulx64(A[0], B[3], false);
   auto [L12, Unused12] = emitMulx64(A[1], B[2], false);
@@ -1294,23 +1469,359 @@ X86CgLowering::lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst) {
   (void)Unused21;
   (void)Unused30;
 
-  clearCarryChains();
   CgRegister R3 = H02;
-  CgRegister C3CF = fastEmitCopy(RC, ZeroReg);
-  CgRegister C3OF = fastEmitCopy(RC, ZeroReg);
-  R3 = addWithCF(R3, H11);
-  R3 = addWithOF(R3, H20);
-  C3CF = addWithCF(C3CF, ZeroReg);
-  C3OF = addWithOF(C3OF, ZeroReg);
-  R3 = addWithCF(R3, L03);
-  R3 = addWithOF(R3, L12);
-  C3CF = addWithCF(C3CF, ZeroReg);
-  C3OF = addWithOF(C3OF, ZeroReg);
-  R3 = addWithCF(R3, L21);
-  R3 = addWithOF(R3, L30);
-  C3CF = addWithCF(C3CF, ZeroReg);
-  C3OF = addWithOF(C3OF, ZeroReg);
-  R3 = addWithCF(R3, C2);
+  R3 = addNoCarry(R3, H11);
+  R3 = addNoCarry(R3, H20);
+  R3 = addNoCarry(R3, L03);
+  R3 = addNoCarry(R3, L12);
+  R3 = addNoCarry(R3, L21);
+  R3 = addNoCarry(R3, L30);
+  R3 = addNoCarry(R3, R23Carry);
+
+  U256MulResultRegs[&Inst] = {R1, R2, R3};
+  return R0;
+}
+
+CgRegister
+X86CgLowering::lowerEvmU256MulExprMulx(const EvmU256MulInstruction &Inst) {
+  static constexpr size_t NumLimbs = 4;
+  const TargetRegisterClass *RC = &X86::GR64RegClass;
+  CgRegister ZeroReg = X86MaterializeInt(0, MVT::i64);
+
+  std::array<CgRegister, NumLimbs> A = {};
+  std::array<CgRegister, NumLimbs> B = {};
+  for (size_t I = 0; I < NumLimbs; ++I) {
+    A[I] = lowerExpr(*Inst.getOperand(I));
+    B[I] = lowerExpr(*Inst.getOperand(NumLimbs + I));
+  }
+
+  CgRegister MulxSourceReg = X86::NoRegister;
+  CgRegister DeadMulxHiReg = X86::NoRegister;
+  auto getDeadMulxHiReg = [&]() {
+    if (DeadMulxHiReg == X86::NoRegister) {
+      DeadMulxHiReg = createReg(RC);
+    }
+    return DeadMulxHiReg;
+  };
+  auto emitMulx64 = [&](CgRegister SourceReg, CgRegister OperandReg,
+                        bool NeedHigh) -> std::pair<CgRegister, CgRegister> {
+    if (MulxSourceReg != SourceReg) {
+      SmallVector<CgOperand, 2> CopyToRDXOperands{
+          CgOperand::createRegOperand(X86::RDX, true),
+          CgOperand::createRegOperand(SourceReg, false),
+      };
+      MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY),
+                              CopyToRDXOperands);
+      MulxSourceReg = SourceReg;
+    }
+
+    CgRegister LoReg = createReg(RC);
+    CgRegister HiReg = NeedHigh ? createReg(RC) : getDeadMulxHiReg();
+    SmallVector<CgOperand, 3> MulxOperands{
+        CgOperand::createRegOperand(HiReg, true, false, false, !NeedHigh),
+        CgOperand::createRegOperand(LoReg, true),
+        CgOperand::createRegOperand(OperandReg, false),
+    };
+    MF->createCgInstruction(*CurBB, TII.get(X86::MULX64rr), MulxOperands);
+    return {LoReg, NeedHigh ? HiReg : X86::NoRegister};
+  };
+
+  auto addNoCarry = [&](CgRegister LHSReg, CgRegister RHSReg) {
+    return fastEmitInst_rr(X86::ADD64rr, RC, LHSReg, RHSReg);
+  };
+
+  auto addWithCarryCounter = [&](CgRegister SumReg, CgRegister CarryReg,
+                                 CgRegister TermReg) {
+    CgRegister NewSum = fastEmitInst_rr(X86::ADD64rr, RC, SumReg, TermReg);
+    CgRegister NewCarry = fastEmitInst_ri(X86::ADC64ri32, RC, CarryReg, 0);
+    return std::pair<CgRegister, CgRegister>(NewSum, NewCarry);
+  };
+
+  auto [R0, H00] = emitMulx64(A[0], B[0], true);
+  CgRegister R1 = H00;
+  CgRegister C1 = ZeroReg;
+
+  auto [L01, H01] = emitMulx64(A[0], B[1], true);
+  auto [S1, C1a] = addWithCarryCounter(R1, C1, L01);
+  R1 = S1;
+  C1 = C1a;
+
+  auto [L02, H02] = emitMulx64(A[0], B[2], true);
+  CgRegister R2 = H01;
+  CgRegister C2 = ZeroReg;
+  auto [S2, C2a] = addWithCarryCounter(R2, C2, L02);
+  R2 = S2;
+  C2 = C2a;
+
+  auto [L03, Unused03] = emitMulx64(A[0], B[3], false);
+  (void)Unused03;
+  CgRegister R3 = H02;
+  R3 = addNoCarry(R3, L03);
+
+  auto [L10, H10] = emitMulx64(A[1], B[0], true);
+  auto [S3, C1b] = addWithCarryCounter(R1, C1, L10);
+  R1 = S3;
+  C1 = C1b;
+  auto [S4, C2b] = addWithCarryCounter(R2, C2, H10);
+  R2 = S4;
+  C2 = C2b;
+
+  auto [L11, H11] = emitMulx64(A[1], B[1], true);
+  auto [S5, C2c] = addWithCarryCounter(R2, C2, L11);
+  R2 = S5;
+  C2 = C2c;
+  R3 = addNoCarry(R3, H11);
+
+  auto [L12, Unused12] = emitMulx64(A[1], B[2], false);
+  (void)Unused12;
+  R3 = addNoCarry(R3, L12);
+
+  auto [L20, H20] = emitMulx64(A[2], B[0], true);
+  auto [S6, C2d] = addWithCarryCounter(R2, C2, L20);
+  R2 = S6;
+  C2 = C2d;
+  R3 = addNoCarry(R3, H20);
+
+  auto [L21, Unused21] = emitMulx64(A[2], B[1], false);
+  (void)Unused21;
+  R3 = addNoCarry(R3, L21);
+
+  auto [L30, Unused30] = emitMulx64(A[3], B[0], false);
+  (void)Unused30;
+  R3 = addNoCarry(R3, L30);
+
+  auto [S7, C2e] = addWithCarryCounter(R2, C2, C1);
+  R2 = S7;
+  C2 = C2e;
+  R3 = addNoCarry(R3, C2);
+
+  U256MulResultRegs[&Inst] = {R1, R2, R3};
+  return R0;
+}
+
+CgRegister
+X86CgLowering::lowerEvmU256SquareExprAdx(const EvmU256MulInstruction &Inst) {
+  static constexpr size_t NumLimbs = 4;
+  const TargetRegisterClass *RC = &X86::GR64RegClass;
+  CgRegister ZeroReg = X86MaterializeInt(0, MVT::i64);
+
+  std::array<CgRegister, NumLimbs> A = {};
+  for (size_t I = 0; I < NumLimbs; ++I) {
+    A[I] = lowerExpr(*Inst.getOperand(I));
+  }
+
+  CgRegister MulxSourceReg = X86::NoRegister;
+  CgRegister DeadMulxHiReg = X86::NoRegister;
+  auto getDeadMulxHiReg = [&]() {
+    if (DeadMulxHiReg == X86::NoRegister) {
+      DeadMulxHiReg = createReg(RC);
+    }
+    return DeadMulxHiReg;
+  };
+  auto emitMulx64 = [&](CgRegister SourceReg, CgRegister OperandReg,
+                        bool NeedHigh) -> std::pair<CgRegister, CgRegister> {
+    if (MulxSourceReg != SourceReg) {
+      SmallVector<CgOperand, 2> CopyToRDXOperands{
+          CgOperand::createRegOperand(X86::RDX, true),
+          CgOperand::createRegOperand(SourceReg, false),
+      };
+      MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY),
+                              CopyToRDXOperands);
+      MulxSourceReg = SourceReg;
+    }
+
+    CgRegister LoReg = createReg(RC);
+    CgRegister HiReg = NeedHigh ? createReg(RC) : getDeadMulxHiReg();
+    SmallVector<CgOperand, 3> MulxOperands{
+        CgOperand::createRegOperand(HiReg, true, false, false, !NeedHigh),
+        CgOperand::createRegOperand(LoReg, true),
+        CgOperand::createRegOperand(OperandReg, false),
+    };
+    MF->createCgInstruction(*CurBB, TII.get(X86::MULX64rr), MulxOperands);
+    return {LoReg, NeedHigh ? HiReg : X86::NoRegister};
+  };
+
+  auto addNoCarry = [&](CgRegister LHSReg, CgRegister RHSReg) {
+    return fastEmitInst_rr(X86::ADD64rr, RC, LHSReg, RHSReg);
+  };
+
+  auto addWithCarryCounter = [&](CgRegister SumReg, CgRegister CarryReg,
+                                 CgRegister TermReg) {
+    CgRegister NewSum = fastEmitInst_rr(X86::ADD64rr, RC, SumReg, TermReg);
+    CgRegister NewCarry = fastEmitInst_ri(X86::ADC64ri32, RC, CarryReg, 0);
+    return std::pair<CgRegister, CgRegister>(NewSum, NewCarry);
+  };
+
+  auto addWithCF = [&](CgRegister DstReg, CgRegister SrcReg) {
+    return fastEmitInst_rr(X86::ADCX64rr, RC, DstReg, SrcReg);
+  };
+
+  auto addWithOF = [&](CgRegister DstReg, CgRegister SrcReg) {
+    return fastEmitInst_rr(X86::ADOX64rr, RC, DstReg, SrcReg);
+  };
+
+  auto clearCarryChains = [&]() {
+    fastEmitNoDefInst_rr(X86::TEST64rr, ZeroReg, ZeroReg);
+  };
+
+  auto doubleWithAdcx = [&](CgRegister LoReg, CgRegister HiReg,
+                            bool NeedHighCarry)
+      -> std::tuple<CgRegister, CgRegister, CgRegister> {
+    clearCarryChains();
+    CgRegister DoubleLo = addWithCF(LoReg, LoReg);
+    CgRegister DoubleHi = addWithCF(HiReg, HiReg);
+    CgRegister HighCarry = X86::NoRegister;
+    if (NeedHighCarry) {
+      HighCarry = fastEmitCopy(RC, ZeroReg);
+      HighCarry = addWithCF(HighCarry, ZeroReg);
+    }
+    return {DoubleLo, DoubleHi, HighCarry};
+  };
+
+  auto [R0, H00] = emitMulx64(A[0], A[0], true);
+
+  auto [L01, H01] = emitMulx64(A[0], A[1], true);
+  auto [D01Lo, D01HiWithCarry, C01Hi] = doubleWithAdcx(L01, H01, true);
+
+  auto [L02, H02] = emitMulx64(A[0], A[2], true);
+  auto [D02Lo, D02HiWithCarry, Ignored02Carry] =
+      doubleWithAdcx(L02, H02, false);
+  (void)Ignored02Carry;
+
+  auto [L03, Unused03] = emitMulx64(A[0], A[3], false);
+  (void)Unused03;
+  CgRegister D03 = addNoCarry(L03, L03);
+
+  auto [L11, H11] = emitMulx64(A[1], A[1], true);
+  auto [L12, Unused12] = emitMulx64(A[1], A[2], false);
+  (void)Unused12;
+  CgRegister D12 = addNoCarry(L12, L12);
+
+  CgRegister K2Lo = L11;
+  CgRegister K2Carry = ZeroReg;
+  auto [K2Sum, K2CarryOut] = addWithCarryCounter(K2Lo, K2Carry, D02Lo);
+  K2Lo = K2Sum;
+  K2Carry = K2CarryOut;
+
+  CgRegister K3Lo = D03;
+  K3Lo = addNoCarry(K3Lo, H11);
+  K3Lo = addNoCarry(K3Lo, D12);
+  K3Lo = addNoCarry(K3Lo, C01Hi);
+  K3Lo = addNoCarry(K3Lo, K2Carry);
+
+  CgRegister R1 = H00;
+  CgRegister R2 = D01HiWithCarry;
+  CgRegister R3 = D02HiWithCarry;
+  clearCarryChains();
+  R1 = addWithCF(R1, D01Lo);
+  R2 = addWithOF(R2, K2Lo);
+  R2 = addWithCF(R2, ZeroReg);
+  R3 = addWithOF(R3, K3Lo);
+  R3 = addWithCF(R3, ZeroReg);
+
+  U256MulResultRegs[&Inst] = {R1, R2, R3};
+  return R0;
+}
+
+CgRegister
+X86CgLowering::lowerEvmU256SquareExprMulx(const EvmU256MulInstruction &Inst) {
+  static constexpr size_t NumLimbs = 4;
+  const TargetRegisterClass *RC = &X86::GR64RegClass;
+  CgRegister ZeroReg = X86MaterializeInt(0, MVT::i64);
+
+  std::array<CgRegister, NumLimbs> A = {};
+  for (size_t I = 0; I < NumLimbs; ++I) {
+    A[I] = lowerExpr(*Inst.getOperand(I));
+  }
+
+  CgRegister MulxSourceReg = X86::NoRegister;
+  CgRegister DeadMulxHiReg = X86::NoRegister;
+  auto getDeadMulxHiReg = [&]() {
+    if (DeadMulxHiReg == X86::NoRegister) {
+      DeadMulxHiReg = createReg(RC);
+    }
+    return DeadMulxHiReg;
+  };
+  auto emitMulx64 = [&](CgRegister SourceReg, CgRegister OperandReg,
+                        bool NeedHigh) -> std::pair<CgRegister, CgRegister> {
+    if (MulxSourceReg != SourceReg) {
+      SmallVector<CgOperand, 2> CopyToRDXOperands{
+          CgOperand::createRegOperand(X86::RDX, true),
+          CgOperand::createRegOperand(SourceReg, false),
+      };
+      MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY),
+                              CopyToRDXOperands);
+      MulxSourceReg = SourceReg;
+    }
+
+    CgRegister LoReg = createReg(RC);
+    CgRegister HiReg = NeedHigh ? createReg(RC) : getDeadMulxHiReg();
+    SmallVector<CgOperand, 3> MulxOperands{
+        CgOperand::createRegOperand(HiReg, true, false, false, !NeedHigh),
+        CgOperand::createRegOperand(LoReg, true),
+        CgOperand::createRegOperand(OperandReg, false),
+    };
+    MF->createCgInstruction(*CurBB, TII.get(X86::MULX64rr), MulxOperands);
+    return {LoReg, NeedHigh ? HiReg : X86::NoRegister};
+  };
+
+  auto addNoCarry = [&](CgRegister LHSReg, CgRegister RHSReg) {
+    return fastEmitInst_rr(X86::ADD64rr, RC, LHSReg, RHSReg);
+  };
+
+  auto addWithCarryCounter = [&](CgRegister SumReg, CgRegister CarryReg,
+                                 CgRegister TermReg) {
+    CgRegister NewSum = fastEmitInst_rr(X86::ADD64rr, RC, SumReg, TermReg);
+    CgRegister NewCarry = fastEmitInst_ri(X86::ADC64ri32, RC, CarryReg, 0);
+    return std::pair<CgRegister, CgRegister>(NewSum, NewCarry);
+  };
+
+  auto doubleWithCarry = [&](CgRegister ValueReg) {
+    return addWithCarryCounter(ValueReg, ZeroReg, ValueReg);
+  };
+
+  auto [R0, H00] = emitMulx64(A[0], A[0], true);
+
+  auto [L01, H01] = emitMulx64(A[0], A[1], true);
+  auto [D01Lo, C01Lo] = doubleWithCarry(L01);
+  auto [D01Hi, C01HiA] = doubleWithCarry(H01);
+  auto [D01HiWithCarry, C01Hi] = addWithCarryCounter(D01Hi, C01HiA, C01Lo);
+
+  CgRegister R1 = H00;
+  CgRegister C1 = ZeroReg;
+  auto [S1, C1a] = addWithCarryCounter(R1, C1, D01Lo);
+  R1 = S1;
+  C1 = C1a;
+
+  auto [L02, H02] = emitMulx64(A[0], A[2], true);
+  auto [D02Lo, C02Lo] = doubleWithCarry(L02);
+  auto [D02Hi, Ignored02Hi] = doubleWithCarry(H02);
+  (void)Ignored02Hi;
+  CgRegister D02HiWithCarry = addNoCarry(D02Hi, C02Lo);
+
+  auto [L03, Unused03] = emitMulx64(A[0], A[3], false);
+  (void)Unused03;
+  CgRegister D03 = addNoCarry(L03, L03);
+
+  auto [L11, H11] = emitMulx64(A[1], A[1], true);
+  auto [L12, Unused12] = emitMulx64(A[1], A[2], false);
+  (void)Unused12;
+  CgRegister D12 = addNoCarry(L12, L12);
+
+  CgRegister R2 = D01HiWithCarry;
+  CgRegister C2 = ZeroReg;
+  auto [S2, C2a] = addWithCarryCounter(R2, C2, L11);
+  auto [S3, C2b] = addWithCarryCounter(S2, C2a, D02Lo);
+  auto [S4, C2c] = addWithCarryCounter(S3, C2b, C1);
+  R2 = S4;
+  C2 = C2c;
+
+  CgRegister R3 = D02HiWithCarry;
+  R3 = addNoCarry(R3, D03);
+  R3 = addNoCarry(R3, C01Hi);
+  R3 = addNoCarry(R3, H11);
+  R3 = addNoCarry(R3, D12);
+  R3 = addNoCarry(R3, C2);
 
   U256MulResultRegs[&Inst] = {R1, R2, R3};
   return R0;

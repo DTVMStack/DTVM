@@ -118,6 +118,9 @@ private:
 
   CgRegister lowerEvmU256MulExprLegacy(const EvmU256MulInstruction &Inst);
   CgRegister lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst);
+  CgRegister lowerEvmU256MulExprMulx(const EvmU256MulInstruction &Inst);
+  CgRegister lowerEvmU256SquareExprAdx(const EvmU256MulInstruction &Inst);
+  CgRegister lowerEvmU256SquareExprMulx(const EvmU256MulInstruction &Inst);
 
   void lowerFastCompareExpr(const MInstruction *LHS, const MInstruction *RHS,
                             MVT VT);
