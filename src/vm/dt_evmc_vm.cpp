@@ -11,7 +11,6 @@
 #include "runtime/runtime.h"
 #include "wrapped_host.h"
 #include <algorithm>
-#include <list>
 
 #include <evmc/evmc.h>
 #include <evmc/evmc.hpp>
@@ -475,7 +474,6 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
   TheInst->pushMessage(&MsgWithCode);
 
   const bool ReuseCachedInstance = !IsTransientMod && Msg->depth == 0;
-  const bool DeleteInstanceAfterCall = Msg->depth > 0 || !ReuseCachedInstance;
 
   // For nested calls, create a new InterpreterExecContext
   // For cacheable top-level calls, reuse cached context
