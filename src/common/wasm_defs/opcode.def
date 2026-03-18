@@ -210,4 +210,13 @@ DEFINE_WASM_OPCODE(I64_EXTEND32_S,	0xc4,	"i64_extend32_s")
 DEFINE_WASM_OPCODE(DROP_64,	0xc5,	"drop_64")
 DEFINE_WASM_OPCODE(SELECT_64,	0xc6,	"select_64")
 
+// Bulk Memory Operations (encoded as 0xFC prefix + sub-opcode in wasm binary)
+DEFINE_WASM_OPCODE(MEMORY_INIT,	0xc7,	"memory.init")
+DEFINE_WASM_OPCODE(DATA_DROP,	0xc8,	"data.drop")
+DEFINE_WASM_OPCODE(MEMORY_COPY,	0xc9,	"memory.copy")
+DEFINE_WASM_OPCODE(MEMORY_FILL,	0xca,	"memory.fill")
+DEFINE_WASM_OPCODE(TABLE_INIT,	0xcb,	"table.init")
+DEFINE_WASM_OPCODE(ELEM_DROP,	0xcc,	"elem.drop")
+DEFINE_WASM_OPCODE(TABLE_COPY,	0xcd,	"table.copy")
+
 #endif

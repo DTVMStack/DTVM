@@ -83,6 +83,8 @@ DEFINE_ERROR(Load,  None,   InvalidNameSectionPosition,       "name section must
 DEFINE_ERROR(Load,  None,   DuplicateExportName,    "duplicate export name")
 DEFINE_ERROR(Load,  None,   FuncCodeInconsistent,   "function and code section have inconsistent lengths")
 DEFINE_ERROR(Load,  None,   DataSegAndDataCountInconsistent,    "data count and data section have inconsistent lengths")
+DEFINE_ERROR(Load,  None,   UnknownDataSegment,         "unknown data segment")
+DEFINE_ERROR(Load,  None,   UnknownElemSegment,         "unknown elem segment")
 
 // Link Error: Import
 DEFINE_ERROR(Load,  None,   UnknownImport,          "unknown import")
@@ -152,6 +154,7 @@ DEFINE_ERROR(Execution,     None,   IndirectCallTypeMismatch,   "indirect call t
 DEFINE_ERROR(Execution,     None,   UndefinedElement,           "undefined element")
 DEFINE_ERROR(Execution,     None,   Unreachable,                "unreachable")
 DEFINE_ERROR(Execution,     None,   UninitializedElement,       "uninitialized element")
+DEFINE_ERROR(Execution,     None,   OutOfBoundsTable,           "out of bounds table access")
 DEFINE_ERROR(Execution,     None,   GasLimitExceeded,           "out of gas")
 DEFINE_ERROR(Execution,     None,   InstanceExit,               "instance exit")
 

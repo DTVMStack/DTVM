@@ -166,6 +166,8 @@ void Instantiator::instantiateTables(Instance &Inst) {
 
   for (uint32_t I = 0; I < Mod.NumElementSegments; ++I) {
     const auto &Element = Mod.ElementTable[I];
+    if (Element.Mode != 0)
+      continue; // skip non-active segments
     TableInstance &TableInst = Inst.Tables[Element.TableIdx];
     uint32_t Offset = 0;
     if (Element.InitExprKind == GET_GLOBAL) {
@@ -209,6 +211,8 @@ void Instantiator::initMemoryByDataSegments(Instance &Inst) {
   const Module *Mod = Inst.Mod;
   for (uint32_t I = 0; I < Mod->NumDataSegments; ++I) {
     const auto &DataSeg = Mod->DataTable[I];
+    if (DataSeg.Mode != 0)
+      continue; // skip non-active segments
     uint32_t MemIdx = DataSeg.MemIdx;
     // should checked if MemIndex is valid in loader
     MemoryInstance &MemInst = Inst.Memories[MemIdx];
@@ -348,6 +352,28 @@ void Instantiator::instantiate(Instance &Inst) {
   instantiateTables(Inst);
 
   instantiateMemories(Inst);
+
+  // Initialize dropped segment tracking arrays
+  if (Mod.NumDataSegments > 0) {
+    Inst.DroppedDataSegments =
+        (bool *)Inst.allocateZeros(sizeof(bool) * Mod.NumDataSegments);
+    // Mark active data segments as dropped after instantiation (per spec)
+    for (uint32_t I = 0; I < Mod.NumDataSegments; ++I) {
+      if (Mod.DataTable[I].Mode == 0) {
+        Inst.DroppedDataSegments[I] = true;
+      }
+    }
+  }
+  if (Mod.NumElementSegments > 0) {
+    Inst.DroppedElemSegments =
+        (bool *)Inst.allocateZeros(sizeof(bool) * Mod.NumElementSegments);
+    // Mark active element segments as dropped after instantiation (per spec)
+    for (uint32_t I = 0; I < Mod.NumElementSegments; ++I) {
+      if (Mod.ElementTable[I].Mode == 0) {
+        Inst.DroppedElemSegments[I] = true;
+      }
+    }
+  }
 
 #ifdef ZEN_ENABLE_BUILTIN_WASI
   if (!Inst.getRuntime()->getConfig().DisableWASI) {
