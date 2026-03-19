@@ -27,7 +27,7 @@ option(ZEN_ENABLE_LIBEVM "Enable evmc library build" OFF)
 option(
   ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
   "Enable interpreter fallback before JIT compilation for bytecode estimated to be too expensive"
-  ON
+  OFF
 )
 option(ZEN_ENABLE_CPU_EXCEPTION "Enable cpu trap to implement wasm trap" ON)
 option(ZEN_ENABLE_VIRTUAL_STACK "Enable virtual stack(no system stack)" OFF)
@@ -135,7 +135,13 @@ if(ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK AND NOT ZEN_ENABLE_MULTIPASS_JIT)
       "ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK requires ZEN_ENABLE_MULTIPASS_JIT=ON. "
       "Automatically disabling ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK."
   )
-  set(ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK OFF)
+  set(ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
+      OFF
+      CACHE
+        BOOL
+        "Enable interpreter fallback before JIT compilation for bytecode estimated to be too expensive"
+        FORCE
+  )
 endif()
 
 if(ZEN_ENABLE_LIBEVM)
