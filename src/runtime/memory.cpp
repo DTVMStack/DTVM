@@ -183,14 +183,14 @@ WasmMemoryAllocator::~WasmMemoryAllocator() {
     }
     if (MmapMemoryInitFd > 0) {
       ::close(MmapMemoryInitFd);
+    }
+    if (MmapMemoryFilepath) {
       // delete the memory file forcely
       int Status = ::remove(MmapMemoryFilepath);
       if (Status != 0) {
         ZEN_LOG_WARN("failed to remove mmap tmp memory file %s due to '%s'",
                      MmapMemoryFilepath, std::strerror(errno));
       }
-    }
-    if (MmapMemoryFilepath) {
       ::free(MmapMemoryFilepath);
     }
     delete MemoryAddrToMmapAddr;

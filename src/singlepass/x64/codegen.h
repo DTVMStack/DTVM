@@ -335,18 +335,20 @@ public:
   void checkMemoryOverflow(Operand Base, uint32_t Offset) {
     if (Ctx->UseSoftMemCheck) {
       constexpr uint32_t Size = getWASMTypeSize<Type>();
-      Offset += Size;
-      // check (offset + size) overflow
-      if (Offset < Size) {
-        _ jmp(getExceptLabel(ErrorCode::OutOfBoundsMemory));
-      }
-
+      // Use 64-bit arithmetic to correctly handle cases where base + offset +
+      // size overflows 32-bit (per WASM spec, effective address is computed
+      // as natural number addition, not wrapping 32-bit).
       auto BaseRegNum = Layout.getScopedTemp<X64::I32, ScopedTempReg0>();
-      auto BaseReg = X64Reg::getRegRef<X64::I32>(BaseRegNum);
       mov<X64::I32>(BaseRegNum, Base);
-      _ add(BaseReg, Offset);
-      _ jc(getExceptLabel(ErrorCode::OutOfBoundsMemory));
-      _ cmp(BaseReg, X64Reg::getRegRef<X64::I32>(ABI.getMemorySize()));
+      auto BaseReg64 = X64Reg::getRegRef<X64::I64>(BaseRegNum);
+      // Load offset into a separate 32-bit register so it is zero-extended
+      // to 64 bits before the addition (avoids sign-extension of large values).
+      auto OffsetRegNum = Layout.getScopedTemp<X64::I32, ScopedTempReg1>();
+      _ mov(X64Reg::getRegRef<X64::I32>(OffsetRegNum), Offset);
+      _ add(BaseReg64, X64Reg::getRegRef<X64::I64>(OffsetRegNum));
+      _ add(BaseReg64, Size);
+      // Compare with 64-bit memory size register
+      _ cmp(BaseReg64, ABI.getMemorySizeReg());
       _ ja(getExceptLabel(ErrorCode::OutOfBoundsMemory));
     }
   }
@@ -1022,6 +1024,22 @@ public:
                      : asmjit::x86::Mem(ABI.getMemoryBaseReg(),
                                         X64Reg::getRegRef<X64::I32>(RegNum), 0,
                                         Offset, getWASMTypeSize<Type>());
+
+#ifdef ZEN_ENABLE_CPU_EXCEPTION
+    if (!Base.isImm() && (Offset >= (uint32_t)INT32_MAX)) {
+      // When offset >= INT32_MAX the displacement cannot be encoded as a
+      // signed 32-bit value in the x86 memory operand, so the address would
+      // be computed incorrectly.  Compute the full 64-bit effective address
+      // explicitly and use it as the base for the store.
+      auto MemAddrReg = Layout.getScopedTemp<AddrType, ScopedTempReg2>();
+      _ mov(X64Reg::getRegRef<X64::I32>(MemAddrReg), Offset);
+      _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg),
+            X64Reg::getRegRef<X64::I64>(RegNum));
+      _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg), ABI.getMemoryBaseReg());
+      Addr = asmjit::x86::Mem(X64Reg::getRegRef<X64::I64>(MemAddrReg), 0,
+                               getWASMTypeSize<Type>());
+    }
+#endif // ZEN_ENABLE_CPU_EXCEPTION
 
     mov<X64Type, ScopedTempReg0>(Addr, Value);
   }
