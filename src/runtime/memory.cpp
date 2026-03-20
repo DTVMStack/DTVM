@@ -101,6 +101,13 @@ WasmMemoryAllocator::WasmMemoryAllocator(
         Stats.revertRecord(Timer);
         goto try_use_mmap_init;
       }
+      // Remove the directory entry while keeping the fd open. On POSIX,
+      // remove() on a regular file is equivalent to unlink(): it deletes the
+      // name from the filesystem but the file data remains accessible through
+      // any open fd or mmap. The kernel reclaims the storage automatically
+      // when the last fd/mmap reference is closed — even on abnormal exit
+      // (SIGKILL, crash). This prevents /dev/shm file accumulation.
+      ::remove(Path);
       MmapMemoryFilepath = ::strdup(Path);
       DefaultMemoryType = WM_MEMORY_DATA_TYPE_BUCKET_MMAP;
       MmapMemoryBucketGrowMaxSize = MmapMemoryFileMaxSize;
@@ -183,12 +190,6 @@ WasmMemoryAllocator::~WasmMemoryAllocator() {
     }
     if (MmapMemoryInitFd > 0) {
       ::close(MmapMemoryInitFd);
-      // delete the memory file forcely
-      int Status = ::remove(MmapMemoryFilepath);
-      if (Status != 0) {
-        ZEN_LOG_WARN("failed to remove mmap tmp memory file %s due to '%s'",
-                     MmapMemoryFilepath, std::strerror(errno));
-      }
     }
     if (MmapMemoryFilepath) {
       ::free(MmapMemoryFilepath);
