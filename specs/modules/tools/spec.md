@@ -75,7 +75,7 @@ This module does not include: Build system (CMake), test framework (gtest/ctest)
 | solc / solc-select | Solidity compilation |
 | dtvm | EVM/WASM execution (run_evm_tests, bug_finder) |
 | gdb | Debug tracing |
-| Python 3 | PyYAML, Crypto, rlp, eth-hash, trie |
+| Python 3 | pycryptodome, eth-hash, trie, rlp |
 
 ## Invariants and Permissions
 
@@ -85,11 +85,11 @@ This module does not include: Build system (CMake), test framework (gtest/ctest)
 
 ## Compatibility Strategy
 
-- **Toolchain version**: Depends on system/pipeline clang, solc, Python; `requirements.txt` pins pip deps
+- **Toolchain version**: Depends on system/pipeline clang, solc, Python; `requirements.txt` specifies minimum pip dep versions
 - **Platform**: format.sh, easm2bytecode.sh are bash; Python scripts cross-platform
 
 ## Cross-References
 
-- [specs/testing/README.md](../testing/README.md) — Test run instructions
-- [docs/start.md](../../docs/start.md) — Build and dependencies
-- [specs/modules/tests/spec.md](./tests/spec.md) — Test module
+- [specs/testing/README.md](../../testing/README.md) — Test run instructions
+- [docs/start.md](../../../docs/start.md) — Build and dependencies
+- [specs/modules/tests/spec.md](../tests/spec.md) — Test module

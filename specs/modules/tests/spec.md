@@ -110,7 +110,7 @@ This module does not include: EVM interpreter (evm), Host implementation (host),
 
 ## Cross-References
 
-- [specs/testing/README.md](../testing/README.md) — Full testing guide
-- [specs/modules/evm/spec.md](./evm/spec.md) — EVM interpreter spec
-- [specs/modules/runtime/spec.md](./runtime/spec.md) — Runtime and instances
+- [specs/testing/README.md](../../testing/README.md) — Full testing guide
+- [specs/modules/evm/spec.md](../evm/spec.md) — EVM interpreter spec
+- [specs/modules/runtime/spec.md](../runtime/spec.md) — Runtime and instances
 - [AGENTS.md](../../AGENTS.md) — Build and test commands
