@@ -175,19 +175,32 @@ def benchmark_libraries_interleaved(
             run_case(evmc_bin, baseline_library, mode, revision, case, cpu)
         for rep in range(repeat):
             if rep % 2 == 0:
-                current_samples.append(
-                    run_case(evmc_bin, current_library, mode, revision, case, cpu)
+                current_sample = run_case(
+                    evmc_bin, current_library, mode, revision, case, cpu
                 )
-                baseline_samples.append(
-                    run_case(evmc_bin, baseline_library, mode, revision, case, cpu)
+                baseline_sample = run_case(
+                    evmc_bin, baseline_library, mode, revision, case, cpu
                 )
             else:
-                baseline_samples.append(
-                    run_case(evmc_bin, baseline_library, mode, revision, case, cpu)
+                baseline_sample = run_case(
+                    evmc_bin, baseline_library, mode, revision, case, cpu
                 )
-                current_samples.append(
-                    run_case(evmc_bin, current_library, mode, revision, case, cpu)
+                current_sample = run_case(
+                    evmc_bin, current_library, mode, revision, case, cpu
                 )
+
+            if (
+                current_sample.gas_used != baseline_sample.gas_used
+                or current_sample.output_hex != baseline_sample.output_hex
+            ):
+                raise RuntimeError(
+                    f"current/baseline mismatch for case {case.name}: "
+                    f"current(gas={current_sample.gas_used}, output={current_sample.output_hex}) "
+                    f"baseline(gas={baseline_sample.gas_used}, output={baseline_sample.output_hex})"
+                )
+
+            current_samples.append(current_sample)
+            baseline_samples.append(baseline_sample)
         current_results[case.name] = current_samples
         baseline_results[case.name] = baseline_samples
     return current_results, baseline_results
@@ -288,7 +301,12 @@ def parse_args() -> argparse.Namespace:
         dest="case_names",
         help="Benchmark case to run. Can be specified multiple times.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.repeat <= 0:
+        parser.error("--repeat must be greater than 0")
+    if args.warmup < 0:
+        parser.error("--warmup must be non-negative")
+    return args
 
 
 def main() -> int:
