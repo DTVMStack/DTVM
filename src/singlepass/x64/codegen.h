@@ -900,6 +900,7 @@ public:
 
     checkMemoryOverflow<SrcType>(Base, Offset);
 
+    bool UseImmAddr = Base.isImm();
     typename X64TypeAttr<AddrType>::RegNum BaseReg =
         X64::RAX; // the initial value only used to suppress compiler error
 
@@ -914,7 +915,9 @@ public:
       uint64_t Offset64 = (uint64_t)Offset;
       Offset64 += (uint32_t)Base.getImm();
       if (Offset64 > INT32_MAX) {
-        Offset = INT32_MAX; // invalid addr
+        BaseReg = Layout.getScopedTemp<AddrType, ScopedTempReg1>();
+        _ mov(X64Reg::getRegRef<X64::I32>(BaseReg), (uint32_t)Base.getImm());
+        UseImmAddr = false;
       } else {
         Offset = (uint32_t)Offset64;
       }
@@ -928,14 +931,13 @@ public:
       ValReg = Layout.getScopedTemp<X64DestType, ScopedTempReg0>();
     }
 
-    Addr = Base.isImm()
-               ? asmjit::x86::Mem(ABI.getMemoryBaseReg(), Offset,
-                                  getWASMTypeSize<SrcType>())
-               : asmjit::x86::Mem(ABI.getMemoryBaseReg(),
-                                  X64Reg::getRegRef<X64::I32>(BaseReg), 0,
-                                  Offset, getWASMTypeSize<SrcType>());
+    Addr = UseImmAddr ? asmjit::x86::Mem(ABI.getMemoryBaseReg(), Offset,
+                                         getWASMTypeSize<SrcType>())
+                      : asmjit::x86::Mem(ABI.getMemoryBaseReg(),
+                                         X64Reg::getRegRef<X64::I32>(BaseReg),
+                                         0, Offset, getWASMTypeSize<SrcType>());
 
-    if (!Base.isImm() && (Offset > (uint32_t)INT32_MAX)) {
+    if (!UseImmAddr && (Offset > (uint32_t)INT32_MAX)) {
       auto MemAddrReg = Layout.getScopedTemp<AddrType, ScopedTempReg2>();
       _ mov(X64Reg::getRegRef<X64::I32>(MemAddrReg), Offset);
       _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg),
@@ -991,6 +993,7 @@ public:
 
     checkMemoryOverflow<Type>(Base, Offset);
 
+    bool UseImmAddr = Base.isImm();
     X64::RegNum RegNum = 0;
     if (Base.isReg()) {
       RegNum = Base.getReg();
@@ -1002,7 +1005,9 @@ public:
       uint64_t Offset64 = (uint64_t)Offset;
       Offset64 += (uint32_t)Base.getImm();
       if (Offset64 > INT32_MAX) {
-        Offset = INT32_MAX; // invalid addr
+        RegNum = Layout.getScopedTemp<AddrType, ScopedTempReg1>();
+        _ mov(X64Reg::getRegRef<X64::I32>(RegNum), (uint32_t)Base.getImm());
+        UseImmAddr = false;
       } else {
         Offset = (uint32_t)Offset64;
       }
@@ -1011,13 +1016,13 @@ public:
     }
 
     asmjit::x86::Mem Addr =
-        Base.isImm() ? asmjit::x86::Mem(ABI.getMemoryBaseReg(), Offset,
-                                        getWASMTypeSize<Type>())
-                     : asmjit::x86::Mem(ABI.getMemoryBaseReg(),
-                                        X64Reg::getRegRef<X64::I32>(RegNum), 0,
-                                        Offset, getWASMTypeSize<Type>());
+        UseImmAddr ? asmjit::x86::Mem(ABI.getMemoryBaseReg(), Offset,
+                                      getWASMTypeSize<Type>())
+                   : asmjit::x86::Mem(ABI.getMemoryBaseReg(),
+                                      X64Reg::getRegRef<X64::I32>(RegNum), 0,
+                                      Offset, getWASMTypeSize<Type>());
 
-    if (!Base.isImm() && (Offset > (uint32_t)INT32_MAX)) {
+    if (!UseImmAddr && (Offset > (uint32_t)INT32_MAX)) {
       auto MemAddrReg = Layout.getScopedTemp<AddrType, ScopedTempReg2>();
       _ mov(X64Reg::getRegRef<X64::I32>(MemAddrReg), Offset);
       _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg),
