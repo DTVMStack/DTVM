@@ -4,7 +4,7 @@
 #ifndef EVM_FRONTEND_EVM_ANALYZER_H
 #define EVM_FRONTEND_EVM_ANALYZER_H
 
-#include "compiler/common/common_defs.h"
+#include "common/defines.h"
 #include "evm/evm.h"
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
