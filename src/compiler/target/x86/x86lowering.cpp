@@ -196,6 +196,15 @@ CgRegister X86CgLowering::emitAdd64NoCarry(const TargetRegisterClass *RC,
   return fastEmitInst_rr(X86::ADD64rr, RC, LHSReg, RHSReg);
 }
 
+CgRegister X86CgLowering::emitAdd64NoCarryChain(const TargetRegisterClass *RC,
+                                                CgRegister SumReg,
+                                                ArrayRef<CgRegister> TermRegs) {
+  for (CgRegister TermReg : TermRegs) {
+    SumReg = emitAdd64NoCarry(RC, SumReg, TermReg);
+  }
+  return SumReg;
+}
+
 std::pair<CgRegister, CgRegister>
 X86CgLowering::emitAdd64WithCarryCounter(const TargetRegisterClass *RC,
                                          CgRegister SumReg, CgRegister CarryReg,
@@ -213,6 +222,14 @@ CgRegister X86CgLowering::emitAdcx64(const TargetRegisterClass *RC,
 CgRegister X86CgLowering::emitAdox64(const TargetRegisterClass *RC,
                                      CgRegister DstReg, CgRegister SrcReg) {
   return fastEmitInst_rr(X86::ADOX64rr, RC, DstReg, SrcReg);
+}
+
+CgRegister X86CgLowering::collectCarryChains(const TargetRegisterClass *RC,
+                                             CgRegister CarryReg,
+                                             CgRegister ZeroReg) {
+  CarryReg = emitAdcx64(RC, CarryReg, ZeroReg);
+  CarryReg = emitAdox64(RC, CarryReg, ZeroReg);
+  return CarryReg;
 }
 
 void X86CgLowering::clearCarryChains(CgRegister ZeroReg) {
@@ -247,6 +264,89 @@ X86CgLowering::emitMulx64(const TargetRegisterClass *RC,
   };
   MF->createCgInstruction(*CurBB, TII.get(X86::MULX64rr), MulxOperands);
   return {LoReg, NeedHigh ? HiReg : X86::NoRegister};
+}
+
+X86CgLowering::TruncatedU256MulProducts
+X86CgLowering::emitTruncatedU256MulProducts(
+    const TargetRegisterClass *RC, const std::array<CgRegister, 4> &A,
+    const std::array<CgRegister, 4> &B) {
+  CgRegister MulxSourceReg = X86::NoRegister;
+  CgRegister DeadMulxHiReg = X86::NoRegister;
+  auto [R0, H00] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[0], true);
+  auto [L01, H01] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[1], true);
+  auto [L02, H02] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[2], true);
+  auto [L03, Unused03] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[3], false);
+  auto [L10, H10] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], B[0], true);
+  auto [L11, H11] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], B[1], true);
+  auto [L12, Unused12] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], B[2], false);
+  auto [L20, H20] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[2], B[0], true);
+  auto [L21, Unused21] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[2], B[1], false);
+  auto [L30, Unused30] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[3], B[0], false);
+  (void)Unused03;
+  (void)Unused12;
+  (void)Unused21;
+  (void)Unused30;
+  return {
+      .R0 = R0,
+      .H00 = H00,
+      .H01 = H01,
+      .H02 = H02,
+      .H10 = H10,
+      .H11 = H11,
+      .H20 = H20,
+      .L01 = L01,
+      .L02 = L02,
+      .L03 = L03,
+      .L10 = L10,
+      .L11 = L11,
+      .L12 = L12,
+      .L20 = L20,
+      .L21 = L21,
+      .L30 = L30,
+  };
+}
+
+X86CgLowering::TruncatedU256SquareProducts
+X86CgLowering::emitTruncatedU256SquareProducts(
+    const TargetRegisterClass *RC, const std::array<CgRegister, 4> &A) {
+  CgRegister MulxSourceReg = X86::NoRegister;
+  CgRegister DeadMulxHiReg = X86::NoRegister;
+  auto [R0, H00] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[0], true);
+  auto [L01, H01] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[1], true);
+  auto [L02, H02] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[2], true);
+  auto [L03, Unused03] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[3], false);
+  auto [L11, H11] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], A[1], true);
+  auto [L12, Unused12] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], A[2], false);
+  (void)Unused03;
+  (void)Unused12;
+  return {
+      .R0 = R0,
+      .H00 = H00,
+      .H11 = H11,
+      .L11 = L11,
+      .L01 = L01,
+      .H01 = H01,
+      .L02 = L02,
+      .H02 = H02,
+      .L03 = L03,
+      .L12 = L12,
+  };
 }
 
 // ==================== Unary Expressions ====================
@@ -1415,60 +1515,28 @@ X86CgLowering::lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst) {
     B[I] = lowerExpr(*Inst.getOperand(NumLimbs + I));
   }
 
-  CgRegister MulxSourceReg = X86::NoRegister;
-  CgRegister DeadMulxHiReg = X86::NoRegister;
-  auto [R0, H00] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[0], true);
-  auto [L01, H01] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[1], true);
-  auto [L02, H02] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[2], true);
-  auto [L03, Unused03] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[3], false);
-  auto [L10, H10] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], B[0], true);
-  auto [L11, H11] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], B[1], true);
-  auto [L12, Unused12] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], B[2], false);
-  auto [L20, H20] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[2], B[0], true);
-  auto [L21, Unused21] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[2], B[1], false);
-  auto [L30, Unused30] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[3], B[0], false);
-  (void)Unused03;
-  (void)Unused12;
-  (void)Unused21;
-  (void)Unused30;
+  TruncatedU256MulProducts P = emitTruncatedU256MulProducts(RC, A, B);
 
-  auto [K2LoA, K2CarryA] = emitAdd64WithCarryCounter(RC, L02, ZeroReg, L11);
-  auto [K2LoB, K2CarryB] = emitAdd64WithCarryCounter(RC, H10, ZeroReg, L20);
+  auto [K2LoA, K2CarryA] = emitAdd64WithCarryCounter(RC, P.L02, ZeroReg, P.L11);
+  auto [K2LoB, K2CarryB] = emitAdd64WithCarryCounter(RC, P.H10, ZeroReg, P.L20);
   CgRegister K3Carry = emitAdd64NoCarry(RC, K2CarryA, K2CarryB);
 
   clearCarryChains(ZeroReg);
-  CgRegister R1 = H00;
-  R1 = emitAdcx64(RC, R1, L01);
-  R1 = emitAdox64(RC, R1, L10);
+  CgRegister R1 = P.H00;
+  R1 = emitAdcx64(RC, R1, P.L01);
+  R1 = emitAdox64(RC, R1, P.L10);
 
-  CgRegister R2 = H01;
+  CgRegister R2 = P.H01;
   R2 = emitAdcx64(RC, R2, K2LoA);
   R2 = emitAdox64(RC, R2, K2LoB);
 
-  K3Carry = emitAdcx64(RC, K3Carry, ZeroReg);
-  K3Carry = emitAdox64(RC, K3Carry, ZeroReg);
+  K3Carry = collectCarryChains(RC, K3Carry, ZeroReg);
 
-  CgRegister R3 = H02;
-  R3 = emitAdd64NoCarry(RC, R3, H11);
-  R3 = emitAdd64NoCarry(RC, R3, H20);
-  R3 = emitAdd64NoCarry(RC, R3, L03);
-  R3 = emitAdd64NoCarry(RC, R3, L12);
-  R3 = emitAdd64NoCarry(RC, R3, L21);
-  R3 = emitAdd64NoCarry(RC, R3, L30);
-  R3 = emitAdd64NoCarry(RC, R3, K3Carry);
+  CgRegister R3 = emitAdd64NoCarryChain(
+      RC, P.H02, {P.H11, P.H20, P.L03, P.L12, P.L21, P.L30, K3Carry});
 
   U256MulResultRegs[&Inst] = {R1, R2, R3};
-  return R0;
+  return P.R0;
 }
 
 CgRegister
@@ -1484,41 +1552,16 @@ X86CgLowering::lowerEvmU256MulExprMulx(const EvmU256MulInstruction &Inst) {
     B[I] = lowerExpr(*Inst.getOperand(NumLimbs + I));
   }
 
-  CgRegister MulxSourceReg = X86::NoRegister;
-  CgRegister DeadMulxHiReg = X86::NoRegister;
-  auto [R0, H00] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[0], true);
-  auto [L01, H01] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[1], true);
-  auto [L02, H02] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[2], true);
-  auto [L03, Unused03] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[3], false);
-  auto [L10, H10] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], B[0], true);
-  auto [L11, H11] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], B[1], true);
-  auto [L12, Unused12] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], B[2], false);
-  auto [L20, H20] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[2], B[0], true);
-  auto [L21, Unused21] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[2], B[1], false);
-  auto [L30, Unused30] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[3], B[0], false);
-  (void)Unused03;
-  (void)Unused12;
-  (void)Unused21;
-  (void)Unused30;
+  TruncatedU256MulProducts P = emitTruncatedU256MulProducts(RC, A, B);
 
-  auto [K1Lo, K1CarryA] = emitAdd64WithCarryCounter(RC, L01, ZeroReg, L10);
-  auto [R1, K1CarryB] = emitAdd64WithCarryCounter(RC, H00, ZeroReg, K1Lo);
+  auto [K1Lo, K1CarryA] = emitAdd64WithCarryCounter(RC, P.L01, ZeroReg, P.L10);
+  auto [R1, K1CarryB] = emitAdd64WithCarryCounter(RC, P.H00, ZeroReg, K1Lo);
   CgRegister K2Carry = emitAdd64NoCarry(RC, K1CarryA, K1CarryB);
 
-  auto [K2LoA, K2CarryA] = emitAdd64WithCarryCounter(RC, L02, ZeroReg, L11);
-  auto [K2LoB, K2CarryB] = emitAdd64WithCarryCounter(RC, H10, ZeroReg, L20);
+  auto [K2LoA, K2CarryA] = emitAdd64WithCarryCounter(RC, P.L02, ZeroReg, P.L11);
+  auto [K2LoB, K2CarryB] = emitAdd64WithCarryCounter(RC, P.H10, ZeroReg, P.L20);
 
-  CgRegister R2 = H01;
+  CgRegister R2 = P.H01;
   CgRegister R2Carry = ZeroReg;
   auto [R2SumA, R2CarryA] = emitAdd64WithCarryCounter(RC, R2, R2Carry, K2LoA);
   auto [R2SumB, R2CarryB] =
@@ -1530,17 +1573,11 @@ X86CgLowering::lowerEvmU256MulExprMulx(const EvmU256MulInstruction &Inst) {
   CgRegister K3Carry = emitAdd64NoCarry(RC, K2CarryA, K2CarryB);
   K3Carry = emitAdd64NoCarry(RC, K3Carry, R2CarryC);
 
-  CgRegister R3 = H02;
-  R3 = emitAdd64NoCarry(RC, R3, H11);
-  R3 = emitAdd64NoCarry(RC, R3, H20);
-  R3 = emitAdd64NoCarry(RC, R3, L03);
-  R3 = emitAdd64NoCarry(RC, R3, L12);
-  R3 = emitAdd64NoCarry(RC, R3, L21);
-  R3 = emitAdd64NoCarry(RC, R3, L30);
-  R3 = emitAdd64NoCarry(RC, R3, K3Carry);
+  CgRegister R3 = emitAdd64NoCarryChain(
+      RC, P.H02, {P.H11, P.H20, P.L03, P.L12, P.L21, P.L30, K3Carry});
 
   U256MulResultRegs[&Inst] = {R1, R2, R3};
-  return R0;
+  return P.R0;
 }
 
 CgRegister
@@ -1554,56 +1591,38 @@ X86CgLowering::lowerEvmU256SquareExprAdx(const EvmU256MulInstruction &Inst) {
     A[I] = lowerExpr(*Inst.getOperand(I));
   }
 
-  CgRegister MulxSourceReg = X86::NoRegister;
-  CgRegister DeadMulxHiReg = X86::NoRegister;
-  auto [R0, H00] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[0], true);
-  auto [L01, H01] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[1], true);
-  auto [L02, H02] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[2], true);
-  auto [L03, Unused03] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[3], false);
-  auto [L11, H11] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], A[1], true);
-  auto [L12, Unused12] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], A[2], false);
-  (void)Unused03;
-  (void)Unused12;
+  TruncatedU256SquareProducts P = emitTruncatedU256SquareProducts(RC, A);
 
-  auto [D01Lo, C01Lo] = emitAdd64WithCarryCounter(RC, L01, ZeroReg, L01);
-  auto [D01Hi, C01HiA] = emitAdd64WithCarryCounter(RC, H01, ZeroReg, H01);
+  auto [D01Lo, C01Lo] = emitAdd64WithCarryCounter(RC, P.L01, ZeroReg, P.L01);
+  auto [D01Hi, C01HiA] = emitAdd64WithCarryCounter(RC, P.H01, ZeroReg, P.H01);
   auto [D01HiWithCarry, C01Hi] =
       emitAdd64WithCarryCounter(RC, D01Hi, C01HiA, C01Lo);
 
-  auto [D02Lo, C02Lo] = emitAdd64WithCarryCounter(RC, L02, ZeroReg, L02);
-  auto [D02Hi, Ignored02Hi] = emitAdd64WithCarryCounter(RC, H02, ZeroReg, H02);
+  auto [D02Lo, C02Lo] = emitAdd64WithCarryCounter(RC, P.L02, ZeroReg, P.L02);
+  auto [D02Hi, Ignored02Hi] =
+      emitAdd64WithCarryCounter(RC, P.H02, ZeroReg, P.H02);
   (void)Ignored02Hi;
   CgRegister D02HiWithCarry = emitAdd64NoCarry(RC, D02Hi, C02Lo);
 
-  CgRegister D03 = emitAdd64NoCarry(RC, L03, L03);
-  CgRegister D12 = emitAdd64NoCarry(RC, L12, L12);
+  CgRegister D03 = emitAdd64NoCarry(RC, P.L03, P.L03);
+  CgRegister D12 = emitAdd64NoCarry(RC, P.L12, P.L12);
   CgRegister K3Carry = C01Hi;
 
   clearCarryChains(ZeroReg);
-  CgRegister R1 = H00;
+  CgRegister R1 = P.H00;
   R1 = emitAdcx64(RC, R1, D01Lo);
 
   CgRegister R2 = D01HiWithCarry;
-  R2 = emitAdcx64(RC, R2, L11);
+  R2 = emitAdcx64(RC, R2, P.L11);
   R2 = emitAdox64(RC, R2, D02Lo);
 
-  K3Carry = emitAdcx64(RC, K3Carry, ZeroReg);
-  K3Carry = emitAdox64(RC, K3Carry, ZeroReg);
+  K3Carry = collectCarryChains(RC, K3Carry, ZeroReg);
 
-  CgRegister R3 = D02HiWithCarry;
-  R3 = emitAdd64NoCarry(RC, R3, D03);
-  R3 = emitAdd64NoCarry(RC, R3, H11);
-  R3 = emitAdd64NoCarry(RC, R3, D12);
-  R3 = emitAdd64NoCarry(RC, R3, K3Carry);
+  CgRegister R3 =
+      emitAdd64NoCarryChain(RC, D02HiWithCarry, {D03, P.H11, D12, K3Carry});
 
   U256MulResultRegs[&Inst] = {R1, R2, R3};
-  return R0;
+  return P.R0;
 }
 
 CgRegister
@@ -1617,64 +1636,44 @@ X86CgLowering::lowerEvmU256SquareExprMulx(const EvmU256MulInstruction &Inst) {
     A[I] = lowerExpr(*Inst.getOperand(I));
   }
 
-  CgRegister MulxSourceReg = X86::NoRegister;
-  CgRegister DeadMulxHiReg = X86::NoRegister;
   auto doubleWithCarry = [&](CgRegister ValueReg) {
     return emitAdd64WithCarryCounter(RC, ValueReg, ZeroReg, ValueReg);
   };
 
-  auto [R0, H00] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[0], true);
+  TruncatedU256SquareProducts P = emitTruncatedU256SquareProducts(RC, A);
 
-  auto [L01, H01] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[1], true);
-  auto [D01Lo, C01Lo] = doubleWithCarry(L01);
-  auto [D01Hi, C01HiA] = doubleWithCarry(H01);
+  auto [D01Lo, C01Lo] = doubleWithCarry(P.L01);
+  auto [D01Hi, C01HiA] = doubleWithCarry(P.H01);
   auto [D01HiWithCarry, C01Hi] =
       emitAdd64WithCarryCounter(RC, D01Hi, C01HiA, C01Lo);
 
-  CgRegister R1 = H00;
+  CgRegister R1 = P.H00;
   CgRegister C1 = ZeroReg;
   auto [S1, C1a] = emitAdd64WithCarryCounter(RC, R1, C1, D01Lo);
   R1 = S1;
   C1 = C1a;
 
-  auto [L02, H02] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[2], true);
-  auto [D02Lo, C02Lo] = doubleWithCarry(L02);
-  auto [D02Hi, Ignored02Hi] = doubleWithCarry(H02);
+  auto [D02Lo, C02Lo] = doubleWithCarry(P.L02);
+  auto [D02Hi, Ignored02Hi] = doubleWithCarry(P.H02);
   (void)Ignored02Hi;
   CgRegister D02HiWithCarry = emitAdd64NoCarry(RC, D02Hi, C02Lo);
 
-  auto [L03, Unused03] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], A[3], false);
-  (void)Unused03;
-  CgRegister D03 = emitAdd64NoCarry(RC, L03, L03);
-
-  auto [L11, H11] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], A[1], true);
-  auto [L12, Unused12] =
-      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[1], A[2], false);
-  (void)Unused12;
-  CgRegister D12 = emitAdd64NoCarry(RC, L12, L12);
+  CgRegister D03 = emitAdd64NoCarry(RC, P.L03, P.L03);
+  CgRegister D12 = emitAdd64NoCarry(RC, P.L12, P.L12);
 
   CgRegister R2 = D01HiWithCarry;
   CgRegister C2 = ZeroReg;
-  auto [S2, C2a] = emitAdd64WithCarryCounter(RC, R2, C2, L11);
+  auto [S2, C2a] = emitAdd64WithCarryCounter(RC, R2, C2, P.L11);
   auto [S3, C2b] = emitAdd64WithCarryCounter(RC, S2, C2a, D02Lo);
   auto [S4, C2c] = emitAdd64WithCarryCounter(RC, S3, C2b, C1);
   R2 = S4;
   C2 = C2c;
 
-  CgRegister R3 = D02HiWithCarry;
-  R3 = emitAdd64NoCarry(RC, R3, D03);
-  R3 = emitAdd64NoCarry(RC, R3, C01Hi);
-  R3 = emitAdd64NoCarry(RC, R3, H11);
-  R3 = emitAdd64NoCarry(RC, R3, D12);
-  R3 = emitAdd64NoCarry(RC, R3, C2);
+  CgRegister R3 =
+      emitAdd64NoCarryChain(RC, D02HiWithCarry, {D03, C01Hi, P.H11, D12, C2});
 
   U256MulResultRegs[&Inst] = {R1, R2, R3};
-  return R0;
+  return P.R0;
 }
 
 CgRegister X86CgLowering::lowerEvmU256MulResultExpr(

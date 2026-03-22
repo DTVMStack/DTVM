@@ -112,11 +112,46 @@ public:
 private:
   // ==================== X86CgLowering Utilities ====================
 
+  struct TruncatedU256MulProducts {
+    CgRegister R0;
+    CgRegister H00;
+    CgRegister H01;
+    CgRegister H02;
+    CgRegister H10;
+    CgRegister H11;
+    CgRegister H20;
+    CgRegister L01;
+    CgRegister L02;
+    CgRegister L03;
+    CgRegister L10;
+    CgRegister L11;
+    CgRegister L12;
+    CgRegister L20;
+    CgRegister L21;
+    CgRegister L30;
+  };
+
+  struct TruncatedU256SquareProducts {
+    CgRegister R0;
+    CgRegister H00;
+    CgRegister H11;
+    CgRegister L11;
+    CgRegister L01;
+    CgRegister H01;
+    CgRegister L02;
+    CgRegister H02;
+    CgRegister L03;
+    CgRegister L12;
+  };
+
   static unsigned X86ChooseCmpImmediateOpcode(MVT VT, int64_t Val);
   static unsigned X86ChooseCmpImmediateOpcode(MVT VT, const APInt &Value);
   static unsigned X86ChooseCmpOpcode(MVT VT);
   CgRegister emitAdd64NoCarry(const TargetRegisterClass *RC, CgRegister LHSReg,
                               CgRegister RHSReg);
+  CgRegister emitAdd64NoCarryChain(const TargetRegisterClass *RC,
+                                   CgRegister SumReg,
+                                   ArrayRef<CgRegister> TermRegs);
   std::pair<CgRegister, CgRegister>
   emitAdd64WithCarryCounter(const TargetRegisterClass *RC, CgRegister SumReg,
                             CgRegister CarryReg, CgRegister TermReg);
@@ -124,11 +159,20 @@ private:
                         CgRegister SrcReg);
   CgRegister emitAdox64(const TargetRegisterClass *RC, CgRegister DstReg,
                         CgRegister SrcReg);
+  CgRegister collectCarryChains(const TargetRegisterClass *RC,
+                                CgRegister CarryReg, CgRegister ZeroReg);
   void clearCarryChains(CgRegister ZeroReg);
   std::pair<CgRegister, CgRegister>
   emitMulx64(const TargetRegisterClass *RC, CgRegister &MulxSourceReg,
              CgRegister &DeadMulxHiReg, CgRegister SourceReg,
              CgRegister OperandReg, bool NeedHigh);
+  TruncatedU256MulProducts
+  emitTruncatedU256MulProducts(const TargetRegisterClass *RC,
+                               const std::array<CgRegister, 4> &A,
+                               const std::array<CgRegister, 4> &B);
+  TruncatedU256SquareProducts
+  emitTruncatedU256SquareProducts(const TargetRegisterClass *RC,
+                                  const std::array<CgRegister, 4> &A);
 
   CgRegister lowerEvmU256MulExprLegacy(const EvmU256MulInstruction &Inst);
   CgRegister lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst);
