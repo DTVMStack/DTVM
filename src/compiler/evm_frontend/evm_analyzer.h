@@ -653,6 +653,11 @@ private:
 #ifdef ZEN_ENABLE_JIT_FALLBACK_TEST
         Info.HasUndefinedInstr = false;
 #endif
+        ++ScanPC;
+        Info.BodyEndPC = static_cast<uint64_t>(ScanPC);
+        skipDeadCode(Bytecode, BytecodeSize, ScanPC, NextEntryPC,
+                     NextBodyStartPC, HasNextBlock);
+        break;
       }
 
       uint8_t OpcodeU8 = static_cast<uint8_t>(Opcode);

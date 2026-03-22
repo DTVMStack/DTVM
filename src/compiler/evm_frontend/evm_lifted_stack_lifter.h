@@ -284,13 +284,13 @@ public:
         EntryState.PendingPhis[Index].IncomingValues[PredBlockPC] =
             State.Slots[Index];
         EntryState.PendingPhis[Index].IncomingPhiValues[PredBlockPC] =
-            Builder.prepareStackPhiIncoming(Values[Index]);
+            prepareStackPhiIncomingCompat(Values[Index]);
         updatePendingPhi(EntryState.PendingPhis[Index],
                          EntryState.ExpectedIncomingCount);
       }
       if (Index < EntryState.MergeOperands.size()) {
         if (!EntryState.MergeOperands[Index].isEmpty()) {
-          Builder.assignStackMergeOperand(
+          assignStackMergeOperandCompat(
               EntryState.MergeOperands[Index], PredBlockPC,
               EntryState.PendingPhis[Index].IncomingPhiValues[PredBlockPC]);
         }
@@ -343,6 +343,39 @@ private:
       T,
       std::void_t<decltype(std::declval<const T &>().getU256VarComponents())>>
       : std::true_type {};
+
+  template <typename T, typename = void>
+  struct HasPrepareStackPhiIncoming : std::false_type {};
+  template <typename T>
+  struct HasPrepareStackPhiIncoming<
+      T, std::void_t<decltype(std::declval<T &>().prepareStackPhiIncoming(
+             std::declval<const Operand &>()))>> : std::true_type {};
+
+  template <typename T, typename = void>
+  struct HasAssignStackMergeOperand : std::false_type {};
+  template <typename T>
+  struct HasAssignStackMergeOperand<
+      T, std::void_t<decltype(std::declval<T &>().assignStackMergeOperand(
+             std::declval<const Operand &>(), uint64_t{},
+             std::declval<const Operand &>()))>> : std::true_type {};
+
+  Operand prepareStackPhiIncomingCompat(const Operand &Value) {
+    if constexpr (HasPrepareStackPhiIncoming<IRBuilder>::value) {
+      return Builder.prepareStackPhiIncoming(Value);
+    } else {
+      return Value;
+    }
+  }
+
+  void assignStackMergeOperandCompat(const Operand &Dest, uint64_t PredBlockPC,
+                                     const Operand &Value) {
+    if constexpr (HasAssignStackMergeOperand<IRBuilder>::value) {
+      Builder.assignStackMergeOperand(Dest, PredBlockPC, Value);
+    } else {
+      (void)PredBlockPC;
+      Builder.assignStackEntryOperand(Dest, Value);
+    }
+  }
 
   static void appendPointerKey(std::string &Key, const void *Ptr) {
     Key += std::to_string(reinterpret_cast<uintptr_t>(Ptr));

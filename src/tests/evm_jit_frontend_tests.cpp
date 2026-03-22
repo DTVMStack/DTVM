@@ -417,7 +417,7 @@ TEST(EVMJITFrontendAnalyzerTest,
   const EVMAnalyzer Analyzer = analyzeBytecode(Bytecode);
 
   const auto *EntryBlock = findBlock(Analyzer, 0);
-  const auto *FallthroughBlock = findBlock(Analyzer, 4);
+  const auto *FallthroughBlock = findBlock(Analyzer, 5);
   const auto *JumpDestBlock = findBlock(Analyzer, 6);
   ASSERT_NE(EntryBlock, nullptr);
   ASSERT_NE(FallthroughBlock, nullptr);
@@ -426,7 +426,7 @@ TEST(EVMJITFrontendAnalyzerTest,
   EXPECT_TRUE(EntryBlock->HasConditionalJump);
   EXPECT_TRUE(EntryBlock->HasConstantJump);
   EXPECT_FALSE(EntryBlock->HasDynamicJump);
-  expectPCList(EntryBlock->Successors, {4, 6});
+  expectPCList(EntryBlock->Successors, {5, 6});
 
   EXPECT_EQ(FallthroughBlock->ResolvedEntryStackDepth, 0);
   EXPECT_TRUE(FallthroughBlock->CanLiftStack);
@@ -453,7 +453,7 @@ TEST(EVMJITFrontendAnalyzerTest,
   const EVMAnalyzer Analyzer = analyzeBytecode(Bytecode);
 
   const auto *EntryBlock = findBlock(Analyzer, 0);
-  const auto *DynamicJumpBlock = findBlock(Analyzer, 4);
+  const auto *DynamicJumpBlock = findBlock(Analyzer, 5);
   const auto *JumpDestBlock = findBlock(Analyzer, 7);
   ASSERT_NE(EntryBlock, nullptr);
   ASSERT_NE(DynamicJumpBlock, nullptr);
@@ -469,7 +469,7 @@ TEST(EVMJITFrontendAnalyzerTest,
   EXPECT_FALSE(JumpDestBlock->CanLiftStack);
 }
 
-TEST(EVMJITFrontendAnalyzerTest, HiddenEntryPrefixDisablesLiftability) {
+TEST(EVMJITFrontendAnalyzerTest, HiddenEntryPrefixKeepsStaticMergesLiftable) {
   const std::vector<uint8_t> Bytecode = {
       0x60, 0xaa, // PUSH1 preserved prefix
       0x60, 0x01, // PUSH1 cond
@@ -482,18 +482,18 @@ TEST(EVMJITFrontendAnalyzerTest, HiddenEntryPrefixDisablesLiftability) {
   };
 
   const EVMAnalyzer Analyzer = analyzeBytecode(Bytecode);
-  const auto *FallthroughBlock = findBlock(Analyzer, 6);
+  const auto *FallthroughBlock = findBlock(Analyzer, 7);
   const auto *JumpDestBlock = findBlock(Analyzer, 10);
   ASSERT_NE(FallthroughBlock, nullptr);
   ASSERT_NE(JumpDestBlock, nullptr);
 
   EXPECT_EQ(FallthroughBlock->ResolvedEntryStackDepth, 1);
   EXPECT_EQ(FallthroughBlock->EntryStackDepth, 0);
-  EXPECT_FALSE(FallthroughBlock->CanLiftStack);
+  EXPECT_TRUE(FallthroughBlock->CanLiftStack);
 
   EXPECT_EQ(JumpDestBlock->ResolvedEntryStackDepth, 1);
   EXPECT_EQ(JumpDestBlock->EntryStackDepth, 0);
-  EXPECT_FALSE(JumpDestBlock->CanLiftStack);
+  EXPECT_TRUE(JumpDestBlock->CanLiftStack);
 }
 
 TEST(EVMJITFrontendAnalyzerTest, MergeDepthConflictDisablesLiftedEntry) {
@@ -511,7 +511,7 @@ TEST(EVMJITFrontendAnalyzerTest, MergeDepthConflictDisablesLiftedEntry) {
   const EVMAnalyzer Analyzer = analyzeBytecode(Bytecode);
 
   const auto *EntryBlock = findBlock(Analyzer, 0);
-  const auto *FallthroughBlock = findBlock(Analyzer, 4);
+  const auto *FallthroughBlock = findBlock(Analyzer, 5);
   const auto *MergeBlock = findBlock(Analyzer, 10);
   ASSERT_NE(EntryBlock, nullptr);
   ASSERT_NE(FallthroughBlock, nullptr);
@@ -527,7 +527,7 @@ TEST(EVMJITFrontendAnalyzerTest, MergeDepthConflictDisablesLiftedEntry) {
   EXPECT_EQ(MergeBlock->ResolvedExitStackDepth, -1);
   EXPECT_TRUE(MergeBlock->HasInconsistentEntryDepth);
   EXPECT_FALSE(MergeBlock->CanLiftStack);
-  expectPCList(MergeBlock->Predecessors, {0, 4});
+  expectPCList(MergeBlock->Predecessors, {0, 5});
 }
 
 TEST(EVMJITFrontendAnalyzerTest,
@@ -680,6 +680,32 @@ TEST(EVMJITFrontendVisitorTest,
   EXPECT_FALSE(Builder.Undefined);
   EXPECT_EQ(Builder.runtimeStackDepth(), 1U);
   EXPECT_EQ(Builder.topStackValue()[0], 0xaaU);
+}
+
+TEST(EVMJITFrontendVisitorTest,
+     UndefinedInstructionAfterProducerDoesNotTriggerStackOverflowTrap) {
+  const std::vector<uint8_t> Bytecode = {
+      0x30, // ADDRESS
+      0x2a  // undefined
+  };
+
+  const EVMAnalyzer Analyzer = analyzeBytecode(Bytecode);
+  const auto *EntryBlock = findBlock(Analyzer, 0);
+  ASSERT_NE(EntryBlock, nullptr);
+  EXPECT_TRUE(EntryBlock->HasUndefinedInstr);
+  EXPECT_EQ(EntryBlock->MaxStackHeight, 1);
+
+  COMPILER::EVMFrontendContext Ctx;
+  Ctx.setRevision(EVMC_CANCUN);
+  Ctx.setBytecode(reinterpret_cast<const zen::common::Byte *>(Bytecode.data()),
+                  Bytecode.size());
+
+  MockEVMBuilder Builder;
+  Builder.enableRuntimeStackChecks();
+  COMPILER::EVMByteCodeVisitor<MockEVMBuilder> Visitor(Builder, &Ctx);
+  EXPECT_TRUE(Visitor.compile());
+  EXPECT_FALSE(Builder.Trapped);
+  EXPECT_TRUE(Builder.Undefined);
 }
 
 TEST(EVMJITFrontendVisitorTest, TruncatedPushIsRightPaddedWithZeros) {

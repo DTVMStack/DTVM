@@ -13,6 +13,8 @@
 
 #include <array>
 #include <map>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace COMPILER {
@@ -62,6 +64,65 @@ private:
     bool Known = false;
     uint64_t Value = 0;
   };
+
+  template <typename T, typename = void>
+  struct HasRegisterCurrentBlockPC : std::false_type {};
+  template <typename T>
+  struct HasRegisterCurrentBlockPC<
+      T, std::void_t<decltype(std::declval<T &>().registerCurrentBlockPC(
+             uint64_t{}))>> : std::true_type {};
+
+  template <typename T, typename = void>
+  struct HasSpillTrackedStackPreservingPrefix : std::false_type {};
+  template <typename T>
+  struct HasSpillTrackedStackPreservingPrefix<
+      T, std::void_t<
+             decltype(std::declval<T &>().spillTrackedStackPreservingPrefix(
+                 std::declval<const std::vector<Operand> &>(), uint32_t{}))>>
+      : std::true_type {};
+
+  template <typename T, typename = void>
+  struct HasMaterializeStackMergeOperand : std::false_type {};
+  template <typename T>
+  struct HasMaterializeStackMergeOperand<
+      T,
+      std::void_t<decltype(std::declval<T &>().materializeStackMergeOperand(
+          std::declval<const std::vector<uint64_t> &>(),
+          std::declval<const std::vector<std::pair<uint64_t, Operand>> &>()))>>
+      : std::true_type {};
+
+  void registerCurrentBlockPC(uint64_t BlockPC) {
+    if constexpr (HasRegisterCurrentBlockPC<IRBuilder>::value) {
+      Builder.registerCurrentBlockPC(BlockPC);
+    } else {
+      (void)BlockPC;
+    }
+  }
+
+  void spillTrackedStackPreservingPrefix(const std::vector<Operand> &Values,
+                                         uint32_t PrefixDepth) {
+    if constexpr (HasSpillTrackedStackPreservingPrefix<IRBuilder>::value) {
+      Builder.spillTrackedStackPreservingPrefix(Values, PrefixDepth);
+    } else {
+      (void)PrefixDepth;
+      Builder.spillTrackedStack(Values);
+    }
+  }
+
+  Operand materializeStackMergeOperandCompat(
+      const std::vector<uint64_t> &PredBlockPCs,
+      const std::vector<std::pair<uint64_t, Operand>> &IncomingValues) {
+    if constexpr (HasMaterializeStackMergeOperand<IRBuilder>::value) {
+      return Builder.materializeStackMergeOperand(PredBlockPCs, IncomingValues);
+    } else {
+      (void)PredBlockPCs;
+      Operand Result = Builder.createStackEntryOperand();
+      if (!IncomingValues.empty()) {
+        Builder.assignStackEntryOperand(Result, IncomingValues.back().second);
+      }
+      return Result;
+    }
+  }
 
   void push(const Operand &Opnd) { Stack.push(Opnd); }
 
@@ -870,8 +931,8 @@ private:
   void finalizeBlockExit(std::vector<Operand> Values, bool Materialize) {
     if (Materialize) {
       if (CurrentBlockLifted) {
-        Builder.spillTrackedStackPreservingPrefix(
-            Values, CurrentBlockHiddenLiveInPrefixDepth);
+        spillTrackedStackPreservingPrefix(Values,
+                                          CurrentBlockHiddenLiveInPrefixDepth);
       } else {
         for (const Operand &Opnd : Values) {
           Builder.stackPush(Opnd);
@@ -1044,14 +1105,7 @@ private:
     const auto &BlockInfo = BlockInfos.at(PC);
     CurrentBlockEntryPC = PC;
     CurrentBlockHiddenLiveInPrefixDepth = 0;
-    Builder.registerCurrentBlockPC(PC);
-    if (BlockInfo.HasUndefinedInstr) {
-      Builder.handleUndefined();
-      InDeadCode = true;
-      CurrentBlockLifted = false;
-      return;
-    }
-
+    registerCurrentBlockPC(PC);
     bool LiftedBlock = isLiftedBlock(PC);
     if (LiftedBlock && !validateLiftedBlockStackBounds(BlockInfo)) {
       return;
@@ -1108,8 +1162,8 @@ private:
       }
       StackLifter.assignMergeOperand(
           BlockPC, Request.SlotIndex,
-          Builder.materializeStackMergeOperand(Request.ExpectedPredBlockPCs,
-                                               IncomingValues));
+          materializeStackMergeOperandCompat(Request.ExpectedPredBlockPCs,
+                                             IncomingValues));
     }
   }
 
