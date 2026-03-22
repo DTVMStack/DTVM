@@ -1515,28 +1515,39 @@ X86CgLowering::lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst) {
     B[I] = lowerExpr(*Inst.getOperand(NumLimbs + I));
   }
 
-  TruncatedU256MulProducts P = emitTruncatedU256MulProducts(RC, A, B);
-
-  auto [K2LoA, K2CarryA] = emitAdd64WithCarryCounter(RC, P.L02, ZeroReg, P.L11);
-  auto [K2LoB, K2CarryB] = emitAdd64WithCarryCounter(RC, P.H10, ZeroReg, P.L20);
-  CgRegister K3Carry = emitAdd64NoCarry(RC, K2CarryA, K2CarryB);
+  CgRegister MulxSourceReg = X86::NoRegister;
+  CgRegister DeadMulxHiReg = X86::NoRegister;
+  auto [R0, H00] =
+      emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[0], true);
+  std::array<CgRegister, NumLimbs> Acc{R0, H00, ZeroReg, ZeroReg};
 
   clearCarryChains(ZeroReg);
-  CgRegister R1 = P.H00;
-  R1 = emitAdcx64(RC, R1, P.L01);
-  R1 = emitAdox64(RC, R1, P.L10);
+  for (size_t J = 1; J < NumLimbs; ++J) {
+    bool NeedHigh = (J + 1) < NumLimbs;
+    auto [LoReg, HiReg] =
+        emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[J], NeedHigh);
+    Acc[J] = emitAdcx64(RC, Acc[J], LoReg);
+    if (NeedHigh) {
+      Acc[J + 1] = emitAdox64(RC, Acc[J + 1], HiReg);
+    }
+  }
 
-  CgRegister R2 = P.H01;
-  R2 = emitAdcx64(RC, R2, K2LoA);
-  R2 = emitAdox64(RC, R2, K2LoB);
+  for (size_t I = 1; I < NumLimbs; ++I) {
+    clearCarryChains(ZeroReg);
+    for (size_t J = 0; J < NumLimbs - I; ++J) {
+      size_t Column = I + J;
+      bool NeedHigh = (Column + 1) < NumLimbs;
+      auto [LoReg, HiReg] =
+          emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[I], B[J], NeedHigh);
+      Acc[Column] = emitAdcx64(RC, Acc[Column], LoReg);
+      if (NeedHigh) {
+        Acc[Column + 1] = emitAdox64(RC, Acc[Column + 1], HiReg);
+      }
+    }
+  }
 
-  K3Carry = collectCarryChains(RC, K3Carry, ZeroReg);
-
-  CgRegister R3 = emitAdd64NoCarryChain(
-      RC, P.H02, {P.H11, P.H20, P.L03, P.L12, P.L21, P.L30, K3Carry});
-
-  U256MulResultRegs[&Inst] = {R1, R2, R3};
-  return P.R0;
+  U256MulResultRegs[&Inst] = {Acc[1], Acc[2], Acc[3]};
+  return Acc[0];
 }
 
 CgRegister
