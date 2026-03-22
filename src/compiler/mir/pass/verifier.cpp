@@ -165,6 +165,50 @@ void MVerifier::visitSelectInstruction(SelectInstruction &I) {
   MVisitor::visitSelectInstruction(I);
 }
 
+void MVerifier::visitPhiInstruction(PhiInstruction &I) {
+  CHECK(!I.getType()->isVoid(), "The type of phi instruction must not be void");
+  MBasicBlock *PhiBB = I.getBasicBlock();
+  CHECK(PhiBB != nullptr, "phi instruction must belong to a basic block");
+  auto PredRange = PhiBB->predecessors();
+  if (I.getNumIncoming() !=
+      static_cast<size_t>(std::distance(PredRange.begin(), PredRange.end()))) {
+    OS << "[phi-verifier-debug] current block dump\n";
+    PhiBB->print(OS);
+    for (MBasicBlock *PredBB : PredRange) {
+      OS << "[phi-verifier-debug] predecessor block dump\n";
+      PredBB->print(OS);
+    }
+  }
+  CHECK(I.getNumIncoming() == static_cast<size_t>(std::distance(
+                                  PredRange.begin(), PredRange.end())),
+        "The number of phi incoming values must match predecessor count");
+
+  CompileSet<MBasicBlock *> SeenPreds(CurFunc->getContext().ThreadMemPool);
+  for (size_t Index = 0; Index < I.getNumIncoming(); ++Index) {
+    MBasicBlock *IncomingBB = I.getIncomingBlock(Index);
+    const MInstruction *IncomingValue = I.getIncomingValue(Index);
+    CHECK(IncomingBB != nullptr,
+          "phi incoming block must be populated before verification");
+    CHECK(IncomingValue != nullptr,
+          "phi incoming value must be populated before verification");
+    auto PredIt = std::find(PredRange.begin(), PredRange.end(), IncomingBB);
+    if (PredIt == PredRange.end()) {
+      OS << "[phi-verifier-debug] current block dump\n";
+      PhiBB->print(OS);
+      if (IncomingBB) {
+        OS << "[phi-verifier-debug] incoming block dump\n";
+        IncomingBB->print(OS);
+      }
+    }
+    CHECK(PredIt != PredRange.end(),
+          "phi incoming block must be a predecessor of the current block");
+    CHECK(SeenPreds.insert(IncomingBB).second,
+          "phi incoming block must appear at most once");
+    CHECK(IncomingValue->getType()->getKind() == I.getType()->getKind(),
+          "phi incoming value type must match phi result type");
+  }
+}
+
 void MVerifier::visitDassignInstruction(DassignInstruction &I) {
   MType *Type = I.getType();
   CHECK(

@@ -38,6 +38,7 @@ public:
     EVM_UREM128_BY64,
 
     //===---------- Statement Instructions ----------===//
+    PHI,
     DASSIGN,
     STORE,
     BR,

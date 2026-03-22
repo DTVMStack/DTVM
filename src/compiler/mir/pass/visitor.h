@@ -76,6 +76,9 @@ public:
     case MInstruction::SELECT:
       visitSelectInstruction(static_cast<SelectInstruction &>(I));
       break;
+    case MInstruction::PHI:
+      visitPhiInstruction(static_cast<PhiInstruction &>(I));
+      break;
     case MInstruction::DASSIGN:
       visitDassignInstruction(static_cast<DassignInstruction &>(I));
       break;
@@ -153,6 +156,7 @@ public:
   virtual void visitAdcInstruction(AdcInstruction &I) { VISIT_OPERAND_3 }
   virtual void visitSbbInstruction(SbbInstruction &I) { VISIT_OPERAND_3 }
   virtual void visitSelectInstruction(SelectInstruction &I) { VISIT_OPERAND_3 }
+  virtual void visitPhiInstruction(PhiInstruction &I) {}
   virtual void visitDassignInstruction(DassignInstruction &I) {
     VISIT_OPERAND_1
   }

@@ -103,6 +103,9 @@ protected:
 
   void lowerStmt(const MInstruction &Inst) {
     switch (Inst.getKind()) {
+    case MInstruction::PHI:
+      lowerPhiStmt(llvm::cast<PhiInstruction>(Inst));
+      break;
     case MInstruction::DASSIGN:
       lowerDassignStmt(llvm::cast<DassignInstruction>(Inst));
       break;
@@ -222,6 +225,11 @@ protected:
     case MInstruction::SELECT:
       ResultReg = SELF.lowerSelectExpr(llvm::cast<SelectInstruction>(Inst));
       break;
+    case MInstruction::PHI:
+      ZEN_ASSERT(_expr_reg_map.count(&Inst) &&
+                 "phi must be lowered before it is used");
+      ResultReg = _expr_reg_map[&Inst];
+      break;
     case MInstruction::DREAD:
       ResultReg = lowerDreadExpr(llvm::cast<DreadInstruction>(Inst));
       break;
@@ -246,6 +254,29 @@ protected:
     auto var_reg = getOrCreateVarReg(inst.getVarIdx(), reg_class);
     MF->createCgInstruction(*CurBB, TII.get(llvm::TargetOpcode::COPY), reg_op,
                             var_reg);
+  }
+
+  void lowerPhiStmt(const PhiInstruction &Inst) {
+    llvm::MVT VT = getMVT(*Inst.getType());
+    CgRegister ResultReg = createReg(TLI.getRegClassFor(VT));
+    std::vector<CgOperand> Operands;
+    Operands.reserve(1 + Inst.getNumIncoming() * 2);
+    Operands.push_back(CgOperand::createRegOperand(ResultReg, true));
+
+    for (size_t Index = 0; Index < Inst.getNumIncoming(); ++Index) {
+      const MInstruction *IncomingValue = Inst.getIncomingValue(Index);
+      const MBasicBlock *IncomingBB = Inst.getIncomingBlock(Index);
+      ZEN_ASSERT(IncomingValue != nullptr);
+      ZEN_ASSERT(IncomingBB != nullptr);
+      CgRegister IncomingReg = lowerExpr(*IncomingValue);
+      Operands.push_back(CgOperand::createRegOperand(IncomingReg, false));
+      Operands.push_back(CgOperand::createMBB(getOrCreateCgBB(IncomingBB)));
+    }
+
+    llvm::MutableArrayRef<CgOperand> OperandRef(Operands);
+    MF->createCgInstruction(*CurBB, TII.get(llvm::TargetOpcode::PHI),
+                            OperandRef);
+    _expr_reg_map[&Inst] = ResultReg;
   }
 
   CgRegister lowerDreadExpr(const DreadInstruction &inst) {

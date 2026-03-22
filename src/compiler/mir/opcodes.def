@@ -2,7 +2,7 @@
 #define OPCODE(X)
 #endif
 
-OPCODE(clz)                         // OP_UNARY_EXPR_START, OP_START
+OPCODE(clz) // OP_UNARY_EXPR_START, OP_START
 OPCODE(ctz)
 OPCODE(not)
 OPCODE(popcnt)
@@ -13,9 +13,9 @@ OPCODE(fpsqrt)
 OPCODE(fpround_ceil)
 OPCODE(fpround_floor)
 OPCODE(fpround_trunc)
-OPCODE(fpround_nearest)             // OP_UNARY_EXPR_END
+OPCODE(fpround_nearest) // OP_UNARY_EXPR_END
 
-OPCODE(add)                         // OP_BIN_EXPR_START
+OPCODE(add) // OP_BIN_EXPR_START
 OPCODE(sub)
 OPCODE(mul)
 OPCODE(sdiv)
@@ -34,14 +34,14 @@ OPCODE(fpdiv)
 OPCODE(fpmin)
 OPCODE(fpmax)
 OPCODE(fpcopysign)
-OPCODE(wasm_sadd_overflow)          // OP_OVERFLOW_BIN_EXPR_START
+OPCODE(wasm_sadd_overflow) // OP_OVERFLOW_BIN_EXPR_START
 OPCODE(wasm_uadd_overflow)
 OPCODE(wasm_ssub_overflow)
 OPCODE(wasm_usub_overflow)
 OPCODE(wasm_smul_overflow)
-OPCODE(wasm_umul_overflow)          // OP_OVERFLOW_BIN_EXPR_END, OP_BIN_EXPR_END
+OPCODE(wasm_umul_overflow) // OP_OVERFLOW_BIN_EXPR_END, OP_BIN_EXPR_END
 
-OPCODE(inttoptr)                    // OP_CONV_EXPR_START
+OPCODE(inttoptr) // OP_CONV_EXPR_START
 OPCODE(ptrtoint)
 OPCODE(trunc)
 OPCODE(sext)
@@ -52,9 +52,10 @@ OPCODE(sitofp)
 OPCODE(uitofp)
 OPCODE(bitcast)
 OPCODE(wasm_fptosi)
-OPCODE(wasm_fptoui)                 // OP_CONV_EXPR_END
+OPCODE(wasm_fptoui) // OP_CONV_EXPR_END
 
-OPCODE(dread)                       // OP_OTHER_EXPR_START
+OPCODE(phi) // OP_OTHER_EXPR_START
+OPCODE(dread)
 OPCODE(const)
 OPCODE(cmp)
 OPCODE(adc)
@@ -73,15 +74,15 @@ OPCODE(evm_udiv128_by64)            // unsigned 128-bit (hi:lo) divided by 64-bi
 OPCODE(evm_urem128_by64)            // unsigned remainder from the same 128/64 division as evm_udiv128_by64
                                     // OP_OTHER_EXPR_END
 
-OPCODE(br)                          // OP_CTRL_STMT_START
+OPCODE(br) // OP_CTRL_STMT_START
 OPCODE(br_if)
 OPCODE(switch)
 OPCODE(call)
 OPCODE(icall)
-OPCODE(return)                      // OP_CTRL_STMT_END
+OPCODE(return) // OP_CTRL_STMT_END
 
-OPCODE(dassign)                     // OP_OTHER_STMT_START
+OPCODE(dassign) // OP_OTHER_STMT_START
 OPCODE(store)
 OPCODE(wasm_check_memory_access)
 OPCODE(wasm_visit_stack_guard)
-OPCODE(wasm_check_stack_boundary)   // OP_OTHER_STMT_END, OP_END
+OPCODE(wasm_check_stack_boundary) // OP_OTHER_STMT_END, OP_END

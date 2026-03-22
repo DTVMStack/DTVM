@@ -11,8 +11,11 @@
 #include "utils/hash_utils.h"
 #include "utils/logging.h"
 #include "llvm/Support/Casting.h"
+#include <cstdio>
 #include <cstring>
 #include <optional>
+#include <queue>
+#include <set>
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
 #include "compiler/llvm-prebuild/Target/X86/X86Subtarget.h"
@@ -93,6 +96,103 @@ bool EVMMirBuilder::compile(CompilerContext *Context) {
   return Visitor.compile();
 }
 
+void EVMMirBuilder::registerDynamicJumpPhiIncomingBlock(uint64_t TargetBlockPC,
+                                                        uint64_t PredBlockPC,
+                                                        MBasicBlock *PredBB) {
+  registerPhiIncomingBlock(TargetBlockPC, PredBlockPC, PredBB);
+}
+
+void EVMMirBuilder::registerPhiIncomingBlock(uint64_t TargetBlockPC,
+                                             uint64_t PredBlockPC,
+                                             MBasicBlock *PredBB) {
+  const uint64_t CanonicalTargetPC = getCanonicalJumpDestPC(TargetBlockPC);
+  DynamicPhiIncomingBlockTable[CanonicalTargetPC][PredBlockPC] =
+      resolvePhiIncomingPredecessorBB(TargetBlockPC, PredBB);
+}
+
+MBasicBlock *EVMMirBuilder::getPhiIncomingBlock(uint64_t TargetBlockPC,
+                                                uint64_t PredBlockPC) const {
+  auto DynamicTargetIt =
+      DynamicPhiIncomingBlockTable.find(getCanonicalJumpDestPC(TargetBlockPC));
+  if (DynamicTargetIt != DynamicPhiIncomingBlockTable.end()) {
+    auto DynamicPredIt = DynamicTargetIt->second.find(PredBlockPC);
+    if (DynamicPredIt != DynamicTargetIt->second.end()) {
+      return resolveReachablePhiIncomingPredecessorBB(TargetBlockPC,
+                                                      DynamicPredIt->second);
+    }
+  }
+
+  auto BlockIt = BlockEntryTable.find(PredBlockPC);
+  if (BlockIt == BlockEntryTable.end()) {
+    return nullptr;
+  }
+  return resolveReachablePhiIncomingPredecessorBB(TargetBlockPC,
+                                                  BlockIt->second);
+}
+
+uint64_t EVMMirBuilder::getCanonicalJumpDestPC(uint64_t TargetBlockPC) const {
+  auto It = JumpDestCanonicalPCTable.find(TargetBlockPC);
+  return It == JumpDestCanonicalPCTable.end() ? TargetBlockPC : It->second;
+}
+
+MBasicBlock *EVMMirBuilder::resolvePhiIncomingPredecessorBB(
+    uint64_t TargetBlockPC, MBasicBlock *DirectPredBB) const {
+  const uint64_t CanonicalTargetPC = getCanonicalJumpDestPC(TargetBlockPC);
+  auto BodyIt = JumpDestBodyTable.find(CanonicalTargetPC);
+  if (BodyIt == JumpDestBodyTable.end()) {
+    return DirectPredBB;
+  }
+
+  auto EntryIt = JumpDestTable.find(TargetBlockPC);
+  if (EntryIt == JumpDestTable.end()) {
+    return DirectPredBB;
+  }
+
+  return EntryIt->second == BodyIt->second ? DirectPredBB : EntryIt->second;
+}
+
+MBasicBlock *EVMMirBuilder::resolveReachablePhiIncomingPredecessorBB(
+    uint64_t TargetBlockPC, MBasicBlock *CandidateBB) const {
+  if (CandidateBB == nullptr) {
+    return nullptr;
+  }
+
+  auto TargetIt = BlockEntryTable.find(TargetBlockPC);
+  if (TargetIt == BlockEntryTable.end()) {
+    return CandidateBB;
+  }
+
+  MBasicBlock *TargetBB = TargetIt->second;
+  auto PredRange = TargetBB->predecessors();
+  if (std::find(PredRange.begin(), PredRange.end(), CandidateBB) !=
+      PredRange.end()) {
+    return CandidateBB;
+  }
+
+  std::queue<MBasicBlock *> Worklist;
+  std::set<MBasicBlock *> Visited;
+  Worklist.push(CandidateBB);
+  Visited.insert(CandidateBB);
+
+  while (!Worklist.empty()) {
+    MBasicBlock *CurrentBB = Worklist.front();
+    Worklist.pop();
+
+    for (MBasicBlock *SuccBB : CurrentBB->successors()) {
+      if (SuccBB == nullptr || !Visited.insert(SuccBB).second) {
+        continue;
+      }
+      if (std::find(PredRange.begin(), PredRange.end(), SuccBB) !=
+          PredRange.end()) {
+        return SuccBB;
+      }
+      Worklist.push(SuccBB);
+    }
+  }
+
+  return CandidateBB;
+}
+
 void EVMMirBuilder::loadEVMInstanceAttr() {
   InstanceAddr = createInstruction<ConversionInstruction>(
       false, OP_ptrtoint, &Ctx.I64Type,
@@ -139,13 +239,15 @@ void EVMMirBuilder::loadEVMInstanceAttr() {
   ExceptionReturnBB = CurFunc->createExceptionReturnBB();
 }
 
-MBasicBlock *EVMMirBuilder::getOrCreateIndirectJumpBB() {
-  if (IndirectJumpBB) {
-    return IndirectJumpBB;
+MBasicBlock *EVMMirBuilder::getOrCreateIndirectJumpBB(uint64_t SourceBlockPC) {
+  auto ExistingIt = IndirectJumpBBs.find(SourceBlockPC);
+  if (ExistingIt != IndirectJumpBBs.end()) {
+    return ExistingIt->second;
   }
 
   MBasicBlock *FromBB = CurBB;
-  IndirectJumpBB = CurFunc->createBasicBlock();
+  MBasicBlock *IndirectJumpBB = CurFunc->createBasicBlock();
+  IndirectJumpBBs[SourceBlockPC] = IndirectJumpBB;
   setInsertBlock(IndirectJumpBB);
 #ifdef ZEN_ENABLE_LINUX_PERF
   CurBB->setSourceOffset(CurPC);
@@ -204,6 +306,8 @@ MBasicBlock *EVMMirBuilder::getOrCreateIndirectJumpBB() {
             false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, JumpTarget,
             ExpectedPC);
         MBasicBlock *DestBB = JumpHashTable[HashEntry][0];
+        registerDynamicJumpPhiIncomingBlock(JumpHashReverse[HashEntry][0],
+                                            SourceBlockPC, CheckBB);
         createInstruction<BrIfInstruction>(true, Ctx, IsMatch, DestBB,
                                            FailureBB);
         addSuccessor(DestBB);
@@ -226,6 +330,8 @@ MBasicBlock *EVMMirBuilder::getOrCreateIndirectJumpBB() {
           SubCases[I].first =
               createIntConstInstruction(UInt64Type, SubPCVec[I]);
           SubCases[I].second = SubDestBBVec[I];
+          registerDynamicJumpPhiIncomingBlock(SubPCVec[I], SourceBlockPC,
+                                              SubCaseBB);
           addSuccessor(SubDestBBVec[I]);
         }
         createInstruction<SwitchInstruction>(true, Ctx, JumpTarget, FailureBB,
@@ -251,6 +357,7 @@ MBasicBlock *EVMMirBuilder::getOrCreateIndirectJumpBB() {
   for (const auto &[DestPC, DestBB] : JumpDestTable) {
     Cases[Index].first = createIntConstInstruction(UInt64Type, DestPC);
     Cases[Index].second = DestBB;
+    registerDynamicJumpPhiIncomingBlock(DestPC, SourceBlockPC, IndirectJumpBB);
     addSuccessor(DestBB);
     Index++;
   }
@@ -917,8 +1024,113 @@ void EVMMirBuilder::assignStackEntryOperand(const Operand &Dest,
   }
 }
 
+typename EVMMirBuilder::Operand
+EVMMirBuilder::prepareStackPhiIncoming(const Operand &Value) {
+  U256Inst Prepared = {};
+  U256Inst Src = extractU256Operand(Value);
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    Prepared[I] = protectUnsafeValue(Src[I], &Ctx.I64Type);
+  }
+  return Operand(Prepared, EVMType::UINT256);
+}
+
+void EVMMirBuilder::registerCurrentBlockPC(uint64_t BlockPC) {
+  CurrentBlockPC = BlockPC;
+  BlockEntryTable[BlockPC] = CurBB;
+}
+
+typename EVMMirBuilder::Operand EVMMirBuilder::materializeStackMergeOperand(
+    const std::vector<uint64_t> &PredBlockPCs,
+    const std::vector<std::pair<uint64_t, Operand>> &IncomingValues) {
+  std::map<uint64_t, Operand> IncomingValueMap;
+  for (const auto &[PredBlockPC, Value] : IncomingValues) {
+    IncomingValueMap[PredBlockPC] = Value;
+  }
+
+  U256Inst PhiComponents = {};
+  U256Var PhiVars = {};
+  auto PredRange = CurBB->predecessors();
+  const size_t ActualPredCount =
+      static_cast<size_t>(std::distance(PredRange.begin(), PredRange.end()));
+  for (size_t ComponentIndex = 0; ComponentIndex < EVM_ELEMENTS_COUNT;
+       ++ComponentIndex) {
+    PhiInstruction *Phi = createPendingPhi(&Ctx.I64Type, PredBlockPCs.size());
+    auto &SlotMap = PhiIncomingSlotMap[Phi];
+    for (size_t IncomingIndex = 0; IncomingIndex < PredBlockPCs.size();
+         ++IncomingIndex) {
+      uint64_t PredBlockPC = PredBlockPCs[IncomingIndex];
+      SlotMap[PredBlockPC] = IncomingIndex;
+
+      auto IncomingIt = IncomingValueMap.find(PredBlockPC);
+      if (IncomingIt == IncomingValueMap.end()) {
+        continue;
+      }
+
+      MBasicBlock *IncomingBB =
+          getPhiIncomingBlock(CurrentBlockPC, PredBlockPC);
+      if ((IncomingBB == nullptr ||
+           std::find(PredRange.begin(), PredRange.end(), IncomingBB) ==
+               PredRange.end()) &&
+          IncomingIndex < ActualPredCount) {
+        IncomingBB = *(PredRange.begin() + IncomingIndex);
+      }
+      ZEN_ASSERT(
+          IncomingBB != nullptr &&
+          "phi incoming block must be registered before materialization");
+      U256Inst IncomingComponents = extractU256Operand(IncomingIt->second);
+      Phi->setIncoming(IncomingIndex, IncomingBB,
+                       IncomingComponents[ComponentIndex]);
+    }
+    PhiComponents[ComponentIndex] = Phi;
+  }
+
+  for (size_t ComponentIndex = 0; ComponentIndex < EVM_ELEMENTS_COUNT;
+       ++ComponentIndex) {
+    Variable *PhiVar =
+        storeInstructionInTemp(PhiComponents[ComponentIndex], &Ctx.I64Type);
+    PhiVars[ComponentIndex] = PhiVar;
+    StackMergePhiVarMap[PhiVar->getVarIdx()] =
+        llvm::cast<PhiInstruction>(PhiComponents[ComponentIndex]);
+  }
+
+  return Operand(PhiVars, EVMType::UINT256);
+}
+
+void EVMMirBuilder::assignStackMergeOperand(const Operand &Dest,
+                                            uint64_t PredBlockPC,
+                                            const Operand &Value) {
+  U256Var DestVars = Dest.getU256VarComponents();
+  U256Inst IncomingComponents = extractU256Operand(Value);
+  MBasicBlock *IncomingBB = getPhiIncomingBlock(CurrentBlockPC, PredBlockPC);
+  auto PredRange = CurBB->predecessors();
+  const size_t ActualPredCount =
+      static_cast<size_t>(std::distance(PredRange.begin(), PredRange.end()));
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    ZEN_ASSERT(DestVars[I] != nullptr &&
+               "stack merge operand must be anchored in temp vars");
+    auto PhiIt = StackMergePhiVarMap.find(DestVars[I]->getVarIdx());
+    ZEN_ASSERT(PhiIt != StackMergePhiVarMap.end() &&
+               "phi temp var must resolve to pending phi");
+    PhiInstruction *Phi = PhiIt->second;
+    size_t IncomingSlot = getPhiIncomingSlot(Phi, PredBlockPC);
+    if ((IncomingBB == nullptr || std::find(PredRange.begin(), PredRange.end(),
+                                            IncomingBB) == PredRange.end()) &&
+        IncomingSlot < ActualPredCount) {
+      IncomingBB = *(PredRange.begin() + IncomingSlot);
+    }
+    ZEN_ASSERT(IncomingBB != nullptr &&
+               "phi incoming block must be registered before patching");
+    Phi->setIncoming(IncomingSlot, IncomingBB, IncomingComponents[I]);
+  }
+}
+
 void EVMMirBuilder::spillTrackedStack(
     const std::vector<Operand> &TrackedStack) {
+  spillTrackedStackPreservingPrefix(TrackedStack, 0);
+}
+
+void EVMMirBuilder::spillTrackedStackPreservingPrefix(
+    const std::vector<Operand> &TrackedStack, uint32_t PrefixDepth) {
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MPointerType *U64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
   MInstruction *StackPtrOffset = createIntConstInstruction(
@@ -927,9 +1139,10 @@ void EVMMirBuilder::spillTrackedStack(
       false, OP_add, &Ctx.I64Type, InstanceAddr, StackPtrOffset);
 
   const int32_t InnerOffsets[EVM_ELEMENTS_COUNT] = {0, 8, 16, 24};
+  const uint64_t PrefixBytes = static_cast<uint64_t>(PrefixDepth) * 32ULL;
   for (size_t Slot = 0; Slot < TrackedStack.size(); ++Slot) {
     U256Inst Components = extractU256Operand(TrackedStack[Slot]);
-    uint64_t SlotOffset = static_cast<uint64_t>(Slot) * 32ULL;
+    uint64_t SlotOffset = PrefixBytes + static_cast<uint64_t>(Slot) * 32ULL;
     MInstruction *SlotOffsetInst =
         createIntConstInstruction(I64Type, SlotOffset);
     MInstruction *SlotAddr = createInstruction<BinaryInstruction>(
@@ -942,11 +1155,13 @@ void EVMMirBuilder::spillTrackedStack(
     }
   }
 
-  setTrackedStackDepth(static_cast<uint32_t>(TrackedStack.size()));
+  const uint32_t FinalDepth =
+      PrefixDepth + static_cast<uint32_t>(TrackedStack.size());
+  setTrackedStackDepth(FinalDepth);
   const int32_t StackSizeOffset =
       zen::runtime::EVMInstance::getEVMStackSizeOffset();
   MInstruction *StackSize = createIntConstInstruction(
-      I64Type, static_cast<uint64_t>(TrackedStack.size()) * 32ULL);
+      I64Type, static_cast<uint64_t>(FinalDepth) * 32ULL);
   setInstanceElement(&Ctx.I64Type, StackSize, StackSizeOffset);
 }
 
@@ -1034,6 +1249,7 @@ void EVMMirBuilder::createJumpTable() {
   size_t BytecodeSize = EvmCtx->getBytecodeSize();
 
   JumpDestTable.clear();
+  JumpDestCanonicalPCTable.clear();
   JumpDestBodyTable.clear();
   JumpHashTable.clear();
   JumpHashReverse.clear();
@@ -1062,6 +1278,7 @@ void EVMMirBuilder::createJumpTable() {
       BodyBB->setJumpDestBB(true);
 
       for (size_t DestPC = RangeStart; DestPC <= RangeEnd; ++DestPC) {
+        JumpDestCanonicalPCTable[DestPC] = static_cast<uint64_t>(RangeEnd);
         JumpDestBodyTable[DestPC] = BodyBB;
       }
 
@@ -1153,6 +1370,7 @@ void EVMMirBuilder::createJumpTable() {
 void EVMMirBuilder::implementConstantJump(uint64_t ConstDest,
                                           MBasicBlock *FailureBB) {
   if (JumpDestTable.count(ConstDest)) {
+    registerPhiIncomingBlock(ConstDest, CurrentBlockPC, CurBB);
     createInstruction<BrInstruction>(true, Ctx, JumpDestTable[ConstDest]);
     addSuccessor(JumpDestTable[ConstDest]);
   } else {
@@ -1170,7 +1388,7 @@ void EVMMirBuilder::implementIndirectJump(MInstruction *JumpTarget,
   }
   HasIndirectJump = true;
 
-  MBasicBlock *TargetBB = getOrCreateIndirectJumpBB();
+  MBasicBlock *TargetBB = getOrCreateIndirectJumpBB(CurrentBlockPC);
   createInstruction<DassignInstruction>(true, &(Ctx.VoidType), JumpTarget,
                                         JumpTargetVar->getVarIdx());
   createInstruction<BrInstruction>(true, Ctx, TargetBB);
@@ -1289,6 +1507,29 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
                                        FallThroughBB);
     addUniqueSuccessor(InvalidJumpBB);
     addSuccessor(FallThroughBB);
+  } else if (Dest.isConstant()) {
+    const auto &ConstValue = Dest.getConstValue();
+    if ((ConstValue[3] | ConstValue[2] | ConstValue[1]) != 0) {
+      createInstruction<BrIfInstruction>(true, Ctx, IsNonZero, InvalidJumpBB,
+                                         FallThroughBB);
+      addUniqueSuccessor(InvalidJumpBB);
+      addSuccessor(FallThroughBB);
+    } else {
+      uint64_t ConstDest = ConstValue[0];
+      auto JumpIt = JumpDestTable.find(ConstDest);
+      if (JumpIt == JumpDestTable.end()) {
+        createInstruction<BrIfInstruction>(true, Ctx, IsNonZero, InvalidJumpBB,
+                                           FallThroughBB);
+        addUniqueSuccessor(InvalidJumpBB);
+        addSuccessor(FallThroughBB);
+      } else {
+        registerPhiIncomingBlock(ConstDest, CurrentBlockPC, CurBB);
+        createInstruction<BrIfInstruction>(true, Ctx, IsNonZero, JumpIt->second,
+                                           FallThroughBB);
+        addSuccessor(JumpIt->second);
+        addSuccessor(FallThroughBB);
+      }
+    }
   } else {
     MBasicBlock *JumpTableBB = createBasicBlock();
     createInstruction<BrIfInstruction>(true, Ctx, IsNonZero, JumpTableBB,
@@ -1296,31 +1537,19 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
     addSuccessor(JumpTableBB);
     addSuccessor(FallThroughBB);
     setInsertBlock(JumpTableBB);
-    if (Dest.isConstant()) {
-      const auto &ConstValue = Dest.getConstValue();
-      if ((ConstValue[3] | ConstValue[2] | ConstValue[1]) != 0) {
-        createInstruction<BrInstruction>(true, Ctx, InvalidJumpBB);
-        addSuccessor(InvalidJumpBB);
-      } else {
-        uint64_t ConstDest = ConstValue[0];
-        implementConstantJump(ConstDest, InvalidJumpBB);
-      }
-    } else {
-      MInstruction *HighOr = createInstruction<BinaryInstruction>(
-          false, OP_or, MirI64Type, DestComponents[1], DestComponents[2]);
-      HighOr = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
-                                                    HighOr, DestComponents[3]);
-      MInstruction *HighNonZero = createInstruction<CmpInstruction>(
-          false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, HighOr,
-          Zero);
-      MBasicBlock *ValidJumpBB = createBasicBlock();
-      createInstruction<BrIfInstruction>(true, Ctx, HighNonZero, InvalidJumpBB,
-                                         ValidJumpBB);
-      addSuccessor(InvalidJumpBB);
-      addSuccessor(ValidJumpBB);
-      setInsertBlock(ValidJumpBB);
-      implementIndirectJump(JumpTarget, InvalidJumpBB);
-    }
+    MInstruction *HighOr = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, DestComponents[1], DestComponents[2]);
+    HighOr = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                  HighOr, DestComponents[3]);
+    MInstruction *HighNonZero = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, HighOr, Zero);
+    MBasicBlock *ValidJumpBB = createBasicBlock();
+    createInstruction<BrIfInstruction>(true, Ctx, HighNonZero, InvalidJumpBB,
+                                       ValidJumpBB);
+    addSuccessor(InvalidJumpBB);
+    addSuccessor(ValidJumpBB);
+    setInsertBlock(ValidJumpBB);
+    implementIndirectJump(JumpTarget, InvalidJumpBB);
   }
 
   setInsertBlock(FallThroughBB);
@@ -1340,11 +1569,13 @@ void EVMMirBuilder::handleJumpDest(const uint64_t &PC) {
   }
   if (CurBB != DestBB && !IsExceptionSetBB) {
     if (CurBB->empty()) {
+      registerPhiIncomingBlock(PC, CurrentBlockPC, CurBB);
       CurBB->addSuccessor(DestBB);
       createInstruction<BrInstruction>(true, Ctx, DestBB);
     } else {
       MInstruction *LastInst = *std::prev(CurBB->end());
       if (!LastInst->isTerminator()) {
+        registerPhiIncomingBlock(PC, CurrentBlockPC, CurBB);
         CurBB->addSuccessor(DestBB);
         createInstruction<BrInstruction>(true, Ctx, DestBB);
       }
@@ -4179,6 +4410,9 @@ void EVMMirBuilder::handleTStore(Operand Index, Operand ValueComponents) {
 void EVMMirBuilder::handleSelfDestruct(Operand Beneficiary) {
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  // SELFDESTRUCT is a terminating opcode. Flush the live gas register so the
+  // runtime helper observes the current callee gas and returns the correct
+  // leftover amount to the caller.
   syncGasToMemoryFull();
 #endif
   callRuntimeFor<void, const uint8_t *>(RuntimeFunctions.HandleSelfDestruct,
@@ -4338,6 +4572,20 @@ Variable *EVMMirBuilder::storeInstructionInTemp(MInstruction *Value,
 MInstruction *EVMMirBuilder::loadVariable(Variable *Var) {
   return createInstruction<DreadInstruction>(false, Var->getType(),
                                              Var->getVarIdx());
+}
+
+PhiInstruction *EVMMirBuilder::createPendingPhi(MType *Type,
+                                                size_t NumIncoming) {
+  return createInstruction<PhiInstruction>(true, Type, NumIncoming);
+}
+
+size_t EVMMirBuilder::getPhiIncomingSlot(PhiInstruction *Phi,
+                                         uint64_t PredBlockPC) const {
+  auto PhiIt = PhiIncomingSlotMap.find(Phi);
+  ZEN_ASSERT(PhiIt != PhiIncomingSlotMap.end());
+  auto SlotIt = PhiIt->second.find(PredBlockPC);
+  ZEN_ASSERT(SlotIt != PhiIt->second.end());
+  return SlotIt->second;
 }
 
 MInstruction *EVMMirBuilder::protectUnsafeValue(MInstruction *Value,
@@ -4849,8 +5097,17 @@ EVMMirBuilder::convertOperandToUNInstruction(const Operand &Param) {
     }
   } else if (Param.isU256MultiComponent()) {
     auto Components = Param.getU256Components();
-    for (size_t I = 0; I < N; ++I) {
-      Result[I] = Components[I];
+    if (Components[0] != nullptr) {
+      for (size_t I = 0; I < N; ++I) {
+        Result[I] = Components[I];
+      }
+    } else {
+      auto Vars = Param.getU256VarComponents();
+      for (size_t I = 0; I < N; ++I) {
+        ZEN_ASSERT(Vars[I] != nullptr);
+        Result[I] = createInstruction<DreadInstruction>(
+            false, Vars[I]->getType(), Vars[I]->getVarIdx());
+      }
     }
   } else if (Param.isConstant()) {
     const U256Value &U256Value = Param.getConstValue();

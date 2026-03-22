@@ -214,7 +214,17 @@ public:
   void setTrackedStackDepth(uint32_t Depth);
   Operand createStackEntryOperand();
   void assignStackEntryOperand(const Operand &Dest, const Operand &Value);
+  Operand prepareStackPhiIncoming(const Operand &Value);
+  void registerCurrentBlockPC(uint64_t BlockPC);
+  Operand materializeStackMergeOperand(
+      const std::vector<uint64_t> &PredBlockPCs,
+      const std::vector<std::pair<uint64_t, Operand>> &IncomingValues);
+  void assignStackMergeOperand(const Operand &Dest, uint64_t PredBlockPC,
+                               const Operand &Value);
   void spillTrackedStack(const std::vector<Operand> &TrackedStack);
+  void
+  spillTrackedStackPreservingPrefix(const std::vector<Operand> &TrackedStack,
+                                    uint32_t PrefixDepth);
 
   // PUSH0: place value 0 on stack
   // PUSH1-PUSH32: Push N bytes onto stack
@@ -666,6 +676,8 @@ private:
   Operand loadProtectedAddressFieldAsU256(MInstruction *BasePtr,
                                           int32_t Offset);
   MInstruction *getHostArgScratchPtr(std::size_t ScratchSlot);
+  PhiInstruction *createPendingPhi(MType *Type, size_t NumIncoming);
+  size_t getPhiIncomingSlot(PhiInstruction *Phi, uint64_t PredBlockPC) const;
 
   template <class T, typename... Arguments>
   T *createInstruction(bool IsStmt, Arguments &&...Args) {
@@ -864,7 +876,20 @@ private:
   template <size_t N>
   U256Inst convertOperandToUNInstruction(const Operand &Param);
 
-  MBasicBlock *getOrCreateIndirectJumpBB();
+  MBasicBlock *getOrCreateIndirectJumpBB(uint64_t SourceBlockPC);
+  void registerPhiIncomingBlock(uint64_t TargetBlockPC, uint64_t PredBlockPC,
+                                MBasicBlock *PredBB);
+  void registerDynamicJumpPhiIncomingBlock(uint64_t TargetBlockPC,
+                                           uint64_t PredBlockPC,
+                                           MBasicBlock *PredBB);
+  MBasicBlock *getPhiIncomingBlock(uint64_t TargetBlockPC,
+                                   uint64_t PredBlockPC) const;
+  uint64_t getCanonicalJumpDestPC(uint64_t TargetBlockPC) const;
+  MBasicBlock *resolvePhiIncomingPredecessorBB(uint64_t TargetBlockPC,
+                                               MBasicBlock *DirectPredBB) const;
+  MBasicBlock *
+  resolveReachablePhiIncomingPredecessorBB(uint64_t TargetBlockPC,
+                                           MBasicBlock *CandidateBB) const;
 
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;
@@ -887,6 +912,7 @@ private:
   // Entry blocks for jump targets (may be tiny thunks for shared JUMPDEST
   // bodies).
   std::map<uint64_t, MBasicBlock *> JumpDestTable;
+  std::map<uint64_t, uint64_t> JumpDestCanonicalPCTable;
   // Canonical execution blocks for JUMPDEST opcodes in linear decode.
   std::map<uint64_t, MBasicBlock *> JumpDestBodyTable;
   // Cached skipped-metering for merged consecutive JUMPDEST runs.
@@ -899,7 +925,7 @@ private:
   std::map<uint64_t, std::vector<uint64_t>> JumpHashReverse;
   uint64_t HashMask = 0;
   Variable *JumpTargetVar = nullptr;
-  MBasicBlock *IndirectJumpBB = nullptr;
+  std::map<uint64_t, MBasicBlock *> IndirectJumpBBs;
 
   // Stack check block for stack overflow/underflow checking
   MBasicBlock *StackCheckBB = nullptr;
@@ -907,6 +933,12 @@ private:
   Variable *StackSizeVar = nullptr;
   Variable *MemoryBaseVar = nullptr;
   Variable *MemorySizeVar = nullptr;
+  uint64_t CurrentBlockPC = 0;
+  std::map<uint64_t, MBasicBlock *> BlockEntryTable;
+  std::map<uint64_t, std::map<uint64_t, MBasicBlock *>>
+      DynamicPhiIncomingBlockTable;
+  std::map<PhiInstruction *, std::map<uint64_t, size_t>> PhiIncomingSlotMap;
+  std::map<VariableIdx, PhiInstruction *> StackMergePhiVarMap;
 
   struct MemoryCompileStats {
     uint64_t MLoadExpandCount = 0;

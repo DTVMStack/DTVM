@@ -10,6 +10,9 @@
 #include "host/evm/crypto.h"
 #include "runtime/evm_instance.h"
 
+#include <algorithm>
+#include <cstdio>
+
 thread_local zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
 thread_local zen::evm::InterpreterExecContext
     *zen::evm::EVMResource::CurrentContext = nullptr;
@@ -22,6 +25,8 @@ using namespace zen::runtime;
 
 namespace {
 
+bool chargeGas(EVMFrame *Frame, uint64_t GasCost);
+
 evmc_revision currentRevision() {
   auto *Context = EVMResource::getInterpreterExecContext();
   if (!Context) {
@@ -29,6 +34,53 @@ evmc_revision currentRevision() {
   }
   auto *Instance = Context->getInstance();
   return Instance ? Instance->getRevision() : DEFAULT_REVISION;
+}
+
+constexpr uint8_t DelegationMagicBytes[] = {0xef, 0x01, 0x00};
+
+bool resolveDelegatedCallCodeAddress(EVMFrame *Frame, evmc::address Dest,
+                                     evmc::address &CodeAddress) {
+  CodeAddress = Dest;
+  if (currentRevision() < EVMC_PRAGUE) {
+    return true;
+  }
+
+  uint8_t Designation[sizeof(DelegationMagicBytes) + sizeof(evmc::address)] =
+      {};
+  const size_t Copied =
+      Frame->Host->copy_code(Dest, 0, Designation, sizeof(Designation));
+  if (Copied < sizeof(DelegationMagicBytes) ||
+      std::memcmp(Designation, DelegationMagicBytes,
+                  sizeof(DelegationMagicBytes)) != 0) {
+    return true;
+  }
+
+  if (Copied != sizeof(Designation)) {
+    return true;
+  }
+
+  std::memcpy(CodeAddress.bytes, Designation + sizeof(DelegationMagicBytes),
+              sizeof(CodeAddress.bytes));
+  const uint64_t DelegateAccessCost =
+      Frame->Host->access_account(CodeAddress) == EVMC_ACCESS_COLD
+          ? COLD_ACCOUNT_ACCESS_COST
+          : WARM_STORAGE_READ_COST;
+  std::fprintf(stderr,
+               "delegation interp hit rev=%d copied=%zu cost=%llu "
+               "dest=%02x%02x code=%02x%02x gas=%lld\n",
+               static_cast<int>(currentRevision()), Copied,
+               static_cast<unsigned long long>(DelegateAccessCost),
+               Dest.bytes[0], Dest.bytes[1], CodeAddress.bytes[0],
+               CodeAddress.bytes[1], static_cast<long long>(Frame->Msg.gas));
+  if (static_cast<uint64_t>(Frame->Msg.gas) < DelegateAccessCost) {
+    auto *Context = EVMResource::getInterpreterExecContext();
+    if (Context) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+    }
+    return false;
+  }
+  Frame->Msg.gas -= static_cast<int64_t>(DelegateAccessCost);
+  return true;
 }
 
 } // namespace
@@ -1251,6 +1303,11 @@ void CallHandler::doExecute() {
     }
   }
 
+  evmc::address CodeAddress = Dest;
+  if (!resolveDelegatedCallCodeAddress(Frame, Dest, CodeAddress)) {
+    return;
+  }
+
   if (OpCode == evmc_opcode::OP_CALL && HasValue && Frame->isStaticMode()) {
     Context->setStatus(EVMC_STATIC_MODE_VIOLATION);
     return;
@@ -1355,10 +1412,15 @@ void CallHandler::doExecute() {
                    ? Frame->Msg.value
                    : intx::be::store<evmc::bytes32>(Value),
       .create2_salt = {},
-      .code_address = Dest,
+      .code_address = CodeAddress,
       .code = nullptr,
       .code_size = 0,
   };
+  if (std::memcmp(Dest.bytes, CodeAddress.bytes, sizeof(Dest.bytes)) != 0) {
+    NewMsg.flags |= EVMC_DELEGATED;
+  } else {
+    NewMsg.flags &= ~uint32_t(EVMC_DELEGATED);
+  }
 
   const auto Result = Frame->Host->call(NewMsg);
   Context->setResource();

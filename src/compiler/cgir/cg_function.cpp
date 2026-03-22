@@ -79,6 +79,19 @@ CgInstruction *CgFunction::CloneMachineInstr(const CgInstruction *Orig) {
       CgInstruction(*this, *Orig);
 }
 
+void CgFunction::insertCgBasicBlockAfter(CgBasicBlock *After,
+                                         CgBasicBlock *CgBB) {
+  ZEN_ASSERT(After != nullptr);
+  ZEN_ASSERT(CgBB != nullptr);
+
+  const size_t InsertIndex = static_cast<size_t>(After->getNumber()) + 1;
+  auto It = _cg_basic_blocks.begin() + InsertIndex;
+  _cg_basic_blocks.insert(It, CgBB);
+  for (size_t Index = InsertIndex; Index < _cg_basic_blocks.size(); ++Index) {
+    _cg_basic_blocks[Index]->setNumber(Index);
+  }
+}
+
 uint32_t
 CgFunction::createJumpTableIndex(const CompileVector<CgBasicBlock *> &DestBBs) {
   ZEN_ASSERT(!DestBBs.empty() && "Cannot create an empty jump table!");

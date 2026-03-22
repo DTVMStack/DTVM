@@ -161,6 +161,71 @@ protected:
       : FixedOperandInstruction(kind, opcode, 0, type) {}
 };
 
+class PhiInstruction : public DynamicOperandInstruction {
+public:
+  using Incoming = std::pair<MBasicBlock *, MInstruction *>;
+
+  static PhiInstruction *create(CompileMemPool &MemPool, MType *Type,
+                                size_t NumIncoming) {
+    return DynamicOperandInstruction::createWithMemPool<PhiInstruction>(
+        MemPool, NumIncoming, Type, NumIncoming);
+  }
+
+  static PhiInstruction *create(CompileMemPool &MemPool, MType *Type,
+                                llvm::ArrayRef<Incoming> Incomings) {
+    return DynamicOperandInstruction::createWithMemPool<PhiInstruction>(
+        MemPool, Incomings.size(), Type, Incomings);
+  }
+
+  static bool classof(const MInstruction *Inst) {
+    return Inst->getOpcode() == OP_phi;
+  }
+
+  size_t getNumIncoming() const { return getNumOperands(); }
+
+  MBasicBlock *getIncomingBlock(size_t Index) const {
+    ZEN_ASSERT(Index < Blocks.size());
+    return Blocks[Index];
+  }
+
+  const MInstruction *getIncomingValue(size_t Index) const {
+    ZEN_ASSERT(Index < getNumOperands());
+    return getOperand(static_cast<OperandNum>(Index));
+  }
+
+  void setIncoming(size_t Index, MBasicBlock *Block, MInstruction *Value) {
+    ZEN_ASSERT(Index < Blocks.size());
+    Blocks[Index] = Block;
+    if (Value != nullptr) {
+      setOperand(static_cast<OperandNum>(Index), Value);
+    } else {
+      getOperand(static_cast<OperandNum>(Index)) = nullptr;
+    }
+  }
+
+private:
+  friend class DynamicOperandInstruction;
+
+  PhiInstruction(CompileMemPool &MemPool, MType *Type, size_t NumIncoming)
+      : DynamicOperandInstruction(MInstruction::PHI, OP_phi, NumIncoming, Type),
+        Blocks(NumIncoming, MemPool) {
+    for (size_t Index = 0; Index < NumIncoming; ++Index) {
+      Blocks[Index] = nullptr;
+      getOperand(static_cast<OperandNum>(Index)) = nullptr;
+    }
+  }
+
+  PhiInstruction(CompileMemPool &MemPool, MType *Type,
+                 llvm::ArrayRef<Incoming> Incomings)
+      : PhiInstruction(MemPool, Type, Incomings.size()) {
+    for (size_t Index = 0; Index < Incomings.size(); ++Index) {
+      setIncoming(Index, Incomings[Index].first, Incomings[Index].second);
+    }
+  }
+
+  CompileVector<MBasicBlock *> Blocks;
+};
+
 class DassignInstruction : public UnaryInstruction {
 public:
   template <typename... Arguments>

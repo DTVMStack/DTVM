@@ -77,6 +77,12 @@ private:
   mutable evm::EVMBytecodeCache BytecodeCache;
   evmc_revision Revision = zen::evm::DEFAULT_REVISION;
 
+#ifdef ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
+  void initializeMultipassFallbackInfo() const;
+  mutable bool MultipassFallbackInfoInitialized = false;
+  mutable bool ShouldInterpretInMultipass = false;
+#endif
+
 #ifdef ZEN_ENABLE_JIT
   common::CodeMemPool JITCodeMemPool;
   void *JITCode = nullptr;

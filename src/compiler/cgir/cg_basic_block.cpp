@@ -31,6 +31,57 @@ CgBasicBlock::const_parent_iterator CgBasicBlock::getIterator() const {
   return _parent->begin() + _idx;
 }
 
+void CgBasicBlock::removeSuccessor(CgBasicBlock *Succ) {
+  auto It = std::find(Successors.begin(), Successors.end(), Succ);
+  removeSuccessor(It);
+}
+
+void CgBasicBlock::removeSuccessor(succ_iterator It) {
+  ZEN_ASSERT(It != Successors.end());
+  (*It)->removePredecessor(this);
+  Successors.erase(It);
+}
+
+void CgBasicBlock::removePredecessor(CgBasicBlock *Pred) {
+  auto It = std::find(Predecessors.begin(), Predecessors.end(), Pred);
+  ZEN_ASSERT(It != Predecessors.end());
+  Predecessors.erase(It);
+}
+
+void CgBasicBlock::replaceSuccessor(CgBasicBlock *Old, CgBasicBlock *New) {
+  if (Old == New) {
+    return;
+  }
+
+  auto E = Successors.end();
+  auto OldIt = E;
+  auto NewIt = E;
+  for (auto It = Successors.begin(); It != E; ++It) {
+    if (*It == Old) {
+      OldIt = It;
+      if (NewIt != E) {
+        break;
+      }
+    }
+    if (*It == New) {
+      NewIt = It;
+      if (OldIt != E) {
+        break;
+      }
+    }
+  }
+  ZEN_ASSERT(OldIt != E && "Old is not a successor of this block");
+
+  if (NewIt == E) {
+    Old->removePredecessor(this);
+    New->addPredecessor(this);
+    *OldIt = New;
+    return;
+  }
+
+  removeSuccessor(OldIt);
+}
+
 void CgBasicBlock::sortUniqueLiveIns() {
   llvm::sort(LiveIns,
              [](const RegisterMaskPair &LI0, const RegisterMaskPair &LI1) {

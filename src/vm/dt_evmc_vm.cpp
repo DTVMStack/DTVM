@@ -280,10 +280,33 @@ bool shouldUsePersistentModuleCache(const evmc_message *Msg) {
          Msg->kind != EVMC_CREATE2;
 }
 
+bool shouldRetryModuleLoadWithFastRA(const DTVM *VM, const Error &Err) {
+  return VM->Config.Mode == RunMode::MultipassMode &&
+         !VM->Config.DisableMultipassGreedyRA &&
+         Err.getPhase() == ErrorPhase::Compilation &&
+         Err.getSubphase() == ErrorSubphase::RegAlloc;
+}
+
+zen::common::MayBe<EVMModule *>
+loadEVMModuleWithRegAllocRetry(DTVM *VM, const std::string &ModName,
+                               const uint8_t *Code, size_t CodeSize,
+                               evmc_revision Rev) {
+  auto ModRet = VM->RT->loadEVMModule(ModName, Code, CodeSize, Rev);
+  if (ModRet || !shouldRetryModuleLoadWithFastRA(VM, ModRet.getError())) {
+    return ModRet;
+  }
+
+  RuntimeConfig RetryConfig = VM->Config;
+  RetryConfig.DisableMultipassGreedyRA = true;
+  ScopedConfig Retry(VM->RT.get(), RetryConfig);
+  return VM->RT->loadEVMModule(ModName, Code, CodeSize, Rev);
+}
+
 EVMModule *loadTransientModule(DTVM *VM, const uint8_t *Code, size_t CodeSize,
                                evmc_revision Rev) {
   std::string ModName = "tmp_mod_" + std::to_string(VM->ModCounter++);
-  auto ModRet = VM->RT->loadEVMModule(ModName, Code, CodeSize, Rev);
+  auto ModRet =
+      loadEVMModuleWithRegAllocRetry(VM, ModName, Code, CodeSize, Rev);
   if (!ModRet)
     return nullptr;
   return *ModRet;
@@ -347,7 +370,8 @@ EVMModule *findModuleCached(DTVM *VM, const uint8_t *Code, size_t CodeSize,
     }
 
     std::string ModName = "mod_" + std::to_string(VM->ModCounter++);
-    auto ModRet = VM->RT->loadEVMModule(ModName, Code, CodeSize, Rev);
+    auto ModRet =
+        loadEVMModuleWithRegAllocRetry(VM, ModName, Code, CodeSize, Rev);
     if (!ModRet)
       return nullptr;
     Mod = *ModRet;

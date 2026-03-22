@@ -7,6 +7,7 @@
 #include "compiler/cgir/pass/dead_cg_instruction_elim.h"
 #include "compiler/cgir/pass/expand_post_ra_pseudos.h"
 #include "compiler/cgir/pass/fast_ra.h"
+#include "compiler/cgir/pass/phi_elimination.h"
 #include "compiler/cgir/pass/prolog_epilog_inserter.h"
 #include "compiler/cgir/pass/reg_alloc_basic.h"
 #include "compiler/cgir/pass/reg_alloc_greedy.h"
@@ -75,6 +76,8 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
   // TODO: refactor to pass
   X86CgLowering CgLowering(MF);
   X86CgPeephole CgPeephole(MF);
+  CgPhiElimination PhiElimination;
+  PhiElimination.runOnCgFunction(MF);
 
   uint32_t MFuncIdx = MFunc.getFuncIdx();
 

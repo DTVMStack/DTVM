@@ -85,6 +85,8 @@ public:
     _cg_basic_blocks.emplace_back(CgBB);
   }
 
+  void insertCgBasicBlockAfter(CgBasicBlock *After, CgBasicBlock *CgBB);
+
   CgBasicBlock *getCgBasicBlock(BlockNum BBIdx) const {
     ZEN_ASSERT(BBIdx < _cg_basic_blocks.size());
     return _cg_basic_blocks[BBIdx];

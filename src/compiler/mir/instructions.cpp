@@ -60,6 +60,30 @@ void MInstruction::print(llvm::raw_ostream &OS) const {
        << getOperand<1>() << ", " << getOperand<2>() << ", " << getOperand<3>()
        << ')';
     break;
+  case PHI: {
+    auto *phi = llvm::cast<PhiInstruction>(this);
+    OS << "phi [";
+    for (size_t I = 0; I < phi->getNumIncoming(); ++I) {
+      if (I != 0) {
+        OS << ", ";
+      }
+      MBasicBlock *IncomingBB = phi->getIncomingBlock(I);
+      const MInstruction *IncomingValue = phi->getIncomingValue(I);
+      if (IncomingBB) {
+        OS << '@' << IncomingBB->getIdx();
+      } else {
+        OS << "<pending-bb>";
+      }
+      OS << ": ";
+      if (IncomingValue) {
+        OS << IncomingValue;
+      } else {
+        OS << "<pending-value>";
+      }
+    }
+    OS << "]\n";
+    break;
+  }
   case DASSIGN: {
     auto *assign = llvm::cast<DassignInstruction>(this);
     OS << '$' << assign->getVarIdx() << " = " << getOperand<0>() << "\n";

@@ -218,11 +218,16 @@ public:
     Succ->addPredecessor(this);
   }
 
+  void removeSuccessor(CgBasicBlock *Succ);
+  void removeSuccessor(succ_iterator It);
+
   bool isSuccessor(const CgBasicBlock *MBB) const {
     return is_contained(successors(), MBB);
   }
 
   void addPredecessor(CgBasicBlock *Pred) { Predecessors.push_back(Pred); }
+  void removePredecessor(CgBasicBlock *Pred);
+  void replaceSuccessor(CgBasicBlock *Old, CgBasicBlock *New);
 
   // Only call this method when you are certain that all blocks have been added
   // to the basic block list.

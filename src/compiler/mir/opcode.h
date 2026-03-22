@@ -34,7 +34,7 @@ enum Opcode : uint16_t {
   OP_CTRL_STMT_START = OP_br,
   OP_CTRL_STMT_END = OP_return,
 
-  OP_OTHER_STMT_START = OP_dassign,
+  OP_OTHER_STMT_START = OP_phi,
   OP_OTHER_STMT_END = OP_wasm_check_stack_boundary,
 
   OP_START = OP_UNARY_EXPR_START,
@@ -49,6 +49,7 @@ public:
     // TODO: use desc information
     switch (opcode) {
     case OP_dassign:
+    case OP_phi:
     case OP_return:
     case OP_store:
       return true;

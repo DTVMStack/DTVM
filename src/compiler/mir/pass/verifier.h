@@ -28,6 +28,16 @@ public:
     if (BB.empty()) {
       return;
     }
+    bool SeenNonPhi = false;
+    for (const MInstruction *Inst : BB) {
+      if (Inst->getKind() == MInstruction::PHI) {
+        CHECK(!SeenNonPhi, "phi instructions in BB @" +
+                               std::to_string(BB.getIdx()) +
+                               " must be contiguous at block start");
+      } else {
+        SeenNonPhi = true;
+      }
+    }
     const MInstruction *LastInst = *std::prev(BB.end());
     CHECK(LastInst->isTerminator(), "The last instruction in BB @" +
                                         std::to_string(BB.getIdx()) +
@@ -47,6 +57,7 @@ public:
   void visitSbbInstruction(SbbInstruction &I) override;
   void visitCmpInstruction(CmpInstruction &I) override;
   void visitSelectInstruction(SelectInstruction &I) override;
+  void visitPhiInstruction(PhiInstruction &I) override;
   void visitDassignInstruction(DassignInstruction &I) override;
   void visitLoadInstruction(LoadInstruction &I) override;
   void visitStoreInstruction(StoreInstruction &I) override;

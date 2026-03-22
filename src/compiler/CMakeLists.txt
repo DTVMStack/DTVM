@@ -61,6 +61,7 @@ set(COMPILER_SRCS
     cgir/pass/cg_register_class_info.cpp
     cgir/pass/prolog_epilog_inserter.cpp
     cgir/pass/expand_post_ra_pseudos.cpp
+    cgir/pass/phi_elimination.cpp
     cgir/pass/virt_reg_map.cpp
     cgir/pass/cg_dominators.cpp
     cgir/pass/cg_loop_info.cpp

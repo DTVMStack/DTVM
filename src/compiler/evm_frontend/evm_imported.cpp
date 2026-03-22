@@ -102,6 +102,42 @@ inline void triggerStaticModeViolation(zen::runtime::EVMInstance *Instance) {
   zen::runtime::EVMInstance::triggerInstanceExceptionOnJIT(
       Instance, zen::common::ErrorCode::EVMStaticModeViolation);
 }
+
+constexpr uint8_t DelegationMagicBytes[] = {0xef, 0x01, 0x00};
+
+bool resolveDelegatedCallCodeAddress(zen::runtime::EVMInstance *Instance,
+                                     evmc::address TargetAddr,
+                                     evmc::address &CodeAddr) {
+  CodeAddr = TargetAddr;
+  if (Instance->getRevision() < EVMC_PRAGUE) {
+    return true;
+  }
+
+  const zen::runtime::EVMModule *Module = Instance->getModule();
+  ZEN_ASSERT(Module && Module->Host);
+  uint8_t Designation[sizeof(DelegationMagicBytes) + sizeof(evmc::address)] =
+      {};
+  const size_t Copied =
+      Module->Host->copy_code(TargetAddr, 0, Designation, sizeof(Designation));
+  if (Copied < sizeof(DelegationMagicBytes) ||
+      std::memcmp(Designation, DelegationMagicBytes,
+                  sizeof(DelegationMagicBytes)) != 0) {
+    return true;
+  }
+
+  if (Copied != sizeof(Designation)) {
+    return true;
+  }
+
+  std::memcpy(CodeAddr.bytes, Designation + sizeof(DelegationMagicBytes),
+              sizeof(CodeAddr.bytes));
+  const uint64_t DelegateAccessCost =
+      Module->Host->access_account(CodeAddr) == EVMC_ACCESS_COLD
+          ? zen::evm::COLD_ACCOUNT_ACCESS_COST
+          : zen::evm::WARM_STORAGE_READ_COST;
+  Instance->chargeGas(DelegateAccessCost);
+  return true;
+}
 } // namespace
 
 const RuntimeFunctions &getRuntimeFunctionTable() {
@@ -879,6 +915,12 @@ static uint64_t evmHandleCallInternal(
     Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
   }
 
+  evmc::address CodeAddr = TargetAddr;
+  if (!resolveDelegatedCallCodeAddress(Instance, TargetAddr, CodeAddr)) {
+    Instance->setReturnData({});
+    return 0;
+  }
+
   const bool HasValueArgs = CallKind == EVMC_CALL || CallKind == EVMC_CALLCODE;
   const bool HasValue = Value != 0;
 
@@ -975,10 +1017,16 @@ static uint64_t evmHandleCallInternal(
                    ? CurrentMsg->value
                    : intx::be::store<evmc::bytes32>(Value),
       .create2_salt = {},
-      .code_address = TargetAddr,
+      .code_address = CodeAddr,
       .code = nullptr,
       .code_size = 0,
   };
+  if (std::memcmp(TargetAddr.bytes, CodeAddr.bytes, sizeof(TargetAddr.bytes)) !=
+      0) {
+    CallMsg.flags |= EVMC_DELEGATED;
+  } else {
+    CallMsg.flags &= ~uint32_t(EVMC_DELEGATED);
+  }
 
   Instance->pushMessage(&CallMsg);
   evmc::Result Result = Module->Host->call(CallMsg);
