@@ -1549,9 +1549,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
 
         auto storeResult = [&](const U256Inst &Values) {
           for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-            createInstruction<DassignInstruction>(true, &(Ctx.VoidType),
-                                                  Values[I],
-                                                  ResultVars[I]->getVarIdx());
+            createInstruction<DassignInstruction>(
+                true, &(Ctx.VoidType), Values[I], ResultVars[I]->getVarIdx());
           }
         };
 
