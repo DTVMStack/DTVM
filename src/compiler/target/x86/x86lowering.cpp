@@ -1277,6 +1277,9 @@ X86CgLowering::lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst) {
       emitMulx64(RC, MulxSourceReg, DeadMulxHiReg, A[0], B[0], true);
   std::array<CgRegister, NumLimbs> Acc{R0, H00, ZeroReg, ZeroReg};
 
+  // The final CF/OF left after a row only carry into limb 4, which is outside
+  // the truncated 256-bit product, so the next row can start with both chains
+  // cleared.
   clearCarryChains(ZeroReg);
   for (size_t J = 1; J < NumLimbs; ++J) {
     bool NeedHigh = (J + 1) < NumLimbs;
