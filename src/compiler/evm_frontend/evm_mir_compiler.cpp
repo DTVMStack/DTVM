@@ -1529,8 +1529,69 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
   // u64 divisor: inline cascading 128/64 division
   if (DivisorOp.isConstU64()) {
     uint64_t D = DivisorOp.getConstValue()[0];
-    if (D != 0)
+    if (D != 0) {
+      if (!DividendOp.isConstant()) {
+        U256Inst A = extractU256Operand(DividendOp);
+        MType *I64Type = &Ctx.I64Type;
+        MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+
+        MInstruction *UpperAny = createInstruction<BinaryInstruction>(
+            false, OP_or, I64Type, A[1],
+            createInstruction<BinaryInstruction>(false, OP_or, I64Type, A[2],
+                                                 A[3]));
+        MInstruction *HasUpper = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_NE, I64Type, UpperAny, Zero);
+
+        U256Var ResultVars = {};
+        for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+          ResultVars[I] = CurFunc->createVariable(I64Type);
+        }
+
+        auto storeResult = [&](const U256Inst &Values) {
+          for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+            createInstruction<DassignInstruction>(true, &(Ctx.VoidType),
+                                                  Values[I],
+                                                  ResultVars[I]->getVarIdx());
+          }
+        };
+
+        auto loadResult = [&]() -> U256Inst {
+          U256Inst Values = {};
+          for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+            Values[I] = loadVariable(ResultVars[I]);
+          }
+          return Values;
+        };
+
+        MBasicBlock *KnownU64BB = createBasicBlock();
+        MBasicBlock *SlowBB = createBasicBlock();
+        MBasicBlock *AfterBB = createBasicBlock();
+        createInstruction<BrIfInstruction>(true, Ctx, HasUpper, SlowBB,
+                                           KnownU64BB);
+        addSuccessor(SlowBB);
+        addSuccessor(KnownU64BB);
+
+        setInsertBlock(KnownU64BB);
+        MInstruction *DivConst = createIntConstInstruction(I64Type, D);
+        MInstruction *Quotient = createInstruction<BinaryInstruction>(
+            false, OP_udiv, I64Type, A[0], DivConst);
+        U256Inst FastResult = {Quotient, Zero, Zero, Zero};
+        storeResult(FastResult);
+        createInstruction<BrInstruction>(true, Ctx, AfterBB);
+        addSuccessor(AfterBB);
+
+        setInsertBlock(SlowBB);
+        U256Inst SlowResult =
+            extractU256Operand(handleDivU64Divisor(DividendOp, D));
+        storeResult(SlowResult);
+        createInstruction<BrInstruction>(true, Ctx, AfterBB);
+        addSuccessor(AfterBB);
+
+        setInsertBlock(AfterBB);
+        return Operand(loadResult(), EVMType::UINT256);
+      }
       return handleDivU64Divisor(DividendOp, D);
+    }
   }
 
   // u64 dividend: OR-fold + select
