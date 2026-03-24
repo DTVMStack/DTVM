@@ -13,6 +13,51 @@
 #include <evmc/evmc.h>
 #include <vector>
 
+namespace {
+
+static constexpr uint32_t KeccakCacheSlots = 16;
+static constexpr uint32_t KeccakCacheMaxInputLen = 128;
+
+struct KeccakCacheEntry {
+  uint8_t Input[KeccakCacheMaxInputLen];
+  uint32_t InputLen = 0;
+  evmc::bytes32 Result;
+  bool Valid = false;
+};
+
+struct KeccakCache {
+  KeccakCacheEntry Slots[KeccakCacheSlots];
+  uint32_t NextSlot = 0;
+
+  const evmc::bytes32 *lookup(const uint8_t *Data, uint32_t Len) const {
+    if (Len > KeccakCacheMaxInputLen)
+      return nullptr;
+    for (uint32_t I = 0; I < KeccakCacheSlots; ++I) {
+      auto &S = Slots[I];
+      if (S.Valid && S.InputLen == Len &&
+          std::memcmp(S.Input, Data, Len) == 0) {
+        return &S.Result;
+      }
+    }
+    return nullptr;
+  }
+
+  void insert(const uint8_t *Data, uint32_t Len, const evmc::bytes32 &Result) {
+    if (Len > KeccakCacheMaxInputLen)
+      return;
+    auto &S = Slots[NextSlot];
+    std::memcpy(S.Input, Data, Len);
+    S.InputLen = Len;
+    S.Result = Result;
+    S.Valid = true;
+    NextSlot = (NextSlot + 1) % KeccakCacheSlots;
+  }
+};
+
+static thread_local KeccakCache TLKeccakCache;
+
+} // namespace
+
 namespace COMPILER {
 
 namespace {
@@ -1098,12 +1143,19 @@ const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,
     InputData = MemoryBase + Offset;
   }
 
-  auto &Cache = Instance->getMessageCache();
+  auto &ExecCache = Instance->getMessageCache();
+
+  uint32_t Len32 = static_cast<uint32_t>(Length);
+  if (const evmc::bytes32 *Cached = TLKeccakCache.lookup(InputData, Len32)) {
+    ExecCache.Keccak256Results.push_back(*Cached);
+    return ExecCache.Keccak256Results.back().bytes;
+  }
+
   evmc::bytes32 HashResult;
   zen::host::evm::crypto::keccak256(InputData, Length, HashResult.bytes);
-  Cache.Keccak256Results.push_back(HashResult);
-
-  return Cache.Keccak256Results.back().bytes;
+  TLKeccakCache.insert(InputData, Len32, HashResult);
+  ExecCache.Keccak256Results.push_back(HashResult);
+  return ExecCache.Keccak256Results.back().bytes;
 }
 void evmHandleFallback(zen::runtime::EVMInstance *Instance, uint64_t PC) {
   // Phase 3 implementation: Complete JIT-to-interpreter fallback

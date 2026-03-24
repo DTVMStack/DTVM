@@ -46,30 +46,6 @@ private:
 // Forward declaration for InstanceGuard
 struct DTVM;
 
-// RAII guard for temporary EVMInstance cleanup (exception safety for nested
-// calls). Ensures that temporary instances created for nested calls (depth > 0)
-// are properly deleted even if an exception occurs during execution.
-struct InstanceGuard {
-  DTVM *VM;
-  EVMInstance *Inst;
-  bool ShouldDelete;
-
-  InstanceGuard(DTVM *VM, EVMInstance *Inst, bool ShouldDelete)
-      : VM(VM), Inst(Inst), ShouldDelete(ShouldDelete) {}
-
-  InstanceGuard(const InstanceGuard &) = delete;
-  InstanceGuard &operator=(const InstanceGuard &) = delete;
-
-  InstanceGuard(InstanceGuard &&Other) noexcept
-      : VM(Other.VM), Inst(Other.Inst), ShouldDelete(Other.ShouldDelete) {
-    Other.ShouldDelete = false;
-  }
-
-  ~InstanceGuard();
-
-  void release() { ShouldDelete = false; }
-};
-
 // RAII guard for unloading transient modules that must not be persisted in the
 // address-based cache. Destruction order matters: instance guards must run
 // before unloading the module they execute.
@@ -112,6 +88,8 @@ struct HostContextScope {
 };
 
 // ---- Address-based module cache types ----
+
+static constexpr size_t MAX_MODULE_CACHE_SIZE = 4096;
 
 struct CodeAddrRevKey {
   evmc_address Addr;
@@ -177,14 +155,22 @@ struct DTVM : evmc_vm {
   DTVM();
   ~DTVM() {
     // Clean up cached instance first (before modules it may reference)
-    if (CachedInst && Iso) {
-      Iso->deleteEVMInstance(CachedInst);
-      CachedInst = nullptr;
+    if (CachedMainInst && Iso) {
+      Iso->deleteEVMInstance(CachedMainInst);
+      CachedMainInst = nullptr;
     }
+
+    // Clean up cached instance for depth > 0
+    if (CacheInsts.size() > 0 && Iso) {
+      for (auto It : CacheInsts) {
+        Iso->deleteEVMInstance(It);
+      }
+    }
+
     // Unload all address-cached modules
     if (RT) {
       for (auto &P : AddrCache) {
-        if (!RT->unloadEVMModule(P.second)) {
+        if (!RT->unloadEVMModule(P.second.first)) {
           ZEN_LOG_ERROR("failed to unload EVM module");
         }
       }
@@ -205,23 +191,35 @@ struct DTVM : evmc_vm {
   const uint8_t *LastCodePtr = nullptr;
   size_t LastCodeSize = 0;
   EVMModule *L0Mod = nullptr;
-  // L1: address-based cache map (code_address + rev -> module)
-  std::unordered_map<CodeAddrRevKey, EVMModule *, CodeAddrRevHash,
-                     CodeAddrRevEqual>
+
+  // L1: address-based LRU cache (code_address + rev -> module)
+  // LRUOrder tracks access recency: front = most recent, back = least recent.
+  // AddrCache maps key -> (module, iterator into LRUOrder) for O(1) lookup
+  // and O(1) LRU maintenance via std::list::splice.
+  using LRUList = std::list<CodeAddrRevKey>;
+  LRUList LRUOrder;
+  std::unordered_map<CodeAddrRevKey, std::pair<EVMModule *, LRUList::iterator>,
+                     CodeAddrRevHash, CodeAddrRevEqual>
       AddrCache;
+
   uint64_t ModCounter = 0;
   // Cached EVMInstance to avoid alloc/free (~33KB) on every call
-  EVMInstance *CachedInst = nullptr;
+  EVMInstance *CachedMainInst = nullptr;
   // Cached InterpreterExecContext (interpreter mode only)
   std::unique_ptr<zen::evm::InterpreterExecContext> CachedCtx;
-};
+  // Instance pool for depth > 0
+  std::vector<EVMInstance *> CacheInsts;
 
-// InstanceGuard destructor (defined after DTVM is complete)
-InstanceGuard::~InstanceGuard() {
-  if (ShouldDelete && Inst && VM && VM->Iso) {
-    VM->Iso->deleteEVMInstance(Inst);
+  bool isModuleInUse(const EVMModule *Mod) const {
+    if (CachedMainInst && CachedMainInst->getModule() == Mod)
+      return true;
+    for (const auto *Inst : CacheInsts) {
+      if (Inst && Inst->getModule() == Mod)
+        return true;
+    }
+    return false;
   }
-}
+};
 
 ModuleGuard::~ModuleGuard() {
   if (ShouldUnload && Mod && VM && VM->RT) {
@@ -286,10 +284,14 @@ bool ensureRuntimeAndIsolation(DTVM *VM) {
 }
 
 bool shouldUsePersistentModuleCache(const evmc_message *Msg) {
-  // CREATE/CREATE2 initcode and nested execution can change code frequently
-  // and may recurse. Reusing address-keyed cached modules for those cases can
-  // evict a module that is still active on the current execution stack.
-  return Msg != nullptr && Msg->depth == 0 && Msg->kind != EVMC_CREATE &&
+  // CREATE/CREATE2 initcode must not be cached: the same address can receive
+  // different initcode across transactions, and initcode is one-shot.
+  // Regular calls (CALL/DELEGATECALL/STATICCALL/CALLCODE) at any depth are
+  // safe to cache: EVM guarantees that deployed code at a given address is
+  // immutable. The module is keyed by (code_address, revision) and a
+  // defense-in-depth head/tail validation is performed before reuse. Each
+  // nested call gets its own EVMInstance so reentrancy is safe.
+  return Msg != nullptr && Msg->kind != EVMC_CREATE &&
          Msg->kind != EVMC_CREATE2;
 }
 
@@ -322,32 +324,50 @@ EVMModule *findModuleCached(DTVM *VM, const uint8_t *Code, size_t CodeSize,
 
   EVMModule *Mod = nullptr;
 
-  // L1: Address-based map lookup
+  // L1: Address-based LRU cache lookup
   CodeAddrRevKey AddrKey{Msg->code_address, Rev};
   auto It = VM->AddrCache.find(AddrKey);
   if (It != VM->AddrCache.end() &&
-      validateCodeMatch(Code, CodeSize, It->second)) {
-    Mod = It->second;
+      validateCodeMatch(Code, CodeSize, It->second.first)) {
+    Mod = It->second.first;
+    // LRU touch: move to front (most recently used)
+    VM->LRUOrder.splice(VM->LRUOrder.begin(), VM->LRUOrder, It->second.second);
   } else {
     // Cold path: full module load
     // If validation failed for an existing entry, evict the stale module
     if (It != VM->AddrCache.end()) {
-      EVMModule *OldMod = It->second;
-      if (VM->CachedInst && VM->CachedInst->getModule() == OldMod) {
-        VM->Iso->deleteEVMInstance(VM->CachedInst);
-        VM->CachedInst = nullptr;
-      }
-      if (VM->L0Mod == OldMod)
+      EVMModule *OldMod = It->second.first;
+      if (VM->L0Mod == OldMod && Msg->depth == 0)
         VM->L0Mod = nullptr;
       VM->RT->unloadEVMModule(OldMod);
+      VM->LRUOrder.erase(It->second.second);
       VM->AddrCache.erase(It);
     }
+
+    // LRU eviction: if cache is at capacity, evict least recently used
+    while (VM->AddrCache.size() >= MAX_MODULE_CACHE_SIZE &&
+           !VM->LRUOrder.empty()) {
+      auto &VictimKey = VM->LRUOrder.back();
+      auto VictimIt = VM->AddrCache.find(VictimKey);
+      if (VictimIt != VM->AddrCache.end()) {
+        EVMModule *VictimMod = VictimIt->second.first;
+        if (VM->isModuleInUse(VictimMod))
+          break; // never evict a module referenced by an active instance
+        if (VM->L0Mod == VictimMod)
+          VM->L0Mod = nullptr;
+        VM->RT->unloadEVMModule(VictimMod);
+        VM->AddrCache.erase(VictimIt);
+      }
+      VM->LRUOrder.pop_back();
+    }
+
     std::string ModName = "mod_" + std::to_string(VM->ModCounter++);
     auto ModRet = VM->RT->loadEVMModule(ModName, Code, CodeSize, Rev);
     if (!ModRet)
       return nullptr;
     Mod = *ModRet;
-    VM->AddrCache[AddrKey] = Mod;
+    VM->LRUOrder.push_front(AddrKey);
+    VM->AddrCache[AddrKey] = {Mod, VM->LRUOrder.begin()};
   }
 
   // Update L0 cache members. Even though L0 lookup is disabled, we maintain
@@ -364,38 +384,50 @@ EVMModule *findModuleCached(DTVM *VM, const uint8_t *Code, size_t CodeSize,
 }
 
 /// Get or create an EVMInstance for the given module.
-/// For cacheable top-level calls, reuses the cached instance if possible.
-/// For nested calls or transient modules, creates a temporary instance that
-/// must be deleted by the caller after use.
+/// For top-level calls (Depth == 0), reuses a single cached main instance
+/// when possible; for nested calls (Depth > 0), uses per-depth cached
+/// instances stored in VM->CacheInsts, creating them lazily as needed.
+/// The lifetime of all returned instances is managed by the DTVM object;
+/// callers must not delete the returned pointer.
 EVMInstance *getOrCreateInstance(DTVM *VM, EVMModule *Mod, evmc_revision Rev,
-                                 int32_t Depth, bool ReuseCachedInstance) {
-  // Nested calls and transient modules need separate instances because the
-  // execution context is isolated and the module may be unloaded immediately
-  // after the call returns.
-  if (Depth > 0 || !ReuseCachedInstance) {
-    auto InstRet = VM->Iso->createEVMInstance(*Mod, 0);
-    if (!InstRet)
-      return nullptr;
-    EVMInstance *TempInst = *InstRet;
-    TempInst->resetForNewCall(Rev);
-    return TempInst; // Caller must delete this instance (when depth > 0)
+                                 int32_t Depth) {
+  // if depth > 0, use cached instance
+  if (Depth > 0) {
+    EVMInstance *TempInst = nullptr;
+    if (VM->CacheInsts.size() < static_cast<size_t>(Depth)) {
+      auto InstRet = VM->Iso->createEVMInstance(*Mod, 0);
+      if (!InstRet)
+        return nullptr;
+      TempInst = *InstRet;
+      VM->CacheInsts.push_back(TempInst);
+    } else {
+      size_t Idx = Depth - 1;
+      TempInst = VM->CacheInsts[Idx];
+    }
+    TempInst->resetForNewCall(Rev, *Mod);
+    return TempInst;
   }
 
-  // Top-level call: create or reuse cached instance
-  EVMInstance *TheInst = VM->CachedInst;
+  // if depth == 0, reuse cached main instance
+  EVMInstance *TheInst = VM->CachedMainInst;
+  // Create new instance if cache is empty or module mismatch
   if (!TheInst || TheInst->getModule() != Mod) {
     if (TheInst) {
-      VM->Iso->deleteEVMInstance(TheInst);
-      VM->CachedInst = nullptr;
+      // Reuse existing instance with new module
+      TheInst->resetForNewCall(Rev, *Mod);
+    } else {
+      // Allocate new instance and cache it
+      auto InstRet = VM->Iso->createEVMInstance(*Mod, 0);
+      if (!InstRet)
+        return nullptr;
+      TheInst = *InstRet;
+      VM->CachedMainInst = TheInst;
     }
-    auto InstRet = VM->Iso->createEVMInstance(*Mod, 0);
-    if (!InstRet)
-      return nullptr;
-    TheInst = *InstRet;
-    VM->CachedInst = TheInst;
+  } else {
+    // Cache hit: same module, just reset with new revision
+    TheInst->resetForNewCall(Rev);
   }
 
-  TheInst->resetForNewCall(Rev);
   return TheInst;
 }
 
@@ -425,19 +457,11 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
   }
   ModuleGuard ModGuard(VM, Mod, IsTransientMod);
 
-  const bool ReuseCachedInstance = !IsTransientMod && Msg->depth == 0;
-  const bool DeleteInstanceAfterCall = Msg->depth > 0 || !ReuseCachedInstance;
-
   // Instance reuse (shared only for cacheable top-level calls)
-  EVMInstance *TheInst =
-      getOrCreateInstance(VM, Mod, Rev, Msg->depth, ReuseCachedInstance);
+  EVMInstance *TheInst = getOrCreateInstance(VM, Mod, Rev, Msg->depth);
   if (!TheInst) {
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
-
-  // RAII guard for exception safety: ensures temporary instance cleanup
-  // even if an exception occurs during execution (e.g., std::bad_alloc)
-  InstanceGuard InstGuard(VM, TheInst, DeleteInstanceAfterCall);
 
   // Trigger bytecodeCache build if not yet done (lazy, cached on module)
   (void)Mod->getBytecodeCache();
@@ -448,6 +472,8 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
   MsgWithCode.code_size = Mod->CodeSize;
   TheInst->setExeResult(evmc::Result{EVMC_SUCCESS, 0, 0});
   TheInst->pushMessage(&MsgWithCode);
+
+  const bool ReuseCachedInstance = !IsTransientMod && Msg->depth == 0;
 
   // For nested calls, create a new InterpreterExecContext
   // For cacheable top-level calls, reuse cached context
@@ -476,9 +502,6 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
   evmc::Result Result =
       std::move(const_cast<evmc::Result &>(Ctx.getExeResult()));
   Result.gas_left = TheInst->getGas();
-
-  // RAII guards handle cleanup: InstanceGuard for nested calls,
-  // HostContextScope for host context restoration
 
   return Result.release_raw();
 }
@@ -533,17 +556,11 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
   }
   ModuleGuard ModGuard(VM, Mod, IsTransientMod);
 
-  const bool ReuseCachedInstance = !IsTransientMod && Msg->depth == 0;
-  const bool DeleteInstanceAfterCall = Msg->depth > 0 || !ReuseCachedInstance;
-
   // Instance reuse (shared only for cacheable top-level calls)
-  auto *TheInst =
-      getOrCreateInstance(VM, Mod, Rev, Msg->depth, ReuseCachedInstance);
+  auto *TheInst = getOrCreateInstance(VM, Mod, Rev, Msg->depth);
   if (!TheInst) {
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
-
-  InstanceGuard InstGuard(VM, TheInst, DeleteInstanceAfterCall);
 
   // Execute via callEVMMain (handles both JIT and interpreter fallback)
   evmc_message Message = *Msg;

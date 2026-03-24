@@ -116,6 +116,7 @@ public:
   /// of execution mode (interpreter, multipass, or JIT). This avoids the cost
   /// of destroying and recreating the instance for each call.
   void resetForNewCall(evmc_revision NewRev);
+  void resetForNewCall(evmc_revision NewRev, const EVMModule &M);
 
   // can only called by hostapi directly
   // setExceptionByHostapi must be inline to capture the hostapi's frame
