@@ -1742,6 +1742,18 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
     return Operand(intxToU256Value(A * B));
   }
 
+  if (MultiplicandOp.isZeroConstant() || MultiplierOp.isZeroConstant()) {
+    return Operand(U256Value{0, 0, 0, 0});
+  }
+
+  if (MultiplicandOp.isOneConstant()) {
+    return MultiplierOp;
+  }
+
+  if (MultiplierOp.isOneConstant()) {
+    return MultiplicandOp;
+  }
+
   // Phase 4: u64 fast path - one operand fits in u64 (4x1 multiplication)
   bool AIsU64 = MultiplicandOp.isConstU64();
   bool BIsU64 = MultiplierOp.isConstU64();
@@ -2387,7 +2399,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
 }
 
 EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQZ(const U256Inst &LHS,
-                                                        MType *ResultType) {
+                                                        MType *ResultType,
+                                                        bool IsNegated) {
   U256Inst Result = {};
   MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
@@ -2405,7 +2418,8 @@ EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQZ(const U256Inst &LHS,
 
   // Final result is 1 if all are zero, 0 otherwise
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
-  auto Predicate = CmpInstruction::Predicate::ICMP_EQ;
+  auto Predicate = IsNegated ? CmpInstruction::Predicate::ICMP_NE
+                             : CmpInstruction::Predicate::ICMP_EQ;
   MInstruction *CmpResult = createInstruction<CmpInstruction>(
       false, Predicate, ResultType, OrResult, Zero);
 
@@ -2529,19 +2543,11 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
     return Operand(U256Value{~V[0], ~V[1], ~V[2], ~V[3]});
   }
 
-  U256Inst Result = {};
-  U256Inst LHS = extractU256Operand(LHSOp);
-
-  MType *MirI64Type =
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
-  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-    MInstruction *LocalResult =
-        createInstruction<NotInstruction>(false, MirI64Type, LHS[I]);
-    Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
+  if (LHSOp.isDeferredBitwiseNot()) {
+    return Operand(LHSOp.getDeferredBaseComponents(), EVMType::UINT256);
   }
 
-  return Operand(Result, EVMType::UINT256);
+  return Operand::createDeferredBitwiseNot(extractU256Operand(LHSOp));
 }
 
 // ==================== u64 Fast Path Helpers ====================
@@ -4493,6 +4499,23 @@ EVMMirBuilder::U256Inst EVMMirBuilder::extractU256Operand(const Operand &Opnd) {
     return Result;
   }
 
+  if (Opnd.isDeferredBitwiseNot()) {
+    const U256Inst &Base = Opnd.getDeferredBaseComponents();
+    MType *MirI64Type =
+        EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      MInstruction *LocalResult =
+          createInstruction<NotInstruction>(false, MirI64Type, Base[I]);
+      Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
+    }
+    return Result;
+  }
+
+  if (Opnd.isDeferredZeroTest()) {
+    return handleCompareEQZ(Opnd.getDeferredBaseComponents(), &Ctx.I64Type,
+                            Opnd.isDeferredZeroTestNegated());
+  }
+
   if (Opnd.isU256MultiComponent()) {
     U256Inst Instrs = Opnd.getU256Components();
     if (Instrs[0] != nullptr) {
@@ -5092,6 +5115,11 @@ EVMMirBuilder::convertOperandToUNInstruction(const Operand &Param) {
   } else if (Param.getType() == EVMType::BYTES32) {
     auto U256Op = convertBytes32ToU256Operand(Param);
     auto Components = U256Op.getU256Components();
+    for (size_t I = 0; I < N; ++I) {
+      Result[I] = Components[I];
+    }
+  } else if (Param.isDeferredValue()) {
+    auto Components = extractU256Operand(Param);
     for (size_t I = 0; I < N; ++I) {
       Result[I] = Components[I];
     }
