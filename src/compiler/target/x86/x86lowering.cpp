@@ -1153,6 +1153,8 @@ X86CgLowering::lowerEvmUmul128HiExpr(const EvmUmul128HiInstruction &Inst) {
 
 CgRegister
 X86CgLowering::lowerEvmU256MulExpr(const EvmU256MulInstruction &Inst) {
+  // This path only exists in the x86 EVM JIT lowering pipeline. Non-JIT EVM
+  // execution does not reach this codegen path.
   if (Subtarget->hasBMI2() && Subtarget->hasADX()) {
     return lowerEvmU256MulExprAdx(Inst);
   }
