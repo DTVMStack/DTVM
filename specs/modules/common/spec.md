@@ -1,0 +1,158 @@
+# common Module Specification
+
+> Directory: `src/common/`
+
+## Boundaries and Responsibilities
+
+The common module is DTVM's core infrastructure layer, providing project-wide shared base abstractions, type definitions, and general-purpose capabilities.
+
+**Core Responsibilities**:
+
+- **Shared types and constants**: WASM/EVM type system, opcode enumerations, WebAssembly preset limit constants
+- **Error system**: Unified `Error` exception class, error code enumeration, error query and formatting API
+- **Memory pools**: Memory allocators with multiple strategies (system pool, code pool, etc.), with STL allocator adapter support
+- **String pool**: Constant string deduplication and reference counting (WASM symbol management)
+- **Opcodes and operators**: WASM opcode definitions, binary/unary/comparison operator enumerations
+- **Trap handling**: JIT trap capture and rollback based on CPU signals (SIGILL/SIGSEGV, etc.), with separate implementations for WASM and EVM
+
+**Out of scope**:
+
+- The C++17 compatibility layer under `libcxx/` is part of platform abstraction and is not defined by common alone
+- `common/wasm_defs/` generates enumerations via `.def` macro expansion; the content belongs to common, but definitions are spread across multiple `.def` files
+
+## Core Concepts
+
+| Concept | Description |
+|------|------|
+| **WASMSymbol / EVMSymbol** | Symbol handle in the string pool, `uint32_t`, 0 means empty |
+| **Error system** | Layered error model: `ErrorPhase` → `ErrorSubphase` → `ErrorCode` |
+| **MemPool** | Templated memory pool, strategy selected by `MemPoolKind` (SYS_POOL, CODE_POOL, etc.) |
+| **ConstStringPool** | Hash table-based constant string pool, supports `probeSymbol` (no refcount increment) and `newSymbol` (increments refcount) |
+| **TrapHandler** | Under `ZEN_ENABLE_CPU_EXCEPTION`, captures traps during JIT execution via signal handler and rolls back using `longjmp` |
+| **CallThreadState / EVMCallThreadState** | Thread-local trap call state, records PC, stack frame, Gas register, etc., used for JIT stack unwinding |
+
+## External Contracts
+
+### Errors and Optionals
+
+```cpp
+// Error query
+Error getError(ErrorCode ErrCode);
+Optional<Error> getErrorOrNone(ErrorCode ErrCode);  // Returns Nullopt if ErrCode is undefined
+Error getErrorWithPhase(ErrorCode ErrCode, ErrorPhase Phase, ErrorSubphase Subphase = None);
+Error getErrorWithExtraMessage(ErrorCode ErrCode, const std::string& ExtraMessage);
+
+// Optional value wrapper (pointer types only)
+template<typename T> class MayBe<T>;  // T must be a pointer, wraps Value or Error
+```
+
+### String Pool
+
+```cpp
+class ConstStringPool {
+  bool initPool();
+  void destroyPool();
+  WASMSymbol newSymbol(const char* Str, size_t Len);
+  void freeSymbol(WASMSymbol Sym);
+  int32_t getNumSymbols();
+  const char* dumpSymbolString(WASMSymbol Sym);
+  WASMSymbol probeSymbol(const char* Str, size_t Len) const;  // Does not increment refcount
+};
+```
+
+### Memory Pool
+
+```cpp
+// SysMemPool - based on malloc/free
+void* allocate(size_t Size, size_t Align = 0, const char* TypeName = nullptr);
+void* allocateZeros(size_t Size, size_t Align = 0, const char* TypeName = nullptr);
+void deallocate(void* Ptr);
+void* reallocate(void* OldPtr, size_t OldSize, size_t NewSize);
+T* newObject(Arguments&&... Args);
+void deleteObject(T* Ptr);
+
+// CodeMemPool - mmap code cache, thread-safe
+void* allocate(size_t Size, size_t Align = DefaultAlign);
+// getMemStart(), getMemEnd(), getMemPageEnd()
+```
+
+### Trap Initialization (`ZEN_ENABLE_CPU_EXCEPTION`)
+
+```cpp
+// WASM JIT
+namespace common::traphandler {
+  bool initPlatformTrapHandler();
+}
+
+// EVM JIT
+namespace common::evm_traphandler {
+  bool initEVMPlatformTrapHandler();
+}
+```
+
+### Types and Operators
+
+```cpp
+// Type query
+WASMType getWASMValTypeFromOpcode(uint8_t Opcode);
+WASMType getWASMBlockTypeFromOpcode(uint8_t Opcode);
+WASMType getWASMRefTypeFromOpcode(uint8_t Opcode);
+uint32_t getWASMTypeSize(WASMType Type);
+uint32_t getWASMTypeCellNum(WASMType Type);
+WASMTypeKind getWASMTypeKind(WASMType Type);
+
+// Comparison operator negation (for operand-swapped comparisons)
+template<CompareOperator opr>
+constexpr CompareOperator getExchangedCompareOperator();
+```
+
+## Invariants and Permissions
+
+| Invariant | Description |
+|--------|------|
+| **ConstStringPool** | Reserved symbols (`Sym < WASM_SYMBOLS_END`) cannot be `freeSymbol`'d; `probeSymbol` does not hold a lifetime reference — the caller must ensure the string remains alive |
+| **MemPool** | `SysMemPool` tracks unfreed allocations under NDEBUG, asserting all freed on destruction; `CODE_POOL` is non-copyable |
+| **Error** | `ErrorCode` underlying type is fixed at `uint32_t`, used by JIT |
+| **TrapHandler** | `initPlatformTrapHandler` / `initEVMPlatformTrapHandler` should be called once in a single translation unit |
+| **ThreadPool** | Must call `waitForTasks()` or `interrupt()` before destruction; behavior is undefined otherwise |
+
+## Error Codes
+
+Error codes are generated by macro expansion from `common/errors.def`, categorized as follows:
+
+| Phase | Subphase | Representative Error Codes |
+|------|--------|-------------|
+| BeforeLoad | None | InvalidFilePath, FileAccessFailed, InvalidRawData, InvalidModuleName |
+| Load | None | MagicNotDetected, UnknownBinaryVersion, TooManyTypes, TooManyFunctions, ... |
+| Instantiation | None | DataSegmentDoesNotFit, ElementsSegmentDoesNotFit |
+| Compilation | Lexing/Parsing/ContextInit/... | UnsupportedToken, NoMatchedSyntax, RegAllocFailed, ... |
+| BeforeExecution | None | CannotFindFunction, UnexpectedNumArgs, InvalidArgument, ... |
+| Execution | None | IntegerOverflow, OutOfBoundsMemory, CallStackExhausted, GasLimitExceeded, ... |
+
+**EVM-specific** (`ZEN_ENABLE_EVM`): EVMStackOverflow, EVMStackUnderflow, EVMBadJumpDestination, EVMInvalidInstruction, EVMFrameNotFound, EVMStaticModeViolation, etc.
+
+**dWasm-specific** (`ZEN_ENABLE_DWASM`): DWasmFuncBodyTooLarge, DWasmLocalsTooMany, DWasmOutOfGas, etc.
+
+## Compatibility Strategy
+
+- **ErrorCode**: New error codes should be appended; do not delete or modify existing enum values to ensure stable uint32_t error code semantics in JIT
+- **WASM opcodes**: Aligned with the WebAssembly specification; changes to `opcode.def` require assessment of impact on compiler and interpreter
+- **ConstStringPool reserved symbols**: Predefined symbol indices in `const_strings.def` should remain stable
+- **MemPool API**: allocate/deallocate signatures should remain stable; `reallocate` is provided by `SysMemPool` only
+
+## Cross-References
+
+| Dependency | Description |
+|------|------|
+| `platform/platform.h` | Mutex, Optional, to_underlying, chrono, and other platform abstractions |
+| `platform/map.h` | mmap/munmap/mprotect, used by CodeMemPool |
+
+| Depended by | Description |
+|--------|------|
+| compiler | Uses MemPool, enums, operators, type, errors |
+| runtime | Uses traphandler, evm_traphandler, errors, defines, type |
+| action | Uses const_string_pool, mem_pool, errors, defines |
+| host | Uses errors, defines, type |
+| vm-interface | Uses RunMode, InputFormat, RuntimeConfig, errors, defines |
+| evmc | Uses errors, defines (evmc library types, via vm-interface, etc.) |
+| tests | Uses all common capabilities |
