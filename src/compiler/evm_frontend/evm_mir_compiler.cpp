@@ -2819,63 +2819,59 @@ EVMMirBuilder::handleSignextend(Operand IndexOp, Operand ValueOp) {
 
   MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MType *MirI8Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT8);
 
-  // Calculate sign bit position: index * 8 + 7
-  MInstruction *Const8 = createIntConstInstruction(MirI64Type, 8);
-  MInstruction *ByteBitPos = createInstruction<BinaryInstruction>(
-      false, OP_mul, MirI64Type, IndexComponents[0], Const8);
   MInstruction *Const7 = createIntConstInstruction(MirI64Type, 7);
-  MInstruction *SignBitPos = createInstruction<BinaryInstruction>(
-      false, OP_add, MirI64Type, ByteBitPos, Const7);
-
-  // ComponentIndex = (index * 8 + 7) / 64
-  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
-  MInstruction *ComponentIndex = createInstruction<BinaryInstruction>(
-      false, OP_udiv, MirI64Type, SignBitPos, Const64);
-  // BitOffset = (index * 8 + 7) % 64
-  MInstruction *BitOffset = createInstruction<BinaryInstruction>(
-      false, OP_urem, MirI64Type, SignBitPos, Const64);
-
-  // Calculate sign extension mask
-  // FullMask = (1 << (BitOffset + 1)) - 1
-  // InvMask = ~FullMask = FullMask ^ AllOnes
-  // Note: When BitOffset == 63, MaskBits == 64, and (1 << 64) causes undefined
-  // behavior on x86-64 (SHL masks shift amount to 6 bits, so 1 << 64 becomes
-  // 1 << 0 = 1). We need to handle this case specially.
-  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+  MInstruction *Const3 = createIntConstInstruction(MirI64Type, 3);
+  MInstruction *Const8 = createIntConstInstruction(MirI64Type, 8);
+  MInstruction *Const63 = createIntConstInstruction(MirI64Type, 63);
   MInstruction *AllOnes = createIntConstInstruction(MirI64Type, ~0ULL);
-  MInstruction *MaskBits = createInstruction<BinaryInstruction>(
-      false, OP_add, MirI64Type, BitOffset, One);
-  MInstruction *Is64 = createInstruction<CmpInstruction>(
-      false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, MaskBits,
-      Const64);
-  MInstruction *Mask = createInstruction<BinaryInstruction>(
-      false, OP_shl, MirI64Type, One, MaskBits);
-  MInstruction *FullMaskNormal = createInstruction<BinaryInstruction>(
-      false, OP_sub, MirI64Type, Mask, One);
-  // When MaskBits == 64, FullMask should be AllOnes (0xFFFFFFFFFFFFFFFF)
-  MInstruction *FullMask = createInstruction<SelectInstruction>(
-      false, MirI64Type, Is64, AllOnes, FullMaskNormal);
-  MInstruction *InvMask = createInstruction<BinaryInstruction>(
-      false, OP_xor, MirI64Type, FullMask, AllOnes);
-
-  // Extract sign bit
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
-  MInstruction *SignBit = Zero;
-  for (int I = 0; I < 4; I++) {
-    MInstruction *IsComp = createInstruction<CmpInstruction>(
-        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, ComponentIndex,
+
+  // Match the interpreter strategy:
+  //   sign_word_index = index / 8
+  //   sign_byte_index = index % 8
+  //   sign_word = value[sign_word_index]
+  //   sign_word' = sext(int8(sign_word >> (sign_byte_index * 8)))
+  //   upper words = sign fill
+  MInstruction *SignWordIndex = createInstruction<BinaryInstruction>(
+      false, OP_ushr, MirI64Type, IndexComponents[0], Const3);
+  MInstruction *SignByteIndex = createInstruction<BinaryInstruction>(
+      false, OP_and, MirI64Type, IndexComponents[0], Const7);
+  MInstruction *SignByteOffset = createInstruction<BinaryInstruction>(
+      false, OP_shl, MirI64Type, SignByteIndex, Const3);
+
+  MInstruction *SelectedWord = ValueComponents[0];
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    MInstruction *IsThisWord = createInstruction<CmpInstruction>(
+        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, SignWordIndex,
         createIntConstInstruction(MirI64Type, I));
-    // Shifted = ValueComponents[I] >> BitOffset
-    MInstruction *Shifted = createInstruction<BinaryInstruction>(
-        false, OP_ushr, MirI64Type, ValueComponents[I], BitOffset);
-    // Bit = Shifted & 1
-    MInstruction *Bit = createInstruction<BinaryInstruction>(
-        false, OP_and, MirI64Type, Shifted, One);
-    // SignBit = IsComp ? Bit : SignBit
-    SignBit = createInstruction<SelectInstruction>(false, MirI64Type, IsComp,
-                                                   Bit, SignBit);
+    SelectedWord = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsThisWord, ValueComponents[I], SelectedWord);
   }
+
+  MInstruction *ShiftedWord = createInstruction<BinaryInstruction>(
+      false, OP_ushr, MirI64Type, SelectedWord, SignByteOffset);
+  MInstruction *ConstFF = createIntConstInstruction(MirI64Type, 0xFF);
+  MInstruction *SignByte = createInstruction<BinaryInstruction>(
+      false, OP_and, MirI64Type, ShiftedWord, ConstFF);
+  MInstruction *SignByteI8 = createInstruction<ConversionInstruction>(
+      false, OP_trunc, MirI8Type, SignByte);
+  MInstruction *SextByte = createInstruction<ConversionInstruction>(
+      false, OP_sext, MirI64Type, SignByteI8);
+
+  MInstruction *SignMask = createInstruction<BinaryInstruction>(
+      false, OP_shl, MirI64Type, AllOnes, SignByteOffset);
+  MInstruction *LowerMask = createInstruction<BinaryInstruction>(
+      false, OP_xor, MirI64Type, SignMask, AllOnes);
+  MInstruction *LowerBits = createInstruction<BinaryInstruction>(
+      false, OP_and, MirI64Type, SelectedWord, LowerMask);
+  MInstruction *SextWord = createInstruction<BinaryInstruction>(
+      false, OP_shl, MirI64Type, SextByte, SignByteOffset);
+  MInstruction *ExtendedSelectedWord = createInstruction<BinaryInstruction>(
+      false, OP_or, MirI64Type, SextWord, LowerBits);
+  MInstruction *HighValue = createInstruction<BinaryInstruction>(
+      false, OP_sshr, MirI64Type, SextByte, Const63);
 
   // Create sign extension for each component
   U256Inst ResultComponents = {};
@@ -2883,28 +2879,16 @@ EVMMirBuilder::handleSignextend(Operand IndexOp, Operand ValueOp) {
     MInstruction *CompIdx = createIntConstInstruction(MirI64Type, I);
     MInstruction *IsAbove = createInstruction<CmpInstruction>(
         false, CmpInstruction::Predicate::ICMP_UGT, &Ctx.I64Type, CompIdx,
-        ComponentIndex);
+        SignWordIndex);
     MInstruction *IsEqual = createInstruction<CmpInstruction>(
         false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, CompIdx,
-        ComponentIndex);
-
-    // For components above sign bit: all 1s if negative, all 0s if positive
-    MInstruction *HighValue = createInstruction<SelectInstruction>(
-        false, MirI64Type, SignBit, AllOnes, Zero);
-
-    // For sign component: apply mask and sign extension
-    MInstruction *SignCompValue = createInstruction<BinaryInstruction>(
-        false, OP_and, MirI64Type, ValueComponents[I], FullMask);
-    MInstruction *SignExtBits = createInstruction<BinaryInstruction>(
-        false, OP_and, MirI64Type, InvMask, HighValue);
-    MInstruction *ExtendedSignComp = createInstruction<BinaryInstruction>(
-        false, OP_or, MirI64Type, SignCompValue, SignExtBits);
+        SignWordIndex);
 
     // Select appropriate value based on position relative to sign bit
+    MInstruction *SameOrBelow = createInstruction<SelectInstruction>(
+        false, MirI64Type, IsEqual, ExtendedSelectedWord, ValueComponents[I]);
     MInstruction *ComponentResult = createInstruction<SelectInstruction>(
-        false, MirI64Type, IsAbove, HighValue,
-        createInstruction<SelectInstruction>(
-            false, MirI64Type, IsEqual, ExtendedSignComp, ValueComponents[I]));
+        false, MirI64Type, IsAbove, HighValue, SameOrBelow);
 
     // If index >= 31, use original value; otherwise use sign-extended value
     ResultComponents[I] =
