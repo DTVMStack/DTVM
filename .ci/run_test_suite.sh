@@ -18,6 +18,8 @@
 # TestSuite=microsuite
 # # 'cpu' or 'check'
 # CPU_EXCEPTION_TYPE='cpu'
+# # Enable bulk memory operations proposal
+# ENABLE_BULK_MEMORY=true
 
 set -e
 
@@ -92,6 +94,16 @@ case $CPU_EXCEPTION_TYPE in
         CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_CPU_EXCEPTION=OFF"
         ;;
 esac
+
+# Enable bulk memory operations proposal (default: true)
+if [ -z "$ENABLE_BULK_MEMORY" ]; then
+    ENABLE_BULK_MEMORY=true
+fi
+if [ ${ENABLE_BULK_MEMORY} = true ]; then
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_BULK_MEMORY=ON"
+else
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_BULK_MEMORY=OFF"
+fi
 
 STACK_TYPES=("-DZEN_ENABLE_VIRTUAL_STACK=ON" "-DZEN_ENABLE_VIRTUAL_STACK=OFF")
 if [[ $RUN_MODE == "interpreter" ]]; then

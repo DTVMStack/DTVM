@@ -21,6 +21,9 @@ option(ZEN_ENABLE_MULTIPASS_JIT "Enable multipass JIT" OFF)
 option(ZEN_ENABLE_CLI "Enable command line interface" ON)
 option(ZEN_ENABLE_BUILTIN_WASI "Enable builtin wasi" ON)
 option(ZEN_ENABLE_BUILTIN_LIBC "Enable builtin libc (partial)" ON)
+
+# WebAssembly proposal options
+option(ZEN_ENABLE_BULK_MEMORY "Enable bulk memory operations proposal" ON)
 option(ZEN_ENABLE_LIBEVM "Enable evmc library build" OFF)
 
 # Feature options

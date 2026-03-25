@@ -538,6 +538,41 @@ private:
       case I64_EXTEND16_S:
       case I64_EXTEND32_S:
         break;
+      case WASM_PREFIX_FC: { // Bulk memory operations prefix
+#ifdef ZEN_ENABLE_BULK_MEMORY
+        uint32_t SubOpcode = 0;
+        Ptr = readSafeLEBNumber(Ptr, SubOpcode);
+        switch (SubOpcode) {
+        case FC_MEMORY_INIT: // memory.init: dataidx(LEB) + memidx(1 byte)
+          Ptr = skipLEBNumber<uint32_t>(Ptr, End);
+          Ptr++; // skip memidx
+          break;
+        case FC_DATA_DROP: // data.drop: dataidx(LEB)
+          Ptr = skipLEBNumber<uint32_t>(Ptr, End);
+          break;
+        case FC_MEMORY_COPY: // memory.copy: 2 bytes
+          Ptr += 2;
+          break;
+        case FC_MEMORY_FILL: // memory.fill: 1 byte
+          Ptr++;
+          break;
+        case FC_TABLE_INIT: // table.init: elemidx(LEB) + tableidx(LEB)
+          Ptr = skipLEBNumber<uint32_t>(Ptr, End);
+          Ptr = skipLEBNumber<uint32_t>(Ptr, End);
+          break;
+        case FC_ELEM_DROP: // elem.drop: elemidx(LEB)
+          Ptr = skipLEBNumber<uint32_t>(Ptr, End);
+          break;
+        case FC_TABLE_COPY: // table.copy: dst_tableidx(LEB) + src_tableidx(LEB)
+          Ptr = skipLEBNumber<uint32_t>(Ptr, End);
+          Ptr = skipLEBNumber<uint32_t>(Ptr, End);
+          break;
+        default:
+          break;
+        }
+#endif
+        break;
+      }
       case I32_LOAD:
       case I64_LOAD:
       case F32_LOAD:
@@ -2093,8 +2128,146 @@ void BaseInterpreterImpl::interpret() {
         BREAK;
       }
     DEFAULT : {
-      ZEN_LOG_ERROR("munimplemented opcode: 0x%x", Opcode);
-      ZEN_ASSERT_TODO();
+      if (Opcode == WASM_PREFIX_FC) {
+#ifdef ZEN_ENABLE_BULK_MEMORY
+        // Bulk memory operations prefix
+        uint32_t SubOpcode = 0;
+        Ip = readSafeLEBNumber(Ip, SubOpcode);
+        switch (SubOpcode) {
+        case FC_MEMORY_INIT: { // memory.init
+          uint32_t DataIdx = 0;
+          Ip = readSafeLEBNumber(Ip, DataIdx);
+          Ip++; // skip memidx (0x00)
+          uint32_t N = Frame->valuePop<uint32_t>(ValStackPtr);
+          uint32_t S = Frame->valuePop<uint32_t>(ValStackPtr);
+          uint32_t D = Frame->valuePop<uint32_t>(ValStackPtr);
+          const DataEntry *DataSeg = Mod->getDataEntry(DataIdx);
+          bool Dropped = ModInst->isDataSegmentDropped(DataIdx);
+          if (Dropped) {
+            if (N == 0 && S == 0) {
+              // Zero-length init with offset 0 on dropped segment is OK
+              // but still need to check D <= MemSize
+              if ((uint64_t)D > LinearMemSize) {
+                throw getError(ErrorCode::OutOfBoundsMemory);
+              }
+              BREAK;
+            }
+            throw getError(ErrorCode::OutOfBoundsMemory);
+          }
+          if ((uint64_t)S + (uint64_t)N > (uint64_t)DataSeg->Size) {
+            throw getError(ErrorCode::OutOfBoundsMemory);
+          }
+          if ((uint64_t)D + (uint64_t)N > LinearMemSize) {
+            throw getError(ErrorCode::OutOfBoundsMemory);
+          }
+          if (N > 0) {
+            std::memcpy(Memory->MemBase + D,
+                        Mod->getWASMBytecode() + DataSeg->Offset + S, N);
+          }
+          BREAK;
+        }
+        case FC_DATA_DROP: { // data.drop
+          uint32_t DataIdx = 0;
+          Ip = readSafeLEBNumber(Ip, DataIdx);
+          ModInst->dropDataSegment(DataIdx);
+          BREAK;
+        }
+        case FC_MEMORY_COPY: { // memory.copy
+          Ip += 2;             // skip dst_memidx and src_memidx (both 0x00)
+          uint32_t N = Frame->valuePop<uint32_t>(ValStackPtr);
+          uint32_t S = Frame->valuePop<uint32_t>(ValStackPtr);
+          uint32_t D = Frame->valuePop<uint32_t>(ValStackPtr);
+          if ((uint64_t)S + (uint64_t)N > LinearMemSize ||
+              (uint64_t)D + (uint64_t)N > LinearMemSize) {
+            throw getError(ErrorCode::OutOfBoundsMemory);
+          }
+          if (N > 0) {
+            std::memmove(Memory->MemBase + D, Memory->MemBase + S, N);
+          }
+          BREAK;
+        }
+        case FC_MEMORY_FILL: { // memory.fill
+          Ip++;                // skip memidx (0x00)
+          uint32_t N = Frame->valuePop<uint32_t>(ValStackPtr);
+          uint32_t Val = Frame->valuePop<uint32_t>(ValStackPtr);
+          uint32_t D = Frame->valuePop<uint32_t>(ValStackPtr);
+          if ((uint64_t)D + (uint64_t)N > LinearMemSize) {
+            throw getError(ErrorCode::OutOfBoundsMemory);
+          }
+          if (N > 0) {
+            std::memset(Memory->MemBase + D, (uint8_t)Val, N);
+          }
+          BREAK;
+        }
+        case FC_TABLE_INIT: { // table.init
+          uint32_t ElemIdx = 0, TableIdx = 0;
+          Ip = readSafeLEBNumber(Ip, ElemIdx);
+          Ip = readSafeLEBNumber(Ip, TableIdx);
+          uint32_t N = Frame->valuePop<uint32_t>(ValStackPtr);
+          uint32_t S = Frame->valuePop<uint32_t>(ValStackPtr);
+          uint32_t D = Frame->valuePop<uint32_t>(ValStackPtr);
+          const ElemEntry *ElemSeg = Mod->getElemEntry(ElemIdx);
+          TableInstance *Table = ModInst->getTableInst(TableIdx);
+          bool Dropped = ModInst->isElemSegmentDropped(ElemIdx);
+          if (Dropped) {
+            if (N == 0 && S == 0) {
+              if (D > Table->CurSize) {
+                throw getError(ErrorCode::OutOfBoundsTable);
+              }
+              BREAK;
+            }
+            throw getError(ErrorCode::OutOfBoundsTable);
+          }
+          if ((uint64_t)S + (uint64_t)N > (uint64_t)ElemSeg->NumFuncIdxs) {
+            throw getError(ErrorCode::OutOfBoundsTable);
+          }
+          if ((uint64_t)D + (uint64_t)N > (uint64_t)Table->CurSize) {
+            throw getError(ErrorCode::OutOfBoundsTable);
+          }
+          if (N > 0) {
+            std::memcpy(Table->Elements + D, ElemSeg->FuncIdxs + S,
+                        N * sizeof(uint32_t));
+          }
+          BREAK;
+        }
+        case FC_ELEM_DROP: { // elem.drop
+          uint32_t ElemIdx = 0;
+          Ip = readSafeLEBNumber(Ip, ElemIdx);
+          ModInst->dropElemSegment(ElemIdx);
+          BREAK;
+        }
+        case FC_TABLE_COPY: { // table.copy
+          uint32_t DstTableIdx = 0, SrcTableIdx = 0;
+          Ip = readSafeLEBNumber(Ip, DstTableIdx);
+          Ip = readSafeLEBNumber(Ip, SrcTableIdx);
+          uint32_t N = Frame->valuePop<uint32_t>(ValStackPtr);
+          uint32_t S = Frame->valuePop<uint32_t>(ValStackPtr);
+          uint32_t D = Frame->valuePop<uint32_t>(ValStackPtr);
+          TableInstance *DstTable = ModInst->getTableInst(DstTableIdx);
+          TableInstance *SrcTable = ModInst->getTableInst(SrcTableIdx);
+          if ((uint64_t)S + (uint64_t)N > (uint64_t)SrcTable->CurSize ||
+              (uint64_t)D + (uint64_t)N > (uint64_t)DstTable->CurSize) {
+            throw getError(ErrorCode::OutOfBoundsTable);
+          }
+          if (N > 0) {
+            std::memmove(DstTable->Elements + D, SrcTable->Elements + S,
+                         N * sizeof(uint32_t));
+          }
+          BREAK;
+        }
+        default:
+          ZEN_LOG_ERROR("unimplemented 0xFC sub-opcode: 0x%x", SubOpcode);
+          ZEN_ASSERT_TODO();
+        }
+#else
+        ZEN_LOG_ERROR("bulk memory operations not enabled (compile with "
+                      "ZEN_ENABLE_BULK_MEMORY=ON)");
+        ZEN_ASSERT_TODO();
+#endif
+      } else {
+        ZEN_LOG_ERROR("munimplemented opcode: 0x%x", Opcode);
+        ZEN_ASSERT_TODO();
+      }
     }
     }
     // TODO: write back ValueStackPtr, Ip, CtrlStackPtr to Frame

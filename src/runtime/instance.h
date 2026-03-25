@@ -186,6 +186,34 @@ public:
     return Globals[GlobalIdx].Type;
   }
 
+  // ==================== Dropped Segment Methods ====================
+#ifdef ZEN_ENABLE_BULK_MEMORY
+
+  bool isDataSegmentDropped(uint32_t DataIdx) const {
+    if (!DroppedDataSegments)
+      return false;
+    return DroppedDataSegments[DataIdx];
+  }
+
+  bool isElemSegmentDropped(uint32_t ElemIdx) const {
+    if (!DroppedElemSegments)
+      return false;
+    return DroppedElemSegments[ElemIdx];
+  }
+
+  void dropDataSegment(uint32_t DataIdx) {
+    if (DroppedDataSegments) {
+      DroppedDataSegments[DataIdx] = true;
+    }
+  }
+
+  void dropElemSegment(uint32_t ElemIdx) {
+    if (DroppedElemSegments) {
+      DroppedElemSegments[ElemIdx] = true;
+    }
+  }
+#endif
+
   // ==================== Error/Exception Methods ====================
 
   void setError(const Error &NewErr) { Err = NewErr; }
@@ -357,6 +385,11 @@ private:
       WasmMemoryDataType::WM_MEMORY_DATA_TYPE_MALLOC;
 
   bool DataSegsInited = false;
+
+#ifdef ZEN_ENABLE_BULK_MEMORY
+  bool *DroppedDataSegments = nullptr;
+  bool *DroppedElemSegments = nullptr;
+#endif
 
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
   // one instance maybe called by hostapi( instanceA -> hostapi -> instanceA )
