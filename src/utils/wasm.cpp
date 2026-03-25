@@ -290,6 +290,7 @@ const uint8_t *skipCurrentBlock(const uint8_t *Ip, const uint8_t *End) {
     case I64_EXTEND32_S:
       break;
 
+#ifdef ZEN_ENABLE_BULK_MEMORY
     case WASM_PREFIX_FC: { // Bulk memory operations prefix
       uint32_t SubOpcode;
       Ip = readLEBNumber(Ip, End, SubOpcode);
@@ -323,6 +324,7 @@ const uint8_t *skipCurrentBlock(const uint8_t *Ip, const uint8_t *End) {
       }
       break;
     }
+#endif
 
     } // switch opcode
   }   // while ip < end

@@ -2265,7 +2265,7 @@ void BaseInterpreterImpl::interpret() {
         ZEN_ASSERT_TODO();
 #endif
       } else {
-        ZEN_LOG_ERROR("munimplemented opcode: 0x%x", Opcode);
+        ZEN_LOG_ERROR("unimplemented opcode: 0x%x", Opcode);
         ZEN_ASSERT_TODO();
       }
     }

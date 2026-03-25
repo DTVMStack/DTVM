@@ -16,9 +16,9 @@
   )
 )
 
-;; The data segment is active (format 0 with no explicit offset means passive
-;; in this case since there's no offset expression). Actually this is passive
-;; because there's no (i32.const X) offset.
+;; The module above declares a passive data segment using `(data "...")`.
+;; Under the bulk-memory proposal, segments without an explicit offset
+;; expression are passive; active segments have an offset expression.
 
 ;; Basic init from passive segment
 (invoke "init" (i32.const 0) (i32.const 0) (i32.const 5))

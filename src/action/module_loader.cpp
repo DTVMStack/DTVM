@@ -814,6 +814,11 @@ void ModuleLoader::loadElementSection() {
 
     if (SegFlags == 0) {
       // Format 0: active, table 0, offset expr, vec(funcidx)
+      // Validate that table 0 exists (required for active element segments)
+      if (!Mod.isValidTable(0)) {
+        throw getError(ErrorCode::UnknownTable);
+      }
+
       const auto [ExprKind, Expr] = readConstExpr(WASMType::I32);
 
       uint32_t NumFuncIdxs = readU32();
@@ -870,7 +875,15 @@ void ModuleLoader::loadElementSection() {
     }
 #endif
     else {
-      throw getError(ErrorCode::UnsupportedOpcode);
+      // SegFlags 2 and 3 are valid in the WebAssembly spec but not yet
+      // supported:
+      // - 2: active with explicit table index
+      // - 3: declarative element segment
+      // For now, reject with a clear error indicating unsupported feature
+      throw getErrorWithExtraMessage(
+          ErrorCode::UnsupportedOpcode,
+          "element segment flags " + std::to_string(SegFlags) +
+              " not supported (only flags 0 and 1 are supported)");
     }
 
     ++Entry;
