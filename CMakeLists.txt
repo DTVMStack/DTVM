@@ -35,6 +35,9 @@ option(ZEN_ENABLE_DUMP_CALL_STACK "Enable exception call stack dump" OFF)
 option(ZEN_ENABLE_EVM_GAS_REGISTER
        "Enable gas register optimization for x86_64 multipass JIT" OFF
 )
+option(ZEN_ENABLE_WASI_MULTI_VALUE
+       "Enable WASI multi-value extension (multiple return values)" OFF
+)
 
 # Blockchain options
 option(ZEN_ENABLE_CHECKED_ARITHMETIC "Enable checked arithmetic" OFF)

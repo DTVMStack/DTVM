@@ -106,7 +106,7 @@ void Instantiator::instantiateFunctions(Instance &Inst) {
     FuncInst.NumParamCells = Type.NumParamCells;
     FuncInst.NumReturns = Type.NumReturns;
     FuncInst.NumReturnCells = Type.NumReturnCells;
-    std::memcpy(FuncInst.ReturnTypes, Type.ReturnTypes,
+    std::memcpy(FuncInst.ReturnTypes, Type.getReturnTypes(),
                 sizeof(FuncInst.ReturnTypes));
     FuncInst.ParamTypes = Type.ParamTypes;
     FuncInst.FuncType = &Type;

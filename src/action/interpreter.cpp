@@ -1171,6 +1171,23 @@ void BaseInterpreterImpl::interpret() {
         BREAK;
       }
       CASE(BLOCK) : {
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+        // Multi-value support: check if block type is a type index
+        WASMType BlockType = getWASMBlockTypeFromOpcode(*Ip);
+        if (BlockType == WASMType::ERROR_TYPE) {
+          // Type index - read as signed LEB128 from current position
+          int32_t TypeIndex;
+          Ip = utils::readLEBNumber(Ip, IpEnd, TypeIndex);
+          if (TypeIndex >= 0 && Mod->isValidType(TypeIndex)) {
+            const TypeEntry *Type = Mod->getDeclaredType(TypeIndex);
+            findBlockAddr(Ip, IpEnd, ElseAddr, EndAddr);
+            Frame->blockPush(ControlStackPtr, EndAddr, ValStackPtr,
+                             Type->NumReturnCells, LABEL_BLOCK, Type,
+                             Type->NumReturns, Type->NumReturnCells);
+            BREAK;
+          }
+        }
+#endif
         uint32_t CellNum = getWASMTypeCellNumFromOpcode(*Ip++);
 
         findBlockAddr(Ip, IpEnd, ElseAddr, EndAddr);
@@ -1179,6 +1196,23 @@ void BaseInterpreterImpl::interpret() {
         BREAK;
       }
       CASE(LOOP) : {
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+        // Multi-value support: check if block type is a type index
+        WASMType BlockType = getWASMBlockTypeFromOpcode(*Ip);
+        if (BlockType == WASMType::ERROR_TYPE) {
+          // Type index - read as signed LEB128 from current position
+          int32_t TypeIndex;
+          Ip = utils::readLEBNumber(Ip, IpEnd, TypeIndex);
+          if (TypeIndex >= 0 && Mod->isValidType(TypeIndex)) {
+            const TypeEntry *Type = Mod->getDeclaredType(TypeIndex);
+            // For loops, the result type is the input parameters
+            Frame->blockPush(ControlStackPtr, Ip, ValStackPtr,
+                             Type->NumParamCells, LABEL_LOOP, Type,
+                             Type->NumParams, Type->NumParamCells);
+            BREAK;
+          }
+        }
+#endif
         uint32_t CellNum = getWASMTypeCellNumFromOpcode(*Ip++);
         Frame->blockPush(ControlStackPtr, Ip, ValStackPtr, CellNum, LABEL_LOOP);
         BREAK;
@@ -1217,6 +1251,35 @@ void BaseInterpreterImpl::interpret() {
         BREAK;
       }
       CASE(IF) : {
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+        // Multi-value support: check if block type is a type index
+        WASMType BlockType = getWASMBlockTypeFromOpcode(*Ip);
+        if (BlockType == WASMType::ERROR_TYPE) {
+          // Type index - read as signed LEB128 from current position
+          int32_t TypeIndex;
+          Ip = utils::readLEBNumber(Ip, IpEnd, TypeIndex);
+          if (TypeIndex >= 0 && Mod->isValidType(TypeIndex)) {
+            const TypeEntry *Type = Mod->getDeclaredType(TypeIndex);
+            Cond = Frame->valuePop<int32_t>(ValStackPtr);
+            findBlockAddr(Ip, IpEnd, ElseAddr, EndAddr);
+            if (Cond) {
+              Frame->blockPush(ControlStackPtr, EndAddr, ValStackPtr,
+                               Type->NumReturnCells, LABEL_IF, Type,
+                               Type->NumReturns, Type->NumReturnCells);
+            } else {
+              if (ElseAddr == nullptr) {
+                Ip = EndAddr + 1;
+              } else {
+                Frame->blockPush(ControlStackPtr, EndAddr, ValStackPtr,
+                                 Type->NumReturnCells, LABEL_IF, Type,
+                                 Type->NumReturns, Type->NumReturnCells);
+                Ip = ElseAddr + 1;
+              }
+            }
+            BREAK;
+          }
+        }
+#endif
         uint32_t CellNum = getWASMTypeCellNumFromOpcode(*Ip++);
 
         Cond = Frame->valuePop<int32_t>(ValStackPtr);

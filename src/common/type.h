@@ -226,6 +226,9 @@ template <WASMType type> static inline constexpr uint32_t getWASMTypeSize() {
 
 static inline uint32_t getWASMTypeSize(WASMType Type) {
   switch (Type) {
+  case WASMType::VOID:
+  case WASMType::ERROR_TYPE:
+    return 0;
   case WASMType::I8:
     return 1;
   case WASMType::I16:

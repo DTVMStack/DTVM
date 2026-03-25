@@ -46,7 +46,20 @@ public:
 
   ArgumentInfo(TypeEntry *Type) {
     ZEN_ASSERT(Type);
+    // When multi-value is enabled, functions may have multiple return values.
+    // ArgumentInfo currently only supports single return value - the first
+    // return type is used. Full multi-value support requires additional work.
+#ifndef ZEN_ENABLE_WASI_MULTI_VALUE
     ZEN_ASSERT(Type->NumReturns <= 1);
+#else
+    // Store multi-value return info
+    NumRet = Type->NumReturns;
+    if (NumRet > 0) {
+      RetTypes.resize(NumRet);
+      std::memcpy(RetTypes.data(), Type->getReturnTypes(),
+                  NumRet * sizeof(WASMType));
+    }
+#endif
     uint32_t ArgNum = Type->NumParams;
     RetType = Type->getReturnType();
     uint32_t GpNum = 0;
@@ -92,6 +105,13 @@ public:
   WASMType getReturnType() const { return RetType; }
   uint32_t getStackSize() const { return StackSize; }
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  uint32_t getNumReturns() const { return NumRet; }
+  const WASMType *getReturnTypes() const {
+    return NumRet > 0 ? RetTypes.data() : nullptr;
+  }
+#endif
+
   typedef typename std::vector<Argument>::const_reverse_iterator
       ConstReverseIterator;
   typedef typename std::vector<Argument>::const_iterator ConstIterator;
@@ -133,6 +153,10 @@ private:
   uint8_t NumFpRegs;
   uint16_t StackSize;
   WASMType RetType : 8;
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  uint8_t NumRet = 0;
+  std::vector<WASMType> RetTypes;
+#endif
 };
 
 constexpr uint32_t InvalidLabelId = asmjit::Globals::kInvalidId;
@@ -212,7 +236,24 @@ public:
   public:
     BlockInfo(CtrlBlockKind Kind, Operand Result, uint32_t Label,
               uint32_t StackSize)
-        : Kind(Kind), Result(Result), Label(Label), StackSize(StackSize) {}
+        : Kind(Kind), Result(Result), Label(Label), StackSize(StackSize)
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+          ,
+          IsMultiValue(false)
+#endif
+    {
+    }
+
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    // Constructor for multi-value blocks
+    BlockInfo(CtrlBlockKind Kind, std::vector<Operand> Results,
+              const TypeEntry *BlockType, uint32_t Label, uint32_t StackSize)
+        : Kind(Kind), Results(std::move(Results)), BlockType(BlockType),
+          Label(Label), StackSize(StackSize), IsMultiValue(true) {
+      // Set primary result for backward compatibility
+      Result = this->Results.empty() ? Operand() : this->Results[0];
+    }
+#endif
 
     // Get block kind
     CtrlBlockKind getKind() const { return Kind; }
@@ -221,6 +262,17 @@ public:
 
     // Get block WASM type
     WASMType getType() const { return Result.getType(); }
+
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    // Multi-value support
+    bool isMultiValue() const { return IsMultiValue; }
+    uint32_t getNumResults() const {
+      return IsMultiValue ? Results.size()
+                          : (Result.getType() == WASMType::VOID ? 0 : 1);
+    }
+    const std::vector<Operand> &getResults() const { return Results; }
+    const TypeEntry *getBlockType() const { return BlockType; }
+#endif
 
     // Get label associated with the block
     uint32_t getLabel() const { return Label; }
@@ -245,11 +297,18 @@ public:
   private:
     CtrlBlockKind Kind;
     Operand Result;
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    std::vector<Operand> Results;
+    const TypeEntry *BlockType = nullptr;
+#endif
     uint32_t Label;
     uint32_t StackSize;
 
     bool HasElseLabel = false;
     bool Reachable = true;
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    bool IsMultiValue = false;
+#endif
   };
 
   OnePassCodeGen(asmjit::CodeHolder *Code, OnePassDataLayout &Layout,
@@ -279,13 +338,28 @@ public:
 
     ZEN_ASSERT(Stack.size() == 0);
 
-    WASMType RetType = Type->getReturnType();
-    // Use stack operand instead of register operand, as return values of
-    // function/block have relatively long lifetime and may hold registers
-    // for too long.
-    auto Res =
-        (RetType == WASMType::VOID) ? Operand() : getTempStackOperand(RetType);
-    Stack.emplace_back(CtrlBlockKind::FUNC_ENTRY, Res, createLabel(), 0);
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    // Handle multi-value function returns
+    if (Type->NumReturns > 1) {
+      std::vector<Operand> Results;
+      Results.reserve(Type->NumReturns);
+      const WASMType *RetTypes = Type->getReturnTypes();
+      for (uint32_t I = 0; I < Type->NumReturns; ++I) {
+        Results.push_back(getTempStackOperand(RetTypes[I]));
+      }
+      Stack.emplace_back(CtrlBlockKind::FUNC_ENTRY, std::move(Results), Type,
+                         createLabel(), 0);
+    } else
+#endif
+    {
+      WASMType RetType = Type->getReturnType();
+      // Use stack operand instead of register operand, as return values of
+      // function/block have relatively long lifetime and may hold registers
+      // for too long.
+      auto Res = (RetType == WASMType::VOID) ? Operand()
+                                             : getTempStackOperand(RetType);
+      Stack.emplace_back(CtrlBlockKind::FUNC_ENTRY, Res, createLabel(), 0);
+    }
   }
 
   // finalize after handle the function
@@ -394,12 +468,46 @@ public:
     Stack.push_back(BlockInfo(CtrlBlockKind::BLOCK, Res, Label, Estack));
   }
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  void handleBlockMultiValue(const TypeEntry *Type, uint32_t Estack) {
+    uint32_t Label = createLabel();
+    std::vector<Operand> Results;
+    if (Type->NumReturns > 0) {
+      Results.reserve(Type->NumReturns);
+      const WASMType *RetTypes = Type->getReturnTypes();
+      for (uint32_t I = 0; I < Type->NumReturns; ++I) {
+        Results.push_back(getTempStackOperand(RetTypes[I]));
+      }
+    }
+    Stack.push_back(BlockInfo(CtrlBlockKind::BLOCK, std::move(Results), Type,
+                              Label, Estack));
+  }
+#endif
+
   void handleLoop(WASMType Type, uint32_t Estack) {
     uint32_t Label = createLabel();
     auto Res = (Type == WASMType::VOID) ? Operand() : getTempStackOperand(Type);
     Stack.push_back(BlockInfo(CtrlBlockKind::LOOP, Res, Label, Estack));
     bindLabel(Label);
   }
+
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  void handleLoopMultiValue(const TypeEntry *Type, uint32_t Estack) {
+    uint32_t Label = createLabel();
+    // For loops, results are the return values (for fallthrough)
+    std::vector<Operand> Results;
+    if (Type->NumReturns > 0) {
+      Results.reserve(Type->NumReturns);
+      const WASMType *RetTypes = Type->getReturnTypes();
+      for (uint32_t I = 0; I < Type->NumReturns; ++I) {
+        Results.push_back(getTempStackOperand(RetTypes[I]));
+      }
+    }
+    Stack.push_back(BlockInfo(CtrlBlockKind::LOOP, std::move(Results), Type,
+                              Label, Estack));
+    bindLabel(Label);
+  }
+#endif
 
   void handleIf(Operand Op, WASMType Type, uint32_t Estack) {
     uint32_t Label = createLabel();
@@ -409,6 +517,25 @@ public:
     Stack.push_back(BlockInfo(CtrlBlockKind::IF, Res, Label, Estack));
     self().branchFalse(Op, ElseLabel);
   }
+
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  void handleIfMultiValue(Operand Op, const TypeEntry *Type, uint32_t Estack) {
+    uint32_t Label = createLabel();
+    uint32_t ElseLabel = createLabel();
+    ZEN_ASSERT(ElseLabel == Label + 1);
+    std::vector<Operand> Results;
+    if (Type->NumReturns > 0) {
+      Results.reserve(Type->NumReturns);
+      const WASMType *RetTypes = Type->getReturnTypes();
+      for (uint32_t I = 0; I < Type->NumReturns; ++I) {
+        Results.push_back(getTempStackOperand(RetTypes[I]));
+      }
+    }
+    Stack.push_back(
+        BlockInfo(CtrlBlockKind::IF, std::move(Results), Type, Label, Estack));
+    self().branchFalse(Op, ElseLabel);
+  }
+#endif
 
   // else block in if-block
   // if (!cond) goto else_label;
@@ -482,6 +609,12 @@ public:
 
   void handleReturn(Operand Opnd) { self().handleReturnImpl(Opnd); }
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  void handleReturnMultiValue(const std::vector<Operand> &Opnds) {
+    self().handleReturnMultiValueImpl(Opnds);
+  }
+#endif
+
   Operand handleCall(uint32_t FuncIdx, uintptr_t Target, bool IsImport,
                      bool FarCall, const ArgumentInfo &ArgInfo,
                      const std::vector<Operand> &Arg) {
@@ -489,11 +622,31 @@ public:
                                  Arg);
   }
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  std::vector<Operand> handleCallMultiValue(uint32_t FuncIdx, uintptr_t Target,
+                                            bool IsImport, bool FarCall,
+                                            const ArgumentInfo &ArgInfo,
+                                            const std::vector<Operand> &Arg) {
+    return self().handleCallMultiValueImpl(FuncIdx, Target, IsImport, FarCall,
+                                           ArgInfo, Arg);
+  }
+#endif
+
   Operand handleCallIndirect(uint32_t TypeIdx, Operand Callee, uint32_t TblIdx,
                              const ArgumentInfo &ArgInfo,
                              const std::vector<Operand> &Arg) {
     return self().handleCallIndirectImpl(TypeIdx, Callee, TblIdx, ArgInfo, Arg);
   }
+
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  std::vector<Operand>
+  handleCallIndirectMultiValue(uint32_t TypeIdx, Operand Callee,
+                               uint32_t TblIdx, const ArgumentInfo &ArgInfo,
+                               const std::vector<Operand> &Arg) {
+    return self().handleCallIndirectMultiValueImpl(TypeIdx, Callee, TblIdx,
+                                                   ArgInfo, Arg);
+  }
+#endif
 
   // ==================== Parametric Instruction Handlers ====================
 

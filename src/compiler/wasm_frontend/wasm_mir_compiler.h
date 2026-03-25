@@ -85,8 +85,11 @@ public:
     bool isEmpty() const { return !Instr && !Var && Type == WASMType::VOID; }
 
     /* Do nothing, only used to match WASMByteVisitor */
-    constexpr bool isReg() { return false; }
-    constexpr bool isTempReg() { return true; }
+    constexpr bool isReg() const { return false; }
+    constexpr bool isMem() const { return false; }
+    constexpr bool isTempReg() const { return true; }
+    constexpr int getKind() const { return 0; }
+    constexpr uint8_t getRawOpKind() const { return 0; }
 
   private:
     MInstruction *Instr = nullptr;
@@ -103,13 +106,42 @@ public:
               MBasicBlock *JumpBlock, MBasicBlock *NextBlock,
               BrIfInstruction *BranchInst)
         : Kind(Kind), Result(Result), StackSize(StackSize),
-          JumpBlock(JumpBlock), NextBlock(NextBlock), BranchInstr(BranchInst) {}
+          JumpBlock(JumpBlock), NextBlock(NextBlock), BranchInstr(BranchInst)
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+          ,
+          IsMultiValue(false)
+#endif
+    {
+    }
+
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    // Constructor for multi-value blocks
+    BlockInfo(CtrlBlockKind Kind, std::vector<Operand> Results,
+              const TypeEntry *BlockType, uint32_t StackSize,
+              MBasicBlock *JumpBlock, MBasicBlock *NextBlock,
+              BrIfInstruction *BranchInst)
+        : Kind(Kind), Results(std::move(Results)), BlockType(BlockType),
+          StackSize(StackSize), JumpBlock(JumpBlock), NextBlock(NextBlock),
+          BranchInstr(BranchInst), IsMultiValue(true) {
+      Result = this->Results.empty() ? Operand() : this->Results[0];
+    }
+#endif
 
     CtrlBlockKind getKind() const { return Kind; }
 
     Operand getResult() const { return Result; }
 
     WASMType getType() const { return Result.getType(); }
+
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    bool isMultiValue() const { return IsMultiValue; }
+    uint32_t getNumResults() const {
+      return IsMultiValue ? Results.size()
+                          : (Result.getType() == WASMType::VOID ? 0 : 1);
+    }
+    const std::vector<Operand> &getResults() const { return Results; }
+    const TypeEntry *getBlockType() const { return BlockType; }
+#endif
 
     uint32_t getStackSize() const { return StackSize; }
 
@@ -129,18 +161,38 @@ public:
   private:
     CtrlBlockKind Kind;
     Operand Result;
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    std::vector<Operand> Results;
+    const TypeEntry *BlockType = nullptr;
+#endif
     uint32_t StackSize;
     MBasicBlock *JumpBlock = nullptr;
     MBasicBlock *NextBlock = nullptr;
     BrIfInstruction *BranchInstr = nullptr;
     bool Reachable = true;
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    bool IsMultiValue = false;
+#endif
   };
 
   class ArgumentInfo {
   public:
     ArgumentInfo(const TypeEntry *Type) {
       ZEN_ASSERT(Type);
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+      // Multi-value support: store all return types
+      NumReturns = Type->NumReturns;
+      if (NumReturns > 0) {
+        ReturnTypes.resize(NumReturns);
+        std::memcpy(ReturnTypes.data(), Type->getReturnTypes(),
+                    NumReturns * sizeof(WASMType));
+        RetType = ReturnTypes[0]; // Primary return type for backward compat
+      } else {
+        RetType = WASMType::VOID;
+      }
+#else
       RetType = Type->getReturnType();
+#endif
       uint32_t NumParams = Type->NumParams;
       // Reserve 1 slot for instance
       ArgTypes.resize(NumParams + 1);
@@ -151,9 +203,20 @@ public:
 
     WASMType getReturnType() const { return RetType; }
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    uint32_t getNumReturns() const { return NumReturns; }
+    const WASMType *getReturnTypes() const {
+      return NumReturns > 0 ? ReturnTypes.data() : nullptr;
+    }
+#endif
+
   private:
     std::vector<WASMType> ArgTypes;
     WASMType RetType;
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    uint32_t NumReturns = 0;
+    std::vector<WASMType> ReturnTypes;
+#endif
   };
 
   bool compile(CompilerContext *Context);
@@ -180,9 +243,22 @@ public:
 
   void handleBlock(WASMType Type, uint32_t Estack);
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  void handleBlockMultiValue(const TypeEntry *Type, uint32_t Estack);
+#endif
+
   void handleLoop(WASMType Type, uint32_t Estack);
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  void handleLoopMultiValue(const TypeEntry *Type, uint32_t Estack);
+#endif
+
   void handleIf(Operand CondOp, WASMType Type, uint32_t Estack);
+
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  void handleIfMultiValue(Operand CondOp, const TypeEntry *Type,
+                          uint32_t Estack);
+#endif
 
   void handleElse(const BlockInfo &Info);
 
@@ -197,12 +273,31 @@ public:
 
   void handleReturn(Operand Opnd);
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  void handleReturnMultiValue(const std::vector<Operand> &Opnds);
+#endif
+
   Operand handleCall(uint32_t FuncIdx, uintptr_t TarGet, bool IsImport,
                      bool FarCall, const ArgumentInfo &ArgInfo,
                      const std::vector<Operand> &Args);
+
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  std::vector<Operand> handleCallMultiValue(uint32_t FuncIdx, uintptr_t TarGet,
+                                            bool IsImport, bool FarCall,
+                                            const ArgumentInfo &ArgInfo,
+                                            const std::vector<Operand> &Args);
+#endif
+
   Operand handleCallIndirect(uint32_t TypeIdx, Operand IndirectFuncIdx,
                              uint32_t TblIdx, const ArgumentInfo &ArgInfo,
                              const std::vector<Operand> &Args);
+
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  std::vector<Operand>
+  handleCallIndirectMultiValue(uint32_t TypeIdx, Operand IndirectFuncIdx,
+                               uint32_t TblIdx, const ArgumentInfo &ArgInfo,
+                               const std::vector<Operand> &Args);
+#endif
 
   // ==================== Parametric Instruction Handlers ====================
 

@@ -112,7 +112,7 @@ bool TypeEntry::isEqual(TypeEntry *Type1, TypeEntry *Type2) {
   }
   if (std::memcmp(Type1->getParamTypes(), Type2->getParamTypes(),
                   sizeof(WASMType) * Type1->NumParams) ||
-      std::memcmp(Type1->ReturnTypes, Type2->ReturnTypes,
+      std::memcmp(Type1->getReturnTypes(), Type2->getReturnTypes(),
                   sizeof(WASMType) * Type1->NumReturns)) {
     return false;
   }
@@ -291,6 +291,12 @@ void Module::destroyTypeTable() {
     if (TypeTable[I].NumParams > (__WORDSIZE / 8) && TypeTable[I].ParamTypes) {
       deallocate(TypeTable[I].ParamTypes);
     }
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    // Free dynamically allocated return types array for multi-value
+    if (TypeTable[I].NumReturns > 2 && TypeTable[I].ReturnTypesPtr) {
+      deallocate(TypeTable[I].ReturnTypesPtr);
+    }
+#endif
   }
   deallocate(TypeTable);
 }

@@ -98,9 +98,32 @@ protected:
     return readTypeBase(common::getWASMValTypeFromOpcode);
   }
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  // Multi-value support: block type can be a type index
+  // Returns: positive value for WASMType, negative value for type index
+  // The caller should check if result < 0 to determine if it's a type index
+  int32_t readBlockType() {
+    uint8_t TypeOpcode = common::to_underlying(readByte());
+    WASMType Type = common::getWASMBlockTypeFromOpcode(TypeOpcode);
+    if (Type != WASMType::ERROR_TYPE) {
+      return static_cast<int32_t>(Type);
+    }
+    // Type index (signed LEB128)
+    // Rewind and read as signed LEB128
+    Ptr--;
+    int32_t TypeIndex = readLEB<int32_t>();
+    if (TypeIndex < 0) {
+      // Valid type index (must be non-negative)
+      throw getError(ErrorCode::InvalidType);
+    }
+    // Return negative value to indicate type index
+    return -TypeIndex - 1; // -1 means type index 0, -2 means type index 1, etc.
+  }
+#else
   WASMType readBlockType() {
     return readTypeBase(common::getWASMBlockTypeFromOpcode);
   }
+#endif
 
   WASMType readRefType() {
     return readTypeBase(common::getWASMRefTypeFromOpcode);

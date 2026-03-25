@@ -30,7 +30,14 @@ if(ZEN_ENABLE_SPEC_TEST)
   if(ZEN_ENABLE_DWASM)
     set(SPEC_CATEGORIES "dwasm")
   else()
-    set(SPEC_CATEGORIES "spec/test/core" "proposals")
+    # Core spec tests are designed for base WebAssembly without multi-value.
+    # When multi-value is enabled, some tests that expect "invalid result arity"
+    # errors will fail because multi-value allows multiple returns.
+    if(NOT ZEN_ENABLE_WASI_MULTI_VALUE)
+      set(SPEC_CATEGORIES "spec/test/core" "proposals")
+    else()
+      set(SPEC_CATEGORIES "proposals")
+    endif()
     if(ZEN_ENABLE_CHECKED_ARITHMETIC)
       list(APPEND SPEC_CATEGORIES "chain")
     endif()
@@ -44,6 +51,11 @@ if(ZEN_ENABLE_SPEC_TEST)
   endif()
 
   list(APPEND SPEC_CATEGORIES "spec_extra")
+
+  # Multi-value tests (only when ZEN_ENABLE_WASI_MULTI_VALUE is enabled)
+  if(ZEN_ENABLE_WASI_MULTI_VALUE)
+    list(APPEND SPEC_CATEGORIES "multi_value")
+  endif()
 
   foreach(SPEC_CATEGORY ${SPEC_CATEGORIES})
     process_spec_files("${SPEC_DIR}/${SPEC_CATEGORY}")

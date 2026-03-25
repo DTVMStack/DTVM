@@ -15,6 +15,9 @@ namespace runtime {
 struct FunctionInstance;
 class Instance;
 class Runtime;
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+struct TypeEntry;
+#endif
 } // namespace runtime
 
 namespace action {
@@ -24,6 +27,12 @@ struct BlockInfo {
   uint32_t *ValueStackPtr;
   uint32_t CellNum;
   common::LabelType LabelType;
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  // Multi-value support: store full type information
+  const runtime::TypeEntry *BlockType; // Full type for multi-value blocks
+  uint32_t NumResults;                 // Number of result values
+  uint32_t TotalResultCells;           // Total cells for all results
+#endif
 };
 
 struct InterpFrame {
@@ -89,12 +98,23 @@ struct InterpFrame {
 
   void blockPush(BlockInfo *&ControlStackPtr, const uint8_t *TargetAddr,
                  uint32_t *ValStackPtr, uint32_t CellNum,
-                 common::LabelType LabelType) {
+                 common::LabelType LabelType
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+                 ,
+                 const runtime::TypeEntry *BlockType = nullptr,
+                 uint32_t NumResults = 0, uint32_t TotalResultCells = 0
+#endif
+  ) {
     ZEN_ASSERT(ControlStackPtr <= CtrlBoundary);
     ControlStackPtr->TargetAddr = TargetAddr;
     ControlStackPtr->ValueStackPtr = ValStackPtr;
     ControlStackPtr->CellNum = CellNum;
     ControlStackPtr->LabelType = LabelType;
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    ControlStackPtr->BlockType = BlockType;
+    ControlStackPtr->NumResults = NumResults;
+    ControlStackPtr->TotalResultCells = TotalResultCells;
+#endif
     ControlStackPtr++;
   }
 
@@ -114,10 +134,19 @@ struct InterpFrame {
     Ip = CurBlock->TargetAddr;
 
     if (CurBlock->LabelType != common::LABEL_LOOP) {
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+      // Multi-value support: copy all result values
+      uint32_t CellsToCopy = CurBlock->TotalResultCells > 0
+                                 ? CurBlock->TotalResultCells
+                                 : CurBlock->CellNum;
+      std::memcpy(ValStackPtr, ValStackPtrOld - CellsToCopy, CellsToCopy << 2);
+      ValStackPtr += CellsToCopy;
+#else
       uint32_t CellNum = (ControlStackPtr - 1)->CellNum;
 
       std::memcpy(ValStackPtr, ValStackPtrOld - CellNum, CellNum << 2);
       ValStackPtr += CellNum;
+#endif
     }
   }
 };

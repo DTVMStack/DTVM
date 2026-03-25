@@ -373,7 +373,7 @@ static bool checkMainFuncType(TypeEntry *Type) {
       !(ParamTypes[0] == WASMType::I32 && ParamTypes[1] == WASMType::I32)) {
     return false;
   }
-  if (Type->NumReturns && Type->ReturnTypes[0] != WASMType::I32) {
+  if (Type->NumReturns && Type->getReturnTypes()[0] != WASMType::I32) {
     return false;
   }
   return true;
