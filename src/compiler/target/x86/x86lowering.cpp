@@ -1520,7 +1520,35 @@ void X86CgLowering::lowerBrStmt(const BrInstruction &Inst) {
   fastEmitBranch(TargetMBB);
 }
 
-// TODO: optimize if the condition is comparison
+static bool isShortDiamondTrueFallthrough(const BrIfInstruction &Inst) {
+  if (!Inst.hasFalseBlock()) {
+    return false;
+  }
+
+  const auto *CurrentBB = Inst.getBasicBlock();
+  const auto *TrueBB = Inst.getTrueBlock();
+  const auto *FalseBB = Inst.getFalseBlock();
+  if (CurrentBB->getIdx() + 1 != TrueBB->getIdx() ||
+      TrueBB->getIdx() + 1 != FalseBB->getIdx()) {
+    return false;
+  }
+
+  auto PredRange = TrueBB->predecessors();
+  auto PredIt = PredRange.begin();
+  if (PredIt == PredRange.end() || *PredIt != CurrentBB) {
+    return false;
+  }
+  ++PredIt;
+  if (PredIt != PredRange.end() || TrueBB->empty()) {
+    return false;
+  }
+
+  auto *MutableTrueBB = const_cast<MBasicBlock *>(TrueBB);
+  const auto *Terminator = *std::prev(MutableTrueBB->end());
+  const auto *BrInst = dyn_cast<BrInstruction>(Terminator);
+  return BrInst != nullptr && BrInst->getTargetBlock() == FalseBB;
+}
+
 void X86CgLowering::lowerBrIfStmt(const BrIfInstruction &Inst) {
   const MInstruction *Operand = Inst.getOperand<0>();
   CgRegister OperandReg = lowerExpr(*Operand);
@@ -1538,15 +1566,25 @@ void X86CgLowering::lowerBrIfStmt(const BrIfInstruction &Inst) {
   }
   fastEmitNoDefInst_rr(TESTOpc, OperandReg, OperandReg);
 
-  // Jump to the true basic block if the operand is not zero
   CgBasicBlock *TrueMBB = getOrCreateCgBB(Inst.getTrueBlock());
-  fastEmitCondBranch(TrueMBB, X86::CondCode::COND_NE);
-
   if (Inst.hasFalseBlock()) {
-    // Jump to the false basic block if the operand is zero
     CgBasicBlock *FalseMBB = getOrCreateCgBB(Inst.getFalseBlock());
+    if (isShortDiamondTrueFallthrough(Inst)) {
+      // Prefer falling through to the next laid-out block and branch away on
+      // the zero case when the MIR already forms a short diamond that rejoins
+      // immediately after the true block.
+      fastEmitCondBranch(FalseMBB, X86::CondCode::COND_E);
+      CurBB->addSuccessorWithoutProb(TrueMBB);
+      return;
+    }
+
+    // Jump to the true basic block if the operand is not zero.
+    fastEmitCondBranch(TrueMBB, X86::CondCode::COND_NE);
+    // Jump to the false basic block if the operand is zero.
     fastEmitBranch(FalseMBB);
   } else {
+    // Jump to the true basic block if the operand is not zero.
+    fastEmitCondBranch(TrueMBB, X86::CondCode::COND_NE);
     startNewBlockAfterBranch();
   }
 }

@@ -144,7 +144,7 @@ public:
       Operand Result;
       Result.Type = EVMType::UINT256;
       Result.DeferredValueKind = DeferredKind::BITWISE_NOT;
-      Result.DeferredBaseComponents = BaseComponents;
+      Result.U256Components = BaseComponents;
       return Result;
     }
 
@@ -153,7 +153,7 @@ public:
       Operand Result;
       Result.Type = EVMType::UINT256;
       Result.DeferredValueKind = DeferredKind::ZERO_TEST;
-      Result.DeferredBaseComponents = BaseComponents;
+      Result.U256Components = BaseComponents;
       Result.DeferredZeroTestNegated = IsNegated;
       return Result;
     }
@@ -216,7 +216,7 @@ public:
     const U256Inst &getDeferredBaseComponents() const {
       ZEN_ASSERT(DeferredValueKind != DeferredKind::NONE &&
                  "Not a deferred value");
-      return DeferredBaseComponents;
+      return U256Components;
     }
 
     constexpr bool isReg() { return false; }
@@ -232,7 +232,6 @@ public:
     U256Inst U256Components = {};
     U256Var U256VarComponents = {};
     U256Value ConstValue = {};
-    U256Inst DeferredBaseComponents = {};
     bool IsConstant = false;
     bool IsU256MultiComponent = false;
     DeferredKind DeferredValueKind = DeferredKind::NONE;
