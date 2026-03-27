@@ -5,8 +5,8 @@
 ;; compute the full 64-bit address explicitly to avoid this.
 ;;
 ;; Effective address = memory.size(65131) + offset(4268353288) = 4268418419
-;; Memory size = 65131 * 65536 = 4269236224
-;; 4268418419 + 8 <= 4269236224 => in-bounds, should NOT trap.
+;; Memory size = 65131 * 65536 = 4268425216
+;; 4268418419 + 8 <= 4268425216 => in-bounds, should NOT trap.
 
 (module
   (memory (;0;) 65131)
