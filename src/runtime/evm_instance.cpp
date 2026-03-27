@@ -86,7 +86,7 @@ void EVMInstance::resetForNewCall(evmc_revision NewRev) {
   MemoryStack.clear();
 
   // Reset output
-  ReturnData.clear();
+  clearReturnData();
   ExeResult = evmc::Result{EVMC_SUCCESS, 0, 0};
 
   // Reset execution cache: clear() keeps allocated bucket arrays,

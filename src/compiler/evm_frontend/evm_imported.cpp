@@ -662,8 +662,7 @@ void evmExpandMemoryNoGas(zen::runtime::EVMInstance *Instance,
 }
 
 uint64_t evmGetReturnDataSize(zen::runtime::EVMInstance *Instance) {
-  const auto &ReturnData = Instance->getReturnData();
-  return ReturnData.size();
+  return Instance->getReturnDataSize();
 }
 
 template <size_t MaxTopics>
