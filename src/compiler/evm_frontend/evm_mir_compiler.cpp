@@ -2749,11 +2749,10 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
         false, OP_ushr, MirI64Type, SelectedComponent, BitOffset);
     MInstruction *ByteValue = createInstruction<BinaryInstruction>(
         false, OP_and, MirI64Type, ShiftedValue, ConstFF);
-    MInstruction *Result = IsOutOfBounds
-                               ? createInstruction<SelectInstruction>(
-                                     false, MirI64Type, IsOutOfBounds, Zero,
-                                     ByteValue)
-                               : ByteValue;
+    MInstruction *Result =
+        IsOutOfBounds ? createInstruction<SelectInstruction>(
+                            false, MirI64Type, IsOutOfBounds, Zero, ByteValue)
+                      : ByteValue;
 
     U256Inst ResultComponents = {};
     ResultComponents[0] = protectUnsafeValue(Result, MirI64Type);
@@ -2790,9 +2789,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
     uint64_t Index = IndexConst[0];
     size_t ComponentIndex = 3 - static_cast<size_t>(Index >> 3);
     uint64_t BitOffset = (7 - (Index & 7)) << 3;
-    return buildByteResult(
-        ValueComponents[ComponentIndex],
-        createIntConstInstruction(MirI64Type, BitOffset));
+    return buildByteResult(ValueComponents[ComponentIndex],
+                           createIntConstInstruction(MirI64Type, BitOffset));
   }
 
   U256Inst IndexComponents = extractU256Operand(IndexOp);
@@ -2828,9 +2826,11 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
       false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, GroupIndex,
       Const2);
   MInstruction *UpperPair = createInstruction<SelectInstruction>(
-      false, MirI64Type, IsSecondInPair, ValueComponents[2], ValueComponents[3]);
+      false, MirI64Type, IsSecondInPair, ValueComponents[2],
+      ValueComponents[3]);
   MInstruction *LowerPair = createInstruction<SelectInstruction>(
-      false, MirI64Type, IsSecondInPair, ValueComponents[0], ValueComponents[1]);
+      false, MirI64Type, IsSecondInPair, ValueComponents[0],
+      ValueComponents[1]);
   MInstruction *SelectedComponent = createInstruction<SelectInstruction>(
       false, MirI64Type, IsLowerPair, LowerPair, UpperPair);
 
