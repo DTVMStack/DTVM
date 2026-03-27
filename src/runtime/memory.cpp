@@ -197,7 +197,7 @@ WasmMemoryAllocator::~WasmMemoryAllocator() {
       }
       delete MmapAddresses;
     }
-    if (MmapMemoryInitFd > 0) {
+    if (MmapMemoryInitFd >= 0) {
       ::close(MmapMemoryInitFd);
     }
     if (MmapMemoryFilepath) {
@@ -216,7 +216,7 @@ bool WasmMemoryAllocator::checkWasmMemoryCanUseMmap() {
   bool CanUseMmap = false;
   if (UseMmap) {
     if (DefaultMemoryType == WM_MEMORY_DATA_TYPE_BUCKET_MMAP &&
-        MmapMemoryInitFd > 0) {
+        MmapMemoryInitFd >= 0) {
       CanUseMmap = true;
     }
   }
