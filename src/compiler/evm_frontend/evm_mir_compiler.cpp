@@ -2737,68 +2737,104 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
 // (value >> (8 × (31 - index))) & 0xFF
 typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
                                                           Operand ValueOp) {
-  U256Inst IndexComponents = extractU256Operand(IndexOp);
-  U256Inst ValueComponents = extractU256Operand(ValueOp);
-
-  // Check if index >= 32 (out of bounds)
-  MInstruction *IsOutOfBounds = isU256GreaterOrEqual(IndexComponents, 32);
-
   MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-
-  // Calculate bit shift: (31 - index) * 8
-  MInstruction *Const31 = createIntConstInstruction(MirI64Type, 31);
-  MInstruction *ByteIndex = createInstruction<BinaryInstruction>(
-      false, OP_sub, MirI64Type, Const31, IndexComponents[0]);
-  MInstruction *Const8 = createIntConstInstruction(MirI64Type, 8);
-  MInstruction *BitShift = createInstruction<BinaryInstruction>(
-      false, OP_mul, MirI64Type, ByteIndex, Const8);
-
-  // Determine which 64-bit component contains the byte
-  MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
-  MInstruction *ComponentIndex = createInstruction<BinaryInstruction>(
-      false, OP_udiv, MirI64Type, BitShift, Const64);
-
-  // Calculate the bit offset within the selected 64-bit component
-  MInstruction *BitOffset = createInstruction<BinaryInstruction>(
-      false, OP_urem, MirI64Type, BitShift, Const64);
-
-  // Select the appropriate 64-bit component based on component_index
-  // Example: bit_shift=248 → component_index=3 (248/64=3), bit_offset=56
-  // This means target byte is in the highest component (comp3) at bit offset 56
-  MInstruction *SelectedComponent = ValueComponents[0];
-  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
-    MInstruction *IsThisComponent = createInstruction<CmpInstruction>(
-        false, CmpInstruction::Predicate::ICMP_EQ, &Ctx.I64Type, ComponentIndex,
-        createIntConstInstruction(MirI64Type, I));
-    SelectedComponent = createInstruction<SelectInstruction>(
-        false, MirI64Type, IsThisComponent, ValueComponents[I],
-        SelectedComponent);
-  }
-
-  // Extract the byte by shifting right and masking
-  // Shift the selected component right by bit_offset to move target byte to LSB
-  // Then mask with 0xFF to extract the lowest 8 bits
-  MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
-      false, OP_ushr, MirI64Type, SelectedComponent, BitOffset);
-  MInstruction *ConstFF = createIntConstInstruction(MirI64Type, 0xFF);
-  MInstruction *ByteValue = createInstruction<BinaryInstruction>(
-      false, OP_and, MirI64Type, ShiftedValue, ConstFF);
-
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
-  // Return 0 if out of bounds, otherwise return the extracted byte value
-  MInstruction *Result = createInstruction<SelectInstruction>(
-      false, MirI64Type, IsOutOfBounds, Zero, ByteValue);
+  MInstruction *ConstFF = createIntConstInstruction(MirI64Type, 0xFF);
 
-  // Create U256 result with only the low component set
-  // High components are zeroed out as per EVM specification
-  U256Inst ResultComponents = {};
-  ResultComponents[0] = protectUnsafeValue(Result, MirI64Type);
-  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
-    ResultComponents[I] = Zero;
+  auto buildByteResult = [&](MInstruction *SelectedComponent,
+                             MInstruction *BitOffset,
+                             MInstruction *IsOutOfBounds = nullptr) {
+    MInstruction *ShiftedValue = createInstruction<BinaryInstruction>(
+        false, OP_ushr, MirI64Type, SelectedComponent, BitOffset);
+    MInstruction *ByteValue = createInstruction<BinaryInstruction>(
+        false, OP_and, MirI64Type, ShiftedValue, ConstFF);
+    MInstruction *Result = IsOutOfBounds
+                               ? createInstruction<SelectInstruction>(
+                                     false, MirI64Type, IsOutOfBounds, Zero,
+                                     ByteValue)
+                               : ByteValue;
+
+    U256Inst ResultComponents = {};
+    ResultComponents[0] = protectUnsafeValue(Result, MirI64Type);
+    for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+      ResultComponents[I] = Zero;
+    }
+    return Operand(ResultComponents, EVMType::UINT256);
+  };
+
+  if (IndexOp.isConstant() && ValueOp.isConstant()) {
+    const auto &IndexConst = IndexOp.getConstValue();
+    if (IndexConst[1] != 0 || IndexConst[2] != 0 || IndexConst[3] != 0 ||
+        IndexConst[0] >= 32) {
+      return Operand(U256Value{0, 0, 0, 0});
+    }
+
+    uint64_t Index = IndexConst[0];
+    size_t ComponentIndex = 3 - static_cast<size_t>(Index >> 3);
+    uint64_t BitOffset = (7 - (Index & 7)) << 3;
+    uint64_t ByteValue =
+        (ValueOp.getConstValue()[ComponentIndex] >> BitOffset) & 0xFF;
+    return Operand(U256Value{ByteValue, 0, 0, 0});
   }
 
-  return Operand(ResultComponents, EVMType::UINT256);
+  U256Inst ValueComponents = extractU256Operand(ValueOp);
+
+  if (IndexOp.isConstant()) {
+    const auto &IndexConst = IndexOp.getConstValue();
+    if (IndexConst[1] != 0 || IndexConst[2] != 0 || IndexConst[3] != 0 ||
+        IndexConst[0] >= 32) {
+      return Operand(U256Value{0, 0, 0, 0});
+    }
+
+    uint64_t Index = IndexConst[0];
+    size_t ComponentIndex = 3 - static_cast<size_t>(Index >> 3);
+    uint64_t BitOffset = (7 - (Index & 7)) << 3;
+    return buildByteResult(
+        ValueComponents[ComponentIndex],
+        createIntConstInstruction(MirI64Type, BitOffset));
+  }
+
+  U256Inst IndexComponents = extractU256Operand(IndexOp);
+
+  // Check if index >= 32 (out of bounds).
+  MInstruction *IsOutOfBounds = isU256GreaterOrEqual(IndexComponents, 32);
+  MInstruction *IndexLow = IndexComponents[0];
+  MInstruction *Const1 = createIntConstInstruction(MirI64Type, 1);
+  MInstruction *Const2 = createIntConstInstruction(MirI64Type, 2);
+  MInstruction *Const3 = createIntConstInstruction(MirI64Type, 3);
+  MInstruction *Const7 = createIntConstInstruction(MirI64Type, 7);
+
+  // Use byte-granular arithmetic directly:
+  //   component_index = 3 - (index / 8)
+  //   bit_offset = (7 - (index % 8)) * 8
+  MInstruction *GroupIndex = createInstruction<BinaryInstruction>(
+      false, OP_ushr, MirI64Type, IndexLow, Const3);
+  MInstruction *ByteInGroup = createInstruction<BinaryInstruction>(
+      false, OP_and, MirI64Type, IndexLow, Const7);
+  MInstruction *ByteShiftInComponent = createInstruction<BinaryInstruction>(
+      false, OP_sub, MirI64Type, Const7, ByteInGroup);
+  MInstruction *BitOffset = createInstruction<BinaryInstruction>(
+      false, OP_shl, MirI64Type, ByteShiftInComponent, Const3);
+
+  // Pick the source limb with a two-level select tree to shorten live ranges:
+  // [3,2] and [1,0] are selected independently, then merged.
+  MInstruction *GroupLowBit = createInstruction<BinaryInstruction>(
+      false, OP_and, MirI64Type, GroupIndex, Const1);
+  MInstruction *IsSecondInPair = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, GroupLowBit,
+      Zero);
+  MInstruction *IsLowerPair = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_UGE, &Ctx.I64Type, GroupIndex,
+      Const2);
+  MInstruction *UpperPair = createInstruction<SelectInstruction>(
+      false, MirI64Type, IsSecondInPair, ValueComponents[2], ValueComponents[3]);
+  MInstruction *LowerPair = createInstruction<SelectInstruction>(
+      false, MirI64Type, IsSecondInPair, ValueComponents[0], ValueComponents[1]);
+  MInstruction *SelectedComponent = createInstruction<SelectInstruction>(
+      false, MirI64Type, IsLowerPair, LowerPair, UpperPair);
+
+  return buildByteResult(SelectedComponent, BitOffset, IsOutOfBounds);
 }
 
 // EVM SIGNEXTEND opcode: sign-extends a signed integer from (index+1) bytes to
