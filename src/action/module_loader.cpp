@@ -251,7 +251,7 @@ ModuleLoader::resolveImportFunction(WASMSymbol ModuleName, WASMSymbol FieldName,
   }
 
   for (uint32_t I = 0; I < ExpectedNumReturns; ++I) {
-    WASMType ExpectedType = ExpectedFuncType.ReturnTypes[I];
+    WASMType ExpectedType = ExpectedFuncType.getReturnTypes()[I];
     WASMType ActualType = ActualFuncType[I + ActualNumParams];
     if (ExpectedType != ActualType) {
       std::string DetailErrMsg = "return type mismatch (expected ";
@@ -434,7 +434,17 @@ void ModuleLoader::loadTypeSection() {
     }
 
     uint32_t NumReturns = readU32();
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    WASMType *ReturnTypes = nullptr;
+    if (NumReturns > 2) {
+      // Allocate dynamic array for more than 2 return types
+      ReturnTypes = Entry->ReturnTypesPtr = Mod.initParamTypes(NumReturns);
+    } else {
+      ReturnTypes = Entry->ReturnTypesVec;
+    }
+#else
     WASMType *ReturnTypes = Entry->ReturnTypes;
+#endif
     if (NumReturns > PresetMaxNumReturns) {
       throw getError(ErrorCode::TooManyReturns);
     }

@@ -126,9 +126,20 @@ private:
 struct TypeEntry final {
   uint16_t NumParams;
   uint16_t NumParamCells;
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  // Multi-value support: allow more return values
+  uint8_t NumReturns;
+  uint8_t NumReturnCells;
+  // Dynamic array for return types when multi-value is enabled
+  union {
+    WASMType *ReturnTypesPtr;
+    WASMType ReturnTypesVec[2]; // Inline storage for small number of returns
+  };
+#else
   uint8_t NumReturns : 2;
   uint8_t NumReturnCells : 6;
   WASMType ReturnTypes[2];
+#endif
   union {
     WASMType *ParamTypes;
     WASMType ParamTypesVec[__WORDSIZE / 8];
@@ -142,9 +153,29 @@ struct TypeEntry final {
     return ParamTypesVec;
   }
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  const WASMType *getReturnTypes() const {
+    if (NumReturns <= 2) {
+      return ReturnTypesVec;
+    }
+    return ReturnTypesPtr;
+  }
+#else
+  const WASMType *getReturnTypes() const { return ReturnTypes; }
+#endif
+
   WASMType getReturnType() const {
+    // When multi-value is enabled, functions may have multiple return values.
+    // This method returns the first return type (or VOID if none).
+    // The assertion only applies when multi-value is disabled.
+#ifndef ZEN_ENABLE_WASI_MULTI_VALUE
     ZEN_ASSERT(NumReturns <= 1);
+#endif
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    return NumReturns > 0 ? getReturnTypes()[0] : WASMType::VOID;
+#else
     return NumReturns > 0 ? ReturnTypes[0] : WASMType::VOID;
+#endif
   }
 
   static bool isEqual(TypeEntry *Type1, TypeEntry *Type2);

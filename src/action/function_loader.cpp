@@ -20,7 +20,7 @@ bool FunctionLoader::ControlBlockType::isBalanced() const {
   uint32_t NumParamTypes = Type->NumParams;
   uint32_t NumReturnTypes = Type->NumReturns;
   const WASMType *ParamTypes = Type->getParamTypes();
-  const WASMType *ReturnTypes = Type->ReturnTypes;
+  const WASMType *ReturnTypes = Type->getReturnTypes();
   return NumParamTypes == NumReturnTypes &&
          std::memcmp(ParamTypes, ReturnTypes,
                      NumParamTypes * sizeof(WASMType)) == 0;
@@ -48,7 +48,7 @@ FunctionLoader::ControlBlockType::getReturnTypes() const {
   const TypeEntry *Type = std::get<const TypeEntry *>(TypeVariant);
   return {
       static_cast<uint32_t>(Type->NumReturns),
-      Type->ReturnTypes,
+      Type->getReturnTypes(),
   };
 }
 
@@ -287,8 +287,24 @@ void FunctionLoader::load() {
       [[fallthrough]];
     case BLOCK:
     case LOOP: {
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+      int32_t BlockTypeOrIndex = readBlockType();
+      ControlBlockType BlockType;
+      if (BlockTypeOrIndex >= 0) {
+        // Simple type (VOID, I32, I64, F32, F64)
+        BlockType = static_cast<WASMType>(BlockTypeOrIndex);
+      } else {
+        // Type index (multi-value)
+        uint32_t TypeIndex = static_cast<uint32_t>(-BlockTypeOrIndex - 1);
+        if (!Mod.isValidType(TypeIndex)) {
+          throw getError(ErrorCode::UnknownTypeIdx);
+        }
+        BlockType = Mod.getDeclaredType(TypeIndex);
+      }
+#else
       WASMType Type = readBlockType();
       ControlBlockType BlockType = Type;
+#endif
       auto BlockLabelTy = static_cast<LabelType>(LABEL_BLOCK + Opcode - BLOCK);
       pushBlock(BlockLabelTy, BlockType, Ptr);
 
@@ -782,7 +798,7 @@ void FunctionLoader::load() {
     case RETURN: {
       int32_t NumReturns = static_cast<int32_t>(FuncTypeEntry.NumReturns);
       for (int32_t I = NumReturns - 1; I >= 0; --I) {
-        popValueType(FuncTypeEntry.ReturnTypes[I]);
+        popValueType(FuncTypeEntry.getReturnTypes()[I]);
       }
       resetStack();
       setStackPolymorphic(true);
@@ -801,7 +817,7 @@ void FunctionLoader::load() {
         popValueType(ParamTypes[I - 1]);
       }
       for (uint32_t I = 0; I < CalleeFuncType->NumReturns; ++I) {
-        pushValueType(CalleeFuncType->ReturnTypes[I]);
+        pushValueType(CalleeFuncType->getReturnTypes()[I]);
       }
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
       if (!CalleeIdxBitset[CalleeIdx]) {
@@ -836,7 +852,7 @@ void FunctionLoader::load() {
       }
 
       for (uint32_t I = 0; I < CalleeFuncType->NumReturns; ++I) {
-        pushValueType(CalleeFuncType->ReturnTypes[I]);
+        pushValueType(CalleeFuncType->getReturnTypes()[I]);
       }
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
       const auto &LikelyCalleeIdxs = Mod.TypedFuncRefs[TypeIdx];

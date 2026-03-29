@@ -117,6 +117,7 @@ public:
     return getKind() >= OK_BaseIndexScale1 && getKind() <= OK_BaseIndexScale8;
   }
   bool isTempReg() const { return (OpKind & FLAG_TEMP_REG); }
+  uint8_t getRawOpKind() const { return OpKind; }
   bool isTempMem() const { return (OpKind & FLAG_TEMP_MEM); }
 
   template <X64::Type Ty>

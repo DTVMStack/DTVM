@@ -26,6 +26,14 @@ class FunctionLoader final : public LoaderCommon {
       return *this;
     }
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    // Check if this block type is a type index (multi-value)
+    bool isTypeIndex() const {
+      return TypeVariant.index() == 1 &&
+             std::holds_alternative<const TypeEntry *>(TypeVariant);
+    }
+#endif
+
     // Means the block has the same popped types and pushed types
     bool isBalanced() const;
 

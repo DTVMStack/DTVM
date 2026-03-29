@@ -117,8 +117,14 @@ constexpr size_t PresetMaxSectionSize = 512 * 1024 * 1024; // 512MB
 constexpr size_t PresetMaxNameLength = UINT16_MAX;
 constexpr size_t PresetMaxNumParams = UINT16_MAX;     // uint16_t
 constexpr size_t PresetMaxNumParamCells = UINT16_MAX; // uint16_t
+// Multi-value support: allow multiple return values (WASI extension)
+// MVP limit: PresetMaxNumReturns = 1
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+constexpr size_t PresetMaxNumReturns = UINT8_MAX; // uint8_t: 8 bits
+#else
 // At most one return value in MVP
-constexpr size_t PresetMaxNumReturns = 1;                 // uint8_t: 2 bits
+constexpr size_t PresetMaxNumReturns = 1; // uint8_t: 2 bits
+#endif
 constexpr size_t PresetMaxNumReturnCells = (1u << 6) - 1; // uint8_t: 6 bits
 
 constexpr size_t PresetMaxMemoryPages = 1u << 16;                // 65536 pages

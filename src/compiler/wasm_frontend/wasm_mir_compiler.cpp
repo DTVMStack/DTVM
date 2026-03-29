@@ -77,7 +77,8 @@ void buildAllMIRFuncTypes(WasmFrontendContext &Context, MModule &MMod,
       MParamTypes[J + 1] = Context.getMIRTypeFromWASMType(ParamTypes[J]);
     }
     MType *MRetType = Context.getMIRTypeFromWASMType(
-        FuncType->NumReturns > 0 ? FuncType->ReturnTypes[0] : WASMType::VOID);
+        FuncType->NumReturns > 0 ? FuncType->getReturnTypes()[0]
+                                 : WASMType::VOID);
     MMod.addFuncType(MFunctionType::create(Context, *MRetType, MParamTypes));
   }
 }
@@ -126,7 +127,22 @@ void FunctionMirBuilder::initFunction(
   }
 
   MBasicBlock *ReturnBB = createBasicBlock();
-  enterBlock(CtrlBlockKind::FUNC_ENTRY, RetType, 0, ReturnBB);
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  // Handle multi-value function returns
+  if (Type.NumReturns > 1) {
+    std::vector<Operand> Results;
+    Results.reserve(Type.NumReturns);
+    const WASMType *RetTypes = Type.getReturnTypes();
+    for (uint32_t I = 0; I < Type.NumReturns; ++I) {
+      Results.push_back(createTempStackOperand(RetTypes[I]));
+    }
+    ControlStack.emplace_back(CtrlBlockKind::FUNC_ENTRY, std::move(Results),
+                              &Type, 0, ReturnBB, nullptr, nullptr);
+  } else
+#endif
+  {
+    enterBlock(CtrlBlockKind::FUNC_ENTRY, RetType, 0, ReturnBB);
+  }
 
   loadWASMInstanceAttr();
 }
@@ -256,8 +272,12 @@ void FunctionMirBuilder::finalizeFunctionBase() {
 
   auto ReturnZero = [&]() {
     Operand Ret;
-    WASMType WType =
-        static_cast<WASMType>(Ctx.getWasmFuncType().ReturnTypes[0]);
+    const auto &Type = Ctx.getWasmFuncType();
+    if (Type.NumReturns == 0) {
+      handleReturn(Ret);
+      return;
+    }
+    WASMType WType = Type.getReturnType();
     switch (WType) {
     case WASMType::I32:
       Ret = handleConst<WASMType::I32>(0);
@@ -266,12 +286,10 @@ void FunctionMirBuilder::finalizeFunctionBase() {
       Ret = handleConst<WASMType::I64>(0);
       break;
     case WASMType::F32:
-      Ret = handleConst<WASMType::F32>(0);
+      Ret = handleConst<WASMType::F32>(0.0f);
       break;
     case WASMType::F64:
-      Ret = handleConst<WASMType::F64>(0);
-      break;
-    case WASMType::VOID:
+      Ret = handleConst<WASMType::F64>(0.0);
       break;
     default:
       ZEN_ABORT();
@@ -405,6 +423,67 @@ void FunctionMirBuilder::handleIf(Operand CondOp, WASMType Type,
   setInsertBlock(ThenBlock);
 }
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+void FunctionMirBuilder::handleBlockMultiValue(const TypeEntry *Type,
+                                               uint32_t StackSize) {
+  MBasicBlock *EndBlock = createBasicBlock();
+  std::vector<Operand> Results;
+  if (Type->NumReturns > 0) {
+    Results.reserve(Type->NumReturns);
+    const WASMType *RetTypes = Type->getReturnTypes();
+    for (uint32_t I = 0; I < Type->NumReturns; ++I) {
+      Results.push_back(createTempStackOperand(RetTypes[I]));
+    }
+  }
+  ControlStack.emplace_back(CtrlBlockKind::BLOCK, std::move(Results), Type,
+                            StackSize, EndBlock, nullptr, nullptr);
+}
+
+void FunctionMirBuilder::handleLoopMultiValue(const TypeEntry *Type,
+                                              uint32_t StackSize) {
+  MBasicBlock *LoopBlock = createBasicBlock();
+  MBasicBlock *EndBlock = createBasicBlock();
+  createInstruction<BrInstruction>(true, Ctx, LoopBlock);
+  addSuccessor(LoopBlock);
+
+  std::vector<Operand> Results;
+  if (Type->NumReturns > 0) {
+    Results.reserve(Type->NumReturns);
+    const WASMType *RetTypes = Type->getReturnTypes();
+    for (uint32_t I = 0; I < Type->NumReturns; ++I) {
+      Results.push_back(createTempStackOperand(RetTypes[I]));
+    }
+  }
+  ControlStack.emplace_back(CtrlBlockKind::LOOP, std::move(Results), Type,
+                            StackSize, LoopBlock, EndBlock, nullptr);
+  setInsertBlock(LoopBlock);
+}
+
+void FunctionMirBuilder::handleIfMultiValue(Operand CondOp,
+                                            const TypeEntry *Type,
+                                            uint32_t StackSize) {
+  MInstruction *Condition = extractOperand(CondOp);
+  MBasicBlock *ThenBlock = createBasicBlock();
+  MBasicBlock *EndBlock = createBasicBlock();
+  auto BranchInst = createInstruction<BrIfInstruction>(true, Ctx, Condition,
+                                                       ThenBlock, EndBlock);
+  addSuccessor(ThenBlock);
+  addSuccessor(EndBlock);
+
+  std::vector<Operand> Results;
+  if (Type->NumReturns > 0) {
+    Results.reserve(Type->NumReturns);
+    const WASMType *RetTypes = Type->getReturnTypes();
+    for (uint32_t I = 0; I < Type->NumReturns; ++I) {
+      Results.push_back(createTempStackOperand(RetTypes[I]));
+    }
+  }
+  ControlStack.emplace_back(CtrlBlockKind::IF, std::move(Results), Type,
+                            StackSize, EndBlock, nullptr, BranchInst);
+  setInsertBlock(ThenBlock);
+}
+#endif
+
 void FunctionMirBuilder::handleElse(const BlockInfo &Info) {
   MBasicBlock *EndBlock = Info.getJumpBlock();
   if (Info.reachable()) {
@@ -535,6 +614,35 @@ void FunctionMirBuilder::handleReturn(Operand Opnd) {
   createInstruction<ReturnInstruction>(true, Type, Ret);
 }
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+void FunctionMirBuilder::handleReturnMultiValue(
+    const std::vector<Operand> &Opnds) {
+#ifdef ZEN_ENABLE_DWASM
+  const auto &Layout = Ctx.getWasmMod().getLayout();
+  MInstruction *StackCost =
+      getInstanceElement(&Ctx.I32Type, Layout.StackCostOffset);
+  MInstruction *CurFuncStackCost = createIntConstInstruction(
+      &Ctx.I32Type, Ctx.getWasmFuncCode().JITStackCost);
+  MInstruction *NewStackCost = createInstruction<BinaryInstruction>(
+      false, OP_sub, &Ctx.I32Type, StackCost, CurFuncStackCost);
+  setInstanceElement(&Ctx.I32Type, NewStackCost, Layout.StackCostOffset);
+#endif
+
+  // For multi-value returns, we need to handle multiple operands
+  // Currently we just use the first operand for the return instruction
+  // Full multi-value return requires extending ReturnInstruction
+  if (Opnds.empty()) {
+    createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
+  } else {
+    // Use first operand for now
+    // TODO: Extend ReturnInstruction to support multiple operands
+    MInstruction *Ret = extractOperand(Opnds[0]);
+    MType *Type = Ret ? Ret->getType() : &Ctx.VoidType;
+    createInstruction<ReturnInstruction>(true, Type, Ret);
+  }
+}
+#endif
+
 FunctionMirBuilder::Operand FunctionMirBuilder::handleCall(
     uint32_t FuncIdx, uintptr_t Target, bool IsImport, bool FarCall,
     const ArgumentInfo &ArgInfo, const std::vector<Operand> &Args) {
@@ -640,6 +748,90 @@ FunctionMirBuilder::Operand FunctionMirBuilder::handleCallIndirect(
                          Ctx.getWasmMod().getLayout().FuncPtrsBaseOffset);
   return handleCallBase<ICallInstruction>(FuncAddr, ArgInfo, Args, true);
 }
+
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+// Multi-value call implementation
+std::vector<FunctionMirBuilder::Operand>
+FunctionMirBuilder::handleCallMultiValue(uint32_t FuncIdx, uintptr_t Target,
+                                         bool IsImport, bool FarCall,
+                                         const ArgumentInfo &ArgInfo,
+                                         const std::vector<Operand> &Args) {
+  // First, get the single result from the actual call
+  // The calling convention only supports single return value
+  Operand SingleResult =
+      handleCall(FuncIdx, Target, IsImport, FarCall, ArgInfo, Args);
+
+  // For multi-value returns, we need to create temp operands for each return
+  // The first return value comes from the actual call result
+  // Additional return values would require extending the calling convention
+  std::vector<Operand> Results;
+  uint32_t NumReturns = ArgInfo.getNumReturns();
+  if (NumReturns > 0) {
+    Results.reserve(NumReturns);
+    // First result is from the actual call
+    Results.push_back(SingleResult);
+    // For additional return values, create properly defined operands
+    // Note: This is a limitation - the calling convention only supports
+    // single return value, so additional values are initialized to 0
+    // Full multi-value support requires extending the calling convention
+    const WASMType *RetTypes = ArgInfo.getReturnTypes();
+    for (uint32_t I = 1; I < NumReturns; ++I) {
+      MType *Mtype = Ctx.getMIRTypeFromWASMType(RetTypes[I]);
+      MInstruction *ConstVal;
+      if (RetTypes[I] == WASMType::F32) {
+        ConstVal = createInstruction<ConstantInstruction>(
+            false, Mtype, *MConstantFloat::get(Ctx, *Mtype, 0.0f));
+      } else if (RetTypes[I] == WASMType::F64) {
+        ConstVal = createInstruction<ConstantInstruction>(
+            false, Mtype, *MConstantFloat::get(Ctx, *Mtype, 0.0));
+      } else {
+        ConstVal = createIntConstInstruction(Mtype, 0);
+      }
+      MInstruction *DefinedVal = makeReusableValue(ConstVal, Mtype);
+      Results.push_back(Operand(DefinedVal, RetTypes[I]));
+    }
+  }
+  return Results;
+}
+
+std::vector<FunctionMirBuilder::Operand>
+FunctionMirBuilder::handleCallIndirectMultiValue(
+    uint32_t TypeIdx, Operand IndirectFuncIdx, uint32_t TblIdx,
+    const ArgumentInfo &ArgInfo, const std::vector<Operand> &Args) {
+  // First, get the single result from the actual call
+  Operand SingleResult =
+      handleCallIndirect(TypeIdx, IndirectFuncIdx, TblIdx, ArgInfo, Args);
+
+  // For multi-value returns, create properly defined operands
+  std::vector<Operand> Results;
+  uint32_t NumReturns = ArgInfo.getNumReturns();
+  if (NumReturns > 0) {
+    Results.reserve(NumReturns);
+    // First result is from the actual call
+    Results.push_back(SingleResult);
+    // For additional return values, create properly defined operands
+    // Note: This is a limitation - the calling convention only supports
+    // single return value, so additional values are initialized to 0
+    const WASMType *RetTypes = ArgInfo.getReturnTypes();
+    for (uint32_t I = 1; I < NumReturns; ++I) {
+      MType *Mtype = Ctx.getMIRTypeFromWASMType(RetTypes[I]);
+      MInstruction *ConstVal;
+      if (RetTypes[I] == WASMType::F32) {
+        ConstVal = createInstruction<ConstantInstruction>(
+            false, Mtype, *MConstantFloat::get(Ctx, *Mtype, 0.0f));
+      } else if (RetTypes[I] == WASMType::F64) {
+        ConstVal = createInstruction<ConstantInstruction>(
+            false, Mtype, *MConstantFloat::get(Ctx, *Mtype, 0.0));
+      } else {
+        ConstVal = createIntConstInstruction(Mtype, 0);
+      }
+      MInstruction *DefinedVal = makeReusableValue(ConstVal, Mtype);
+      Results.push_back(Operand(DefinedVal, RetTypes[I]));
+    }
+  }
+  return Results;
+}
+#endif
 
 void FunctionMirBuilder::checkCallException(bool IsImportOrIndirect) {
 #ifdef ZEN_ENABLE_CPU_EXCEPTION

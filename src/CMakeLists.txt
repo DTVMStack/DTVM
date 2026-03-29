@@ -41,6 +41,10 @@ if(ZEN_ENABLE_DWASM)
   add_definitions(-DZEN_ENABLE_DWASM)
 endif()
 
+if(ZEN_ENABLE_WASI_MULTI_VALUE)
+  add_definitions(-DZEN_ENABLE_WASI_MULTI_VALUE)
+endif()
+
 if(ZEN_ENABLE_VIRTUAL_STACK)
   add_definitions(-DZEN_ENABLE_VIRTUAL_STACK)
 endif()

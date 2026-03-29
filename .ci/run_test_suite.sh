@@ -93,6 +93,11 @@ case $CPU_EXCEPTION_TYPE in
         ;;
 esac
 
+# Multi-value support
+if [ "${ENABLE_MULTI_VALUE:-false}" = true ]; then
+    CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_WASI_MULTI_VALUE=ON"
+fi
+
 STACK_TYPES=("-DZEN_ENABLE_VIRTUAL_STACK=ON" "-DZEN_ENABLE_VIRTUAL_STACK=OFF")
 if [[ $RUN_MODE == "interpreter" ]]; then
     STACK_TYPES=("-DZEN_ENABLE_VIRTUAL_STACK=OFF")

@@ -178,7 +178,7 @@ public:
 
   WASMType getReturnType(uint32_t Index) {
     ZEN_ASSERT(Index < getNumReturns());
-    return static_cast<WASMType>(Ctx->FuncType->ReturnTypes[Index]);
+    return static_cast<WASMType>(Ctx->FuncType->getReturnTypes()[Index]);
   }
 
   uint32_t getIntPresSavedCount() const {

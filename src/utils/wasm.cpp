@@ -36,7 +36,8 @@ const uint8_t *skipCurrentBlock(const uint8_t *Ip, const uint8_t *End) {
     case LOOP:
     case IF:
       ++NestedLevel;
-      ++Ip; // skip value_type
+      // Skip blocktype: can be value type (1 byte) or type index (s33 LEB128)
+      Ip = skipLEBNumber<int32_t>(Ip, End);
       break;
 
     case ELSE:

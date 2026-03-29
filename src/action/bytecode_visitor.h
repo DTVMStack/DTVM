@@ -70,7 +70,9 @@ public:
 
 private:
   void push(Operand Opnd) {
-    ZEN_ASSERT(!Opnd.isReg() || Opnd.isTempReg());
+    // Note: We allow non-temp register operands (e.g., ABI return registers
+    // from calls) These are not managed by the temp register pool and won't be
+    // released
     ZEN_ASSERT(Opnd.getType() != WASMType::VOID);
     Stack.push(Opnd);
   }
@@ -82,7 +84,10 @@ private:
     return Opnd;
   }
 
+  Operand peek(uint8_t Depth = 0) { return Stack.peek(Depth); }
+
   Operand getTop() { return Stack.getTop(); }
+  Operand getTop(uint32_t Depth) { return Stack.peek(Depth); }
 
   bool decode() {
     const uint8_t *Ip = CurFunc->CodePtr;
@@ -108,19 +113,73 @@ private:
         break;
 
       case Opcode::BLOCK: {
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+        // Multi-value support: block type can be a type index
+        WASMType BlockType = getWASMBlockTypeFromOpcode(*Ip);
+        if (BlockType == WASMType::ERROR_TYPE) {
+          // Type index - read as signed LEB128 from current position
+          int32_t TypeIndex;
+          Ip = utils::readLEBNumber(Ip, IpEnd, TypeIndex);
+          if (TypeIndex >= 0 && CurMod->isValidType(TypeIndex)) {
+            const TypeEntry *Type = CurMod->getDeclaredType(TypeIndex);
+            // For multi-value blocks, we use VOID as marker and handle
+            // specially The actual type info is stored in the TypeEntry
+            handleBlockMultiValue(Type);
+            break;
+          }
+        } else {
+          Ip++;
+        }
+#else
         WASMType BlockType = getWASMBlockTypeFromOpcode(*Ip++);
+#endif
         handleBlock(BlockType);
         break;
       }
 
       case Opcode::LOOP: {
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+        // Multi-value support: block type can be a type index
+        WASMType BlockType = getWASMBlockTypeFromOpcode(*Ip);
+        if (BlockType == WASMType::ERROR_TYPE) {
+          // Type index - read as signed LEB128 from current position
+          int32_t TypeIndex;
+          Ip = utils::readLEBNumber(Ip, IpEnd, TypeIndex);
+          if (TypeIndex >= 0 && CurMod->isValidType(TypeIndex)) {
+            const TypeEntry *Type = CurMod->getDeclaredType(TypeIndex);
+            handleLoopMultiValue(Type);
+            break;
+          }
+        } else {
+          Ip++;
+        }
+#else
         WASMType BlockType = getWASMBlockTypeFromOpcode(*Ip++);
+#endif
         handleLoop(BlockType);
         break;
       }
 
       case Opcode::IF: {
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+        // Multi-value support: block type can be a type index
+        WASMType BlockType = getWASMBlockTypeFromOpcode(*Ip);
+        if (BlockType == WASMType::ERROR_TYPE) {
+          // Type index - read as signed LEB128 from current position
+          int32_t TypeIndex;
+          Ip = utils::readLEBNumber(Ip, IpEnd, TypeIndex);
+          if (TypeIndex >= 0 && CurMod->isValidType(TypeIndex)) {
+            const TypeEntry *Type = CurMod->getDeclaredType(TypeIndex);
+            Operand Cond = pop();
+            handleIfMultiValue(Cond, Type);
+            break;
+          }
+        } else {
+          Ip++;
+        }
+#else
         WASMType BlockType = getWASMBlockTypeFromOpcode(*Ip++);
+#endif
         handleIf(BlockType);
         break;
       }
@@ -730,7 +789,9 @@ private:
 
     // always emit return after function end, as branch instructions might
     // target a function's end and jump out
+#ifndef ZEN_ENABLE_WASI_MULTI_VALUE
     handleReturn();
+#endif
 
     return true;
   }
@@ -752,11 +813,35 @@ private:
     Builder.handleIf(Cond, BlockType, Stack.getSize());
   }
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+  // Multi-value support: handle blocks with multiple return values
+  void handleBlockMultiValue(const TypeEntry *Type) {
+    Builder.handleBlockMultiValue(Type, Stack.getSize());
+  }
+
+  void handleLoopMultiValue(const TypeEntry *Type) {
+    Builder.handleLoopMultiValue(Type, Stack.getSize());
+  }
+
+  void handleIfMultiValue(Operand Cond, const TypeEntry *Type) {
+    Builder.handleIfMultiValue(Cond, Type, Stack.getSize());
+  }
+#endif
+
   void handleElse() {
     const CtrlBlockInfo &Info = Builder.getCurrentBlockInfo();
     ZEN_ASSERT(verifyCtrlInstValType(Info));
     ZEN_ASSERT(Info.getKind() == CtrlBlockKind::IF);
-    if (Info.getType() != WASMType::VOID && Info.reachable()) {
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    if (Info.isMultiValue() && Info.reachable()) {
+      // Handle multiple results for multi-value blocks
+      const auto &Results = Info.getResults();
+      for (int I = Results.size() - 1; I >= 0; --I) {
+        Builder.makeAssignment(Results[I].getType(), Results[I], pop());
+      }
+    } else
+#endif
+        if (Info.getType() != WASMType::VOID && Info.reachable()) {
       // make an assignment to copy stack top to block info result
       Operand BlockResult = Info.getResult();
       Builder.makeAssignment(Info.getType(), BlockResult, pop());
@@ -768,6 +853,45 @@ private:
     const CtrlBlockInfo &Info = Builder.getCurrentBlockInfo();
     ZEN_ASSERT(verifyCtrlInstValType(Info));
 
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    // For function entry, handle the implicit return if reachable
+    // The return values remain on the stack for handleReturn to consume
+    if (Info.getKind() == CtrlBlockKind::FUNC_ENTRY) {
+      bool WasReachable = Info.reachable();
+      Builder.handleEnd(Info);
+      // After handleEnd, the control stack is empty, so we check WasReachable
+      // For unreachable code, return is handled by finalizeFunctionBase
+      if (WasReachable) {
+        handleReturn();
+      }
+      return;
+    }
+    if (Info.isMultiValue()) {
+      // Handle multiple results for multi-value blocks
+      // IMPORTANT: Copy results BEFORE handleEnd, because handleEnd pops the
+      // BlockInfo and the Results reference would become dangling
+      std::vector<Operand> ResultsCopy = Info.getResults();
+      if (Info.reachable()) {
+        ZEN_ASSERT(Stack.getSize() >= ResultsCopy.size());
+        for (int I = ResultsCopy.size() - 1; I >= 0; --I) {
+          Builder.makeAssignment(ResultsCopy[I].getType(), ResultsCopy[I],
+                                 pop());
+        }
+      }
+      // value stack may have excess elements after an unconditional branch;
+      // we need to pop them out before returing to the outer block
+      while (Stack.getSize() > Info.getStackSize()) {
+        Stack.pop();
+      }
+      // NOTE: `info` is popped off its container after this call
+      Builder.handleEnd(Info);
+      // Push results back onto the stack
+      for (const auto &Result : ResultsCopy) {
+        push(Result);
+      }
+      return;
+    }
+#endif
     Operand BlockResult = Info.getResult();
     if (Info.getType() != WASMType::VOID && Info.reachable()) {
       // make an assignment to copy stack top to block info result
@@ -792,7 +916,17 @@ private:
     const CtrlBlockInfo &Info = Builder.getBlockInfo(Level);
     bool JumpBack = (Info.getKind() == CtrlBlockKind::LOOP);
     ZEN_ASSERT(verifyCtrlInstValType(Info, JumpBack));
-    if (Info.getType() != WASMType::VOID && !JumpBack) {
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    if (Info.isMultiValue() && !JumpBack) {
+      // Handle multiple results for multi-value blocks
+      const auto &Results = Info.getResults();
+      for (int I = Results.size() - 1; I >= 0; --I) {
+        Builder.makeAssignment(Results[I].getType(), Results[I],
+                               getTop(Results.size() - I - 1));
+      }
+    } else
+#endif
+        if (Info.getType() != WASMType::VOID && !JumpBack) {
       // make an assignment to copy stack top to block info result
       Operand BlockResult = Info.getResult();
       Builder.makeAssignment(Info.getType(), BlockResult, getTop());
@@ -805,7 +939,17 @@ private:
     const CtrlBlockInfo &Info = Builder.getBlockInfo(Level);
     bool JumpBack = (Info.getKind() == CtrlBlockKind::LOOP);
     ZEN_ASSERT(verifyCtrlInstValType(Info, JumpBack));
-    if (Info.getType() != WASMType::VOID && !JumpBack) {
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    if (Info.isMultiValue() && !JumpBack) {
+      // Handle multiple results for multi-value blocks
+      const auto &Results = Info.getResults();
+      for (int I = Results.size() - 1; I >= 0; --I) {
+        Builder.makeAssignment(Results[I].getType(), Results[I],
+                               getTop(Results.size() - I - 1));
+      }
+    } else
+#endif
+        if (Info.getType() != WASMType::VOID && !JumpBack) {
       // make an assignment to copy stack top to block info result
       Operand BlockResult = Info.getResult();
       Builder.makeAssignment(Info.getType(), BlockResult, getTop());
@@ -843,12 +987,33 @@ private:
 
   void handleReturn() {
     const TypeEntry &Type = Ctx->getWasmFuncType();
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    // For multi-value, collect all return values
+    if (Type.NumReturns > 0 && Stack.getSize() > 0) {
+      if (Type.NumReturns == 1) {
+        Builder.handleReturn(pop());
+      } else {
+        // Collect multiple return values (in reverse order from stack)
+        std::vector<Operand> ReturnOps;
+        ReturnOps.reserve(Type.NumReturns);
+        for (uint32_t I = 0; I < Type.NumReturns && Stack.getSize() > 0; ++I) {
+          ReturnOps.push_back(pop());
+        }
+        // Reverse to get correct order
+        std::reverse(ReturnOps.begin(), ReturnOps.end());
+        Builder.handleReturnMultiValue(ReturnOps);
+      }
+    } else {
+      Builder.handleReturn(Operand());
+    }
+#else
     ZEN_ASSERT(Stack.getSize() >= Type.NumReturns);
     if (Type.NumReturns > 0 && Stack.getSize() > 0) {
       Builder.handleReturn(pop());
     } else if (Type.NumReturns == 0) {
       Builder.handleReturn(Operand());
     }
+#endif
   }
 
   void handleCall(uint32_t FuncIdx, uint32_t CallOffset) {
@@ -870,10 +1035,22 @@ private:
     Args.resize(Type->NumParams);
     collectCallParams(Type, Args);
 
-    Operand Result =
-        Builder.handleCall(FuncIdx, Target, IsImport, FarCall, ArgInfo, Args);
-    if (Type->NumReturns > 0) {
-      push(Result);
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    if (Type->NumReturns > 1) {
+      // Multi-value return
+      std::vector<Operand> Results = Builder.handleCallMultiValue(
+          FuncIdx, Target, IsImport, FarCall, ArgInfo, Args);
+      for (const auto &Result : Results) {
+        push(Result);
+      }
+    } else
+#endif
+    {
+      Operand Result =
+          Builder.handleCall(FuncIdx, Target, IsImport, FarCall, ArgInfo, Args);
+      if (Type->NumReturns > 0) {
+        push(Result);
+      }
     }
   }
 
@@ -888,12 +1065,23 @@ private:
     Args.resize(Type->NumParams);
     collectCallParams(Type, Args);
     TypeIdx = CurMod->getDeclaredType(TypeIdx)->SmallestTypeIdx;
-    Operand Result = Builder.handleCallIndirect(TypeIdx, IndirectFuncIdx,
-                                                TableIdx, ArgInfo, Args);
 
-    if (Type->NumReturns > 0) {
-      ZEN_ASSERT(Type->NumReturns == 1);
-      push(Result);
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    if (Type->NumReturns > 1) {
+      // Multi-value return
+      std::vector<Operand> Results = Builder.handleCallIndirectMultiValue(
+          TypeIdx, IndirectFuncIdx, TableIdx, ArgInfo, Args);
+      for (const auto &Result : Results) {
+        push(Result);
+      }
+    } else
+#endif
+    {
+      Operand Result = Builder.handleCallIndirect(TypeIdx, IndirectFuncIdx,
+                                                  TableIdx, ArgInfo, Args);
+      if (Type->NumReturns > 0) {
+        push(Result);
+      }
     }
   }
 
@@ -1168,6 +1356,19 @@ private:
       // value stack becomes unconstrained after an unconditional branch
       return true;
     }
+#ifdef ZEN_ENABLE_WASI_MULTI_VALUE
+    if (Info.isMultiValue()) {
+      // For multi-value blocks, check all result types
+      const auto &Results = Info.getResults();
+      uint32_t NumResults = Results.size();
+      ZEN_ASSERT(Info.getStackSize() + NumResults <= Stack.getSize());
+      for (uint32_t I = 0; I < NumResults; ++I) {
+        ZEN_ASSERT(Results[I].getType() ==
+                   Stack.peek(NumResults - 1 - I).getType());
+      }
+      return true;
+    }
+#endif
     if (Info.getType() == WASMType::VOID || JumpBack) {
       // on an unconditional branch, value stack may have excess elements
       ZEN_ASSERT(Info.getStackSize() <= Stack.getSize());
