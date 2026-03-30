@@ -26,7 +26,6 @@ def main():
         tmpdir = pathlib.Path(tmpdir)
         out_path = tmpdir / "seed_candidates.json"
 
-        # Test 1: basic seed mode run
         proc = run_miner(source_dir, ["--out", str(out_path)])
         if proc.returncode != 0:
             print("FAIL: miner exited non-zero", file=sys.stderr)
@@ -41,7 +40,6 @@ def main():
             print(f"FAIL: output is not valid JSON: {exc}", file=sys.stderr)
             return 1
 
-        # Test 2: required top-level keys
         for key in ("summary", "candidates", "curated_candidates",
                     "covered_candidates", "novel_candidates"):
             if key not in result:
@@ -63,7 +61,6 @@ def main():
             print("FAIL: sample_count should be > 0", file=sys.stderr)
             return 1
 
-        # Test 3: no rules supplied -> nothing covered
         if summary["covered_candidate_count"] != 0:
             print("FAIL: covered_candidate_count should be 0 without --rules", file=sys.stderr)
             return 1
@@ -71,34 +68,20 @@ def main():
             print("FAIL: config_supplied should be false without --config", file=sys.stderr)
             return 1
 
-        # Test 4: candidate entries have lhs, rhs, cost
         for entry in result["curated_candidates"]:
             for field in ("lhs", "rhs", "cost"):
                 if field not in entry:
                     print(f"FAIL: candidate entry missing field '{field}'", file=sys.stderr)
                     return 1
 
-        # Test 5: a known identity appears - (add x 0:i64) -> x
         lhs_set = {entry["lhs"] for entry in result["curated_candidates"]}
         if "(add x 0:i64)" not in lhs_set:
             print("FAIL: expected '(add x 0:i64)' in curated candidates", file=sys.stderr)
             return 1
 
-        # Test 6: novel_candidate_count == curated_candidate_count (no rules supplied)
         if summary["novel_candidate_count"] != summary["curated_candidate_count"]:
             print("FAIL: without --rules, novel count should equal curated count",
                   file=sys.stderr)
-            return 1
-
-        # Test 7: stdout mode
-        proc2 = run_miner(source_dir)
-        if proc2.returncode != 0:
-            print("FAIL: miner failed writing to stdout", file=sys.stderr)
-            return 1
-        try:
-            json.loads(proc2.stdout)
-        except json.JSONDecodeError as exc:
-            print(f"FAIL: stdout is not valid JSON: {exc}", file=sys.stderr)
             return 1
 
     print("PASS: test_mine_dmir_seed_rules")

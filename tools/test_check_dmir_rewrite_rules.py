@@ -2,6 +2,7 @@
 # Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import copy
 import json
 import pathlib
 import subprocess
@@ -52,7 +53,6 @@ def main():
         print(f"Rules file not found: {rules_path}", file=sys.stderr)
         return 1
 
-    # Test 1: real rules with binary
     proc = run_checker(source_dir, rules_path, gtest_binary)
     if proc.returncode != 0:
         print("FAIL: checker failed on real dmir rules", file=sys.stderr)
@@ -62,18 +62,15 @@ def main():
         print("FAIL: expected success message not found", file=sys.stderr)
         return 1
 
-    # Test 2: real rules without binary
-    proc2 = run_checker(source_dir, rules_path, None)
-    if proc2.returncode != 0:
-        print("FAIL: checker failed on real dmir rules without binary", file=sys.stderr)
-        return 1
+    if gtest_binary:
+        proc2 = run_checker(source_dir, rules_path, None)
+        if proc2.returncode != 0:
+            print("FAIL: checker failed on real dmir rules without binary", file=sys.stderr)
+            return 1
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = pathlib.Path(tmpdir)
 
-        import copy
-
-        # Test 3: duplicate name -> exit 1
         dup_path = tmpdir / "dup.json"
         rule_a = copy.deepcopy(VALID_RULE_TEMPLATE)
         rule_b = copy.deepcopy(VALID_RULE_TEMPLATE)
@@ -87,7 +84,6 @@ def main():
             print("FAIL: expected 'duplicate' in error output", file=sys.stderr)
             return 1
 
-        # Test 4: invalid status -> exit 1
         bad_status = copy.deepcopy(VALID_RULE_TEMPLATE)
         bad_status["name"] = "bad-status-rule"
         bad_status["status"] = "unknown_status"
@@ -101,7 +97,6 @@ def main():
             print("FAIL: expected 'invalid status' in error output", file=sys.stderr)
             return 1
 
-        # Test 5: duplicate canonical lhs/rhs -> exit 1
         rule_c = copy.deepcopy(VALID_RULE_TEMPLATE)
         rule_c["name"] = "test-add-zero-commuted"
         # (add 0:i64 x) normalizes to same canonical key as (add x 0:i64) due to commutativity
@@ -116,7 +111,6 @@ def main():
             print("FAIL: expected 'duplicates canonical rewrite' in error output", file=sys.stderr)
             return 1
 
-        # Test 6: only interpreter_sample (no semantic mode) -> exit 1
         no_semantic = copy.deepcopy(VALID_RULE_TEMPLATE)
         no_semantic["name"] = "no-semantic-mode"
         no_semantic["validation"]["modes"] = ["interpreter_sample"]
@@ -130,7 +124,6 @@ def main():
             print("FAIL: expected 'interpreter_fuzz or smt' in error output", file=sys.stderr)
             return 1
 
-        # Test 7: missing gtest coverage entry with binary
         if gtest_binary:
             missing_cov = copy.deepcopy(VALID_RULE_TEMPLATE)
             missing_cov["name"] = "missing-coverage-rule"

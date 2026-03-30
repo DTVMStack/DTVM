@@ -37,7 +37,6 @@ def main():
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = pathlib.Path(tmpdir)
 
-        # Test 1: valid rules file produces output with exit code 0
         out_inc = tmpdir / "generated.inc"
         out_report = tmpdir / "report.txt"
         proc = run_generator(rules_path, out_inc, out_report, source_dir)
@@ -68,7 +67,6 @@ def main():
             print(report_text, file=sys.stderr)
             return 1
 
-        # Test 2: conflicting rules produce exit code 1 and a conflict report
         conflict_rules = {
             "version": 1,
             "rules": [

@@ -32,7 +32,6 @@ def main():
         tmpdir = pathlib.Path(tmpdir)
         out_path = tmpdir / "novel_candidates.json"
 
-        # Test 1: run with --rules
         proc = run_miner(source_dir, ["--rules", str(rules_path), "--out", str(out_path)])
         if proc.returncode != 0:
             print("FAIL: miner exited non-zero", file=sys.stderr)
@@ -46,45 +45,38 @@ def main():
 
         summary = result["summary"]
 
-        # Test 2: some candidates are covered by the real rules
         if summary["covered_candidate_count"] == 0:
             print("FAIL: expected some candidates covered by the real rules file",
                   file=sys.stderr)
             return 1
 
-        # Test 3: covered + novel == curated (partition is exhaustive)
         if (summary["covered_candidate_count"] + summary["novel_candidate_count"]
                 != summary["curated_candidate_count"]):
             print("FAIL: covered + novel != curated", file=sys.stderr)
             return 1
 
-        # Test 4: novel count is strictly less than curated count
         if summary["novel_candidate_count"] >= summary["curated_candidate_count"]:
             print("FAIL: novel_candidate_count should be < curated_candidate_count",
                   file=sys.stderr)
             return 1
 
-        # Test 5: a known rule identity is in covered_candidates
         covered_lhs_set = {entry["lhs"] for entry in result["covered_candidates"]}
         if "(add x 0:i64)" not in covered_lhs_set:
             print("FAIL: '(add x 0:i64)' should appear in covered_candidates", file=sys.stderr)
             return 1
 
-        # Test 6: each novel candidate has covered_by_rule_repo == false
         for entry in result["novel_candidates"]:
             if entry.get("covered_by_rule_repo") is not False:
                 print(f"FAIL: novel candidate '{entry.get('lhs')}' has wrong "
                       "covered_by_rule_repo", file=sys.stderr)
                 return 1
 
-        # Test 7: each covered candidate has covered_by_rule_repo == true
         for entry in result["covered_candidates"]:
             if entry.get("covered_by_rule_repo") is not True:
                 print(f"FAIL: covered candidate '{entry.get('lhs')}' has wrong "
                       "covered_by_rule_repo", file=sys.stderr)
                 return 1
 
-        # Test 8: combination of --rules + --config (bootstrap)
         if bootstrap_config.exists():
             out_path2 = tmpdir / "novel_bootstrap.json"
             proc2 = run_miner(source_dir, [

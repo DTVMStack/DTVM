@@ -1,6 +1,6 @@
+#!/usr/bin/env python3
 # Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
-#!/usr/bin/env python3
 """Test wrapper for update_compiler_pass_timing_budget.py.
 
 Called by CMakeLists.txt as:
@@ -15,11 +15,6 @@ import pathlib
 import subprocess
 import sys
 import tempfile
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 CASE_NAMES = [
     "add",
@@ -44,7 +39,6 @@ TOTAL_TIME_MS = 1.0
 PASS_TIME_MS = 0.002
 PASS_SHARE_PCT = 0.2
 
-
 def make_phase_stats(time_ms, share_pct):
     return {
         "mean": time_ms,
@@ -61,7 +55,6 @@ def make_phase_stats(time_ms, share_pct):
         },
     }
 
-
 def make_case_summary(total_time_ms, pass_name, pass_time_ms, pass_share_pct):
     return {
         "total_time_ms": {"mean": total_time_ms, "median": total_time_ms},
@@ -71,7 +64,6 @@ def make_case_summary(total_time_ms, pass_name, pass_time_ms, pass_share_pct):
         "runs": 1,
         "record_count": 1,
     }
-
 
 def build_synthetic_report(manifest_path):
     cases = []
@@ -98,12 +90,6 @@ def build_synthetic_report(manifest_path):
         "cases": cases,
         "overall": overall_summary,
     }
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 
 def main():
     if len(sys.argv) != 2:
@@ -262,7 +248,6 @@ def main():
 
     print("PASS: test_update_compiler_pass_timing_budget")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

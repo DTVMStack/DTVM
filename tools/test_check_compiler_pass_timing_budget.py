@@ -1,6 +1,6 @@
+#!/usr/bin/env python3
 # Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
-#!/usr/bin/env python3
 """Test wrapper for check_compiler_pass_timing_budget.py.
 
 Called by CMakeLists.txt as:
@@ -16,11 +16,6 @@ import pathlib
 import subprocess
 import sys
 import tempfile
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 BUDGET_FILES = [
     "tests/evm_asm/compiler_pass_timing_budget_x86_cg_peephole.json",
@@ -46,7 +41,6 @@ CASE_NAMES = [
     "bool_xor_not_chain",
 ]
 
-
 def make_phase_stats(time_ms, share_pct):
     """Return a phase stats dict well within any reasonable budget."""
     return {
@@ -64,7 +58,6 @@ def make_phase_stats(time_ms, share_pct):
         },
     }
 
-
 def make_case_summary(total_time_ms, pass_name, pass_time_ms, pass_share_pct):
     return {
         "total_time_ms": {"mean": total_time_ms, "median": total_time_ms},
@@ -74,7 +67,6 @@ def make_case_summary(total_time_ms, pass_name, pass_time_ms, pass_share_pct):
         "runs": 1,
         "record_count": 1,
     }
-
 
 def build_synthetic_report(pass_name, total_time_ms, pass_time_ms, pass_share_pct):
     """Build a manifest-style timing report that stays inside the budget."""
@@ -103,7 +95,6 @@ def build_synthetic_report(pass_name, total_time_ms, pass_time_ms, pass_share_pc
         "overall": overall_summary,
     }
 
-
 def run_checker(checker, budget_path, report_path):
     cmd = [
         sys.executable,
@@ -115,12 +106,6 @@ def run_checker(checker, budget_path, report_path):
         "--allow-missing-cases",
     ]
     return subprocess.run(cmd, capture_output=True, text=True, check=False)
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 
 def main():
     if len(sys.argv) != 2:
@@ -206,7 +191,6 @@ def main():
 
     print("PASS: test_check_compiler_pass_timing_budget")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

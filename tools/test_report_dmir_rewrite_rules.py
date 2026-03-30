@@ -36,7 +36,6 @@ def main():
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = pathlib.Path(tmpdir)
 
-        # Test 1: produces valid JSON output via --out
         out_path = tmpdir / "report.json"
         proc = run_reporter(source_dir, rules_path, gtest_binary, out_path)
         if proc.returncode != 0:
@@ -52,7 +51,6 @@ def main():
             print(f"FAIL: output is not valid JSON: {exc}", file=sys.stderr)
             return 1
 
-        # Test 2: required top-level keys
         for key in ("summary", "rules"):
             if key not in report:
                 print(f"FAIL: report missing top-level key '{key}'", file=sys.stderr)
@@ -68,7 +66,6 @@ def main():
             print("FAIL: summary.rule_count must be > 0", file=sys.stderr)
             return 1
 
-        # Test 3: per-rule entry structure and cost_delta fields
         cost_fields = ("dmir_inst", "select_depth", "adc_chain", "runtime_calls")
         for entry in report["rules"]:
             for field in ("name", "status", "inputs", "modes", "cost_delta",
@@ -81,13 +78,11 @@ def main():
                     print(f"FAIL: cost_delta missing field '{cost_field}'", file=sys.stderr)
                     return 1
 
-        # Test 4: with gtest binary, real rules have no missing coverage
         if gtest_binary and summary["rules_with_missing_coverage"] != 0:
             print("FAIL: real dmir rules have missing coverage according to gtest binary",
                   file=sys.stderr)
             return 1
 
-        # Test 5: without gtest binary, coverage entries are present=true
         out_path2 = tmpdir / "report_no_binary.json"
         proc2 = run_reporter(source_dir, rules_path, None, out_path2)
         if proc2.returncode != 0:
@@ -101,7 +96,6 @@ def main():
                           file=sys.stderr)
                     return 1
 
-        # Test 6: stdout mode
         proc3 = run_reporter(source_dir, rules_path, None, None)
         if proc3.returncode != 0:
             print("FAIL: reporter failed when writing to stdout", file=sys.stderr)

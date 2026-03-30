@@ -31,7 +31,6 @@ def main():
         print(f"Rules file not found: {rules_path}", file=sys.stderr)
         return 1
 
-    # Test 1: real rules file with gtest binary (if supplied)
     proc = run_checker(source_dir, rules_path, gtest_binary)
     if proc.returncode != 0:
         print("FAIL: checker failed on real rules file", file=sys.stderr)
@@ -42,17 +41,16 @@ def main():
         print(proc.stdout, file=sys.stderr)
         return 1
 
-    # Test 2: real rules file without gtest binary
-    proc2 = run_checker(source_dir, rules_path, None)
-    if proc2.returncode != 0:
-        print("FAIL: checker failed without gtest binary", file=sys.stderr)
-        print(proc2.stderr, file=sys.stderr)
-        return 1
+    if gtest_binary:
+        proc2 = run_checker(source_dir, rules_path, None)
+        if proc2.returncode != 0:
+            print("FAIL: checker failed without gtest binary", file=sys.stderr)
+            print(proc2.stderr, file=sys.stderr)
+            return 1
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = pathlib.Path(tmpdir)
 
-        # Test 3: rule missing validation metadata -> exit 1
         bad_rules = {
             "rules": [
                 {
@@ -75,7 +73,6 @@ def main():
             print(proc3.stderr, file=sys.stderr)
             return 1
 
-        # Test 4: instruction rule with only structural mode -> exit 1
         structural_only = {
             "rules": [
                 {

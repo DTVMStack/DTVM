@@ -1,6 +1,6 @@
+#!/usr/bin/env python3
 # Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
-#!/usr/bin/env python3
 """Test wrapper for collect_compiler_pass_timings.py.
 
 Called by CMakeLists.txt as:

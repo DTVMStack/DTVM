@@ -31,7 +31,6 @@ def main():
         tmpdir = pathlib.Path(tmpdir)
         out_path = tmpdir / "bootstrap_candidates.json"
 
-        # Test 1: run with bootstrap config
         proc = run_miner(source_dir, [
             "--config", str(bootstrap_config),
             "--out", str(out_path),
@@ -46,12 +45,10 @@ def main():
             print(f"FAIL: output is not valid JSON: {exc}", file=sys.stderr)
             return 1
 
-        # Test 2: config_supplied is true
         if result["summary"].get("config_supplied") is not True:
             print("FAIL: config_supplied should be true when --config is used", file=sys.stderr)
             return 1
 
-        # Test 3: structural validity
         for key in ("summary", "candidates", "curated_candidates",
                     "covered_candidates", "novel_candidates"):
             if key not in result:
@@ -64,7 +61,6 @@ def main():
                 print(f"FAIL: summary missing key '{key}'", file=sys.stderr)
                 return 1
 
-        # Test 4: bootstrap config adds mul terms, so more terms than default
         default_out = tmpdir / "default_candidates.json"
         proc2 = run_miner(source_dir, ["--out", str(default_out)])
         if proc2.returncode != 0:
@@ -76,7 +72,6 @@ def main():
                   file=sys.stderr)
             return 1
 
-        # Test 5: bootstrap-specific candidates exist (mul identities)
         lhs_set = {entry["lhs"] for entry in result["curated_candidates"]}
         bootstrap_expected = {"(mul x 0:i64)", "(mul x 1:i64)"}
         for expected_lhs in bootstrap_expected:
