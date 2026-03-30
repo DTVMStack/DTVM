@@ -721,7 +721,7 @@ jobs:
             --manifest tests/evm_asm/compiler_pass_timing_manifest.json \
             --runs 5 \
             --output /tmp/ci_timing_report.json \
-            -- --compile-only
+            -- --format evm --mode multipass --compile-only
 
       - name: Check timing budget (x86_cg_peephole)
         run: |
