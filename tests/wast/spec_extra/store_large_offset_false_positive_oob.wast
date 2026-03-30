@@ -1,4 +1,5 @@
-;; Test: f64.store with offset >= INT32_MAX on large memory should NOT trap.
+;; Test: f64.store with offset > INT32_MAX (i.e. >= 0x80000000) on large memory
+;; should NOT trap.
 ;;
 ;; When offset >= 0x80000000, x86-64 disp32 sign-extends to a negative 64-bit
 ;; value, causing the effective address to go before MemBase. The JIT must

@@ -935,7 +935,7 @@ public:
                                   X64Reg::getRegRef<X64::I32>(BaseReg), 0,
                                   Offset, getWASMTypeSize<SrcType>());
 
-    if (!Base.isImm() && (Offset >= (uint32_t)INT32_MAX)) {
+    if (!Base.isImm() && (Offset > (uint32_t)INT32_MAX)) {
       auto MemAddrReg = Layout.getScopedTemp<AddrType, ScopedTempReg2>();
       _ mov(X64Reg::getRegRef<X64::I32>(MemAddrReg), Offset);
       _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg),
@@ -1017,7 +1017,7 @@ public:
                                         X64Reg::getRegRef<X64::I32>(RegNum), 0,
                                         Offset, getWASMTypeSize<Type>());
 
-    if (!Base.isImm() && (Offset >= (uint32_t)INT32_MAX)) {
+    if (!Base.isImm() && (Offset > (uint32_t)INT32_MAX)) {
       auto MemAddrReg = Layout.getScopedTemp<AddrType, ScopedTempReg2>();
       _ mov(X64Reg::getRegRef<X64::I32>(MemAddrReg), Offset);
       _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg),
