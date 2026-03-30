@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "target_pass": "x86_cg_peephole",
+  "thresholds": {
+    "max_overall_total_time_regression_pct": 5.0,
+    "max_case_total_time_regression_pct": 20.0,
+    "max_pass_share_p95_pct": 2.0,
+    "max_pass_time_p95_ms": 0.06
+  },
+  "baseline": {
+    "overall_total_time_ms_median": 0.930236,
+    "case_total_time_ms_median": {
+      "add": 1.066,
+      "mul": 0.97544,
+      "div": 0.907207,
+      "shl": 0.922234,
+      "shr": 0.907362,
+      "sar": 0.892219,
+      "byte": 1.04518,
+      "eq_true": 0.979004,
+      "lt_true": 0.890249,
+      "jump": 0.999483,
+      "u256_shl_add_mul": 0.926801,
+      "u256_mul_add_chain": 0.910121,
+      "u256_shr_add_shl": 0.9047,
+      "bool_and_or_xor_not": 0.973858,
+      "bool_xor_not_chain": 0.930236
+    }
+  },
+  "metadata": {
+    "manifest": "tests/evm_asm/compiler_pass_timing_manifest.json",
+    "runs": 5,
+    "num_extra_compilations": 4,
+    "compile_mode": "compile-only",
+    "rule_count": 8,
+    "thresholds_status": "active"
+  }
+}

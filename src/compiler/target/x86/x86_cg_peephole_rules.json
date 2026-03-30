@@ -1,0 +1,689 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "remove-self-move",
+      "stage": "instruction",
+      "priority": 120,
+      "pattern": [
+        {
+          "bind": "mov",
+          "opcode_any": [
+            "MOV8rr",
+            "MOV16rr",
+            "MOV64rr"
+          ],
+          "capture": [
+            {
+              "name": "mov_dst",
+              "operand": 0,
+              "field": "reg"
+            }
+          ],
+          "require": [
+            {
+              "operand": 1,
+              "field": "reg",
+              "equals_capture": "mov_dst"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "mov"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesSelfMove64",
+          "X86CgPeephole.KeepsSelfMove32",
+          "X86CgPeephole.ExecutionHarnessRemoveSelfMove",
+          "X86CgPeephole.ExecutionHarnessSelfMove32ChangesUpperBits"
+        ]
+      }
+    },
+    {
+      "name": "remove-zero-shift",
+      "stage": "instruction",
+      "priority": 115,
+      "pattern": [
+        {
+          "bind": "shift",
+          "opcode_any": [
+            "SHL8ri",
+            "SHL16ri",
+            "SHL64ri",
+            "SHR8ri",
+            "SHR16ri",
+            "SHR64ri",
+            "SAR8ri",
+            "SAR16ri",
+            "SAR64ri"
+          ],
+          "require": [
+            {
+              "operand": -1,
+              "field": "imm",
+              "equals_int": 0
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "shift"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesZeroShift64",
+          "X86CgPeephole.KeepsZeroShift32",
+          "X86CgPeephole.ExecutionHarnessRemoveZeroShift"
+        ]
+      }
+    },
+    {
+      "name": "fold-setcc-test-jne-to-jcc",
+      "stage": "instruction",
+      "priority": 100,
+      "pattern": [
+        {
+          "bind": "cmp",
+          "predicate": "isCompare"
+        },
+        {
+          "bind": "setcc",
+          "opcode": "SETCCr",
+          "capture": [
+            {
+              "name": "setcc_dst",
+              "operand": 0,
+              "field": "reg"
+            },
+            {
+              "name": "setcc_cc",
+              "operand": 1,
+              "field": "imm"
+            }
+          ]
+        },
+        {
+          "bind": "test",
+          "opcode": "TEST8rr",
+          "require": [
+            {
+              "operand": 0,
+              "field": "reg",
+              "equals_capture": "setcc_dst"
+            },
+            {
+              "operand": 1,
+              "field": "reg",
+              "equals_capture": "setcc_dst"
+            }
+          ]
+        },
+        {
+          "bind": "jcc",
+          "opcode": "JCC_1",
+          "require": [
+            {
+              "operand": 1,
+              "field": "imm",
+              "equals_enum": "COND_NE"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "setcc",
+          "test"
+        ],
+        "set_imm": [
+          {
+            "inst": "jcc",
+            "operand": 1,
+            "from_capture": "setcc_cc"
+          }
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "semantics_model",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.FoldsSetccTestJneChain",
+          "X86CgPeephole.FuzzFoldSetccTestJneToJccSemantics",
+          "X86CgPeephole.ExecutionHarnessFoldSetccTestJneToJcc"
+        ]
+      }
+    },
+    {
+      "name": "remove-fallthrough-jcc",
+      "stage": "block_end",
+      "priority": 110,
+      "pattern": [
+        {
+          "bind": "jcc",
+          "predicate": "isConditionalBranch",
+          "require": [
+            {
+              "operand": 0,
+              "field": "is_mbb",
+              "equals_bool": true
+            }
+          ]
+        }
+      ],
+      "when": [
+        {
+          "kind": "target_is_next_block",
+          "inst": "jcc",
+          "operand": 0
+        }
+      ],
+      "action": {
+        "erase": [
+          "jcc"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesFallthroughConditionalJump",
+          "X86CgPeephole.ExecutionHarnessRemoveFallthroughConditionalJump"
+        ]
+      }
+    },
+    {
+      "name": "remove-redundant-test64rr",
+      "stage": "instruction",
+      "priority": 105,
+      "pattern": [
+        {
+          "bind": "test1",
+          "opcode": "TEST64rr",
+          "capture": [
+            {
+              "name": "test1_op0",
+              "operand": 0,
+              "field": "reg"
+            },
+            {
+              "name": "test1_op1",
+              "operand": 1,
+              "field": "reg"
+            }
+          ]
+        },
+        {
+          "bind": "test2",
+          "opcode": "TEST64rr",
+          "require": [
+            {
+              "operand": 0,
+              "field": "reg",
+              "equals_capture": "test1_op0"
+            },
+            {
+              "operand": 1,
+              "field": "reg",
+              "equals_capture": "test1_op1"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "test1"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesRedundantTest64rr",
+          "X86CgPeephole.KeepsNonRedundantTest64rr",
+          "X86CgPeephole.ExecutionHarnessRemoveRedundantTest64rr"
+        ]
+      }
+    },
+    {
+      "name": "remove-redundant-test32rr",
+      "stage": "instruction",
+      "priority": 105,
+      "pattern": [
+        {
+          "bind": "test1",
+          "opcode": "TEST32rr",
+          "capture": [
+            {
+              "name": "test32_op0",
+              "operand": 0,
+              "field": "reg"
+            },
+            {
+              "name": "test32_op1",
+              "operand": 1,
+              "field": "reg"
+            }
+          ]
+        },
+        {
+          "bind": "test2",
+          "opcode": "TEST32rr",
+          "require": [
+            {
+              "operand": 0,
+              "field": "reg",
+              "equals_capture": "test32_op0"
+            },
+            {
+              "operand": 1,
+              "field": "reg",
+              "equals_capture": "test32_op1"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "test1"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesRedundantTest32rr",
+          "X86CgPeephole.KeepsNonRedundantTest32rr",
+          "X86CgPeephole.ExecutionHarnessRemoveRedundantTest32rr"
+        ]
+      }
+    },
+    {
+      "name": "remove-redundant-test8rr",
+      "stage": "instruction",
+      "priority": 105,
+      "pattern": [
+        {
+          "bind": "test1",
+          "opcode": "TEST8rr",
+          "capture": [
+            {
+              "name": "test8_op0",
+              "operand": 0,
+              "field": "reg"
+            },
+            {
+              "name": "test8_op1",
+              "operand": 1,
+              "field": "reg"
+            }
+          ]
+        },
+        {
+          "bind": "test2",
+          "opcode": "TEST8rr",
+          "require": [
+            {
+              "operand": 0,
+              "field": "reg",
+              "equals_capture": "test8_op0"
+            },
+            {
+              "operand": 1,
+              "field": "reg",
+              "equals_capture": "test8_op1"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "test1"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesRedundantTest8rr",
+          "X86CgPeephole.KeepsNonRedundantTest8rr",
+          "X86CgPeephole.ExecutionHarnessRemoveRedundantTestrr"
+        ]
+      }
+    },
+    {
+      "name": "remove-redundant-cmp64rr",
+      "stage": "instruction",
+      "priority": 105,
+      "pattern": [
+        {
+          "bind": "cmp1",
+          "opcode": "CMP64rr",
+          "capture": [
+            {
+              "name": "cmp64_op0",
+              "operand": 0,
+              "field": "reg"
+            },
+            {
+              "name": "cmp64_op1",
+              "operand": 1,
+              "field": "reg"
+            }
+          ]
+        },
+        {
+          "bind": "cmp2",
+          "opcode": "CMP64rr",
+          "require": [
+            {
+              "operand": 0,
+              "field": "reg",
+              "equals_capture": "cmp64_op0"
+            },
+            {
+              "operand": 1,
+              "field": "reg",
+              "equals_capture": "cmp64_op1"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "cmp1"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesRedundantCmp64rr",
+          "X86CgPeephole.KeepsNonRedundantCmp64rr"
+        ]
+      }
+    },
+    {
+      "name": "remove-redundant-cmp32rr",
+      "stage": "instruction",
+      "priority": 105,
+      "pattern": [
+        {
+          "bind": "cmp1",
+          "opcode": "CMP32rr",
+          "capture": [
+            {
+              "name": "cmp32_op0",
+              "operand": 0,
+              "field": "reg"
+            },
+            {
+              "name": "cmp32_op1",
+              "operand": 1,
+              "field": "reg"
+            }
+          ]
+        },
+        {
+          "bind": "cmp2",
+          "opcode": "CMP32rr",
+          "require": [
+            {
+              "operand": 0,
+              "field": "reg",
+              "equals_capture": "cmp32_op0"
+            },
+            {
+              "operand": 1,
+              "field": "reg",
+              "equals_capture": "cmp32_op1"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "cmp1"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesRedundantCmp32rr",
+          "X86CgPeephole.KeepsNonRedundantCmp32rr"
+        ]
+      }
+    },
+    {
+      "name": "remove-redundant-cmp8rr",
+      "stage": "instruction",
+      "priority": 105,
+      "pattern": [
+        {
+          "bind": "cmp1",
+          "opcode": "CMP8rr",
+          "capture": [
+            {
+              "name": "cmp8_op0",
+              "operand": 0,
+              "field": "reg"
+            },
+            {
+              "name": "cmp8_op1",
+              "operand": 1,
+              "field": "reg"
+            }
+          ]
+        },
+        {
+          "bind": "cmp2",
+          "opcode": "CMP8rr",
+          "require": [
+            {
+              "operand": 0,
+              "field": "reg",
+              "equals_capture": "cmp8_op0"
+            },
+            {
+              "operand": 1,
+              "field": "reg",
+              "equals_capture": "cmp8_op1"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "cmp1"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesRedundantCmp8rr",
+          "X86CgPeephole.KeepsNonRedundantCmp8rr"
+        ]
+      }
+    },
+    {
+      "name": "remove-redundant-cmp16rr",
+      "stage": "instruction",
+      "priority": 105,
+      "pattern": [
+        {
+          "bind": "cmp1",
+          "opcode": "CMP16rr",
+          "capture": [
+            {
+              "name": "cmp16_op0",
+              "operand": 0,
+              "field": "reg"
+            },
+            {
+              "name": "cmp16_op1",
+              "operand": 1,
+              "field": "reg"
+            }
+          ]
+        },
+        {
+          "bind": "cmp2",
+          "opcode": "CMP16rr",
+          "require": [
+            {
+              "operand": 0,
+              "field": "reg",
+              "equals_capture": "cmp16_op0"
+            },
+            {
+              "operand": 1,
+              "field": "reg",
+              "equals_capture": "cmp16_op1"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "cmp1"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesRedundantCmp16rr",
+          "X86CgPeephole.KeepsNonRedundantCmp16rr"
+        ]
+      }
+    },
+    {
+      "name": "remove-redundant-test16rr",
+      "stage": "instruction",
+      "priority": 105,
+      "pattern": [
+        {
+          "bind": "test1",
+          "opcode": "TEST16rr",
+          "capture": [
+            {
+              "name": "test16_op0",
+              "operand": 0,
+              "field": "reg"
+            },
+            {
+              "name": "test16_op1",
+              "operand": 1,
+              "field": "reg"
+            }
+          ]
+        },
+        {
+          "bind": "test2",
+          "opcode": "TEST16rr",
+          "require": [
+            {
+              "operand": 0,
+              "field": "reg",
+              "equals_capture": "test16_op0"
+            },
+            {
+              "operand": 1,
+              "field": "reg",
+              "equals_capture": "test16_op1"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "test1"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesRedundantTest16rr",
+          "X86CgPeephole.KeepsNonRedundantTest16rr"
+        ]
+      }
+    },
+    {
+      "name": "remove-fallthrough-jump",
+      "stage": "block_end",
+      "priority": 100,
+      "pattern": [
+        {
+          "bind": "jmp",
+          "predicate": "isUnconditionalBranch",
+          "require": [
+            {
+              "operand": 0,
+              "field": "is_mbb",
+              "equals_bool": true
+            }
+          ]
+        }
+      ],
+      "when": [
+        {
+          "kind": "target_is_next_block",
+          "inst": "jmp",
+          "operand": 0
+        }
+      ],
+      "action": {
+        "erase": [
+          "jmp"
+        ]
+      },
+      "validation": {
+        "modes": [
+          "structural",
+          "execution"
+        ],
+        "coverage": [
+          "X86CgPeephole.RemovesFallthroughJump",
+          "X86CgPeephole.ExecutionHarnessRemoveFallthroughJump"
+        ]
+      }
+    }
+  ]
+}

@@ -53,6 +53,10 @@ if(ZEN_ENABLE_SPEC_TEST)
 
   add_executable(mempoolTests mempool_tests.cpp)
   add_executable(cAPITests c_api_tests.cpp)
+  if(ZEN_ENABLE_MULTIPASS_JIT)
+    add_executable(x86CgPeepholeTests x86_cg_peephole_tests.cpp)
+    add_executable(dmirValidationTests dmir_validation_tests.cpp)
+  endif()
   target_include_directories(
     mempoolTests PRIVATE ${googletest_SOURCE_DIR}/googletest/include
   )
@@ -126,6 +130,13 @@ if(ZEN_ENABLE_SPEC_TEST)
         PRIVATE dtvmcore gtest_main -fsanitize=address
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
+      if(ZEN_ENABLE_MULTIPASS_JIT)
+        target_link_libraries(
+          x86CgPeepholeTests
+          PRIVATE compiler dtvmcore gtest_main -fsanitize=address
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+      endif()
 
       if(ZEN_ENABLE_EVM)
         target_link_libraries(
@@ -192,6 +203,20 @@ if(ZEN_ENABLE_SPEC_TEST)
         PRIVATE dtvmcore gtest_main -fsanitize=address -static-libasan
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
+      if(ZEN_ENABLE_MULTIPASS_JIT)
+        target_link_libraries(
+          x86CgPeepholeTests
+          PRIVATE compiler dtvmcore gtest_main -fsanitize=address
+                  -static-libasan
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          dmirValidationTests
+          PRIVATE compiler dtvmcore gtest_main -fsanitize=address
+                  -static-libasan
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+      endif()
 
       if(ZEN_ENABLE_EVM)
         target_link_libraries(
@@ -278,6 +303,18 @@ if(ZEN_ENABLE_SPEC_TEST)
       PRIVATE dtvmcore gtest_main
       PUBLIC ${GTEST_BOTH_LIBRARIES}
     )
+    if(ZEN_ENABLE_MULTIPASS_JIT)
+      target_link_libraries(
+        x86CgPeepholeTests
+        PRIVATE compiler dtvmcore gtest_main
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+      target_link_libraries(
+        dmirValidationTests
+        PRIVATE compiler dtvmcore gtest_main
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+    endif()
 
     if(ZEN_ENABLE_EVM)
       target_link_libraries(
@@ -344,6 +381,89 @@ if(ZEN_ENABLE_SPEC_TEST)
   endif()
   add_test(NAME mempoolTests COMMAND mempoolTests)
   add_test(NAME cAPITests COMMAND cAPITests)
+  if(ZEN_ENABLE_MULTIPASS_JIT)
+    add_test(NAME x86CgPeepholeTests COMMAND x86CgPeepholeTests)
+    add_test(NAME dmirValidationTests COMMAND dmirValidationTests)
+    add_test(
+      NAME x86CgPeepholeRuleGen
+      COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tools/test_x86_cg_peephole_generator.py
+        ${CMAKE_SOURCE_DIR}
+    )
+    add_test(
+      NAME x86CgPeepholeValidationMeta
+      COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tools/test_x86_cg_peephole_validation.py
+        ${CMAKE_SOURCE_DIR} $<TARGET_FILE:x86CgPeepholeTests>
+    )
+    add_test(
+      NAME x86CgPeepholeValidationReport
+      COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tools/test_report_x86_cg_peephole_validation.py
+        ${CMAKE_SOURCE_DIR} $<TARGET_FILE:x86CgPeepholeTests>
+    )
+    add_test(
+      NAME dmirRewriteRuleMeta
+      COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tools/test_check_dmir_rewrite_rules.py
+        ${CMAKE_SOURCE_DIR} $<TARGET_FILE:dmirValidationTests>
+    )
+    add_test(
+      NAME dmirRewriteRuleReport
+      COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tools/test_report_dmir_rewrite_rules.py
+        ${CMAKE_SOURCE_DIR} $<TARGET_FILE:dmirValidationTests>
+    )
+    add_test(
+      NAME dmirSeedRuleMiner
+      COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tools/test_mine_dmir_seed_rules.py
+        ${CMAKE_SOURCE_DIR}
+    )
+    add_test(
+      NAME dmirBootstrapMinerConfig
+      COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tools/test_mine_dmir_bootstrap_config.py
+        ${CMAKE_SOURCE_DIR}
+    )
+    add_test(
+      NAME dmirNovelRuleMiner
+      COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tools/test_mine_dmir_novel_rules.py
+        ${CMAKE_SOURCE_DIR}
+    )
+    if(ZEN_ENABLE_EVM)
+      add_test(
+        NAME compilerPassTimingTool
+        COMMAND
+          ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/test_collect_compiler_pass_timings.py
+          ${CMAKE_SOURCE_DIR} $<TARGET_FILE:dtvm>
+      )
+      add_test(
+        NAME compilerPassTimingBudgetTool
+        COMMAND
+          ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/test_check_compiler_pass_timing_budget.py
+          ${CMAKE_SOURCE_DIR}
+      )
+      add_test(
+        NAME compilerPassTimingBudgetRefreshTool
+        COMMAND
+          ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/test_update_compiler_pass_timing_budget.py
+          ${CMAKE_SOURCE_DIR}
+      )
+    endif()
+  endif()
 
   if(ZEN_ENABLE_EVM)
     add_test(NAME evmInterpTests COMMAND evmInterpTests)

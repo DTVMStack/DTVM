@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "add",
+      "input": "add.evm.hex"
+    },
+    {
+      "name": "mul",
+      "input": "mul.evm.hex"
+    },
+    {
+      "name": "div",
+      "input": "div.evm.hex"
+    },
+    {
+      "name": "shl",
+      "input": "shl.evm.hex"
+    },
+    {
+      "name": "shr",
+      "input": "shr.evm.hex"
+    },
+    {
+      "name": "sar",
+      "input": "sar.evm.hex"
+    },
+    {
+      "name": "byte",
+      "input": "byte.evm.hex"
+    },
+    {
+      "name": "eq_true",
+      "input": "eq_true.evm.hex"
+    },
+    {
+      "name": "lt_true",
+      "input": "lt_true.evm.hex"
+    },
+    {
+      "name": "jump",
+      "input": "jump.evm.hex"
+    },
+    {
+      "name": "u256_shl_add_mul",
+      "input": "u256_shl_add_mul.evm.hex"
+    },
+    {
+      "name": "u256_mul_add_chain",
+      "input": "u256_mul_add_chain.evm.hex"
+    },
+    {
+      "name": "u256_shr_add_shl",
+      "input": "u256_shr_add_shl.evm.hex"
+    },
+    {
+      "name": "bool_and_or_xor_not",
+      "input": "bool_and_or_xor_not.evm.hex"
+    },
+    {
+      "name": "bool_xor_not_chain",
+      "input": "bool_xor_not_chain.evm.hex"
+    }
+  ]
+}

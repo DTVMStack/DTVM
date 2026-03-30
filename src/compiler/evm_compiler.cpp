@@ -4,6 +4,7 @@
 #include "compiler/evm_compiler.h"
 #include "common/thread_pool.h"
 #include "compiler/cgir/cg_function.h"
+#include "compiler/common/pass_timing.h"
 #include "compiler/mir/module.h"
 #include "compiler/target/x86/x86_mc_lowering.h"
 #include "platform/map.h"
@@ -27,7 +28,8 @@ const size_t MPROTECT_CHUNK_SIZE = 0x1000;
 namespace COMPILER {
 
 void EVMJITCompiler::compileEVMToMC(EVMFrontendContext &Ctx, MModule &Mod,
-                                    uint32_t FuncIdx, bool DisableGreedyRA) {
+                                    uint32_t FuncIdx, bool DisableGreedyRA,
+                                    CompilerPassTimingSession *PassTiming) {
   if (Ctx.Inited) {
     // Release all memory allocated by previous function compilation
     Ctx.MemPool = CompileMemPool();
@@ -43,16 +45,22 @@ void EVMJITCompiler::compileEVMToMC(EVMFrontendContext &Ctx, MModule &Mod,
   CgFunction CgFunc(Ctx, MFunc);
   MFunc.setFunctionType(Mod.getFuncType(FuncIdx));
   EVMMirBuilder MIRBuilder(Ctx, MFunc);
-  MIRBuilder.compile(&Ctx);
+  {
+    ScopedCompilerPassTimer Timer(PassTiming, "evm_mir_build");
+    MIRBuilder.compile(&Ctx);
+  }
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   MIRBuilder.dumpMemoryCompileStats();
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
 
   // Apply MIR optimizations and generate machine code
-  compileMIRToCgIR(Mod, MFunc, CgFunc, DisableGreedyRA);
+  compileMIRToCgIR(Mod, MFunc, CgFunc, DisableGreedyRA, PassTiming);
 
   // Generate machine code
-  Ctx.getMCLowering().runOnCgFunction(CgFunc);
+  {
+    ScopedCompilerPassTimer Timer(PassTiming, "x86_mc_lowering");
+    Ctx.getMCLowering().runOnCgFunction(CgFunc);
+  }
 }
 
 void EagerEVMJITCompiler::compile() {
@@ -113,10 +121,15 @@ void EagerEVMJITCompiler::compile() {
 
     auto &CodeMPool = EVMMod->getJITCodeMemPool();
     uint8_t *JITCode = const_cast<uint8_t *>(CodeMPool.getMemStart());
+    CompilerPassTimingSession PassTiming("evm", 0);
 
     // EVM has only 1 function, use direct single-threaded compilation
-    compileEVMToMC(Ctx, Mod, 0, Config.DisableMultipassGreedyRA);
-    emitObjectBuffer(&Ctx);
+    compileEVMToMC(Ctx, Mod, 0, Config.DisableMultipassGreedyRA, &PassTiming);
+    {
+      ScopedCompilerPassTimer Timer(&PassTiming, "emit_object_buffer");
+      emitObjectBuffer(&Ctx);
+    }
+    PassTiming.flush();
     ZEN_ASSERT(Ctx.ExternRelocs.empty());
 
     uint8_t *JITFuncPtr = Ctx.CodePtr + Ctx.FuncOffsetMap[0];

@@ -12,11 +12,13 @@
 #include "compiler/cgir/pass/reg_alloc_basic.h"
 #include "compiler/cgir/pass/reg_alloc_greedy.h"
 #include "compiler/cgir/pass/register_coalescer.h"
+#include "compiler/common/pass_timing.h"
 #include "compiler/context.h"
 #include "compiler/frontend/parser.h"
 #include "compiler/mir/function.h"
 #include "compiler/mir/module.h"
 #include "compiler/mir/pass/dead_basicblock_elim.h"
+#include "compiler/mir/pass/dmir_rewrite.h"
 #include "compiler/mir/pass/verifier.h"
 #include "compiler/target/x86/x86_cg_peephole.h"
 #include "compiler/target/x86/x86_mc_lowering.h"
@@ -55,27 +57,45 @@ static inline bool isFuncNeedGreedyRA(uint32_t FuncIdx) {
 #endif // ZEN_ENABLE_DEBUG_GREEDY_RA
 
 void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
-                                       CgFunction &CgFunc,
-                                       bool DisableGreedyRA) {
+                                       CgFunction &CgFunc, bool DisableGreedyRA,
+                                       CompilerPassTimingSession *PassTiming) {
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   llvm::DebugFlag = true;
   llvm::dbgs() << "\n########## MIR Dump ##########\n\n";
   MFunc.dump();
 #endif
 
-  MVerifier Verifier(MMod, MFunc, llvm::errs());
-  if (!Verifier.verify()) {
-    throw getError(ErrorCode::MIRVerifyingFailed);
+  {
+    ScopedCompilerPassTimer Timer(PassTiming, "verify_mir");
+    MVerifier Verifier(MMod, MFunc, llvm::errs());
+    if (!Verifier.verify()) {
+      throw getError(ErrorCode::MIRVerifyingFailed);
+    }
   }
 
-  DeadMBasicBlockElim MBBDCE;
-  MBBDCE.runOnMFunction(MFunc);
+  {
+    ScopedCompilerPassTimer Timer(PassTiming, "dead_mbb_elim");
+    DeadMBasicBlockElim MBBDCE;
+    MBBDCE.runOnMFunction(MFunc);
+  }
+
+  {
+    ScopedCompilerPassTimer Timer(PassTiming, "dmir_rewrite");
+    DMirRewritePass RewritePass;
+    RewritePass.runOnMFunction(MFunc);
+  }
 
   CgFunction &MF = CgFunc;
 
-  // TODO: refactor to pass
-  X86CgLowering CgLowering(MF);
-  X86CgPeephole CgPeephole(MF);
+  {
+    ScopedCompilerPassTimer Timer(PassTiming, "x86_cg_lowering");
+    // TODO: refactor to pass
+    X86CgLowering CgLowering(MF);
+  }
+  {
+    ScopedCompilerPassTimer Timer(PassTiming, "x86_cg_peephole");
+    X86CgPeephole CgPeephole(MF);
+  }
   CgPhiElimination PhiElimination;
   PhiElimination.runOnCgFunction(MF);
 
@@ -83,8 +103,10 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
 
   if (DisableGreedyRA) {
     ZEN_LOG_DEBUG("using fast ra for function %d", MFuncIdx);
+    ScopedCompilerPassTimer Timer(PassTiming, "fast_ra");
     FastRA RA(MF);
   } else {
+    ScopedCompilerPassTimer Timer(PassTiming, "greedy_ra");
 #ifdef ZEN_ENABLE_DEBUG_GREEDY_RA
     if (!isFuncNeedGreedyRA(MFuncIdx)) {
       ZEN_LOG_DEBUG("using fast ra for function %d", MFuncIdx);
@@ -123,16 +145,22 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
   MF.dump();
 #endif
 
-  PrologEpilogInserter PEInserter;
-  PEInserter.runOnCgFunction(MF);
+  {
+    ScopedCompilerPassTimer Timer(PassTiming, "prolog_epilog_inserter");
+    PrologEpilogInserter PEInserter;
+    PEInserter.runOnCgFunction(MF);
+  }
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   llvm::dbgs() << "\n########## CgIR Dump After Prologue/Epilogue Insertion "
                   "##########\n\n";
   MF.dump();
 #endif
 
-  ExpandPostRAPseudos PseudosExpander;
-  PseudosExpander.runOnCgFunction(MF);
+  {
+    ScopedCompilerPassTimer Timer(PassTiming, "expand_post_ra_pseudos");
+    ExpandPostRAPseudos PseudosExpander;
+    PseudosExpander.runOnCgFunction(MF);
+  }
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   llvm::dbgs() << "\n########## CgIR Dump After Post-RA Pseudo "
                   "Instruction Expansion "

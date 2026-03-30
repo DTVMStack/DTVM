@@ -10,6 +10,7 @@
 namespace COMPILER {
 
 class CompileContext;
+class CompilerPassTimingSession;
 class WasmFrontendContext;
 class MModule;
 class MFunction;
@@ -20,7 +21,8 @@ protected:
   virtual ~JITCompilerBase() = default;
 
   static void compileMIRToCgIR(MModule &Mod, MFunction &MFunc,
-                               CgFunction &CgFunc, bool DisableGreedyRA);
+                               CgFunction &CgFunc, bool DisableGreedyRA,
+                               CompilerPassTimingSession *PassTiming = nullptr);
   static void emitObjectBuffer(CompileContext *Ctx);
 };
 

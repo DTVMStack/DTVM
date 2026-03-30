@@ -32,6 +32,7 @@ endif()
 set(COMPILER_SRCS
     compiler.cpp
     context.cpp
+    common/pass_timing.cpp
     common/llvm_workaround.cpp
     frontend/parser.cpp
     frontend/lexer.cpp
@@ -94,6 +95,34 @@ set(COMPILER_SRCS
     cgir/pass/llvm_utils.cpp
 )
 
+set(X86_PEEPHOLE_RULES
+    ${CMAKE_CURRENT_SOURCE_DIR}/target/x86/x86_cg_peephole_rules.json
+)
+set(X86_PEEPHOLE_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated/target/x86)
+set(X86_PEEPHOLE_GENERATED_INC
+    ${X86_PEEPHOLE_GENERATED_DIR}/x86_cg_peephole_generated.inc
+)
+set(X86_PEEPHOLE_REPORT
+    ${X86_PEEPHOLE_GENERATED_DIR}/x86_cg_peephole_report.txt
+)
+
+add_custom_command(
+  OUTPUT ${X86_PEEPHOLE_GENERATED_INC} ${X86_PEEPHOLE_REPORT}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${X86_PEEPHOLE_GENERATED_DIR}
+  COMMAND
+    ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/generate_x86_cg_peephole.py
+    --rules ${X86_PEEPHOLE_RULES} --out-inc ${X86_PEEPHOLE_GENERATED_INC}
+    --out-report ${X86_PEEPHOLE_REPORT}
+  DEPENDS ${X86_PEEPHOLE_RULES}
+          ${CMAKE_SOURCE_DIR}/tools/generate_x86_cg_peephole.py
+  VERBATIM
+)
+
+add_custom_target(
+  generateX86CgPeephole DEPENDS ${X86_PEEPHOLE_GENERATED_INC}
+                                ${X86_PEEPHOLE_REPORT}
+)
+
 if(ZEN_ENABLE_EVM)
   list(APPEND COMPILER_SRCS evm_compiler.cpp evm_frontend/evm_imported.cpp
        evm_frontend/evm_mir_compiler.cpp
@@ -111,6 +140,10 @@ set_property(
 )
 
 add_library(compiler STATIC ${COMPILER_SRCS} $<TARGET_OBJECTS:utils>)
+add_dependencies(compiler generateX86CgPeephole)
+target_include_directories(
+  compiler PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated
+)
 target_link_libraries(compiler PRIVATE ${llvm_libs})
 if(ZEN_ENABLE_EVM)
   target_link_libraries(compiler PUBLIC evmc::instructions)

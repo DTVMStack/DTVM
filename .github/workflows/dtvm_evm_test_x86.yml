@@ -668,3 +668,69 @@ jobs:
         run: |
           echo "::error::Performance regression detected in ${{ matrix.mode }} mode. See logs for details."
           exit 1
+
+  peephole_validation_and_timing_budget:
+    name: Peephole Validation and Timing Budget Check
+    runs-on: ubuntu-latest
+    container:
+      image: dtvmdev1/dtvm-dev-x64:main
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: "true"
+
+      - name: Build dtvm and x86CgPeepholeTests
+        run: |
+          export LLVM_SYS_150_PREFIX=/opt/llvm15
+          export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
+          export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DZEN_ENABLE_SINGLEPASS_JIT=OFF \
+            -DZEN_ENABLE_MULTIPASS_JIT=ON \
+            -DZEN_ENABLE_EVM=ON \
+            -DZEN_ENABLE_SPEC_TEST=ON \
+            -DZEN_ENABLE_CPU_EXCEPTION=ON \
+            -DZEN_ENABLE_VIRTUAL_STACK=ON
+          cmake --build build --target dtvm --target x86CgPeepholeTests --target dmirValidationTests -j$(nproc)
+          bash tools/easm2bytecode.sh tests/evm_asm tests/evm_asm
+
+      - name: Verify .inc generator output is up-to-date
+        run: |
+          python tools/generate_x86_cg_peephole.py \
+            --rules src/compiler/target/x86/x86_cg_peephole_rules.json \
+            --out-inc /tmp/x86_cg_peephole_generated_check.inc \
+            --out-report /tmp/x86_cg_peephole_report_check.txt
+          diff /tmp/x86_cg_peephole_generated_check.inc \
+            build/src/compiler/generated/target/x86/x86_cg_peephole_generated.inc
+
+      - name: Run peephole rule validation check
+        run: |
+          python tools/check_x86_cg_peephole_validation.py \
+            --rules src/compiler/target/x86/x86_cg_peephole_rules.json \
+            --gtest-binary build/x86CgPeepholeTests
+
+      - name: Run dmir rewrite validation tests
+        run: ./build/dmirValidationTests
+
+      - name: Collect compiler pass timings
+        run: |
+          python tools/collect_compiler_pass_timings.py \
+            --dtvm build/dtvm \
+            --manifest tests/evm_asm/compiler_pass_timing_manifest.json \
+            --runs 5 \
+            --output /tmp/ci_timing_report.json \
+            -- --compile-only
+
+      - name: Check timing budget (x86_cg_peephole)
+        run: |
+          python tools/check_compiler_pass_timing_budget.py \
+            --budget tests/evm_asm/compiler_pass_timing_budget_x86_cg_peephole.json \
+            --report /tmp/ci_timing_report.json
+
+      - name: Check timing budget (dmir_rewrite)
+        run: |
+          python tools/check_compiler_pass_timing_budget.py \
+            --budget tests/evm_asm/compiler_pass_timing_budget_dmir_rewrite.json \
+            --report /tmp/ci_timing_report.json

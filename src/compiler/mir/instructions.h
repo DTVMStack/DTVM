@@ -49,6 +49,10 @@ public:
         std::forward<Arguments>(args)...);
   }
 
+  static bool classof(const MInstruction *Inst) {
+    return Inst->getKind() == MInstruction::BINARY;
+  }
+
 protected:
   // Used for subclass
   BinaryInstruction(Kind kind, Opcode opcode, MType *type, MInstruction *lhs,

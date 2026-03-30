@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "fold-a",
+      "stage": "instruction",
+      "priority": 100,
+      "pattern": [
+        {
+          "bind": "cmp",
+          "predicate": "isCompare"
+        },
+        {
+          "bind": "setcc",
+          "opcode": "SETCCr",
+          "capture": [
+            {
+              "name": "setcc_dst",
+              "operand": 0,
+              "field": "reg"
+            },
+            {
+              "name": "setcc_cc",
+              "operand": 1,
+              "field": "imm"
+            }
+          ]
+        },
+        {
+          "bind": "test",
+          "opcode_any": [
+            "TEST8rr",
+            "TEST16rr",
+            "TEST32rr",
+            "TEST64rr"
+          ],
+          "require": [
+            {
+              "operand": 0,
+              "field": "reg",
+              "equals_capture": "setcc_dst"
+            }
+          ]
+        },
+        {
+          "bind": "jcc",
+          "opcode": "JCC_1",
+          "require": [
+            {
+              "operand": 1,
+              "field": "imm",
+              "equals_enum": "COND_NE"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "setcc"
+        ],
+        "set_imm": [
+          {
+            "inst": "jcc",
+            "operand": 1,
+            "from_capture": "setcc_cc"
+          }
+        ]
+      }
+    },
+    {
+      "name": "fold-b",
+      "stage": "instruction",
+      "priority": 100,
+      "pattern": [
+        {
+          "bind": "cmp",
+          "predicate": "isCompare"
+        },
+        {
+          "bind": "setcc",
+          "opcode": "SETCCr",
+          "capture": [
+            {
+              "name": "setcc_dst",
+              "operand": 0,
+              "field": "reg"
+            },
+            {
+              "name": "setcc_cc",
+              "operand": 1,
+              "field": "imm"
+            }
+          ]
+        },
+        {
+          "bind": "test",
+          "opcode_any": [
+            "TEST8rr",
+            "TEST16rr",
+            "TEST32rr",
+            "TEST64rr"
+          ],
+          "require": [
+            {
+              "operand": 0,
+              "field": "reg",
+              "equals_capture": "setcc_dst"
+            }
+          ]
+        },
+        {
+          "bind": "jcc",
+          "opcode": "JCC_1",
+          "require": [
+            {
+              "operand": 1,
+              "field": "imm",
+              "equals_enum": "COND_NE"
+            }
+          ]
+        }
+      ],
+      "action": {
+        "erase": [
+          "test"
+        ],
+        "set_imm": [
+          {
+            "inst": "jcc",
+            "operand": 1,
+            "from_capture": "setcc_cc"
+          }
+        ]
+      }
+    }
+  ]
+}
+

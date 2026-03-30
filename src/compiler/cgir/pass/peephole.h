@@ -15,13 +15,18 @@ template <typename T> class CgPeephole : public NonCopyable {
 public:
   CgPeephole(CgFunction &MF) : MF(MF) {
     for (auto *MBB : MF) {
-      SELF.peepholeOptimizeBB(*MBB);
       for (CgBasicBlock::iterator MII = MBB->begin(), MIE = MBB->end();
            MII != MIE;) {
-        // may change MII
-        SELF.peepholeOptimize(*MBB, MII);
-        MII++;
+        // When the matcher erases the current instruction, it must advance
+        // MII itself and return true to avoid incrementing an invalid iterator.
+        if (!SELF.peepholeOptimize(*MBB, MII)) {
+          MII++;
+        }
       }
+      // Block-end rewrites (e.g. remove-fallthrough-jcc) erase terminators
+      // that instruction-level rules (e.g. fold-setcc-test-jne-to-jcc) need
+      // as part of a longer match window. Run instruction-level pass first.
+      SELF.peepholeOptimizeBB(*MBB);
     }
   }
 

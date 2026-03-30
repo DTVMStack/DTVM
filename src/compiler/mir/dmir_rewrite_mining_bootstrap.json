@@ -1,0 +1,165 @@
+{
+  "base_terms": [
+    "x",
+    "y",
+    "cond",
+    "0:i64",
+    "1:i64",
+    "18446744073709551615:i64"
+  ],
+  "unary_not_terms": [
+    "x",
+    "y",
+    "cond"
+  ],
+  "double_not_terms": [
+    "x",
+    "y",
+    "cond"
+  ],
+  "binary_fixed_rhs": [
+    {
+      "ops": [
+        "add",
+        "sub",
+        "and",
+        "or",
+        "xor",
+        "shl",
+        "sshr",
+        "ushr"
+      ],
+      "lhs": [
+        "x",
+        "y",
+        "cond"
+      ],
+      "rhs": "0:i64"
+    },
+    {
+      "ops": [
+        "and",
+        "or",
+        "xor"
+      ],
+      "lhs": [
+        "x",
+        "y",
+        "cond",
+        "(not x)",
+        "(not y)"
+      ],
+      "rhs": "18446744073709551615:i64"
+    },
+    {
+      "ops": [
+        "mul"
+      ],
+      "lhs": [
+        "x",
+        "y"
+      ],
+      "rhs": "0:i64"
+    },
+    {
+      "ops": [
+        "mul"
+      ],
+      "lhs": [
+        "x",
+        "y"
+      ],
+      "rhs": "1:i64"
+    }
+  ],
+  "binary_self": [
+    {
+      "ops": [
+        "and",
+        "mul",
+        "or",
+        "xor"
+      ],
+      "terms": [
+        "x",
+        "y",
+        "cond"
+      ]
+    }
+  ],
+  "select_same_arm": {
+    "conditions": [
+      "cond",
+      "x",
+      "0:i64",
+      "1:i64"
+    ],
+    "values": [
+      "x",
+      "y",
+      "(not x)"
+    ]
+  },
+  "pair_binary_groups": [
+    {
+      "ops": [
+        "add",
+        "sub",
+        "and",
+        "or",
+        "xor"
+      ],
+      "lhs": [
+        "x",
+        "y"
+      ],
+      "rhs": [
+        "x",
+        "y",
+        "0:i64"
+      ]
+    },
+    {
+      "ops": [
+        "and",
+        "or",
+        "xor"
+      ],
+      "lhs": [
+        "x",
+        "y",
+        "(and x y)",
+        "(or x y)",
+        "(xor x y)",
+        "(not x)",
+        "(not y)"
+      ],
+      "rhs": [
+        "x",
+        "y",
+        "0:i64",
+        "(and x y)",
+        "(or x y)",
+        "(xor x y)",
+        "(not x)",
+        "(not y)"
+      ]
+    }
+  ],
+  "adc_sbb_zero": {
+    "ops": [
+      "adc",
+      "sbb"
+    ],
+    "lhs": [
+      "x",
+      "y"
+    ],
+    "rhs": [
+      "x",
+      "y",
+      "0:i64"
+    ],
+    "carry": "0:i64"
+  }
+}

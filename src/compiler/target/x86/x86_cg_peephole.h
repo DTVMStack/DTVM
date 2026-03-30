@@ -10,12 +10,8 @@ class X86CgPeephole : public CgPeephole<X86CgPeephole> {
 public:
   using CgPeephole::CgPeephole;
   void peepholeOptimizeBB(CgBasicBlock &MBB);
-  // after this function, MII should be the processed instruction
-  void peepholeOptimize(CgBasicBlock &MBB, CgBasicBlock::iterator &MII);
-
-private:
-  void optimizeCmp(CgBasicBlock &MBB, CgBasicBlock::iterator &MII);
-  void optimizeBranchInBlockEnd(CgBasicBlock &MBB, CgInstruction &MI);
+  // Returns true when the matcher has already advanced MII.
+  bool peepholeOptimize(CgBasicBlock &MBB, CgBasicBlock::iterator &MII);
 };
 
 } // namespace COMPILER

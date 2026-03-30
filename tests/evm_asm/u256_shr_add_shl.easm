@@ -1,0 +1,15 @@
+// U256 shift chain: ((8 SHR 2) ADD 3) SHL 1 = 10
+// SWAP1 before SHL reorders stack so value (5) is the shift target
+PUSH1 0x02
+PUSH1 0x08
+SHR
+PUSH1 0x03
+ADD
+PUSH1 0x01
+SWAP1
+SHL
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

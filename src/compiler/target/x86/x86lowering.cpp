@@ -1014,6 +1014,13 @@ CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
   // Use x86 flags with direct ADC and rely on the existing carry chain.
   // The required invariant is that no flag-clobbering instruction is emitted
   // between the ADD/ADC instructions that produce and consume CF.
+  //
+  // Lowering consumes operand 2 as an implicit CF input and does not preserve
+  // the explicit zero marker in x86 CgIR. Any analysis that depends on the
+  // source-level operand-2 structure must therefore run before lowering. This
+  // is not, by itself, a license to rewrite ADC into ADD: in the current EVM
+  // lowering, operand 2 is also the marker that the surrounding carry chain is
+  // still live.
   const MInstruction *LHS = Inst.getOperand<0>();
   const MInstruction *RHS = Inst.getOperand<1>();
   const MInstruction *Carry = Inst.getOperand<2>();
@@ -1056,6 +1063,13 @@ CgRegister X86CgLowering::lowerSbbExpr(const SbbInstruction &Inst) {
   // Use x86 flags with direct SBB and rely on the existing borrow chain.
   // The required invariant is that no flag-clobbering instruction is emitted
   // between the SUB/SBB instructions that produce and consume CF.
+  //
+  // Lowering consumes operand 2 as an implicit CF input and does not preserve
+  // the explicit zero marker in x86 CgIR. Any analysis that depends on the
+  // source-level operand-2 structure must therefore run before lowering. This
+  // is not, by itself, a license to rewrite SBB into SUB: in the current EVM
+  // lowering, operand 2 is also the marker that the surrounding borrow chain
+  // is still live.
   const MInstruction *LHS = Inst.getOperand<0>();
   const MInstruction *RHS = Inst.getOperand<1>();
   const MInstruction *Borrow = Inst.getOperand<2>();

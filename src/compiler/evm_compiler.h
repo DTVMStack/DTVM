@@ -10,6 +10,8 @@
 
 namespace COMPILER {
 
+class CompilerPassTimingSession;
+
 class EVMJITCompiler : public JITCompilerBase {
 protected:
   EVMJITCompiler(runtime::EVMModule *EVMMod)
@@ -19,7 +21,8 @@ protected:
   ~EVMJITCompiler() override = default;
 
   void compileEVMToMC(EVMFrontendContext &Ctx, MModule &Mod, uint32_t FuncIdx,
-                      bool DisableGreedyRA);
+                      bool DisableGreedyRA,
+                      CompilerPassTimingSession *PassTiming = nullptr);
 
   runtime::EVMModule *EVMMod;
   const runtime::RuntimeConfig &Config;

@@ -117,12 +117,10 @@ deriveEVMMemorySpecializationProfileFromCalldata(
                                                           Calldata.size());
 }
 
-static bool runEVMBenchmark(const std::string &Filename,
-                            uint32_t NumExtraCompilations,
-                            uint32_t NumExtraExecutions, Runtime *RT,
-                            EVMModule *Mod, const EVMMessageConfig &MsgConfig,
-                            evmc::MockedHost &Host) {
-  if (NumExtraCompilations + NumExtraExecutions == 0) {
+static bool runEVMCompilationBenchmark(
+    const std::string &Filename, uint32_t NumExtraCompilations, Runtime *RT,
+    const zen::runtime::EVMMemorySpecializationProfile &MemoryProfile) {
+  if (NumExtraCompilations == 0) {
     return true;
   }
 
@@ -134,13 +132,29 @@ static bool runEVMBenchmark(const std::string &Filename,
 
   for (uint32_t I = 0; I < NumExtraCompilations; ++I) {
     std::string NewEvmName = Filename + std::to_string(I);
-    const zen::runtime::EVMMemorySpecializationProfile Profile =
-        deriveEVMMemorySpecializationProfileFromCalldata(MsgConfig.Calldata);
     MayBe<EVMModule *> TestModRet =
         RT->loadEVMModule(NewEvmName, Bytecode.data(), Bytecode.size(),
-                          zen::evm::DEFAULT_REVISION, Profile);
+                          zen::evm::DEFAULT_REVISION, MemoryProfile);
     ZEN_ASSERT(TestModRet);
     RT->unloadEVMModule(*TestModRet);
+  }
+
+  return true;
+}
+
+static bool runEVMExecutionBenchmark(const std::string &Filename,
+                                     uint32_t NumExtraExecutions, Runtime *RT,
+                                     EVMModule *Mod,
+                                     const EVMMessageConfig &MsgConfig,
+                                     evmc::MockedHost &Host) {
+  if (NumExtraExecutions == 0) {
+    return true;
+  }
+
+  std::vector<uint8_t> Bytecode;
+  if (!zen::utils::readBinaryFile(Filename, Bytecode)) {
+    SIMPLE_LOG_ERROR("failed to read EVM bytecode file %s", Filename.c_str());
+    return false;
   }
 
   for (uint32_t I = 0; I < NumExtraExecutions; ++I) {
@@ -188,6 +202,7 @@ int main(int argc, char *argv[]) {
   uint32_t NumExtraExecutions = 0;
   RuntimeConfig Config;
   bool EnableBenchmark = false;
+  bool CompileOnly = false;
   bool DeployMode = false;
   std::string ContractAddress;
   std::string SenderAddress = "1000000000000000000000000000000000000000";
@@ -295,6 +310,8 @@ int main(int argc, char *argv[]) {
 #endif // ZEN_ENABLE_MULTIPASS_JIT
 #ifdef ZEN_ENABLE_EVM
     CLIParser->add_option("--calldata", Calldata, "Calldata hex pass to EVM");
+    CLIParser->add_flag("--compile-only", CompileOnly,
+                        "Compile EVM bytecode without creating an instance");
     CLIParser
         ->add_option("--evm-revision", EvmRevision,
                      "EVM revision (e.g., cancun, osaka)")
@@ -310,6 +327,11 @@ int main(int argc, char *argv[]) {
     zen::setGlobalLogger(createConsoleLogger("dtvm_cli_logger", LogLevel));
   } catch (const std::exception &E) {
     ZEN_LOG_ERROR("failed to create logger: %s", E.what());
+    return exitMain(EXIT_FAILURE);
+  }
+
+  if (CompileOnly && Config.Format != InputFormat::EVM) {
+    SIMPLE_LOG_ERROR("--compile-only is only supported with --format evm");
     return exitMain(EXIT_FAILURE);
   }
 
@@ -363,6 +385,26 @@ int main(int argc, char *argv[]) {
       return exitMain(EXIT_FAILURE, RT.get());
     }
     EVMModule *Mod = *ModRet;
+
+    if (CompileOnly) {
+      if (NumExtraExecutions != 0) {
+        SIMPLE_LOG_ERROR(
+            "--num-extra-executions is not supported with --compile-only");
+        return exitMain(EXIT_FAILURE, RT.get());
+      }
+
+      if (!runEVMCompilationBenchmark(Filename, NumExtraCompilations, RT.get(),
+                                      MemoryProfile)) {
+        return exitMain(EXIT_FAILURE, RT.get());
+      }
+
+      if (!RT->unloadEVMModule(Mod)) {
+        ZEN_LOG_ERROR("failed to unload EVM module");
+        return exitMain(EXIT_FAILURE, RT.get());
+      }
+
+      return exitMain(EXIT_SUCCESS, RT.get());
+    }
 
     Isolation *Iso = RT->createManagedIsolation();
     if (!Iso) {
@@ -469,9 +511,13 @@ int main(int argc, char *argv[]) {
     }
 
     /// ======= EVM Extra compilations and executions for benchmarking =======
-    if (!runEVMBenchmark(Filename, NumExtraCompilations, NumExtraExecutions,
-                         RT.get(), Mod, MsgConfig,
-                         *static_cast<evmc::MockedHost *>(Host.get()))) {
+    if (!runEVMCompilationBenchmark(Filename, NumExtraCompilations, RT.get(),
+                                    MemoryProfile)) {
+      return exitMain(EXIT_FAILURE, RT.get());
+    }
+    if (!runEVMExecutionBenchmark(
+            Filename, NumExtraExecutions, RT.get(), Mod, MsgConfig,
+            *static_cast<evmc::MockedHost *>(Host.get()))) {
       return exitMain(EXIT_FAILURE, RT.get());
     }
 

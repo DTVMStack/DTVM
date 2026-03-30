@@ -1,0 +1,2263 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "add-zero",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(add x 0:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAddZeroRewrite"
+        ]
+      }
+    },
+    {
+      "name": "double-not",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(not (not x))",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesDoubleNotRewrite"
+        ]
+      }
+    },
+    {
+      "name": "sub-zero",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(sub x 0:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesSubZeroRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-zero",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(and x 0:i64)",
+      "rhs": "0:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndZeroRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-allones",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(and x 18446744073709551615:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndAllOnesRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-self",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(and x x)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndSelfRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-not-self",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(and (not x) x)",
+      "rhs": "0:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndNotSelfRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-zero",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(or x 0:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrZeroRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-allones",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(or x 18446744073709551615:i64)",
+      "rhs": "18446744073709551615:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrAllOnesRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-self",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(or x x)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrSelfRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-absorb-or",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(and (or x y) x)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndAbsorbOrRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-factor-not-self",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(and (and x y) (not x))",
+      "rhs": "0:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndFactorNotSelfRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-factor-or",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(and (and x y) (or x y))",
+      "rhs": "(and x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndFactorOrRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-factor-lhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(and (and x y) x)",
+      "rhs": "(and x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndFactorLhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-factor-rhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(and (and x y) y)",
+      "rhs": "(and x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndFactorRhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-factor-not-rhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(and (and x y) (not y))",
+      "rhs": "0:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndFactorNotRhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-and-xor-zero",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(and (and x y) (xor x y))",
+      "rhs": "0:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndAndXorZeroRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-not-or",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(and (not x) (or x y))",
+      "rhs": "(and (not x) y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndNotOrRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-not-xor",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(and (not x) (xor x y))",
+      "rhs": "(and (not x) y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndNotXorRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-or-xor",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(and (or x y) (xor x y))",
+      "rhs": "(xor x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndOrXorRewrite"
+        ]
+      }
+    },
+    {
+      "name": "and-or-rhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(and (or x y) y)",
+      "rhs": "y",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAndOrRhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-absorb-and",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (and x y) x)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrAbsorbAndRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-and-or",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (and x y) (or x y))",
+      "rhs": "(or x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrAndOrRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-and-rhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (and x y) y)",
+      "rhs": "y",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrAndRhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-and-xor",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (and x y) (xor x y))",
+      "rhs": "(or x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrAndXorRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-factor-lhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (or x y) x)",
+      "rhs": "(or x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrFactorLhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-factor-rhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (or x y) y)",
+      "rhs": "(or x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrFactorRhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-xor-lhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (xor x y) x)",
+      "rhs": "(or x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrXorLhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-xor-rhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (xor x y) y)",
+      "rhs": "(or x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrXorRhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-not-self",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(or (not x) x)",
+      "rhs": "18446744073709551615:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrNotSelfRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-and-not-lhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (and x y) (not x))",
+      "rhs": "(or (not x) y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrAndNotLhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-and-not-rhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (and x y) (not y))",
+      "rhs": "(or (not y) x)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrAndNotRhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-or-xor",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (or x y) (xor x y))",
+      "rhs": "(or x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrOrXorRewrite"
+        ]
+      }
+    },
+    {
+      "name": "or-not-or",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(or (not x) (or x y))",
+      "rhs": "18446744073709551615:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesOrNotOrRewrite"
+        ]
+      }
+    },
+    {
+      "name": "select-same-arm",
+      "status": "accepted",
+      "inputs": [
+        "cond",
+        "x"
+      ],
+      "lhs": "(select cond x x)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 1,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": -1,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesSelectSameArmRewrite",
+          "DMirValidation.FuzzesSelectSameArmRewriteI8",
+          "DMirValidation.FuzzesSelectSameArmRewriteI32"
+        ]
+      }
+    },
+    {
+      "name": "xor-zero",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(xor x 0:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorZeroRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-self",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(xor x x)",
+      "rhs": "0:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorSelfRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-cancel",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(xor (xor x y) x)",
+      "rhs": "y",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorCancelRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-cancel-rhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(xor (xor x y) y)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorCancelRhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-not-cancel",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(xor (not x) (xor x y))",
+      "rhs": "(not y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorNotCancelRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-not-self",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(xor (not x) x)",
+      "rhs": "18446744073709551615:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorNotSelfRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-not-not",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(xor (not x) (not y))",
+      "rhs": "(xor x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorNotNotRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-not-or",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(xor (not x) (or x y))",
+      "rhs": "(or (not y) x)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorNotOrRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-not-allones",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(xor (not x) 18446744073709551615:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorNotAllOnesRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-and-or",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(xor (and x y) (or x y))",
+      "rhs": "(xor x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorAndOrRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-and-not-lhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(xor (and x y) (not x))",
+      "rhs": "(or (not x) y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorAndNotLhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-and-not-rhs",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(xor (and x y) (not y))",
+      "rhs": "(or (not y) x)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorAndNotRhsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-and-xor",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(xor (and x y) (xor x y))",
+      "rhs": "(or x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorAndXorRewrite"
+        ]
+      }
+    },
+    {
+      "name": "xor-or-xor",
+      "status": "accepted",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "lhs": "(xor (or x y) (xor x y))",
+      "rhs": "(and x y)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 3,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesXorOrXorRewrite"
+        ]
+      }
+    },
+    {
+      "name": "sub-self",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(sub x x)",
+      "rhs": "0:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesSubSelfRewrite"
+        ]
+      }
+    },
+    {
+      "name": "shl-zero",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(shl x 0:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesShlZeroRewrite"
+        ]
+      }
+    },
+    {
+      "name": "sshr-zero",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(sshr x 0:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesSshrZeroRewrite"
+        ]
+      }
+    },
+    {
+      "name": "ushr-zero",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(ushr x 0:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesUshrZeroRewrite"
+        ]
+      }
+    },
+    {
+      "name": "adc-zero-carry",
+      "status": "seed",
+      "inputs": [
+        "lhs",
+        "rhs"
+      ],
+      "lhs": "(adc lhs rhs 0:i64)",
+      "rhs": "(add lhs rhs)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 1,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": -1,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAdcWithoutCarryRewrite"
+        ]
+      }
+    },
+    {
+      "name": "adc-zero-operands",
+      "status": "seed",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(adc x 0:i64 0:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 1,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": -1,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAdcZeroOperandsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "sbb-zero-borrow",
+      "status": "seed",
+      "inputs": [
+        "lhs",
+        "rhs"
+      ],
+      "lhs": "(sbb lhs rhs 0:i64)",
+      "rhs": "(sub lhs rhs)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 1,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": -1,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesSbbWithoutBorrowRewrite"
+        ]
+      }
+    },
+    {
+      "name": "sbb-zero-operands",
+      "status": "seed",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(sbb x 0:i64 0:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 1,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": -1,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesSbbZeroOperandsRewrite"
+        ]
+      }
+    },
+    {
+      "name": "sbb-self-zero-borrow",
+      "status": "seed",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(sbb x x 0:i64)",
+      "rhs": "0:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 1,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": -1,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesSbbSelfWithoutBorrowRewrite"
+        ]
+      }
+    },
+    {
+      "name": "mul-zero-rhs",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(mul x 0:i64)",
+      "rhs": "0:i64",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesMulZeroRewrite"
+        ]
+      }
+    },
+    {
+      "name": "mul-one-rhs",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(mul x 1:i64)",
+      "rhs": "x",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesMulOneRewrite"
+        ]
+      }
+    }
+  ]
+}

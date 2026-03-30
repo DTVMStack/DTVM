@@ -102,6 +102,7 @@ if(ZEN_ENABLE_SINGLEPASS_JIT)
 endif()
 
 if(ZEN_ENABLE_MULTIPASS_JIT)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
   find_package(LLVM 15 REQUIRED CONFIG)
   message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
   message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
