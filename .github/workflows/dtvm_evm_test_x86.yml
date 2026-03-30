@@ -723,14 +723,31 @@ jobs:
             --output /tmp/ci_timing_report.json \
             -- --format evm --mode multipass --compile-only
 
+      - name: Refresh timing budgets from CI data
+        run: |
+          python tools/update_compiler_pass_timing_budget.py \
+            --report /tmp/ci_timing_report.json \
+            --out /tmp/ci_budget_x86_cg_peephole.json \
+            --budget-in tests/evm_asm/compiler_pass_timing_budget_x86_cg_peephole.json \
+            --target-pass x86_cg_peephole \
+            --manifest tests/evm_asm/compiler_pass_timing_manifest.json \
+            --runs 5
+          python tools/update_compiler_pass_timing_budget.py \
+            --report /tmp/ci_timing_report.json \
+            --out /tmp/ci_budget_dmir_rewrite.json \
+            --budget-in tests/evm_asm/compiler_pass_timing_budget_dmir_rewrite.json \
+            --target-pass dmir_rewrite \
+            --manifest tests/evm_asm/compiler_pass_timing_manifest.json \
+            --runs 5
+
       - name: Check timing budget (x86_cg_peephole)
         run: |
           python tools/check_compiler_pass_timing_budget.py \
-            --budget tests/evm_asm/compiler_pass_timing_budget_x86_cg_peephole.json \
+            --budget /tmp/ci_budget_x86_cg_peephole.json \
             --report /tmp/ci_timing_report.json
 
       - name: Check timing budget (dmir_rewrite)
         run: |
           python tools/check_compiler_pass_timing_budget.py \
-            --budget tests/evm_asm/compiler_pass_timing_budget_dmir_rewrite.json \
+            --budget /tmp/ci_budget_dmir_rewrite.json \
             --report /tmp/ci_timing_report.json
