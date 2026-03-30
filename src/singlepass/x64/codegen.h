@@ -939,19 +939,15 @@ public:
                                   X64Reg::getRegRef<X64::I32>(BaseReg), 0,
                                   Offset, getWASMTypeSize<SrcType>());
 
-#ifdef ZEN_ENABLE_CPU_EXCEPTION
-    if (!Base.isImm() && (Offset >= INT32_MAX)) {
-      // when offset >= INT32_MAX, then will cause inst like mov edi, dword
-      // ptr[r13+edi-1].
+    if (!Base.isImm() && (Offset > (uint32_t)INT32_MAX)) {
       auto MemAddrReg = Layout.getScopedTemp<AddrType, ScopedTempReg2>();
       _ mov(X64Reg::getRegRef<X64::I32>(MemAddrReg), Offset);
       _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg),
             X64Reg::getRegRef<X64::I64>(BaseReg));
       _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg), ABI.getMemoryBaseReg());
       Addr = asmjit::x86::Mem(X64Reg::getRegRef<X64::I64>(MemAddrReg), 0,
-                              getWASMTypeSize(SrcType));
+                              getWASMTypeSize<SrcType>());
     }
-#endif // ZEN_ENABLE_CPU_EXCEPTION
 
     LoadOperatorImpl<X64DestType, X64SrcType, Sext>::emit(
         ASM, X64Reg::getRegRef<X64DestType>(ValReg), Addr);
@@ -1018,14 +1014,22 @@ public:
       ZEN_ABORT();
     }
 
-    // Addr = memoryBase + (in64) offset, so when offset < 0,
-    // the result i32 Addr works like add (2**32 + offset)
     asmjit::x86::Mem Addr =
         Base.isImm() ? asmjit::x86::Mem(ABI.getMemoryBaseReg(), Offset,
                                         getWASMTypeSize<Type>())
                      : asmjit::x86::Mem(ABI.getMemoryBaseReg(),
                                         X64Reg::getRegRef<X64::I32>(RegNum), 0,
                                         Offset, getWASMTypeSize<Type>());
+
+    if (!Base.isImm() && (Offset > (uint32_t)INT32_MAX)) {
+      auto MemAddrReg = Layout.getScopedTemp<AddrType, ScopedTempReg2>();
+      _ mov(X64Reg::getRegRef<X64::I32>(MemAddrReg), Offset);
+      _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg),
+            X64Reg::getRegRef<X64::I64>(RegNum));
+      _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg), ABI.getMemoryBaseReg());
+      Addr = asmjit::x86::Mem(X64Reg::getRegRef<X64::I64>(MemAddrReg), 0,
+                              getWASMTypeSize<Type>());
+    }
 
     mov<X64Type, ScopedTempReg0>(Addr, Value);
   }
