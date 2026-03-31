@@ -316,6 +316,20 @@ private:
     if (isOneConst(*RHS)) {
       return LHS;
     }
+    // mul(x, 2^k) -> shl(x, k) for i64 types when k >= 1
+    if (Inst.getType()->isInteger() && Inst.getType()->getBitWidth() == 64 &&
+        isIntegerConst(*RHS)) {
+      uint64_t C = llvm::cast<MConstantInt>(
+                       &llvm::cast<ConstantInstruction>(RHS)->getConstant())
+                       ->getValue()
+                       .getZExtValue();
+      if (C > 1 && (C & (C - 1)) == 0) {
+        uint64_t K = static_cast<uint64_t>(__builtin_ctzll(C));
+        return createBinaryInstruction(
+            OP_shl, *Inst.getType(), LHS,
+            createIntegerConstant(*Inst.getType(), llvm::APInt(64, K), BB), BB);
+      }
+    }
     return nullptr;
   }
 
@@ -363,6 +377,18 @@ private:
       if (isZeroConst(*Sbb.getOperand<1>()) &&
           isCarryDead(*Sbb.getOperand<2>())) {
         return true;
+      }
+    }
+    // zext(icmp(ULT, x, 0)): no unsigned value is less than 0, always false.
+    if (CarryProducer.getOpcode() == OP_uext &&
+        CarryProducer.getKind() == MInstruction::UNARY) {
+      const MInstruction *Inner = CarryProducer.getOperand<0>();
+      if (Inner->getOpcode() == OP_cmp &&
+          llvm::cast<CmpInstruction>(Inner)->getPredicate() ==
+              CmpInstruction::ICMP_ULT) {
+        if (isZeroConst(*Inner->getOperand<1>())) {
+          return true;
+        }
       }
     }
     return false;
@@ -418,8 +444,17 @@ private:
   }
 
   MInstruction *rewriteSelect(SelectInstruction &Inst) const {
+    MInstruction *Cond = Inst.getOperand<0>();
     MInstruction *TrueValue = Inst.getOperand<1>();
     MInstruction *FalseValue = Inst.getOperand<2>();
+    // select(0, t, f) -> f: condition is always false
+    if (isZeroConst(*Cond)) {
+      return FalseValue;
+    }
+    // select(nonzero, t, f) -> t: condition is always true
+    if (isNonZeroIntConst(*Cond)) {
+      return TrueValue;
+    }
     if (structurallyEqual(*TrueValue, *FalseValue)) {
       return TrueValue;
     }
@@ -844,6 +879,16 @@ private:
                &llvm::cast<ConstantInstruction>(Inst).getConstant())
         ->getValue()
         .isZero();
+  }
+
+  static bool isNonZeroIntConst(const MInstruction &Inst) {
+    if (!isIntegerConst(Inst)) {
+      return false;
+    }
+    return !llvm::cast<MConstantInt>(
+                &llvm::cast<ConstantInstruction>(Inst).getConstant())
+                ->getValue()
+                .isZero();
   }
 
   static bool isOneConst(const MInstruction &Inst) {

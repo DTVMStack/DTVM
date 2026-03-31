@@ -2151,4 +2151,191 @@ TEST(DMirValidation, FuzzesSubOrAndToXorRewrite) {
       });
 }
 
+// Optimization 1: select(0, t, f) -> f and select(nonzero, t, f) -> t
+
+TEST(DMirValidation, FuzzesSelectFalseCondRewrite) {
+  // select(0, t, f) -> f
+  expectBinaryI64RewriteEquivalent(
+      getInterestingBinaryInputCases(),
+      [](DMirTestBuilder &Builder, MInstruction *TrueVal,
+         MInstruction *FalseVal) {
+        auto *Cond = Builder.createConstI64(0);
+        return Builder.createExpr<SelectInstruction>(&Builder.Context.I64Type,
+                                                     Cond, TrueVal, FalseVal);
+      },
+      [](DMirTestBuilder &, MInstruction *, MInstruction *FalseVal) {
+        return FalseVal;
+      });
+}
+
+TEST(DMirValidation, FuzzesSelectTrueCondRewrite) {
+  // select(nonzero, t, f) -> t
+  expectBinaryI64RewriteEquivalent(
+      getInterestingBinaryInputCases(),
+      [](DMirTestBuilder &Builder, MInstruction *TrueVal,
+         MInstruction *FalseVal) {
+        auto *Cond = Builder.createConstI64(1);
+        return Builder.createExpr<SelectInstruction>(&Builder.Context.I64Type,
+                                                     Cond, TrueVal, FalseVal);
+      },
+      [](DMirTestBuilder &, MInstruction *TrueVal, MInstruction *) {
+        return TrueVal;
+      });
+}
+
+TEST(DMirRewritePass, RewritesSelectFalseCondToFalseArm) {
+  // select(0, t, f) -> f
+  DMirTestBuilder Builder;
+  Variable *TrueVar = Builder.createVariable(&Builder.Context.I64Type);
+  Variable *FalseVar = Builder.createVariable(&Builder.Context.I64Type);
+  auto *TrueValue = Builder.createExpr<DreadInstruction>(
+      &Builder.Context.I64Type, TrueVar->getVarIdx());
+  auto *FalseValue = Builder.createExpr<DreadInstruction>(
+      &Builder.Context.I64Type, FalseVar->getVarIdx());
+  auto *Select = Builder.createExpr<SelectInstruction>(
+      &Builder.Context.I64Type, Builder.createConstI64(0), TrueValue,
+      FalseValue);
+
+  MInstruction *Rewritten = rewriteReturnedValue(Builder, Select);
+  EXPECT_EQ(Rewritten, FalseValue);
+}
+
+TEST(DMirRewritePass, RewritesSelectTrueCondToTrueArm) {
+  // select(1, t, f) -> t
+  DMirTestBuilder Builder;
+  Variable *TrueVar = Builder.createVariable(&Builder.Context.I64Type);
+  Variable *FalseVar = Builder.createVariable(&Builder.Context.I64Type);
+  auto *TrueValue = Builder.createExpr<DreadInstruction>(
+      &Builder.Context.I64Type, TrueVar->getVarIdx());
+  auto *FalseValue = Builder.createExpr<DreadInstruction>(
+      &Builder.Context.I64Type, FalseVar->getVarIdx());
+  auto *Select = Builder.createExpr<SelectInstruction>(
+      &Builder.Context.I64Type, Builder.createConstI64(1), TrueValue,
+      FalseValue);
+
+  MInstruction *Rewritten = rewriteReturnedValue(Builder, Select);
+  EXPECT_EQ(Rewritten, TrueValue);
+}
+
+// Optimization 2: mul(x, 2^k) -> shl(x, k)
+
+TEST(DMirValidation, FuzzesMulPow2ToShlRewrite) {
+  // mul(x, 2) -> shl(x, 1)
+  expectUnaryI64RewriteEquivalent(
+      getInterestingU64Values(),
+      [](DMirTestBuilder &Builder, MInstruction *Input) {
+        return Builder.createExpr<BinaryInstruction>(
+            OP_mul, &Builder.Context.I64Type, Input, Builder.createConstI64(2));
+      },
+      [](DMirTestBuilder &Builder, MInstruction *Input) {
+        return Builder.createExpr<BinaryInstruction>(
+            OP_shl, &Builder.Context.I64Type, Input, Builder.createConstI64(1));
+      });
+}
+
+TEST(DMirRewritePass, RewritesMulBy2ToShl1) {
+  DMirTestBuilder Builder;
+  Variable *InputVar = Builder.createVariable(&Builder.Context.I64Type);
+  auto *Input = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
+                                                     InputVar->getVarIdx());
+  auto *Mul = Builder.createExpr<BinaryInstruction>(
+      OP_mul, &Builder.Context.I64Type, Input, Builder.createConstI64(2));
+
+  MInstruction *Rewritten = rewriteReturnedValue(Builder, Mul);
+  ASSERT_EQ(Rewritten->getOpcode(), OP_shl);
+  auto *Shl = llvm::cast<BinaryInstruction>(Rewritten);
+  EXPECT_EQ(Shl->getOperand<0>(), Input);
+  ASSERT_EQ(Shl->getOperand<1>()->getOpcode(), OP_const);
+  EXPECT_EQ(
+      llvm::cast<MConstantInt>(
+          &llvm::cast<ConstantInstruction>(Shl->getOperand<1>())->getConstant())
+          ->getValue()
+          .getZExtValue(),
+      1ULL);
+}
+
+TEST(DMirRewritePass, RewritesMulBy4ToShl2) {
+  DMirTestBuilder Builder;
+  Variable *InputVar = Builder.createVariable(&Builder.Context.I64Type);
+  auto *Input = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
+                                                     InputVar->getVarIdx());
+  auto *Mul = Builder.createExpr<BinaryInstruction>(
+      OP_mul, &Builder.Context.I64Type, Input, Builder.createConstI64(4));
+
+  MInstruction *Rewritten = rewriteReturnedValue(Builder, Mul);
+  ASSERT_EQ(Rewritten->getOpcode(), OP_shl);
+  auto *Shl = llvm::cast<BinaryInstruction>(Rewritten);
+  EXPECT_EQ(Shl->getOperand<0>(), Input);
+  EXPECT_EQ(
+      llvm::cast<MConstantInt>(
+          &llvm::cast<ConstantInstruction>(Shl->getOperand<1>())->getConstant())
+          ->getValue()
+          .getZExtValue(),
+      2ULL);
+}
+
+TEST(DMirRewritePass, RewritesMulBy8ToShl3) {
+  DMirTestBuilder Builder;
+  Variable *InputVar = Builder.createVariable(&Builder.Context.I64Type);
+  auto *Input = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
+                                                     InputVar->getVarIdx());
+  auto *Mul = Builder.createExpr<BinaryInstruction>(
+      OP_mul, &Builder.Context.I64Type, Input, Builder.createConstI64(8));
+
+  MInstruction *Rewritten = rewriteReturnedValue(Builder, Mul);
+  ASSERT_EQ(Rewritten->getOpcode(), OP_shl);
+  EXPECT_EQ(llvm::cast<MConstantInt>(
+                &llvm::cast<ConstantInstruction>(
+                     llvm::cast<BinaryInstruction>(Rewritten)->getOperand<1>())
+                     ->getConstant())
+                ->getValue()
+                .getZExtValue(),
+            3ULL);
+}
+
+TEST(DMirRewritePass, DoesNotRewriteMulBy3) {
+  // mul(x, 3) should not be rewritten (not a power of two)
+  DMirTestBuilder Builder;
+  Variable *InputVar = Builder.createVariable(&Builder.Context.I64Type);
+  auto *Input = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
+                                                     InputVar->getVarIdx());
+  auto *Mul = Builder.createExpr<BinaryInstruction>(
+      OP_mul, &Builder.Context.I64Type, Input, Builder.createConstI64(3));
+
+  MInstruction *Rewritten = rewriteReturnedValue(Builder, Mul);
+  EXPECT_EQ(Rewritten->getOpcode(), OP_mul);
+}
+
+// Optimization 3: isCarryDead recognizes zext(icmp_ult(x, 0))
+
+TEST(DMirRewritePass, RewritesSbbWithZextIcmpUltZeroBorrowToSub) {
+  // sbb(x, y, zext(icmp_ult(z, 0))) -> sub(x, y) since borrow is always dead
+  DMirTestBuilder Builder;
+  Variable *XVar = Builder.createVariable(&Builder.Context.I64Type);
+  Variable *YVar = Builder.createVariable(&Builder.Context.I64Type);
+  Variable *ZVar = Builder.createVariable(&Builder.Context.I64Type);
+  auto *X = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
+                                                 XVar->getVarIdx());
+  auto *Y = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
+                                                 YVar->getVarIdx());
+  auto *Z = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
+                                                 ZVar->getVarIdx());
+  // icmp_ult(z, 0): always false, always zero
+  auto *Cmp = Builder.createExpr<CmpInstruction>(CmpInstruction::ICMP_ULT,
+                                                 &Builder.Context.I64Type, Z,
+                                                 Builder.createConstI64(0));
+  // zext to i64
+  auto *Zext = Builder.createExpr<UnaryInstruction>(
+      OP_uext, &Builder.Context.I64Type, Cmp);
+  auto *Sbb =
+      Builder.createExpr<SbbInstruction>(&Builder.Context.I64Type, X, Y, Zext);
+  auto *Return =
+      Builder.createStmt<ReturnInstruction>(&Builder.Context.I64Type, Sbb);
+
+  EXPECT_TRUE(runDMirRewritePass(Builder));
+  auto *Result = Return->getOperand<0>();
+  EXPECT_NE(Result, Sbb);
+  EXPECT_EQ(Result->getOpcode(), OP_sub);
+}
+
 } // namespace

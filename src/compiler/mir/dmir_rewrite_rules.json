@@ -1323,6 +1323,119 @@
       }
     },
     {
+      "name": "select-false-cond",
+      "status": "accepted",
+      "inputs": [
+        "t",
+        "f"
+      ],
+      "lhs": "(select 0:i64 t f)",
+      "rhs": "f",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 1,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": -1,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesSelectFalseCondRewrite"
+        ]
+      }
+    },
+    {
+      "name": "select-true-cond",
+      "status": "accepted",
+      "inputs": [
+        "t",
+        "f"
+      ],
+      "lhs": "(select 1:i64 t f)",
+      "rhs": "t",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 1,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": -1,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesSelectTrueCondRewrite"
+        ]
+      }
+    },
+    {
+      "name": "mul-pow2-to-shl",
+      "status": "accepted",
+      "inputs": [
+        "x"
+      ],
+      "lhs": "(mul x 2:i64)",
+      "rhs": "(shl x 1:i64)",
+      "cost": {
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
+      },
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesMulPow2ToShlRewrite"
+        ]
+      }
+    },
+    {
       "name": "xor-zero",
       "status": "accepted",
       "inputs": [
