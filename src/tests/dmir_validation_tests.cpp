@@ -1224,7 +1224,8 @@ TEST(DMirRewritePass, MaterializesTypedAllOnesForOrNotSelf) {
               llvm::APInt(32, ~0U));
 }
 
-TEST(DMirRewritePass, LeavesAdcZeroCarryUnchanged) {
+TEST(DMirRewritePass, RewritesAdcZeroCarryToAdd) {
+  // adc(lhs, rhs, const(0)) → add(lhs, rhs) when carry is dead
   DMirTestBuilder Builder;
   Variable *LhsVar = Builder.createVariable(&Builder.Context.I64Type);
   Variable *RhsVar = Builder.createVariable(&Builder.Context.I64Type);
@@ -1237,11 +1238,14 @@ TEST(DMirRewritePass, LeavesAdcZeroCarryUnchanged) {
   auto *Return =
       Builder.createStmt<ReturnInstruction>(&Builder.Context.I64Type, Adc);
 
-  EXPECT_FALSE(runDMirRewritePass(Builder));
-  EXPECT_EQ(Return->getOperand<0>(), Adc);
+  EXPECT_TRUE(runDMirRewritePass(Builder));
+  auto *Result = Return->getOperand<0>();
+  EXPECT_NE(Result, Adc);
+  EXPECT_EQ(Result->getOpcode(), OP_add);
 }
 
-TEST(DMirRewritePass, LeavesAdcZeroOperandsUnchanged) {
+TEST(DMirRewritePass, RewritesAdcZeroOperandsToInput) {
+  // adc(input, 0, const(0)) → input when carry is dead and RHS is zero
   DMirTestBuilder Builder;
   Variable *InputVar = Builder.createVariable(&Builder.Context.I64Type);
   auto *Input = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
@@ -1252,11 +1256,12 @@ TEST(DMirRewritePass, LeavesAdcZeroOperandsUnchanged) {
   auto *Return =
       Builder.createStmt<ReturnInstruction>(&Builder.Context.I64Type, Adc);
 
-  EXPECT_FALSE(runDMirRewritePass(Builder));
-  EXPECT_EQ(Return->getOperand<0>(), Adc);
+  EXPECT_TRUE(runDMirRewritePass(Builder));
+  EXPECT_EQ(Return->getOperand<0>(), Input);
 }
 
-TEST(DMirRewritePass, LeavesSbbZeroOperandsUnchanged) {
+TEST(DMirRewritePass, RewritesSbbZeroOperandsToInput) {
+  // sbb(input, 0, const(0)) → input when borrow is dead and RHS is zero
   DMirTestBuilder Builder;
   Variable *InputVar = Builder.createVariable(&Builder.Context.I64Type);
   auto *Input = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
@@ -1267,11 +1272,12 @@ TEST(DMirRewritePass, LeavesSbbZeroOperandsUnchanged) {
   auto *Return =
       Builder.createStmt<ReturnInstruction>(&Builder.Context.I64Type, Sbb);
 
-  EXPECT_FALSE(runDMirRewritePass(Builder));
-  EXPECT_EQ(Return->getOperand<0>(), Sbb);
+  EXPECT_TRUE(runDMirRewritePass(Builder));
+  EXPECT_EQ(Return->getOperand<0>(), Input);
 }
 
-TEST(DMirRewritePass, LeavesSbbSelfZeroBorrowUnchanged) {
+TEST(DMirRewritePass, RewritesSbbSelfZeroBorrowToZero) {
+  // sbb(input, input, const(0)) → 0 when borrow is dead and LHS==RHS
   DMirTestBuilder Builder;
   Variable *InputVar = Builder.createVariable(&Builder.Context.I64Type);
   auto *Input = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
@@ -1284,8 +1290,10 @@ TEST(DMirRewritePass, LeavesSbbSelfZeroBorrowUnchanged) {
   auto *Return =
       Builder.createStmt<ReturnInstruction>(&Builder.Context.I64Type, Sbb);
 
-  EXPECT_FALSE(runDMirRewritePass(Builder));
-  EXPECT_EQ(Return->getOperand<0>(), Sbb);
+  EXPECT_TRUE(runDMirRewritePass(Builder));
+  auto *Result = Return->getOperand<0>();
+  EXPECT_NE(Result, Sbb);
+  EXPECT_TRUE(llvm::isa<ConstantInstruction>(Result));
 }
 
 TEST(DMirRewritePass, RewritesAndAbsorbOrToExistingOperand) {
