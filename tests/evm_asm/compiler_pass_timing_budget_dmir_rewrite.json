@@ -3,38 +3,38 @@
   "target_pass": "dmir_rewrite",
   "thresholds": {
     "max_pass_share_p95_pct": 1.2,
-    "max_pass_time_p95_ms": 0.01,
+    "max_pass_time_p95_ms": 0.028,
     "max_overall_total_time_regression_pct": 5.0,
     "max_case_total_time_regression_pct": 20.0
   },
   "baseline": {
-    "overall_total_time_ms_median": 0.815081,
+    "overall_total_time_ms_median": 0.85175,
     "case_total_time_ms_median": {
-      "add": 0.90462,
-      "mul": 0.816997,
-      "div": 0.768571,
-      "shl": 0.758534,
-      "shr": 0.770613,
-      "sar": 0.750282,
-      "byte": 0.794542,
-      "eq_true": 0.839906,
-      "lt_true": 0.752717,
-      "jump": 0.854454,
-      "u256_shl_add_mul": 0.880501,
-      "u256_mul_add_chain": 0.818078,
-      "u256_shr_add_shl": 0.849664,
-      "bool_and_or_xor_not": 0.869076,
-      "bool_xor_not_chain": 0.823643
+      "add": 0.864481,
+      "mul": 0.903338,
+      "div": 0.854079,
+      "shl": 0.841816,
+      "shr": 0.820848,
+      "sar": 0.827417,
+      "byte": 0.880214,
+      "eq_true": 0.844935,
+      "lt_true": 0.870578,
+      "jump": 0.873635,
+      "u256_shl_add_mul": 0.839147,
+      "u256_mul_add_chain": 0.861729,
+      "u256_shr_add_shl": 0.844389,
+      "bool_and_or_xor_not": 0.848925,
+      "bool_xor_not_chain": 0.847343
     }
   },
   "metadata": {
     "manifest": "tests/evm_asm/compiler_pass_timing_manifest.json",
     "runs": 5,
     "num_extra_compilations": 4,
-    "rule_count": 58,
+    "rule_count": 70,
     "compile_mode": "compile-only",
     "thresholds_status": "provisional",
-    "measured_p95_ms": 0.004757,
+    "measured_p95_ms": 0.013796,
     "measured_p95_share_pct": 0.5947,
     "threshold_multiplier": 2.0
   }
