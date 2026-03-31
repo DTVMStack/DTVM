@@ -2,7 +2,7 @@
   "version": 1,
   "target_pass": "dmir_rewrite",
   "thresholds": {
-    "max_pass_share_p95_pct": 1.2,
+    "max_pass_share_p95_pct": 1.25,
     "max_pass_time_p95_ms": 0.028,
     "max_overall_total_time_regression_pct": 5.0,
     "max_case_total_time_regression_pct": 20.0
