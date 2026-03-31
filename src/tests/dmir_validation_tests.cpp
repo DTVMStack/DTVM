@@ -2044,8 +2044,7 @@ TEST(DMirValidation, FuzzesAddSelfToShl1Rewrite) {
       },
       [](DMirTestBuilder &Builder, MInstruction *Input) {
         return Builder.createExpr<BinaryInstruction>(
-            OP_shl, &Builder.Context.I64Type, Input,
-            Builder.createConstI64(1));
+            OP_shl, &Builder.Context.I64Type, Input, Builder.createConstI64(1));
       });
 }
 
