@@ -915,9 +915,18 @@ public:
       uint64_t Offset64 = (uint64_t)Offset;
       Offset64 += (uint32_t)Base.getImm();
       if (Offset64 > INT32_MAX) {
+#ifdef ZEN_ENABLE_BUILTIN_WASI
+        // WASI (non-blockchain): compute the real large address so the
+        // software OOB check fires correctly per the WASM spec.
         BaseReg = Layout.getScopedTemp<AddrType, ScopedTempReg1>();
         _ mov(X64Reg::getRegRef<X64::I32>(BaseReg), (uint32_t)Base.getImm());
         UseImmAddr = false;
+#else
+        // Blockchain mode: clamp to INT32_MAX so the resulting address
+        // falls in a deterministic out-of-range region; CPU exception
+        // (SIGSEGV) will trap it via the guard mapping.
+        Offset = INT32_MAX; // invalid addr
+#endif
       } else {
         Offset = (uint32_t)Offset64;
       }
@@ -1005,9 +1014,18 @@ public:
       uint64_t Offset64 = (uint64_t)Offset;
       Offset64 += (uint32_t)Base.getImm();
       if (Offset64 > INT32_MAX) {
+#ifdef ZEN_ENABLE_BUILTIN_WASI
+        // WASI (non-blockchain): compute the real large address so the
+        // software OOB check fires correctly per the WASM spec.
         RegNum = Layout.getScopedTemp<AddrType, ScopedTempReg1>();
         _ mov(X64Reg::getRegRef<X64::I32>(RegNum), (uint32_t)Base.getImm());
         UseImmAddr = false;
+#else
+        // Blockchain mode: clamp to INT32_MAX so the resulting address
+        // falls in a deterministic out-of-range region; CPU exception
+        // (SIGSEGV) will trap it via the guard mapping.
+        Offset = INT32_MAX; // invalid addr
+#endif
       } else {
         Offset = (uint32_t)Offset64;
       }
