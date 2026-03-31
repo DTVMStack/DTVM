@@ -439,8 +439,6 @@ public:
         EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
     if constexpr (Operator == BinaryOperator::BO_ADD) {
-      MInstruction *Carry = createIntConstInstruction(MirI64Type, 0);
-
       // Pre-materialize all operand components into variables before the
       // ADD/ADC carry chain to prevent flag-clobbering during x86 lowering.
       for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
@@ -448,24 +446,25 @@ public:
         RHS[I] = protectUnsafeValue(RHS[I], MirI64Type);
       }
 
+      // CarryProducer tracks the raw (unwrapped) instruction whose carry-out
+      // feeds the next ADC. We pass this directly as operand 2 so that
+      // isCarryDead can traverse the chain without being blocked by the
+      // dread barrier inserted by protectUnsafeValue.
+      MInstruction *CarryProducer = nullptr;
       for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
         if (I == 0) {
           MInstruction *LocalResult = createInstruction<BinaryInstruction>(
               false, OP_add, MirI64Type, LHS[I], RHS[I]);
+          CarryProducer = LocalResult;
           Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
         } else {
           MInstruction *LocalResult = createInstruction<AdcInstruction>(
-              false, MirI64Type, LHS[I], RHS[I], Carry);
+              false, MirI64Type, LHS[I], RHS[I], CarryProducer);
+          CarryProducer = LocalResult;
           Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
         }
       }
     } else if constexpr (Operator == BinaryOperator::BO_SUB) {
-      // The borrow here is only used for constructing the sbb instruction.
-      // We currently use sbb only in bo_sub, and since we can guarantee the
-      // instructions are consecutive, there's no need to compute the borrow
-      // in DMIR.
-      MInstruction *Borrow = createIntConstInstruction(MirI64Type, 0);
-
       // Pre-materialize all operand components into variables before the
       // SUB/SBB borrow chain. This ensures that during x86 lowering, no
       // flag-modifying instructions (e.g. ADD for address computation in
@@ -478,14 +477,17 @@ public:
         RHS[I] = protectUnsafeValue(RHS[I], MirI64Type);
       }
 
+      MInstruction *BorrowProducer = nullptr;
       for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
         if (I == 0) {
           MInstruction *LocalResult = createInstruction<BinaryInstruction>(
               false, OP_sub, MirI64Type, LHS[I], RHS[I]);
+          BorrowProducer = LocalResult;
           Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
         } else {
           MInstruction *LocalResult = createInstruction<SbbInstruction>(
-              false, MirI64Type, LHS[I], RHS[I], Borrow);
+              false, MirI64Type, LHS[I], RHS[I], BorrowProducer);
+          BorrowProducer = LocalResult;
           Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
         }
       }

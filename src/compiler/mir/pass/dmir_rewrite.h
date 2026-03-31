@@ -71,7 +71,7 @@ private:
   MInstruction *tryRewrite(MInstruction &Inst, MBasicBlock &BB) {
     switch (Inst.getOpcode()) {
     case OP_add:
-      return rewriteAdd(llvm::cast<BinaryInstruction>(Inst));
+      return rewriteAdd(llvm::cast<BinaryInstruction>(Inst), BB);
     case OP_sub:
       return rewriteSub(llvm::cast<BinaryInstruction>(Inst), BB);
     case OP_and:
@@ -90,12 +90,16 @@ private:
       return rewriteNot(llvm::cast<NotInstruction>(Inst));
     case OP_select:
       return rewriteSelect(llvm::cast<SelectInstruction>(Inst));
+    case OP_adc:
+      return rewriteAdc(llvm::cast<AdcInstruction>(Inst), BB);
+    case OP_sbb:
+      return rewriteSbb(llvm::cast<SbbInstruction>(Inst), BB);
     default:
       return nullptr;
     }
   }
 
-  MInstruction *rewriteAdd(BinaryInstruction &Inst) const {
+  MInstruction *rewriteAdd(BinaryInstruction &Inst, MBasicBlock &BB) {
     MInstruction *LHS = Inst.getOperand<0>();
     MInstruction *RHS = Inst.getOperand<1>();
     if (isZeroConst(*RHS)) {
@@ -103,6 +107,35 @@ private:
     }
     if (isZeroConst(*LHS)) {
       return RHS;
+    }
+    // (add x x) -> (shl x 1): doubling is a left shift by one
+    if (structurallyEqual(*LHS, *RHS)) {
+      return createBinaryInstruction(OP_shl, *Inst.getType(), LHS,
+                                     createOneConstant(*Inst.getType(), BB),
+                                     BB);
+    }
+    // (add (sub 0 x) y) -> (sub y x): negation folding
+    if (isNeg(*LHS)) {
+      return createBinaryInstruction(OP_sub, *Inst.getType(), RHS,
+                                     getNegOperand(*LHS), BB);
+    }
+    if (isNeg(*RHS)) {
+      return createBinaryInstruction(OP_sub, *Inst.getType(), LHS,
+                                     getNegOperand(*RHS), BB);
+    }
+    // (add (and x y) (xor x y)) -> (or x y)
+    if (const auto *AndInst =
+            matchBinaryOperandPair(*LHS, *RHS, OP_and, OP_xor)) {
+      return createBinaryInstruction(OP_or, *Inst.getType(),
+                                     AndInst->getOperand<0>(),
+                                     AndInst->getOperand<1>(), BB);
+    }
+    // (add (and x y) (or x y)) -> (add x y)
+    if (const auto *AndInst =
+            matchBinaryOperandPair(*LHS, *RHS, OP_and, OP_or)) {
+      return createBinaryInstruction(OP_add, *Inst.getType(),
+                                     AndInst->getOperand<0>(),
+                                     AndInst->getOperand<1>(), BB);
     }
     return nullptr;
   }
@@ -115,6 +148,23 @@ private:
     }
     if (structurallyEqual(*LHS, *RHS)) {
       return createZeroConstant(*Inst.getType(), BB);
+    }
+    // (sub (and x y) (or x y)) -> (sub 0 (xor x y))
+    if (const auto *AndInst =
+            matchBinaryOperandPair(*LHS, *RHS, OP_and, OP_or)) {
+      MInstruction *XorInst = createBinaryInstruction(
+          OP_xor, *Inst.getType(), AndInst->getOperand<0>(),
+          AndInst->getOperand<1>(), BB);
+      return createBinaryInstruction(OP_sub, *Inst.getType(),
+                                     createZeroConstant(*Inst.getType(), BB),
+                                     XorInst, BB);
+    }
+    // (sub (or x y) (and x y)) -> (xor x y)
+    if (const auto *OrInst =
+            matchBinaryOperandPair(*LHS, *RHS, OP_or, OP_and)) {
+      return createBinaryInstruction(OP_xor, *Inst.getType(),
+                                     OrInst->getOperand<0>(),
+                                     OrInst->getOperand<1>(), BB);
     }
     return nullptr;
   }
@@ -267,6 +317,89 @@ private:
       return LHS;
     }
     return nullptr;
+  }
+
+  /// Carry-dead analysis: returns true when the carry/borrow output of the
+  /// instruction that feeds this ADC/SBB is provably zero.
+  ///
+  /// Currently handles:
+  ///   - const(0) operand (legacy placeholder or genuine chain-head zero)
+  ///   - add(x, 0) / add(0, x): x + 0 never overflows, carry = 0
+  ///   - adc(x, 0, prev) where isCarryDead(prev): x + 0 + 0 never overflows
+  bool isCarryDead(const MInstruction &CarryProducer) const {
+    // A const(0) carry operand means "no incoming carry" (chain head).
+    if (isZeroConst(CarryProducer)) {
+      return true;
+    }
+    // add(x, 0) or add(0, x): adding zero never produces a carry.
+    if (CarryProducer.getOpcode() == OP_add &&
+        CarryProducer.getKind() == MInstruction::BINARY) {
+      const auto &Add = llvm::cast<BinaryInstruction>(CarryProducer);
+      if (isZeroConst(*Add.getOperand<0>()) ||
+          isZeroConst(*Add.getOperand<1>())) {
+        return true;
+      }
+    }
+    // adc(x, 0, prev) where prev's carry is also dead: recursive chain.
+    if (CarryProducer.getOpcode() == OP_adc) {
+      const auto &Adc = llvm::cast<AdcInstruction>(CarryProducer);
+      if ((isZeroConst(*Adc.getOperand<0>()) ||
+           isZeroConst(*Adc.getOperand<1>())) &&
+          isCarryDead(*Adc.getOperand<2>())) {
+        return true;
+      }
+    }
+    // sub(x, 0): subtracting zero never borrows.
+    if (CarryProducer.getOpcode() == OP_sub &&
+        CarryProducer.getKind() == MInstruction::BINARY) {
+      const auto &Sub = llvm::cast<BinaryInstruction>(CarryProducer);
+      if (isZeroConst(*Sub.getOperand<1>())) {
+        return true;
+      }
+    }
+    // sbb(x, 0, prev) where prev's borrow is dead: recursive chain.
+    if (CarryProducer.getOpcode() == OP_sbb) {
+      const auto &Sbb = llvm::cast<SbbInstruction>(CarryProducer);
+      if (isZeroConst(*Sbb.getOperand<1>()) &&
+          isCarryDead(*Sbb.getOperand<2>())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  MInstruction *rewriteAdc(AdcInstruction &Inst, MBasicBlock &BB) {
+    MInstruction *LHS = Inst.getOperand<0>();
+    MInstruction *RHS = Inst.getOperand<1>();
+    MInstruction *CarryIn = Inst.getOperand<2>();
+    if (!isCarryDead(*CarryIn)) {
+      return nullptr;
+    }
+    // Carry is provably zero: adc(x, y, dead) → add(x, y)
+    if (isZeroConst(*RHS)) {
+      return LHS; // adc(x, 0, dead) → x
+    }
+    if (isZeroConst(*LHS)) {
+      return RHS; // adc(0, y, dead) → y
+    }
+    return createBinaryInstruction(OP_add, *Inst.getType(), LHS, RHS, BB);
+  }
+
+  MInstruction *rewriteSbb(SbbInstruction &Inst, MBasicBlock &BB) {
+    MInstruction *LHS = Inst.getOperand<0>();
+    MInstruction *RHS = Inst.getOperand<1>();
+    MInstruction *BorrowIn = Inst.getOperand<2>();
+    if (!isCarryDead(*BorrowIn)) {
+      return nullptr;
+    }
+    // Borrow is provably zero: sbb(x, y, dead) → sub(x, y)
+    if (isZeroConst(*RHS)) {
+      return LHS; // sbb(x, 0, dead) → x
+    }
+    if (structurallyEqual(*LHS, *RHS)) {
+      return createZeroConstant(*Inst.getType(), BB); // sbb(x, x, dead) → 0
+    }
+    return createBinaryInstruction(OP_sub, *Inst.getType(), LHS, RHS, BB);
   }
 
   MInstruction *rewriteShift(BinaryInstruction &Inst) const {
@@ -656,6 +789,24 @@ private:
     return static_cast<const BinaryInstruction *>(&Inst);
   }
 
+  // Match a pair of binary operands where one has opcode OpcA and the other
+  // has opcode OpcB, and both share the same unordered operand set.
+  // Returns the OpcA instruction on success, nullptr otherwise.
+  const BinaryInstruction *matchBinaryOperandPair(const MInstruction &LHS,
+                                                  const MInstruction &RHS,
+                                                  Opcode OpcA,
+                                                  Opcode OpcB) const {
+    if (const auto *A = getBinaryWithOpcode(LHS, OpcA))
+      if (const auto *B = getBinaryWithOpcode(RHS, OpcB))
+        if (hasSameUnorderedOperands(*A, *B))
+          return A;
+    if (const auto *A = getBinaryWithOpcode(RHS, OpcA))
+      if (const auto *B = getBinaryWithOpcode(LHS, OpcB))
+        if (hasSameUnorderedOperands(*A, *B))
+          return A;
+    return nullptr;
+  }
+
   bool structurallyContains(const BinaryInstruction &Inst,
                             const MInstruction &Value) const {
     return structurallyEqual(*Inst.getOperand<0>(), Value) ||
@@ -717,6 +868,23 @@ private:
 
   MInstruction *createZeroConstant(MType &Type, MBasicBlock &BB) {
     return createIntegerConstant(Type, llvm::APInt(Type.getBitWidth(), 0), BB);
+  }
+
+  MInstruction *createOneConstant(MType &Type, MBasicBlock &BB) {
+    return createIntegerConstant(Type, llvm::APInt(Type.getBitWidth(), 1), BB);
+  }
+
+  // Returns true if Inst is (sub 0 x), i.e. a negation of x.
+  static bool isNeg(const MInstruction &Inst) {
+    if (Inst.getOpcode() != OP_sub) {
+      return false;
+    }
+    return isZeroConst(*Inst.getOperand<0>());
+  }
+
+  // Returns the negated operand x from (sub 0 x). Caller must check isNeg.
+  static MInstruction *getNegOperand(MInstruction &Inst) {
+    return Inst.getOperand<1>();
   }
 
   MInstruction *createAllOnesConstant(MType &Type, MBasicBlock &BB) {

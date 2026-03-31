@@ -1015,21 +1015,16 @@ CgRegister X86CgLowering::lowerAdcExpr(const AdcInstruction &Inst) {
   // The required invariant is that no flag-clobbering instruction is emitted
   // between the ADD/ADC instructions that produce and consume CF.
   //
-  // Lowering consumes operand 2 as an implicit CF input and does not preserve
-  // the explicit zero marker in x86 CgIR. Any analysis that depends on the
-  // source-level operand-2 structure must therefore run before lowering. This
-  // is not, by itself, a license to rewrite ADC into ADD: in the current EVM
-  // lowering, operand 2 is also the marker that the surrounding carry chain is
-  // still live.
+  // Operand 2 is a chain link pointing to the carry-producing instruction and
+  // is metadata for analysis passes only. x86 lowering ignores it and relies
+  // on hardware CF. This is not a license to rewrite ADC into ADD: the
+  // carry chain is still live and must be preserved.
   const MInstruction *LHS = Inst.getOperand<0>();
   const MInstruction *RHS = Inst.getOperand<1>();
-  const MInstruction *Carry = Inst.getOperand<2>();
 
   MVT VT = getMVT(*Inst.getType());
   ZEN_ASSERT(VT.isInteger());
   const TargetRegisterClass *RC = TLI.getRegClassFor(VT);
-
-  assertZeroFlagChainOperand(Carry);
 
   CgRegister LHSReg = lowerExpr(*LHS);
   CgRegister RHSReg = lowerExpr(*RHS);
@@ -1064,21 +1059,16 @@ CgRegister X86CgLowering::lowerSbbExpr(const SbbInstruction &Inst) {
   // The required invariant is that no flag-clobbering instruction is emitted
   // between the SUB/SBB instructions that produce and consume CF.
   //
-  // Lowering consumes operand 2 as an implicit CF input and does not preserve
-  // the explicit zero marker in x86 CgIR. Any analysis that depends on the
-  // source-level operand-2 structure must therefore run before lowering. This
-  // is not, by itself, a license to rewrite SBB into SUB: in the current EVM
-  // lowering, operand 2 is also the marker that the surrounding borrow chain
-  // is still live.
+  // Operand 2 is a chain link pointing to the borrow-producing instruction and
+  // is metadata for analysis passes only. x86 lowering ignores it and relies
+  // on hardware CF. This is not a license to rewrite SBB into SUB: the
+  // borrow chain is still live and must be preserved.
   const MInstruction *LHS = Inst.getOperand<0>();
   const MInstruction *RHS = Inst.getOperand<1>();
-  const MInstruction *Borrow = Inst.getOperand<2>();
 
   MVT VT = getMVT(*Inst.getType());
   ZEN_ASSERT(VT.isInteger());
   const TargetRegisterClass *RC = TLI.getRegClassFor(VT);
-
-  assertZeroFlagChainOperand(Borrow);
 
   CgRegister LHSReg = lowerExpr(*LHS);
   CgRegister RHSReg = lowerExpr(*RHS);

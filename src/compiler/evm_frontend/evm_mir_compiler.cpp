@@ -1930,10 +1930,13 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
                                 MInstruction *Term) -> SumCarryPair {
       MInstruction *NewSum = createInstruction<BinaryInstruction>(
           false, OP_add, I64Type, Sum, Term);
-      MInstruction *NewCarry =
-          createInstruction<AdcInstruction>(false, I64Type, Carry, Zero, Zero);
-      return {protectUnsafeValue(NewSum, I64Type),
-              protectUnsafeValue(NewCarry, I64Type)};
+      // NewCarry captures the carry-out of ADD(Sum, Term). Operand 2 points
+      // to NewSum (the carry-producing instruction) to make the dependency
+      // explicit for analysis passes. x86 lowering uses hardware CF.
+      MInstruction *ProtectedSum = protectUnsafeValue(NewSum, I64Type);
+      MInstruction *NewCarry = createInstruction<AdcInstruction>(
+          false, I64Type, Carry, Zero, ProtectedSum);
+      return {ProtectedSum, protectUnsafeValue(NewCarry, I64Type)};
     };
 
     auto addTermNoCarry = [&](MInstruction *Sum, MInstruction *Term) {
@@ -2976,8 +2979,6 @@ EVMMirBuilder::handleAddU64Const(const Operand &FullOp,
   U256Inst LHS = extractU256Operand(FullOp);
   MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MInstruction *Carry = createIntConstInstruction(MirI64Type, 0);
-
   MInstruction *RHS0 =
       createIntConstInstruction(MirI64Type, U64ConstOp.getConstValue()[0]);
   MInstruction *RHSZero = createIntConstInstruction(MirI64Type, 0);
@@ -2990,13 +2991,16 @@ EVMMirBuilder::handleAddU64Const(const Operand &FullOp,
 
   U256Inst Result = {};
   // Limb 0: ADD with the actual u64 value
-  Result[0] = protectUnsafeValue(createInstruction<BinaryInstruction>(
-                                     false, OP_add, MirI64Type, LHS[0], RHS0),
-                                 MirI64Type);
-  // Limbs 1-3: ADC with zero (carry propagation only)
+  MInstruction *Limb0 = createInstruction<BinaryInstruction>(
+      false, OP_add, MirI64Type, LHS[0], RHS0);
+  Result[0] = protectUnsafeValue(Limb0, MirI64Type);
+  // Limbs 1-3: ADC with raw carry producer so that isCarryDead can traverse
+  // the chain. Keep RHSZero as a direct constant for zero-operand rewrites.
+  MInstruction *CarryProducer = Limb0;
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
     MInstruction *AdcInst = createInstruction<AdcInstruction>(
-        false, MirI64Type, LHS[I], RHSZero, Carry);
+        false, MirI64Type, LHS[I], RHSZero, CarryProducer);
+    CarryProducer = AdcInst;
     // Last ADC: carry flag is dead after this point, no subsequent ADC
     // consumes it. The barrier is only needed for intermediate ADCs to
     // force immediate execution while CF is live.
