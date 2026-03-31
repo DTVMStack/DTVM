@@ -2262,93 +2262,267 @@
     {
       "name": "add-self-to-shl1",
       "status": "accepted",
-      "inputs": ["x"],
+      "inputs": [
+        "x"
+      ],
       "lhs": "(add x x)",
       "rhs": "(shl x 1:i64)",
       "cost": {
-        "lhs": {"dmir_inst": 1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "rhs": {"dmir_inst": 1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "delta": {"dmir_inst": 0, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0}
+        "lhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
       },
-      "validation": {"modes": ["interpreter_fuzz"], "coverage": []}
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAddSelfToShl1Rewrite"
+        ]
+      }
     },
     {
       "name": "add-neg-x-y-to-sub-y-x",
       "status": "accepted",
-      "inputs": ["x", "y"],
+      "inputs": [
+        "x",
+        "y"
+      ],
       "lhs": "(add (sub 0:i64 x) y)",
       "rhs": "(sub y x)",
       "cost": {
-        "lhs": {"dmir_inst": 2, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "rhs": {"dmir_inst": 1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "delta": {"dmir_inst": -1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0}
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
       },
-      "validation": {"modes": ["interpreter_fuzz"], "coverage": []}
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAddNegToSubRewrite"
+        ]
+      }
     },
     {
       "name": "add-y-neg-x-to-sub-y-x",
       "status": "accepted",
-      "inputs": ["x", "y"],
+      "inputs": [
+        "x",
+        "y"
+      ],
       "lhs": "(add y (sub 0:i64 x))",
       "rhs": "(sub y x)",
       "cost": {
-        "lhs": {"dmir_inst": 2, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "rhs": {"dmir_inst": 1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "delta": {"dmir_inst": -1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0}
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
       },
-      "validation": {"modes": ["interpreter_fuzz"], "coverage": []}
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAddNegToSubRewrite"
+        ]
+      }
     },
     {
       "name": "add-and-xor-to-or",
       "status": "accepted",
-      "inputs": ["x", "y"],
+      "inputs": [
+        "x",
+        "y"
+      ],
       "lhs": "(add (and x y) (xor x y))",
       "rhs": "(or x y)",
       "cost": {
-        "lhs": {"dmir_inst": 2, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "rhs": {"dmir_inst": 1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "delta": {"dmir_inst": -1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0}
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
       },
-      "validation": {"modes": ["interpreter_fuzz"], "coverage": []}
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAddAndXorToOrRewrite"
+        ]
+      }
     },
     {
       "name": "add-and-or-to-add",
       "status": "accepted",
-      "inputs": ["x", "y"],
+      "inputs": [
+        "x",
+        "y"
+      ],
       "lhs": "(add (and x y) (or x y))",
       "rhs": "(add x y)",
       "cost": {
-        "lhs": {"dmir_inst": 2, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "rhs": {"dmir_inst": 1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "delta": {"dmir_inst": -1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0}
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
       },
-      "validation": {"modes": ["interpreter_fuzz"], "coverage": []}
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesAddAndOrToAddRewrite"
+        ]
+      }
     },
     {
       "name": "sub-and-or-to-neg-xor",
       "status": "accepted",
-      "inputs": ["x", "y"],
+      "inputs": [
+        "x",
+        "y"
+      ],
       "lhs": "(sub (and x y) (or x y))",
       "rhs": "(sub 0:i64 (xor x y))",
       "cost": {
-        "lhs": {"dmir_inst": 2, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "rhs": {"dmir_inst": 2, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "delta": {"dmir_inst": 0, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0}
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": 0,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
       },
-      "validation": {"modes": ["interpreter_fuzz"], "coverage": []}
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesSubAndOrToNegXorRewrite"
+        ]
+      }
     },
     {
       "name": "sub-or-and-to-xor",
       "status": "accepted",
-      "inputs": ["x", "y"],
+      "inputs": [
+        "x",
+        "y"
+      ],
       "lhs": "(sub (or x y) (and x y))",
       "rhs": "(xor x y)",
       "cost": {
-        "lhs": {"dmir_inst": 2, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "rhs": {"dmir_inst": 1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0},
-        "delta": {"dmir_inst": -1, "select_depth": 0, "adc_chain": 0, "runtime_calls": 0}
+        "lhs": {
+          "dmir_inst": 2,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "rhs": {
+          "dmir_inst": 1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        },
+        "delta": {
+          "dmir_inst": -1,
+          "select_depth": 0,
+          "adc_chain": 0,
+          "runtime_calls": 0
+        }
       },
-      "validation": {"modes": ["interpreter_fuzz"], "coverage": []}
+      "validation": {
+        "modes": [
+          "interpreter_fuzz"
+        ],
+        "coverage": [
+          "DMirValidation.FuzzesSubOrAndToXorRewrite"
+        ]
+      }
     }
   ]
 }

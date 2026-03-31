@@ -2034,4 +2034,122 @@ TEST(DMirValidation, FuzzesMulOneRewrite) {
       [](DMirTestBuilder &, MInstruction *Input) { return Input; });
 }
 
+TEST(DMirValidation, FuzzesAddSelfToShl1Rewrite) {
+  // (add x x) -> (shl x 1)
+  expectUnaryI64RewriteEquivalent(
+      getInterestingU64Values(),
+      [](DMirTestBuilder &Builder, MInstruction *Input) {
+        return Builder.createExpr<BinaryInstruction>(
+            OP_add, &Builder.Context.I64Type, Input, Input);
+      },
+      [](DMirTestBuilder &Builder, MInstruction *Input) {
+        return Builder.createExpr<BinaryInstruction>(
+            OP_shl, &Builder.Context.I64Type, Input,
+            Builder.createConstI64(1));
+      });
+}
+
+TEST(DMirValidation, FuzzesAddNegToSubRewrite) {
+  // (add (sub 0 x) y) -> (sub y x)
+  expectBinaryI64RewriteEquivalent(
+      getInterestingBinaryInputCases(),
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        auto *NegX = Builder.createExpr<BinaryInstruction>(
+            OP_sub, &Builder.Context.I64Type, Builder.createConstI64(0), X);
+        return Builder.createExpr<BinaryInstruction>(
+            OP_add, &Builder.Context.I64Type, NegX, Y);
+      },
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        return Builder.createExpr<BinaryInstruction>(
+            OP_sub, &Builder.Context.I64Type, Y, X);
+      });
+  // (add y (sub 0 x)) -> (sub y x)
+  expectBinaryI64RewriteEquivalent(
+      getInterestingBinaryInputCases(),
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        auto *NegX = Builder.createExpr<BinaryInstruction>(
+            OP_sub, &Builder.Context.I64Type, Builder.createConstI64(0), X);
+        return Builder.createExpr<BinaryInstruction>(
+            OP_add, &Builder.Context.I64Type, Y, NegX);
+      },
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        return Builder.createExpr<BinaryInstruction>(
+            OP_sub, &Builder.Context.I64Type, Y, X);
+      });
+}
+
+TEST(DMirValidation, FuzzesAddAndXorToOrRewrite) {
+  // (add (and x y) (xor x y)) -> (or x y)
+  expectBinaryI64RewriteEquivalent(
+      getInterestingBinaryInputCases(),
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        auto *And = Builder.createExpr<BinaryInstruction>(
+            OP_and, &Builder.Context.I64Type, X, Y);
+        auto *Xor = Builder.createExpr<BinaryInstruction>(
+            OP_xor, &Builder.Context.I64Type, X, Y);
+        return Builder.createExpr<BinaryInstruction>(
+            OP_add, &Builder.Context.I64Type, And, Xor);
+      },
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        return Builder.createExpr<BinaryInstruction>(
+            OP_or, &Builder.Context.I64Type, X, Y);
+      });
+}
+
+TEST(DMirValidation, FuzzesAddAndOrToAddRewrite) {
+  // (add (and x y) (or x y)) -> (add x y)
+  expectBinaryI64RewriteEquivalent(
+      getInterestingBinaryInputCases(),
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        auto *And = Builder.createExpr<BinaryInstruction>(
+            OP_and, &Builder.Context.I64Type, X, Y);
+        auto *Or = Builder.createExpr<BinaryInstruction>(
+            OP_or, &Builder.Context.I64Type, X, Y);
+        return Builder.createExpr<BinaryInstruction>(
+            OP_add, &Builder.Context.I64Type, And, Or);
+      },
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        return Builder.createExpr<BinaryInstruction>(
+            OP_add, &Builder.Context.I64Type, X, Y);
+      });
+}
+
+TEST(DMirValidation, FuzzesSubAndOrToNegXorRewrite) {
+  // (sub (and x y) (or x y)) -> (sub 0 (xor x y))
+  expectBinaryI64RewriteEquivalent(
+      getInterestingBinaryInputCases(),
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        auto *And = Builder.createExpr<BinaryInstruction>(
+            OP_and, &Builder.Context.I64Type, X, Y);
+        auto *Or = Builder.createExpr<BinaryInstruction>(
+            OP_or, &Builder.Context.I64Type, X, Y);
+        return Builder.createExpr<BinaryInstruction>(
+            OP_sub, &Builder.Context.I64Type, And, Or);
+      },
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        auto *Xor = Builder.createExpr<BinaryInstruction>(
+            OP_xor, &Builder.Context.I64Type, X, Y);
+        return Builder.createExpr<BinaryInstruction>(
+            OP_sub, &Builder.Context.I64Type, Builder.createConstI64(0), Xor);
+      });
+}
+
+TEST(DMirValidation, FuzzesSubOrAndToXorRewrite) {
+  // (sub (or x y) (and x y)) -> (xor x y)
+  expectBinaryI64RewriteEquivalent(
+      getInterestingBinaryInputCases(),
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        auto *Or = Builder.createExpr<BinaryInstruction>(
+            OP_or, &Builder.Context.I64Type, X, Y);
+        auto *And = Builder.createExpr<BinaryInstruction>(
+            OP_and, &Builder.Context.I64Type, X, Y);
+        return Builder.createExpr<BinaryInstruction>(
+            OP_sub, &Builder.Context.I64Type, Or, And);
+      },
+      [](DMirTestBuilder &Builder, MInstruction *X, MInstruction *Y) {
+        return Builder.createExpr<BinaryInstruction>(
+            OP_xor, &Builder.Context.I64Type, X, Y);
+      });
+}
+
 } // namespace
