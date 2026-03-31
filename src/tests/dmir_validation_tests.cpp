@@ -1158,6 +1158,9 @@ TEST(DMirValidation, FuzzesSelectSameArmRewriteI32) {
 }
 
 TEST(DMirRewritePass, RewritesReturnedAddZeroToInput) {
+  // add(non_const, 0) is intentionally NOT folded: keeping the add node
+  // preserves a register-copy point that benefits downstream register
+  // allocation for i64 operands. Only add(const, 0) folds to const.
   DMirTestBuilder Builder;
   Variable *InputVar = Builder.createVariable(&Builder.Context.I64Type);
   auto *Input = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
@@ -1166,10 +1169,14 @@ TEST(DMirRewritePass, RewritesReturnedAddZeroToInput) {
       OP_add, &Builder.Context.I64Type, Input, Builder.createConstI64(0));
 
   MInstruction *Rewritten = rewriteReturnedValue(Builder, Add);
-  EXPECT_EQ(Rewritten, Input);
+  EXPECT_EQ(Rewritten, Add);
 }
 
 TEST(DMirRewritePass, RewritesNestedTreeBottomUp) {
+  // Bottom-up rewrites fire: not(not(x)) -> x, and(x, ~0) -> x.
+  // The final add(x, 0) is intentionally NOT folded for non-constant x
+  // (preserves register-copy point for register allocation). The result
+  // is the Add node itself, with its LHS simplified to Input.
   DMirTestBuilder Builder;
   Variable *InputVar = Builder.createVariable(&Builder.Context.I64Type);
   auto *Input = Builder.createExpr<DreadInstruction>(&Builder.Context.I64Type,
@@ -1185,7 +1192,8 @@ TEST(DMirRewritePass, RewritesNestedTreeBottomUp) {
       OP_add, &Builder.Context.I64Type, Masked, Builder.createConstI64(0));
 
   MInstruction *Rewritten = rewriteReturnedValue(Builder, Add);
-  EXPECT_EQ(Rewritten, Input);
+  EXPECT_EQ(Rewritten, Add);
+  EXPECT_EQ(llvm::cast<BinaryInstruction>(Add)->getOperand<0>(), Input);
 }
 
 TEST(DMirRewritePass, RewritesSelectSameArmByStructure) {

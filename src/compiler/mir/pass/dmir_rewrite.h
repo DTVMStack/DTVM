@@ -5,6 +5,7 @@
 #include "compiler/mir/constants.h"
 #include "compiler/mir/function.h"
 #include "compiler/mir/instructions.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/Support/Casting.h"
 
 namespace COMPILER {
@@ -30,6 +31,7 @@ public:
 
 private:
   void runOnBasicBlock(MBasicBlock &BB) {
+    RewriteCache.clear();
     for (MInstruction *Inst : BB) {
       rewriteOperands(*Inst, BB);
     }
@@ -48,6 +50,11 @@ private:
   }
 
   MInstruction *rewriteExprTree(MInstruction *Inst, MBasicBlock &BB) {
+    auto CacheIt = RewriteCache.find(Inst);
+    if (CacheIt != RewriteCache.end()) {
+      return CacheIt->second;
+    }
+
     for (uint32_t OperandIdx = 0; OperandIdx < Inst->getNumOperands();
          ++OperandIdx) {
       MInstruction *Operand = Inst->getOperand(OperandIdx);
@@ -58,14 +65,17 @@ private:
       }
     }
 
+    MInstruction *Result = Inst;
     if (MInstruction *Replacement = tryRewrite(*Inst, BB)) {
       if (Replacement != Inst) {
         Changed = true;
-        return rewriteExprTree(Replacement, BB);
+        Result = rewriteExprTree(Replacement, BB);
+      } else {
+        Result = Replacement;
       }
-      return Replacement;
     }
-    return Inst;
+    RewriteCache[Inst] = Result;
+    return Result;
   }
 
   MInstruction *tryRewrite(MInstruction &Inst, MBasicBlock &BB) {
@@ -102,10 +112,15 @@ private:
   MInstruction *rewriteAdd(BinaryInstruction &Inst, MBasicBlock &BB) {
     MInstruction *LHS = Inst.getOperand<0>();
     MInstruction *RHS = Inst.getOperand<1>();
-    if (isZeroConst(*RHS)) {
+    // Fold add(x, 0) -> x only when x is itself a constant (pure constant
+    // folding). For non-constant x, keeping the add node preserves a natural
+    // register-copy point that benefits downstream register allocation; the
+    // i64 ADD-with-immediate lowering path is more efficient with the node
+    // present than extending the live range of x across all uses.
+    if (isZeroConst(*RHS) && isIntegerConst(*LHS)) {
       return LHS;
     }
-    if (isZeroConst(*LHS)) {
+    if (isZeroConst(*LHS) && isIntegerConst(*RHS)) {
       return RHS;
     }
     // (add x x) -> (shl x 1): doubling is a left shift by one
@@ -960,6 +975,7 @@ private:
 
   MFunction *Func = nullptr;
   bool Changed = false;
+  llvm::DenseMap<MInstruction *, MInstruction *> RewriteCache;
 };
 
 } // namespace COMPILER

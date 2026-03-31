@@ -214,7 +214,8 @@ void JITCompilerBase::emitObjectBuffer(CompileContext *Ctx) {
     throw getError(ErrorCode::ObjectFileResolvingFailed);
   }
 
-  constexpr size_t FuncSymbolPrefixLen = sizeof(JIT_FUNCTION_NAME_PREFIX) - 1;
+  constexpr size_t FUNC_SYMBOL_PREFIX_LEN =
+      sizeof(JIT_FUNCTION_NAME_PREFIX) - 1;
 
   uint32_t FuncIdx = 0;
   size_t NumSymbols = std::distance(Obj.symbol_begin(), Obj.symbol_end());
@@ -269,7 +270,7 @@ void JITCompilerBase::emitObjectBuffer(CompileContext *Ctx) {
     }
 
     // Get function index
-    if (NameOrErr->substr(FuncSymbolPrefixLen).getAsInteger(10, FuncIdx)) {
+    if (NameOrErr->substr(FUNC_SYMBOL_PREFIX_LEN).getAsInteger(10, FuncIdx)) {
       continue;
     }
 #endif
@@ -350,7 +351,8 @@ void JITCompilerBase::emitObjectBuffer(CompileContext *Ctx) {
       }
 
       // Get function index
-      if (SymNameOrErr->substr(FuncSymbolPrefixLen).getAsInteger(10, FuncIdx)) {
+      if (SymNameOrErr->substr(FUNC_SYMBOL_PREFIX_LEN)
+              .getAsInteger(10, FuncIdx)) {
         throw getError(ErrorCode::ObjectFileResolvingFailed);
       }
 
