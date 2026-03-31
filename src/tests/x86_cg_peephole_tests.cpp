@@ -1932,4 +1932,121 @@ TEST(X86CgPeephole, ExecutionHarnessRemoveRedundantTestrr) {
 #endif
 }
 
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+static uint64_t execOriginalMovzxSubreg(uint64_t Input) {
+  uint64_t Out;
+  uint8_t In8 = static_cast<uint8_t>(Input);
+  asm volatile("movzbl %[in], %%eax\n\t"
+               "movq %%rax, %[out]\n\t"
+               : [out] "=r"(Out)
+               : [in] "q"(In8)
+               : "rax");
+  return Out;
+}
+
+static uint64_t execRewrittenMovzxSubreg(uint64_t Input) {
+  uint64_t Out;
+  uint8_t In8 = static_cast<uint8_t>(Input);
+  asm volatile("movzbq %[in], %%rax\n\t"
+               "movq %%rax, %[out]\n\t"
+               : [out] "=r"(Out)
+               : [in] "q"(In8)
+               : "rax");
+  return Out;
+}
+#endif
+
+TEST(X86CgPeephole, FoldsMovzxSubregToReg) {
+  CompileContext Context;
+  Context.initialize();
+
+  MModule Mod(Context);
+  MFunctionType *FuncType = createVoidFunctionType(Context);
+  Mod.addFuncType(FuncType);
+
+  MFunction MirFunc(Context, 0);
+  MirFunc.setFunctionType(FuncType);
+  CgFunction MF(Context, MirFunc);
+
+  CgBasicBlock *BB = MF.createCgBasicBlock();
+  MF.appendCgBasicBlock(BB);
+
+  const auto &TII = MF.getTargetInstrInfo();
+  std::array<CgOperand, 2> MovzxOps = {
+      CgOperand::createRegOperand(X86::EAX, true),
+      CgOperand::createRegOperand(X86::AL, false),
+  };
+  MF.createCgInstruction(*BB, TII.get(X86::MOVZX32rr8), MovzxOps);
+
+  std::array<CgOperand, 4> SubregOps = {
+      CgOperand::createRegOperand(X86::RAX, true),
+      CgOperand::createImmOperand(0),
+      CgOperand::createRegOperand(X86::EAX, false),
+      CgOperand::createImmOperand(6), // sub_32bit
+  };
+  MF.createCgInstruction(*BB, TII.get(TargetOpcode::SUBREG_TO_REG), SubregOps);
+
+  X86CgPeephole Peephole(MF);
+
+  ASSERT_EQ(std::distance(BB->begin(), BB->end()), 1);
+  auto It = BB->begin();
+  EXPECT_EQ(It->getOpcode(), X86::MOVZX64rr8);
+  EXPECT_EQ(It->getOperand(0).getReg(), X86::RAX);
+}
+
+TEST(X86CgPeephole, KeepsMovzxSubregToRegWhenMismatch) {
+  CompileContext Context;
+  Context.initialize();
+
+  MModule Mod(Context);
+  MFunctionType *FuncType = createVoidFunctionType(Context);
+  Mod.addFuncType(FuncType);
+
+  MFunction MirFunc(Context, 0);
+  MirFunc.setFunctionType(FuncType);
+  CgFunction MF(Context, MirFunc);
+
+  CgBasicBlock *BB = MF.createCgBasicBlock();
+  MF.appendCgBasicBlock(BB);
+
+  const auto &TII = MF.getTargetInstrInfo();
+  // MOVZX32rr8 defines EAX, but SUBREG_TO_REG uses EBX - mismatch, no fold.
+  std::array<CgOperand, 2> MovzxOps = {
+      CgOperand::createRegOperand(X86::EAX, true),
+      CgOperand::createRegOperand(X86::AL, false),
+  };
+  MF.createCgInstruction(*BB, TII.get(X86::MOVZX32rr8), MovzxOps);
+
+  std::array<CgOperand, 4> SubregOps = {
+      CgOperand::createRegOperand(X86::RBX, true),
+      CgOperand::createImmOperand(0),
+      CgOperand::createRegOperand(X86::EBX, false),
+      CgOperand::createImmOperand(6), // sub_32bit
+  };
+  MF.createCgInstruction(*BB, TII.get(TargetOpcode::SUBREG_TO_REG), SubregOps);
+
+  X86CgPeephole Peephole(MF);
+
+  EXPECT_EQ(std::distance(BB->begin(), BB->end()), 2);
+}
+
+TEST(X86CgPeephole, ExecutionHarnessFoldMovzxSubregToReg) {
+#if !defined(__x86_64__) || !(defined(__GNUC__) || defined(__clang__))
+  GTEST_SKIP() << "execution harness requires x86_64 GNU-style inline asm";
+#else
+  const std::array<uint8_t, 6> EdgeValues = {0, 1, 0x7f, 0x80, 0xff, 0xaa};
+  std::mt19937_64 Rng(0xEE442026ULL);
+
+  for (uint8_t Value : EdgeValues) {
+    EXPECT_EQ(execOriginalMovzxSubreg(Value), execRewrittenMovzxSubreg(Value))
+        << "value=" << static_cast<int>(Value);
+  }
+  for (int Iter = 0; Iter < 16; ++Iter) {
+    const uint8_t Value = static_cast<uint8_t>(Rng());
+    EXPECT_EQ(execOriginalMovzxSubreg(Value), execRewrittenMovzxSubreg(Value))
+        << "value=" << static_cast<int>(Value);
+  }
+#endif
+}
+
 } // namespace
