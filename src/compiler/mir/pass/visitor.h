@@ -61,6 +61,20 @@ public:
       visitEvmU256MulResultInstruction(
           static_cast<EvmU256MulResultInstruction &>(I));
       break;
+    case MInstruction::EVM_U256_ADD:
+      visitEvmU256AddInstruction(static_cast<EvmU256AddInstruction &>(I));
+      break;
+    case MInstruction::EVM_U256_ADD_RESULT:
+      visitEvmU256AddResultInstruction(
+          static_cast<EvmU256AddResultInstruction &>(I));
+      break;
+    case MInstruction::EVM_U256_SUB:
+      visitEvmU256SubInstruction(static_cast<EvmU256SubInstruction &>(I));
+      break;
+    case MInstruction::EVM_U256_SUB_RESULT:
+      visitEvmU256SubResultInstruction(
+          static_cast<EvmU256SubResultInstruction &>(I));
+      break;
     case MInstruction::EVM_UDIV128_BY64:
       visitEvmUdiv128By64Instruction(
           static_cast<EvmUdiv128By64Instruction &>(I));
@@ -210,6 +224,20 @@ public:
   }
   virtual void
   visitEvmU256MulResultInstruction(EvmU256MulResultInstruction &I) {
+    VISIT_OPERAND_1
+  }
+  virtual void visitEvmU256AddInstruction(EvmU256AddInstruction &I) {
+    VISIT_OPERANDS
+  }
+  virtual void
+  visitEvmU256AddResultInstruction(EvmU256AddResultInstruction &I) {
+    VISIT_OPERAND_1
+  }
+  virtual void visitEvmU256SubInstruction(EvmU256SubInstruction &I) {
+    VISIT_OPERANDS
+  }
+  virtual void
+  visitEvmU256SubResultInstruction(EvmU256SubResultInstruction &I) {
     VISIT_OPERAND_1
   }
   virtual void visitEvmUdiv128By64Instruction(EvmUdiv128By64Instruction &I) {

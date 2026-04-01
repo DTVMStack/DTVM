@@ -224,7 +224,9 @@ void MInstruction::print(llvm::raw_ostream &OS) const {
     OS << getOpcodeString(_opcode) << " (" << getOperand<0>() << ')';
     break;
   }
-  case EVM_U256_MUL: {
+  case EVM_U256_MUL:
+  case EVM_U256_ADD:
+  case EVM_U256_SUB: {
     OS << getOpcodeString(_opcode) << " (";
     for (OperandNum I = 0; I < getNumOperands(); ++I) {
       OS << getOperand(I);
@@ -239,6 +241,18 @@ void MInstruction::print(llvm::raw_ostream &OS) const {
     auto *MulResult = llvm::cast<EvmU256MulResultInstruction>(this);
     OS << getOpcodeString(_opcode) << " (" << MulResult->getMulInst()
        << ", idx = " << MulResult->getResultIdx() << ')';
+    break;
+  }
+  case EVM_U256_ADD_RESULT: {
+    auto *AddResult = llvm::cast<EvmU256AddResultInstruction>(this);
+    OS << getOpcodeString(_opcode) << " (" << AddResult->getAddInst()
+       << ", idx = " << AddResult->getResultIdx() << ')';
+    break;
+  }
+  case EVM_U256_SUB_RESULT: {
+    auto *SubResult = llvm::cast<EvmU256SubResultInstruction>(this);
+    OS << getOpcodeString(_opcode) << " (" << SubResult->getSubInst()
+       << ", idx = " << SubResult->getResultIdx() << ')';
     break;
   }
   case EVM_UDIV128_BY64: {

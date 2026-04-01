@@ -864,6 +864,118 @@ private:
   uint32_t ResultIdx = 0;
 };
 
+class EvmU256AddInstruction : public FixedOperandInstruction<8> {
+public:
+  template <typename... Arguments>
+  static EvmU256AddInstruction *create(Arguments &&...Args) {
+    return FixedOperandInstruction::create<EvmU256AddInstruction>(
+        std::forward<Arguments>(Args)...);
+  }
+
+  static bool classof(const MInstruction *Instr) {
+    return Instr->getKind() == EVM_U256_ADD;
+  }
+
+private:
+  friend class FixedOperandInstruction;
+  EvmU256AddInstruction(MType *Type, MInstruction *A0, MInstruction *A1,
+                        MInstruction *A2, MInstruction *A3, MInstruction *B0,
+                        MInstruction *B1, MInstruction *B2, MInstruction *B3)
+      : FixedOperandInstruction(MInstruction::EVM_U256_ADD, OP_evm_u256_add, 8,
+                                Type) {
+    setOperand<0>(A0);
+    setOperand<1>(A1);
+    setOperand<2>(A2);
+    setOperand<3>(A3);
+    setOperand<4>(B0);
+    setOperand<5>(B1);
+    setOperand<6>(B2);
+    setOperand<7>(B3);
+  }
+};
+
+class EvmU256AddResultInstruction : public UnaryInstruction {
+public:
+  template <typename... Arguments>
+  static EvmU256AddResultInstruction *create(Arguments &&...Args) {
+    return FixedOperandInstruction::create<EvmU256AddResultInstruction>(
+        std::forward<Arguments>(Args)...);
+  }
+
+  static bool classof(const MInstruction *Instr) {
+    return Instr->getKind() == EVM_U256_ADD_RESULT;
+  }
+
+  const MInstruction *getAddInst() const { return getOperand<0>(); }
+  uint32_t getResultIdx() const { return ResultIdx; }
+
+private:
+  friend class FixedOperandInstruction;
+  EvmU256AddResultInstruction(MType *Type, MInstruction *AddInst,
+                              uint32_t ResultIdx)
+      : UnaryInstruction(MInstruction::EVM_U256_ADD_RESULT,
+                         OP_evm_u256_add_result, Type, AddInst),
+        ResultIdx(ResultIdx) {}
+
+  uint32_t ResultIdx = 0;
+};
+
+class EvmU256SubInstruction : public FixedOperandInstruction<8> {
+public:
+  template <typename... Arguments>
+  static EvmU256SubInstruction *create(Arguments &&...Args) {
+    return FixedOperandInstruction::create<EvmU256SubInstruction>(
+        std::forward<Arguments>(Args)...);
+  }
+
+  static bool classof(const MInstruction *Instr) {
+    return Instr->getKind() == EVM_U256_SUB;
+  }
+
+private:
+  friend class FixedOperandInstruction;
+  EvmU256SubInstruction(MType *Type, MInstruction *A0, MInstruction *A1,
+                        MInstruction *A2, MInstruction *A3, MInstruction *B0,
+                        MInstruction *B1, MInstruction *B2, MInstruction *B3)
+      : FixedOperandInstruction(MInstruction::EVM_U256_SUB, OP_evm_u256_sub, 8,
+                                Type) {
+    setOperand<0>(A0);
+    setOperand<1>(A1);
+    setOperand<2>(A2);
+    setOperand<3>(A3);
+    setOperand<4>(B0);
+    setOperand<5>(B1);
+    setOperand<6>(B2);
+    setOperand<7>(B3);
+  }
+};
+
+class EvmU256SubResultInstruction : public UnaryInstruction {
+public:
+  template <typename... Arguments>
+  static EvmU256SubResultInstruction *create(Arguments &&...Args) {
+    return FixedOperandInstruction::create<EvmU256SubResultInstruction>(
+        std::forward<Arguments>(Args)...);
+  }
+
+  static bool classof(const MInstruction *Instr) {
+    return Instr->getKind() == EVM_U256_SUB_RESULT;
+  }
+
+  const MInstruction *getSubInst() const { return getOperand<0>(); }
+  uint32_t getResultIdx() const { return ResultIdx; }
+
+private:
+  friend class FixedOperandInstruction;
+  EvmU256SubResultInstruction(MType *Type, MInstruction *SubInst,
+                              uint32_t ResultIdx)
+      : UnaryInstruction(MInstruction::EVM_U256_SUB_RESULT,
+                         OP_evm_u256_sub_result, Type, SubInst),
+        ResultIdx(ResultIdx) {}
+
+  uint32_t ResultIdx = 0;
+};
+
 // EVM 128-bit / 64-bit unsigned division: (hi:lo) / divisor -> quotient.
 class EvmUdiv128By64Instruction : public FixedOperandInstruction<3> {
 public:

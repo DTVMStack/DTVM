@@ -439,58 +439,31 @@ public:
         EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
     if constexpr (Operator == BinaryOperator::BO_ADD) {
-      // Pre-materialize all operand components into variables before the
-      // ADD/ADC carry chain to prevent flag-clobbering during x86 lowering.
-      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-        LHS[I] = protectUnsafeValue(LHS[I], MirI64Type);
-        RHS[I] = protectUnsafeValue(RHS[I], MirI64Type);
-      }
-
-      // CarryProducer tracks the raw (unwrapped) instruction whose carry-out
-      // feeds the next ADC. We pass this directly as operand 2 so that
-      // isCarryDead can traverse the chain without being blocked by the
-      // dread barrier inserted by protectUnsafeValue.
-      MInstruction *CarryProducer = nullptr;
-      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-        if (I == 0) {
-          MInstruction *LocalResult = createInstruction<BinaryInstruction>(
-              false, OP_add, MirI64Type, LHS[I], RHS[I]);
-          CarryProducer = LocalResult;
-          Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
-        } else {
-          MInstruction *LocalResult = createInstruction<AdcInstruction>(
-              false, MirI64Type, LHS[I], RHS[I], CarryProducer);
-          CarryProducer = LocalResult;
-          Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
-        }
-      }
+      MInstruction *AddInst = createInstruction<EvmU256AddInstruction>(
+          false, MirI64Type, LHS[0], LHS[1], LHS[2], LHS[3], RHS[0], RHS[1],
+          RHS[2], RHS[3]);
+      Result = {
+          AddInst,
+          createInstruction<EvmU256AddResultInstruction>(false, MirI64Type,
+                                                         AddInst, 1),
+          createInstruction<EvmU256AddResultInstruction>(false, MirI64Type,
+                                                         AddInst, 2),
+          createInstruction<EvmU256AddResultInstruction>(false, MirI64Type,
+                                                         AddInst, 3),
+      };
     } else if constexpr (Operator == BinaryOperator::BO_SUB) {
-      // Pre-materialize all operand components into variables before the
-      // SUB/SBB borrow chain. This ensures that during x86 lowering, no
-      // flag-modifying instructions (e.g. ADD for address computation in
-      // BYTES32-to-U256 conversion) are emitted between the SUB and SBB
-      // instructions that form the borrow chain. Without this, lazy
-      // expression lowering of operands like BSWAP(LOAD(ADD(ptr, offset)))
-      // would emit x86 ADD instructions that clobber the carry flag (CF).
-      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-        LHS[I] = protectUnsafeValue(LHS[I], MirI64Type);
-        RHS[I] = protectUnsafeValue(RHS[I], MirI64Type);
-      }
-
-      MInstruction *BorrowProducer = nullptr;
-      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-        if (I == 0) {
-          MInstruction *LocalResult = createInstruction<BinaryInstruction>(
-              false, OP_sub, MirI64Type, LHS[I], RHS[I]);
-          BorrowProducer = LocalResult;
-          Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
-        } else {
-          MInstruction *LocalResult = createInstruction<SbbInstruction>(
-              false, MirI64Type, LHS[I], RHS[I], BorrowProducer);
-          BorrowProducer = LocalResult;
-          Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
-        }
-      }
+      MInstruction *SubInst = createInstruction<EvmU256SubInstruction>(
+          false, MirI64Type, LHS[0], LHS[1], LHS[2], LHS[3], RHS[0], RHS[1],
+          RHS[2], RHS[3]);
+      Result = {
+          SubInst,
+          createInstruction<EvmU256SubResultInstruction>(false, MirI64Type,
+                                                         SubInst, 1),
+          createInstruction<EvmU256SubResultInstruction>(false, MirI64Type,
+                                                         SubInst, 2),
+          createInstruction<EvmU256SubResultInstruction>(false, MirI64Type,
+                                                         SubInst, 3),
+      };
     } else {
       ZEN_ASSERT_TODO();
     }

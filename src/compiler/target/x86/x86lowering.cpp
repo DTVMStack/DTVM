@@ -1333,6 +1333,86 @@ CgRegister X86CgLowering::lowerEvmU256MulResultExpr(
 }
 
 CgRegister
+X86CgLowering::lowerEvmU256AddExpr(const EvmU256AddInstruction &Inst) {
+  const TargetRegisterClass *RC = &X86::GR64RegClass;
+
+  std::array<CgRegister, 4> L = {};
+  std::array<CgRegister, 4> R = {};
+  for (size_t I = 0; I < 4; ++I) {
+    L[I] = lowerExpr(*Inst.getOperand(I));
+    R[I] = lowerExpr(*Inst.getOperand(4 + I));
+  }
+
+  // COPY (MOV) does not modify EFLAGS — safe between carry-chain steps
+  std::array<CgRegister, 4> Res = {};
+  Res[0] = fastEmitCopy(RC, L[0]);
+  MF->createCgInstruction(*CurBB, TII.get(X86::ADD64rr), Res[0], R[0], Res[0]);
+  for (size_t I = 1; I < 4; ++I) {
+    Res[I] = fastEmitCopy(RC, L[I]);
+    MF->createCgInstruction(*CurBB, TII.get(X86::ADC64rr), Res[I], R[I],
+                            Res[I]);
+  }
+
+  U256AddResultRegs[&Inst] = {Res[1], Res[2], Res[3]};
+  return Res[0];
+}
+
+CgRegister X86CgLowering::lowerEvmU256AddResultExpr(
+    const EvmU256AddResultInstruction &Inst) {
+  const MInstruction *AddInst = Inst.getAddInst();
+  CgRegister LowReg = lowerExpr(*AddInst);
+  uint32_t ResultIdx = Inst.getResultIdx();
+  if (ResultIdx == 0) {
+    return LowReg;
+  }
+
+  auto It = U256AddResultRegs.find(AddInst);
+  ZEN_ASSERT(It != U256AddResultRegs.end());
+  ZEN_ASSERT(ResultIdx <= It->second.size());
+  return It->second[ResultIdx - 1];
+}
+
+CgRegister
+X86CgLowering::lowerEvmU256SubExpr(const EvmU256SubInstruction &Inst) {
+  const TargetRegisterClass *RC = &X86::GR64RegClass;
+
+  std::array<CgRegister, 4> L = {};
+  std::array<CgRegister, 4> R = {};
+  for (size_t I = 0; I < 4; ++I) {
+    L[I] = lowerExpr(*Inst.getOperand(I));
+    R[I] = lowerExpr(*Inst.getOperand(4 + I));
+  }
+
+  // COPY (MOV) does not modify EFLAGS — safe between borrow-chain steps
+  std::array<CgRegister, 4> Res = {};
+  Res[0] = fastEmitCopy(RC, L[0]);
+  MF->createCgInstruction(*CurBB, TII.get(X86::SUB64rr), Res[0], R[0], Res[0]);
+  for (size_t I = 1; I < 4; ++I) {
+    Res[I] = fastEmitCopy(RC, L[I]);
+    MF->createCgInstruction(*CurBB, TII.get(X86::SBB64rr), Res[I], R[I],
+                            Res[I]);
+  }
+
+  U256SubResultRegs[&Inst] = {Res[1], Res[2], Res[3]};
+  return Res[0];
+}
+
+CgRegister X86CgLowering::lowerEvmU256SubResultExpr(
+    const EvmU256SubResultInstruction &Inst) {
+  const MInstruction *SubInst = Inst.getSubInst();
+  CgRegister LowReg = lowerExpr(*SubInst);
+  uint32_t ResultIdx = Inst.getResultIdx();
+  if (ResultIdx == 0) {
+    return LowReg;
+  }
+
+  auto It = U256SubResultRegs.find(SubInst);
+  ZEN_ASSERT(It != U256SubResultRegs.end());
+  ZEN_ASSERT(ResultIdx <= It->second.size());
+  return It->second[ResultIdx - 1];
+}
+
+CgRegister
 X86CgLowering::lowerEvmUdiv128By64Expr(const EvmUdiv128By64Instruction &Inst) {
   const MInstruction *Hi = Inst.getOperand<0>();
   const MInstruction *Lo = Inst.getOperand<1>();
