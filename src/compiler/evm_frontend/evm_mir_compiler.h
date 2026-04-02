@@ -119,7 +119,12 @@ public:
 
   class Operand {
   public:
-    enum class DeferredKind : uint8_t { NONE, BITWISE_NOT, ZERO_TEST };
+    enum class DeferredKind : uint8_t {
+      NONE,
+      BITWISE_NOT,
+      ZERO_TEST_EQ,
+      ZERO_TEST_NE
+    };
 
     Operand() = default;
     Operand(MInstruction *Instr, EVMType Type) : Instr(Instr), Type(Type) {}
@@ -152,9 +157,9 @@ public:
                                           bool IsNegated) {
       Operand Result;
       Result.Type = EVMType::UINT256;
-      Result.DeferredValueKind = DeferredKind::ZERO_TEST;
+      Result.DeferredValueKind =
+          IsNegated ? DeferredKind::ZERO_TEST_NE : DeferredKind::ZERO_TEST_EQ;
       Result.U256Components = BaseComponents;
-      Result.DeferredZeroTestNegated = IsNegated;
       return Result;
     }
 
@@ -193,12 +198,12 @@ public:
       return DeferredValueKind == DeferredKind::BITWISE_NOT;
     }
     bool isDeferredZeroTest() const {
-      return DeferredValueKind == DeferredKind::ZERO_TEST;
+      return DeferredValueKind == DeferredKind::ZERO_TEST_EQ ||
+             DeferredValueKind == DeferredKind::ZERO_TEST_NE;
     }
     bool isDeferredZeroTestNegated() const {
-      ZEN_ASSERT(DeferredValueKind == DeferredKind::ZERO_TEST &&
-                 "Not a deferred zero-test value");
-      return DeferredZeroTestNegated;
+      ZEN_ASSERT(isDeferredZeroTest() && "Not a deferred zero-test value");
+      return DeferredValueKind == DeferredKind::ZERO_TEST_NE;
     }
 
     const U256Inst &getU256Components() const {
@@ -235,7 +240,6 @@ public:
     bool IsConstant = false;
     bool IsU256MultiComponent = false;
     DeferredKind DeferredValueKind = DeferredKind::NONE;
-    bool DeferredZeroTestNegated = false;
   };
 
   bool compile(CompilerContext *Context);
