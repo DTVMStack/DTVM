@@ -812,6 +812,22 @@ private:
       }
       break;
     }
+    case OP_evm_u256_add_result: {
+      const auto &LHSRes = llvm::cast<EvmU256AddResultInstruction>(LHS);
+      const auto &RHSRes = llvm::cast<EvmU256AddResultInstruction>(RHS);
+      if (LHSRes.getResultIdx() != RHSRes.getResultIdx()) {
+        return false;
+      }
+      break;
+    }
+    case OP_evm_u256_sub_result: {
+      const auto &LHSRes = llvm::cast<EvmU256SubResultInstruction>(LHS);
+      const auto &RHSRes = llvm::cast<EvmU256SubResultInstruction>(RHS);
+      if (LHSRes.getResultIdx() != RHSRes.getResultIdx()) {
+        return false;
+      }
+      break;
+    }
     default:
       break;
     }

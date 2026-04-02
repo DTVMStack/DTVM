@@ -3,6 +3,7 @@
 #pragma once
 
 #include "compiler/mir/pass/visitor.h"
+#include "llvm/ADT/SmallPtrSet.h"
 
 namespace COMPILER {
 
@@ -25,6 +26,7 @@ public:
   }
 
   void visitBasicBlock(MBasicBlock &BB) override {
+    Visited.clear();
     if (BB.empty()) {
       return;
     }
@@ -49,6 +51,13 @@ public:
                                        "must have false target");
     }
     MVisitor::visitBasicBlock(BB);
+  }
+
+  void visitInstruction(MInstruction &I) override {
+    if (!Visited.insert(&I).second) {
+      return;
+    }
+    MVisitor::visitInstruction(I);
   }
 
   void visitUnaryInstruction(UnaryInstruction &I) override;
@@ -90,6 +99,7 @@ private:
   bool Broken = false;
   llvm::raw_ostream &OS;
   uint32_t FailedCount = 0;
+  llvm::SmallPtrSet<const MInstruction *, 32> Visited;
 };
 
 } // namespace COMPILER

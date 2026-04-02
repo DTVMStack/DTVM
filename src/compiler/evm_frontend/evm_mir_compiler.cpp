@@ -4453,19 +4453,6 @@ void EVMMirBuilder::handleMStore(Operand AddrComponents,
     MInstruction *SizeConst = createIntConstInstruction(I64Type, 32);
     MInstruction *RequiredSize = createInstruction<BinaryInstruction>(
         false, OP_add, I64Type, Offset, SizeConst);
-    // Tie expansion ordering to the stored value to prevent reordering on the
-    // fallback path that still emits a per-op expand sequence.
-    MInstruction *Zero = createIntConstInstruction(I64Type, 0);
-    MInstruction *ValueDep = createInstruction<BinaryInstruction>(
-        false, OP_or, I64Type, ValueParts[0], ValueParts[1]);
-    ValueDep = createInstruction<BinaryInstruction>(false, OP_or, I64Type,
-                                                    ValueDep, ValueParts[2]);
-    ValueDep = createInstruction<BinaryInstruction>(false, OP_or, I64Type,
-                                                    ValueDep, ValueParts[3]);
-    ValueDep = createInstruction<BinaryInstruction>(false, OP_and, I64Type,
-                                                    ValueDep, Zero);
-    RequiredSize = createInstruction<BinaryInstruction>(false, OP_add, I64Type,
-                                                        RequiredSize, ValueDep);
     MInstruction *Overflow = createInstruction<CmpInstruction>(
         false, CmpInstruction::Predicate::ICMP_ULT, I64Type, RequiredSize,
         Offset);
