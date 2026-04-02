@@ -1543,8 +1543,7 @@ static bool isShortDiamondTrueFallthrough(const BrIfInstruction &Inst) {
     return false;
   }
 
-  auto *MutableTrueBB = const_cast<MBasicBlock *>(TrueBB);
-  const auto *Terminator = *std::prev(MutableTrueBB->end());
+  const auto *Terminator = *std::prev(TrueBB->end());
   const auto *BrInst = dyn_cast<BrInstruction>(Terminator);
   return BrInst != nullptr && BrInst->getTargetBlock() == FalseBB;
 }

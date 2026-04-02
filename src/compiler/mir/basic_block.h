@@ -23,6 +23,8 @@ public:
 
   auto begin() { return Statements.begin(); }
   auto end() { return Statements.end(); }
+  auto begin() const { return Statements.begin(); }
+  auto end() const { return Statements.end(); }
   bool empty() const { return Statements.empty(); }
 
   void addStatement(MInstruction *Inst) {
