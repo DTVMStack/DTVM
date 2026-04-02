@@ -1,45 +1,53 @@
-;; Test: f64.store with offset > INT32_MAX (i.e. >= 0x80000000) on large memory
-;; should NOT trap.
+;; Issue #421 / disp32: memarg offset > INT32_MAX (>= 0x80000000) must not mis-address.
+;; x86-64 disp32 sign-extends; the JIT must materialize the full 64-bit EA.
 ;;
-;; When offset >= 0x80000000, x86-64 disp32 sign-extends to a negative 64-bit
-;; value, causing the effective address to go before MemBase. The JIT must
-;; compute the full 64-bit address explicitly to avoid this.
+;; This file uses 32769 pages (~2 GiB), not 65131 (~4 GiB): same bug class with lower
+;; allocation pressure (see PR review on calloc / non-mmap CI).
+;; memarg offset = 2147483648 (0x80000000); memory bytes = 32769 * 65536 = 2147549184.
 ;;
-;; Effective address = memory.size(65131) + offset(4268353288) = 4268418419
-;; Memory size = 65131 * 65536 = 4268425216
-;; 4268418419 + 8 <= 4268425216 => in-bounds, should NOT trap.
+;; In-bounds (dynamic base = memory.size = 32769):
+;;   EA = 32769 + 2147483648 = 2147516417; +8 <= 2147549184.
+;; In-bounds (imm base 0):
+;;   EA = 2147483648; +8 <= 2147549184.
 
 (module
-  (memory (;0;) 65131)
+  (memory (;0;) 32769)
 
-  ;; dynamic base (memory.size result) + large offset: in-bounds store
+  ;; dynamic base (memory.size) + large offset
   (func (export "f64_store_dynamic_base_large_offset")
     memory.size
     f64.const -5.44203
-    f64.store offset=4268353288)
+    f64.store offset=2147483648)
 
-  ;; dynamic base via parameter + large offset: in-bounds store
   (func (export "f64_store_param_base_large_offset") (param i32)
     local.get 0
     f64.const 1.0
-    f64.store offset=4268353288)
+    f64.store offset=2147483648)
 
-  ;; dynamic base (memory.size result) + large offset: in-bounds load
+  ;; immediate base i32.const 0 + large offset (distinct codegen path under WASI)
+  (func (export "f64_store_imm_base_large_offset")
+    i32.const 0
+    f64.const 3.0
+    f64.store offset=2147483648)
+
   (func (export "f64_load_dynamic_base_large_offset") (result f64)
     memory.size
-    f64.load offset=4268353288)
+    f64.load offset=2147483648)
 
-  ;; large offset store that IS out-of-bounds must still trap
+  (func (export "f64_load_imm_base_large_offset") (result f64)
+    i32.const 0
+    f64.load offset=2147483648)
+
   (func (export "f64_store_large_offset_oob") (param i32)
     local.get 0
     f64.const 0.0
     f64.store offset=4294967295)
 )
 
-;; These should all succeed without trapping
 (assert_return (invoke "f64_store_dynamic_base_large_offset"))
-(assert_return (invoke "f64_store_param_base_large_offset" (i32.const 65131)))
+(assert_return (invoke "f64_store_param_base_large_offset" (i32.const 32769)))
+(assert_return (invoke "f64_store_imm_base_large_offset"))
 (assert_return (invoke "f64_load_dynamic_base_large_offset") (f64.const 1.0))
+(assert_return (invoke "f64_load_imm_base_large_offset") (f64.const 3.0))
 
-;; Large offset that actually exceeds memory should still trap
-(assert_trap (invoke "f64_store_large_offset_oob" (i32.const 65131)) "out of bounds memory access")
+(assert_trap (invoke "f64_store_large_offset_oob" (i32.const 32769)) "out of bounds memory access")
