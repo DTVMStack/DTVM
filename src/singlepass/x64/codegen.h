@@ -904,6 +904,7 @@ public:
 
     checkMemoryOverflow<SrcType>(Base, Offset);
 
+    bool UseImmAddr = Base.isImm();
     typename X64TypeAttr<AddrType>::RegNum BaseReg =
         X64::RAX; // the initial value only used to suppress compiler error
 
@@ -918,7 +919,18 @@ public:
       uint64_t Offset64 = (uint64_t)Offset;
       Offset64 += (uint32_t)Base.getImm();
       if (Offset64 > INT32_MAX) {
+#ifdef ZEN_ENABLE_BUILTIN_WASI
+        // WASI (non-blockchain): compute the real large address so the
+        // software OOB check fires correctly per the WASM spec.
+        BaseReg = Layout.getScopedTemp<AddrType, ScopedTempReg1>();
+        _ mov(X64Reg::getRegRef<X64::I32>(BaseReg), (uint32_t)Base.getImm());
+        UseImmAddr = false;
+#else
+        // Blockchain mode: clamp to INT32_MAX so the resulting address
+        // falls in a deterministic out-of-range region; CPU exception
+        // (SIGSEGV) will trap it via the guard mapping.
         Offset = INT32_MAX; // invalid addr
+#endif
       } else {
         Offset = (uint32_t)Offset64;
       }
@@ -932,26 +944,21 @@ public:
       ValReg = Layout.getScopedTemp<X64DestType, ScopedTempReg0>();
     }
 
-    Addr = Base.isImm()
-               ? asmjit::x86::Mem(ABI.getMemoryBaseReg(), Offset,
-                                  getWASMTypeSize<SrcType>())
-               : asmjit::x86::Mem(ABI.getMemoryBaseReg(),
-                                  X64Reg::getRegRef<X64::I32>(BaseReg), 0,
-                                  Offset, getWASMTypeSize<SrcType>());
+    Addr = UseImmAddr ? asmjit::x86::Mem(ABI.getMemoryBaseReg(), Offset,
+                                         getWASMTypeSize<SrcType>())
+                      : asmjit::x86::Mem(ABI.getMemoryBaseReg(),
+                                         X64Reg::getRegRef<X64::I32>(BaseReg),
+                                         0, Offset, getWASMTypeSize<SrcType>());
 
-#ifdef ZEN_ENABLE_CPU_EXCEPTION
-    if (!Base.isImm() && (Offset >= INT32_MAX)) {
-      // when offset >= INT32_MAX, then will cause inst like mov edi, dword
-      // ptr[r13+edi-1].
+    if (!UseImmAddr && (Offset > (uint32_t)INT32_MAX)) {
       auto MemAddrReg = Layout.getScopedTemp<AddrType, ScopedTempReg2>();
       _ mov(X64Reg::getRegRef<X64::I32>(MemAddrReg), Offset);
       _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg),
             X64Reg::getRegRef<X64::I64>(BaseReg));
       _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg), ABI.getMemoryBaseReg());
       Addr = asmjit::x86::Mem(X64Reg::getRegRef<X64::I64>(MemAddrReg), 0,
-                              getWASMTypeSize(SrcType));
+                              getWASMTypeSize<SrcType>());
     }
-#endif // ZEN_ENABLE_CPU_EXCEPTION
 
     LoadOperatorImpl<X64DestType, X64SrcType, Sext>::emit(
         ASM, X64Reg::getRegRef<X64DestType>(ValReg), Addr);
@@ -999,6 +1006,7 @@ public:
 
     checkMemoryOverflow<Type>(Base, Offset);
 
+    bool UseImmAddr = Base.isImm();
     X64::RegNum RegNum = 0;
     if (Base.isReg()) {
       RegNum = Base.getReg();
@@ -1010,7 +1018,18 @@ public:
       uint64_t Offset64 = (uint64_t)Offset;
       Offset64 += (uint32_t)Base.getImm();
       if (Offset64 > INT32_MAX) {
+#ifdef ZEN_ENABLE_BUILTIN_WASI
+        // WASI (non-blockchain): compute the real large address so the
+        // software OOB check fires correctly per the WASM spec.
+        RegNum = Layout.getScopedTemp<AddrType, ScopedTempReg1>();
+        _ mov(X64Reg::getRegRef<X64::I32>(RegNum), (uint32_t)Base.getImm());
+        UseImmAddr = false;
+#else
+        // Blockchain mode: clamp to INT32_MAX so the resulting address
+        // falls in a deterministic out-of-range region; CPU exception
+        // (SIGSEGV) will trap it via the guard mapping.
         Offset = INT32_MAX; // invalid addr
+#endif
       } else {
         Offset = (uint32_t)Offset64;
       }
@@ -1018,14 +1037,22 @@ public:
       ZEN_ABORT();
     }
 
-    // Addr = memoryBase + (in64) offset, so when offset < 0,
-    // the result i32 Addr works like add (2**32 + offset)
     asmjit::x86::Mem Addr =
-        Base.isImm() ? asmjit::x86::Mem(ABI.getMemoryBaseReg(), Offset,
-                                        getWASMTypeSize<Type>())
-                     : asmjit::x86::Mem(ABI.getMemoryBaseReg(),
-                                        X64Reg::getRegRef<X64::I32>(RegNum), 0,
-                                        Offset, getWASMTypeSize<Type>());
+        UseImmAddr ? asmjit::x86::Mem(ABI.getMemoryBaseReg(), Offset,
+                                      getWASMTypeSize<Type>())
+                   : asmjit::x86::Mem(ABI.getMemoryBaseReg(),
+                                      X64Reg::getRegRef<X64::I32>(RegNum), 0,
+                                      Offset, getWASMTypeSize<Type>());
+
+    if (!UseImmAddr && (Offset > (uint32_t)INT32_MAX)) {
+      auto MemAddrReg = Layout.getScopedTemp<AddrType, ScopedTempReg2>();
+      _ mov(X64Reg::getRegRef<X64::I32>(MemAddrReg), Offset);
+      _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg),
+            X64Reg::getRegRef<X64::I64>(RegNum));
+      _ add(X64Reg::getRegRef<X64::I64>(MemAddrReg), ABI.getMemoryBaseReg());
+      Addr = asmjit::x86::Mem(X64Reg::getRegRef<X64::I64>(MemAddrReg), 0,
+                              getWASMTypeSize<Type>());
+    }
 
     mov<X64Type, ScopedTempReg0>(Addr, Value);
   }
