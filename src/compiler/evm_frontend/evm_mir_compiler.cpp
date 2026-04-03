@@ -1381,8 +1381,8 @@ EVMMirBuilder::handleDivU64Dividend(uint64_t Dividend,
       false, CmpInstruction::ICMP_NE, &Ctx.I64Type, Upper, Zero);
   // SafeB0: replace zero divisor with 1 to avoid hardware trap
   MInstruction *One = createIntConstInstruction(I64Type, 1);
-  MInstruction *SafeB0 = createInstruction<SelectInstruction>(
-      false, I64Type, IsZero, One, B[0]);
+  MInstruction *SafeB0 =
+      createInstruction<SelectInstruction>(false, I64Type, IsZero, One, B[0]);
 
   MInstruction *A0 = createIntConstInstruction(I64Type, Dividend);
   MInstruction *Q64 =
@@ -1422,16 +1422,16 @@ EVMMirBuilder::handleModU64Dividend(uint64_t Dividend,
       false, CmpInstruction::ICMP_NE, &Ctx.I64Type, Upper, Zero);
   // SafeB0: replace zero divisor with 1 to avoid hardware trap
   MInstruction *One = createIntConstInstruction(I64Type, 1);
-  MInstruction *SafeB0 = createInstruction<SelectInstruction>(
-      false, I64Type, IsZero, One, B[0]);
+  MInstruction *SafeB0 =
+      createInstruction<SelectInstruction>(false, I64Type, IsZero, One, B[0]);
 
   MInstruction *A0 = createIntConstInstruction(I64Type, Dividend);
   MInstruction *R64 =
       createInstruction<BinaryInstruction>(false, OP_urem, I64Type, A0, SafeB0);
   // When divisor has upper limbs, MOD = Dividend (a < b → a % b = a).
   // When divisor is zero, MOD = 0.
-  MInstruction *UpperResult = createInstruction<SelectInstruction>(
-      false, I64Type, IsZero, Zero, A0);
+  MInstruction *UpperResult =
+      createInstruction<SelectInstruction>(false, I64Type, IsZero, Zero, A0);
   MInstruction *ModResult = createInstruction<SelectInstruction>(
       false, I64Type, HasUpper, UpperResult, R64);
 
