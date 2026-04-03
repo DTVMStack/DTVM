@@ -1363,18 +1363,35 @@ EVMMirBuilder::handleDivU64Dividend(uint64_t Dividend,
 
   U256Inst B = extractU256Operand(DivisorOp);
 
-  // If divisor has any upper limb set, b > a, so DIV = 0
+  // If divisor has any upper limb set, b > a, so DIV = 0.
+  // Also guard against B == 0: EVM DIV(x, 0) must return 0, but
+  // OP_udiv with divisor=0 would lower to a hardware trap on x86.
+  MInstruction *AnyLimb = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, B[0],
+      createInstruction<BinaryInstruction>(
+          false, OP_or, I64Type, B[1],
+          createInstruction<BinaryInstruction>(false, OP_or, I64Type, B[2],
+                                               B[3])));
+  MInstruction *IsZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::ICMP_EQ, &Ctx.I64Type, AnyLimb, Zero);
   MInstruction *Upper = createInstruction<BinaryInstruction>(
       false, OP_or, I64Type, B[1],
       createInstruction<BinaryInstruction>(false, OP_or, I64Type, B[2], B[3]));
   MInstruction *HasUpper = createInstruction<CmpInstruction>(
       false, CmpInstruction::ICMP_NE, &Ctx.I64Type, Upper, Zero);
+  // SafeB0: replace zero divisor with 1 to avoid hardware trap
+  MInstruction *One = createIntConstInstruction(I64Type, 1);
+  MInstruction *SafeB0 = createInstruction<SelectInstruction>(
+      false, I64Type, IsZero, One, B[0]);
 
   MInstruction *A0 = createIntConstInstruction(I64Type, Dividend);
   MInstruction *Q64 =
-      createInstruction<BinaryInstruction>(false, OP_udiv, I64Type, A0, B[0]);
+      createInstruction<BinaryInstruction>(false, OP_udiv, I64Type, A0, SafeB0);
+  // Return 0 when divisor is zero or has upper limbs set
+  MInstruction *Skip = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, IsZero, HasUpper);
   MInstruction *DivResult =
-      createInstruction<SelectInstruction>(false, I64Type, HasUpper, Zero, Q64);
+      createInstruction<SelectInstruction>(false, I64Type, Skip, Zero, Q64);
 
   U256Inst Result = {DivResult, Zero, Zero, Zero};
   return Operand(Result, EVMType::UINT256);
@@ -1388,17 +1405,35 @@ EVMMirBuilder::handleModU64Dividend(uint64_t Dividend,
 
   U256Inst B = extractU256Operand(DivisorOp);
 
+  // Guard against B == 0: EVM MOD(x, 0) must return 0, but
+  // OP_urem with divisor=0 would lower to a hardware trap on x86.
+  MInstruction *AnyLimb = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, B[0],
+      createInstruction<BinaryInstruction>(
+          false, OP_or, I64Type, B[1],
+          createInstruction<BinaryInstruction>(false, OP_or, I64Type, B[2],
+                                               B[3])));
+  MInstruction *IsZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::ICMP_EQ, &Ctx.I64Type, AnyLimb, Zero);
   MInstruction *Upper = createInstruction<BinaryInstruction>(
       false, OP_or, I64Type, B[1],
       createInstruction<BinaryInstruction>(false, OP_or, I64Type, B[2], B[3]));
   MInstruction *HasUpper = createInstruction<CmpInstruction>(
       false, CmpInstruction::ICMP_NE, &Ctx.I64Type, Upper, Zero);
+  // SafeB0: replace zero divisor with 1 to avoid hardware trap
+  MInstruction *One = createIntConstInstruction(I64Type, 1);
+  MInstruction *SafeB0 = createInstruction<SelectInstruction>(
+      false, I64Type, IsZero, One, B[0]);
 
   MInstruction *A0 = createIntConstInstruction(I64Type, Dividend);
   MInstruction *R64 =
-      createInstruction<BinaryInstruction>(false, OP_urem, I64Type, A0, B[0]);
-  MInstruction *ModResult =
-      createInstruction<SelectInstruction>(false, I64Type, HasUpper, A0, R64);
+      createInstruction<BinaryInstruction>(false, OP_urem, I64Type, A0, SafeB0);
+  // When divisor has upper limbs, MOD = Dividend (a < b → a % b = a).
+  // When divisor is zero, MOD = 0.
+  MInstruction *UpperResult = createInstruction<SelectInstruction>(
+      false, I64Type, IsZero, Zero, A0);
+  MInstruction *ModResult = createInstruction<SelectInstruction>(
+      false, I64Type, HasUpper, UpperResult, R64);
 
   U256Inst Result = {ModResult, Zero, Zero, Zero};
   return Operand(Result, EVMType::UINT256);
@@ -1530,63 +1565,66 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
   if (DivisorOp.isConstU64()) {
     uint64_t D = DivisorOp.getConstValue()[0];
     if (D != 0) {
-      U256Inst A = extractU256Operand(DividendOp);
-      MType *I64Type = &Ctx.I64Type;
-      MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+      if (!DividendOp.isConstant()) {
+        U256Inst A = extractU256Operand(DividendOp);
+        MType *I64Type = &Ctx.I64Type;
+        MInstruction *Zero = createIntConstInstruction(I64Type, 0);
 
-      MInstruction *UpperAny = createInstruction<BinaryInstruction>(
-          false, OP_or, I64Type, A[1],
-          createInstruction<BinaryInstruction>(false, OP_or, I64Type, A[2],
-                                               A[3]));
-      MInstruction *HasUpper = createInstruction<CmpInstruction>(
-          false, CmpInstruction::ICMP_NE, I64Type, UpperAny, Zero);
+        MInstruction *UpperAny = createInstruction<BinaryInstruction>(
+            false, OP_or, I64Type, A[1],
+            createInstruction<BinaryInstruction>(false, OP_or, I64Type, A[2],
+                                                 A[3]));
+        MInstruction *HasUpper = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_NE, I64Type, UpperAny, Zero);
 
-      U256Var ResultVars = {};
-      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-        ResultVars[I] = CurFunc->createVariable(I64Type);
+        U256Var ResultVars = {};
+        for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+          ResultVars[I] = CurFunc->createVariable(I64Type);
+        }
+
+        auto storeResult = [&](const U256Inst &Values) {
+          for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+            createInstruction<DassignInstruction>(
+                true, &(Ctx.VoidType), Values[I], ResultVars[I]->getVarIdx());
+          }
+        };
+
+        auto loadResult = [&]() -> U256Inst {
+          U256Inst Values = {};
+          for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+            Values[I] = loadVariable(ResultVars[I]);
+          }
+          return Values;
+        };
+
+        MBasicBlock *KnownU64BB = createBasicBlock();
+        MBasicBlock *SlowBB = createBasicBlock();
+        MBasicBlock *AfterBB = createBasicBlock();
+        createInstruction<BrIfInstruction>(true, Ctx, HasUpper, SlowBB,
+                                           KnownU64BB);
+        addSuccessor(SlowBB);
+        addSuccessor(KnownU64BB);
+
+        setInsertBlock(KnownU64BB);
+        MInstruction *DivConst = createIntConstInstruction(I64Type, D);
+        MInstruction *Quotient = createInstruction<BinaryInstruction>(
+            false, OP_udiv, I64Type, A[0], DivConst);
+        U256Inst FastResult = {Quotient, Zero, Zero, Zero};
+        storeResult(FastResult);
+        createInstruction<BrInstruction>(true, Ctx, AfterBB);
+        addSuccessor(AfterBB);
+
+        setInsertBlock(SlowBB);
+        U256Inst SlowResult =
+            extractU256Operand(handleDivU64Divisor(DividendOp, D));
+        storeResult(SlowResult);
+        createInstruction<BrInstruction>(true, Ctx, AfterBB);
+        addSuccessor(AfterBB);
+
+        setInsertBlock(AfterBB);
+        return Operand(loadResult(), EVMType::UINT256);
       }
-
-      auto storeResult = [&](const U256Inst &Values) {
-        for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-          createInstruction<DassignInstruction>(
-              true, &(Ctx.VoidType), Values[I], ResultVars[I]->getVarIdx());
-        }
-      };
-
-      auto loadResult = [&]() -> U256Inst {
-        U256Inst Values = {};
-        for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
-          Values[I] = loadVariable(ResultVars[I]);
-        }
-        return Values;
-      };
-
-      MBasicBlock *KnownU64BB = createBasicBlock();
-      MBasicBlock *SlowBB = createBasicBlock();
-      MBasicBlock *AfterBB = createBasicBlock();
-      createInstruction<BrIfInstruction>(true, Ctx, HasUpper, SlowBB,
-                                         KnownU64BB);
-      addSuccessor(SlowBB);
-      addSuccessor(KnownU64BB);
-
-      setInsertBlock(KnownU64BB);
-      MInstruction *DivConst = createIntConstInstruction(I64Type, D);
-      MInstruction *Quotient = createInstruction<BinaryInstruction>(
-          false, OP_udiv, I64Type, A[0], DivConst);
-      U256Inst FastResult = {Quotient, Zero, Zero, Zero};
-      storeResult(FastResult);
-      createInstruction<BrInstruction>(true, Ctx, AfterBB);
-      addSuccessor(AfterBB);
-
-      setInsertBlock(SlowBB);
-      U256Inst SlowResult =
-          extractU256Operand(handleDivU64Divisor(DividendOp, D));
-      storeResult(SlowResult);
-      createInstruction<BrInstruction>(true, Ctx, AfterBB);
-      addSuccessor(AfterBB);
-
-      setInsertBlock(AfterBB);
-      return Operand(loadResult(), EVMType::UINT256);
+      return handleDivU64Divisor(DividendOp, D);
     }
   }
 

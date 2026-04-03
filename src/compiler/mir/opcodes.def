@@ -69,8 +69,8 @@ OPCODE(evm_umul128_lo)              // 64x64->64 multiplication (low bits)
 OPCODE(evm_umul128_hi)              // extract high 64 bits from evm_umul128_lo
 OPCODE(evm_u256_mul)                // 256x256->256 multiplication pseudo op
 OPCODE(evm_u256_mul_result)         // extract extra limb from evm_u256_mul
-OPCODE(evm_udiv128_by64)            // RDX:RAX / r64 -> quotient (RAX)
-OPCODE(evm_urem128_by64)            // extract remainder (RDX) from evm_udiv128_by64
+OPCODE(evm_udiv128_by64)            // unsigned 128-bit (hi:lo) divided by 64-bit divisor -> 64-bit quotient
+OPCODE(evm_urem128_by64)            // unsigned remainder from the same 128/64 division as evm_udiv128_by64
                                     // OP_OTHER_EXPR_END
 
 OPCODE(br)                          // OP_CTRL_STMT_START
