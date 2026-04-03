@@ -1385,11 +1385,12 @@ EVMMirBuilder::handleDivU64Dividend(uint64_t Dividend,
   MInstruction *A0 = createIntConstInstruction(I64Type, Dividend);
   MInstruction *Q64 =
       createInstruction<BinaryInstruction>(false, OP_udiv, I64Type, A0, SafeB0);
-  // Return 0 if divisor has upper bits OR divisor is entirely zero
-  MInstruction *ShouldReturnZero = createInstruction<BinaryInstruction>(
-      false, OP_or, I64Type, HasUpper, IsB0Zero);
+  // Chain two selects so lowerSelectExpr can fuse each CmpInstruction
+  // condition directly into CMP+CMOVcc, avoiding SETcc+OR+TEST overhead.
+  MInstruction *TmpResult =
+      createInstruction<SelectInstruction>(false, I64Type, IsB0Zero, Zero, Q64);
   MInstruction *DivResult = createInstruction<SelectInstruction>(
-      false, I64Type, ShouldReturnZero, Zero, Q64);
+      false, I64Type, HasUpper, Zero, TmpResult);
 
   U256Inst Result = {DivResult, Zero, Zero, Zero};
   return Operand(Result, EVMType::UINT256);
@@ -1420,16 +1421,12 @@ EVMMirBuilder::handleModU64Dividend(uint64_t Dividend,
   MInstruction *A0 = createIntConstInstruction(I64Type, Dividend);
   MInstruction *R64 =
       createInstruction<BinaryInstruction>(false, OP_urem, I64Type, A0, SafeB0);
-  // If upper limbs set: divisor > dividend, so MOD result = dividend
-  MInstruction *NonZeroResult =
-      createInstruction<SelectInstruction>(false, I64Type, HasUpper, A0, R64);
-  // If divisor is entirely zero (all limbs 0), return 0 per EVM spec
-  MInstruction *AnyNonZero =
-      createInstruction<BinaryInstruction>(false, OP_or, I64Type, Upper, B[0]);
-  MInstruction *IsDivisorZero = createInstruction<CmpInstruction>(
-      false, CmpInstruction::ICMP_EQ, &Ctx.I64Type, AnyNonZero, Zero);
+  // Chain two selects: IsB0Zero → 0 (div-by-zero), HasUpper → A0 (divisor >
+  // dividend)
+  MInstruction *TmpResult =
+      createInstruction<SelectInstruction>(false, I64Type, IsB0Zero, Zero, R64);
   MInstruction *ModResult = createInstruction<SelectInstruction>(
-      false, I64Type, IsDivisorZero, Zero, NonZeroResult);
+      false, I64Type, HasUpper, A0, TmpResult);
 
   U256Inst Result = {ModResult, Zero, Zero, Zero};
   return Operand(Result, EVMType::UINT256);

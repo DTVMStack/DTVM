@@ -1,4 +1,4 @@
-// BYTE(0x10, 0x42) = 0 (out-of-range byte index), then 0x03 % 0 = 0 per EVM spec
+// BYTE(0x10, 0x42) = 0 (0x42 is in the LSB of the 256-bit word, byte 16 is zero)
 // Regression test: constant dividend % dynamic zero divisor must not trap
 PUSH1 0x42
 PUSH1 0x10
