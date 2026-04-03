@@ -2823,7 +2823,6 @@ EVMMirBuilder::handleSignextend(Operand IndexOp, Operand ValueOp) {
 
   MInstruction *Const7 = createIntConstInstruction(MirI64Type, 7);
   MInstruction *Const3 = createIntConstInstruction(MirI64Type, 3);
-  MInstruction *Const8 = createIntConstInstruction(MirI64Type, 8);
   MInstruction *Const63 = createIntConstInstruction(MirI64Type, 63);
   MInstruction *AllOnes = createIntConstInstruction(MirI64Type, ~0ULL);
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
