@@ -1374,11 +1374,22 @@ EVMMirBuilder::handleDivU64Dividend(uint64_t Dividend,
   MInstruction *HasUpper = createInstruction<CmpInstruction>(
       false, CmpInstruction::ICMP_NE, &Ctx.I64Type, Upper, Zero);
 
+  // Guard B[0] against zero to prevent hardware divide-by-zero trap.
+  // EVM DIV(a, 0) = 0, but x86 DIV with zero divisor raises SIGFPE.
+  MInstruction *One = createIntConstInstruction(I64Type, 1);
+  MInstruction *IsB0Zero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::ICMP_EQ, &Ctx.I64Type, B[0], Zero);
+  MInstruction *SafeB0 =
+      createInstruction<SelectInstruction>(false, I64Type, IsB0Zero, One, B[0]);
+
   MInstruction *A0 = createIntConstInstruction(I64Type, Dividend);
   MInstruction *Q64 =
-      createInstruction<BinaryInstruction>(false, OP_udiv, I64Type, A0, B[0]);
-  MInstruction *DivResult =
-      createInstruction<SelectInstruction>(false, I64Type, HasUpper, Zero, Q64);
+      createInstruction<BinaryInstruction>(false, OP_udiv, I64Type, A0, SafeB0);
+  // Return 0 if divisor has upper bits OR divisor is entirely zero
+  MInstruction *ShouldReturnZero = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, HasUpper, IsB0Zero);
+  MInstruction *DivResult = createInstruction<SelectInstruction>(
+      false, I64Type, ShouldReturnZero, Zero, Q64);
 
   U256Inst Result = {DivResult, Zero, Zero, Zero};
   return Operand(Result, EVMType::UINT256);
@@ -1398,11 +1409,27 @@ EVMMirBuilder::handleModU64Dividend(uint64_t Dividend,
   MInstruction *HasUpper = createInstruction<CmpInstruction>(
       false, CmpInstruction::ICMP_NE, &Ctx.I64Type, Upper, Zero);
 
+  // Guard B[0] against zero to prevent hardware divide-by-zero trap.
+  // EVM MOD(a, 0) = 0, but x86 DIV with zero divisor raises SIGFPE.
+  MInstruction *One = createIntConstInstruction(I64Type, 1);
+  MInstruction *IsB0Zero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::ICMP_EQ, &Ctx.I64Type, B[0], Zero);
+  MInstruction *SafeB0 =
+      createInstruction<SelectInstruction>(false, I64Type, IsB0Zero, One, B[0]);
+
   MInstruction *A0 = createIntConstInstruction(I64Type, Dividend);
   MInstruction *R64 =
-      createInstruction<BinaryInstruction>(false, OP_urem, I64Type, A0, B[0]);
-  MInstruction *ModResult =
+      createInstruction<BinaryInstruction>(false, OP_urem, I64Type, A0, SafeB0);
+  // If upper limbs set: divisor > dividend, so MOD result = dividend
+  MInstruction *NonZeroResult =
       createInstruction<SelectInstruction>(false, I64Type, HasUpper, A0, R64);
+  // If divisor is entirely zero (all limbs 0), return 0 per EVM spec
+  MInstruction *AnyNonZero =
+      createInstruction<BinaryInstruction>(false, OP_or, I64Type, Upper, B[0]);
+  MInstruction *IsDivisorZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::ICMP_EQ, &Ctx.I64Type, AnyNonZero, Zero);
+  MInstruction *ModResult = createInstruction<SelectInstruction>(
+      false, I64Type, IsDivisorZero, Zero, NonZeroResult);
 
   U256Inst Result = {ModResult, Zero, Zero, Zero};
   return Operand(Result, EVMType::UINT256);
