@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -100,7 +101,7 @@ public:
       if (!BlockInfo.CanLiftStack) {
         continue;
       }
-      LiftedBlocks[EntryPC] = true;
+      LiftedBlocks.insert(EntryPC);
       auto &EntryState = BlockEntryStates[EntryPC];
       EntryState.PredecessorOrder =
           Analyzer.getPotentialEntryPredecessorsForBlock(EntryPC);
@@ -134,8 +135,7 @@ public:
 
   bool isLiftedBlock(uint64_t BlockPC) const {
 #ifdef ZEN_ENABLE_EVM_STACK_SSA_LIFT
-    auto It = LiftedBlocks.find(BlockPC);
-    return It != LiftedBlocks.end() && It->second;
+    return LiftedBlocks.count(BlockPC) != 0;
 #else
     (void)BlockPC;
     return false;
@@ -468,7 +468,7 @@ private:
   }
 
   IRBuilder &Builder;
-  std::map<uint64_t, bool> LiftedBlocks;
+  std::set<uint64_t> LiftedBlocks;
   std::map<uint64_t, BlockEntryState> BlockEntryStates;
   std::map<std::string, uint64_t> ValueIds;
   uint64_t NextValueId = 1;

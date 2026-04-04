@@ -807,8 +807,7 @@ private:
           if (PC > RunStartPC && HasLiveFallthrough) {
             Builder.meterOpcodeRange(RunStartPC, PC);
           }
-          if (HasLiveFallthrough &&
-              tryAssignFallthroughEntryState(Analyzer, PC)) {
+          if (HasLiveFallthrough && tryAssignFallthroughEntryState(PC)) {
             // Keep runtime stack materialization elided on lifted fallthrough.
           } else {
             if (HasLiveFallthrough && CurrentBlockLifted && isLiftedBlock(PC)) {
@@ -1019,9 +1018,7 @@ private:
     return true;
   }
 
-  bool tryAssignFallthroughEntryState(const EVMAnalyzer &Analyzer,
-                                      uint64_t SuccPC) {
-    (void)Analyzer;
+  bool tryAssignFallthroughEntryState(uint64_t SuccPC) {
     if (!CurrentBlockLifted || !isLiftedBlock(SuccPC)) {
       return false;
     }

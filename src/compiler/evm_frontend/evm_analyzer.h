@@ -490,18 +490,6 @@ private:
     JITResult = JITSuitabilityResult();
     JITResult.BytecodeSize = BytecodeSize;
 
-    const auto *InstructionMetrics =
-        evmc_get_instruction_metrics_table(Revision);
-    const auto *InstructionNames = evmc_get_instruction_names_table(Revision);
-    if (!InstructionMetrics) {
-      InstructionMetrics =
-          evmc_get_instruction_metrics_table(zen::evm::DEFAULT_REVISION);
-    }
-    if (!InstructionNames) {
-      InstructionNames =
-          evmc_get_instruction_names_table(zen::evm::DEFAULT_REVISION);
-    }
-
     size_t CurConsecutiveExpensive = 0;
     size_t CurBlockExpensiveCount = 0;
     bool PrevWasDup = false;
@@ -544,9 +532,6 @@ private:
 
       size_t PushBytes = immediateSize(Opcode);
       PCIndex += 1 + PushBytes;
-
-      (void)InstructionMetrics;
-      (void)InstructionNames;
     }
 
     JITResult.MaxConsecutiveExpensive =
