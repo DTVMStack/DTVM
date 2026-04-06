@@ -264,10 +264,55 @@ handleExecutionStatus(zen::evm::EVMFrame *&Frame,
 
 } // namespace
 
-EVMFrame *InterpreterExecContext::allocTopFrame(evmc_message *Msg) {
-  FrameStack.emplace_back();
+namespace {
 
-  EVMFrame &Frame = FrameStack.back();
+/// Beyond this retained capacity, Memory / CallData are shrink_to_fit() after
+/// clear() so reusing EVMFrame objects does not grow RSS without bound.
+constexpr size_t kMaxRetainedFrameBufferBytes = 1024 * 1024;
+
+static void clearFrameTransientBuffers(EVMFrame &Frame) {
+  Frame.Memory.clear();
+  if (Frame.Memory.capacity() > kMaxRetainedFrameBufferBytes)
+    Frame.Memory.shrink_to_fit();
+  Frame.CallData.clear();
+  if (Frame.CallData.capacity() > kMaxRetainedFrameBufferBytes)
+    Frame.CallData.shrink_to_fit();
+}
+
+static void releaseAllFrameBuffersIfLarge(std::vector<EVMFrame> &Frames) {
+  for (EVMFrame &F : Frames)
+    clearFrameTransientBuffers(F);
+}
+
+} // namespace
+
+void InterpreterExecContext::resetForNewCall(runtime::EVMInstance *NewInst) {
+  Inst = NewInst;
+  FrameCount = 0;
+  releaseAllFrameBuffersIfLarge(FrameStack);
+  Status = EVMC_SUCCESS;
+  ReturnData.clear();
+  IsJump = false;
+  ExeResult = evmc::Result{EVMC_SUCCESS, 0, 0};
+}
+
+EVMFrame *InterpreterExecContext::allocTopFrame(evmc_message *Msg) {
+  const bool Reuse = (FrameCount < FrameStack.size());
+  if (!Reuse) {
+    FrameStack.emplace_back();
+  }
+  EVMFrame &Frame = FrameStack[FrameCount];
+  if (Reuse) {
+    // Reuse an existing EVMFrame object – avoids zero-initializing the
+    // 32 KB uint256 stack array.  Only reset the fields that matter.
+    Frame.Sp = 0;
+    Frame.Pc = 0;
+    Frame.Host = nullptr;
+    clearFrameTransientBuffers(Frame);
+    Frame.MTx = {};
+    Frame.Value = 0;
+  }
+  ++FrameCount;
 
   Frame.Msg = *Msg;
   Inst->pushMessage(&Frame.Msg);
@@ -279,19 +324,20 @@ EVMFrame *InterpreterExecContext::allocTopFrame(evmc_message *Msg) {
 // We only need to free the last frame (top of the stack),
 // since EVM's control flow is purely stack-based.
 void InterpreterExecContext::freeBackFrame() {
-  if (FrameStack.empty())
+  if (FrameCount == 0)
     return;
 
-  EVMFrame &Frame = FrameStack.back();
+  EVMFrame &Frame = FrameStack[FrameCount - 1];
 
   Inst->setGas(static_cast<uint64_t>(Frame.Msg.gas));
 
-  if (FrameStack.size() > 1) {
+  if (FrameCount > 1) {
     Inst->popMessage();
   }
 
-  // Destroy frame (and its message)
-  FrameStack.pop_back();
+  // Logically free the frame but keep the EVMFrame object alive so its
+  // 32 KB stack array can be reused by the next allocTopFrame().
+  --FrameCount;
 }
 
 void InterpreterExecContext::setCallData(const std::vector<uint8_t> &Data) {

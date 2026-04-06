@@ -125,7 +125,7 @@ private:
   // when grow to not larger then it, just inc the size.
   // otherwise mmap another copy and copy data
   size_t MmapMemoryBucketGrowMaxSize = 0;
-  int MmapMemoryInitFd = 0; // when <=0, means not create memory file
+  int MmapMemoryInitFd = -1; // when <0, means not create memory file
   char *MmapMemoryFilepath = nullptr;
   // use pointers so when MMAP_BUCKET enabled but the module has no memory,
   // then no need to create the objects

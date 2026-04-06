@@ -179,10 +179,15 @@ public:
     InstanceExecutionCache.clear();
   }
   void setReturnData(std::vector<uint8_t> Data) {
+    ReturnDataSize = Data.size();
     ReturnData = std::move(Data);
   }
-  void clearReturnData() { clearReturnDataBuffer(ReturnData); }
+  void clearReturnData() {
+    clearReturnDataBuffer(ReturnData);
+    ReturnDataSize = 0;
+  }
   const std::vector<uint8_t> &getReturnData() const { return ReturnData; }
+  uint64_t getReturnDataSize() const { return ReturnDataSize; }
   void setExeResult(evmc::Result Result) { ExeResult = std::move(Result); }
   const evmc::Result &getExeResult() const { return ExeResult; }
   void exit(int32_t ExitCode);
@@ -294,6 +299,13 @@ public:
     return static_cast<int32_t>(offsetof(EVMInstance, MemorySize));
   }
 
+  static constexpr int32_t getReturnDataSizeOffset() {
+    static_assert(offsetof(EVMInstance, ReturnDataSize) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "EVMInstance offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(EVMInstance, ReturnDataSize));
+  }
+
   // Capacity for EVMStack: 1024 * 256 / 8 = 32768
   static const size_t EVMStackCapacity = 32768;
 
@@ -380,6 +392,7 @@ private:
   };
   std::vector<MemoryFrame> MemoryStack;
   std::vector<uint8_t> ReturnData;
+  uint64_t ReturnDataSize = 0;
   evmc::Result ExeResult{EVMC_SUCCESS, 0, 0};
 
   // Message stack for call hierarchy tracking

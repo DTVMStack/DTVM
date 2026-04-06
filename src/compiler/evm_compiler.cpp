@@ -44,6 +44,9 @@ void EVMJITCompiler::compileEVMToMC(EVMFrontendContext &Ctx, MModule &Mod,
   MFunc.setFunctionType(Mod.getFuncType(FuncIdx));
   EVMMirBuilder MIRBuilder(Ctx, MFunc);
   MIRBuilder.compile(&Ctx);
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+  MIRBuilder.dumpMemoryCompileStats();
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
 
   // Apply MIR optimizations and generate machine code
   compileMIRToCgIR(Mod, MFunc, CgFunc, DisableGreedyRA);

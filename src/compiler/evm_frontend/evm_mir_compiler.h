@@ -590,6 +590,18 @@ public:
   void handleReturnDataCopy(Operand DestOffsetComponents,
                             Operand OffsetComponents, Operand SizeComponents);
   Operand handleReturnDataSize();
+  void dumpMemoryCompileStats() const;
+  void beginMemoryCompileBlock(uint64_t EntryPC);
+  void setMemoryCompileBlockConstPrecheckPlan(uint64_t MaxRequiredSize,
+                                              uint64_t CoveredDirectOps);
+  void
+  setMemoryCompileBlockLinearPrecheckPlan(uint64_t AccessWidth,
+                                          uint64_t CoveredDirectOps,
+                                          bool ValueEqualsFirstAddr = false);
+  void prepareLinearBlockMemoryPrecheck(Operand StrideComponents);
+  void noteMemoryOpcodeInBlock(evmc_opcode Opcode, uint64_t PC);
+  void noteHelperOpcodeInBlock(evmc_opcode Opcode, uint64_t PC);
+  void endMemoryCompileBlock();
   template <size_t NumTopics, typename... TopicArgs>
   void handleLogWithTopics(Operand OffsetOp, Operand SizeOp,
                            TopicArgs... Topics);
@@ -837,6 +849,7 @@ private:
   // Split normalization for const and non-const U256.
   void normalizeOperandU64Const(Operand &Param, uint64_t *Value = nullptr);
   void normalizeOperandU64NonConst(Operand &Param, uint64_t *Value = nullptr);
+  MInstruction *extractKnownU64LowOperand(const Operand &Opnd);
   void normalizeOffsetWithSize(Operand &Offset, Operand &Size);
 
   Operand convertSingleInstrToU256Operand(MInstruction *SingleInstr);
@@ -891,8 +904,101 @@ private:
   Variable *MemoryBaseVar = nullptr;
   Variable *MemorySizeVar = nullptr;
 
+  struct MemoryCompileStats {
+    uint64_t MLoadExpandCount = 0;
+    uint64_t MStoreExpandCount = 0;
+    uint64_t MStore8ExpandCount = 0;
+    uint64_t MCopyExpandCount = 0;
+    uint64_t BlockConstPrecheckCount = 0;
+    uint64_t BlockLinearPrecheckCount = 0;
+    uint64_t PrecheckedMLoadOpCount = 0;
+    uint64_t PrecheckedMStoreOpCount = 0;
+    uint64_t MStoreAddrValueAliasReuseCount = 0;
+    uint64_t LinearU64AddrFastPathCount = 0;
+    uint64_t LinearU64MLoadFastPathCount = 0;
+    uint64_t LinearU64MStoreFastPathCount = 0;
+
+    uint64_t ReloadMemorySizeCount = 0;
+    uint64_t GetMemoryDataPointerCount = 0;
+    uint64_t MemoryBaseInstanceLoadCount = 0;
+    uint64_t MemoryBaseCacheUseCount = 0;
+
+    uint64_t ExpandNeedExpandCFGCount = 0;
+  };
+  bool hasMemoryCompileStats() const;
+  MemoryCompileStats MemStats;
+
+  struct MemoryBlockCompileStats {
+    bool Active = false;
+    bool HasMemoryEvent = false;
+    bool DirectMemoryOnlyCandidate = true;
+    bool HasHelperBarrier = false;
+
+    uint64_t BlockSeqId = 0;
+    uint64_t BlockEntryPC = 0;
+    uint64_t FirstMemoryEventPC = 0;
+    uint64_t LastMemoryEventPC = 0;
+
+    uint64_t DirectMemoryOpCount = 0;
+    uint64_t MLoadCount = 0;
+    uint64_t MStoreCount = 0;
+    uint64_t MStore8Count = 0;
+    uint64_t MSizeCount = 0;
+    uint64_t MCopyCount = 0;
+
+    uint64_t HelperSensitiveOpCount = 0;
+    uint64_t LogCount = 0;
+    uint64_t KeccakCount = 0;
+    uint64_t CopyFamilyCount = 0;
+    uint64_t CallFamilyCount = 0;
+    uint64_t CreateFamilyCount = 0;
+
+    uint64_t ExpandCallCount = 0;
+    uint64_t NeedExpandCFGCount = 0;
+    uint64_t GetMemPtrCount = 0;
+    uint64_t MemoryBaseInstanceLoadCount = 0;
+    uint64_t MemoryBaseCacheUseCount = 0;
+    uint64_t ReloadMemSizeCount = 0;
+    uint64_t BlockConstPrecheckCount = 0;
+    uint64_t BlockLinearPrecheckCount = 0;
+    uint64_t PrecheckedDirectOpCount = 0;
+    uint64_t PrecheckedMLoadOpCount = 0;
+    uint64_t PrecheckedMStoreOpCount = 0;
+    uint64_t MStoreAddrValueAliasReuseCount = 0;
+    uint64_t LinearU64AddrFastPathCount = 0;
+    uint64_t LinearU64MLoadFastPathCount = 0;
+    uint64_t LinearU64MStoreFastPathCount = 0;
+  };
+  void noteBlockMemoryEventPC(uint64_t PC);
+  bool hasCurrentMemoryBlockStats() const;
+  struct MemoryBlockConstPrecheckPlan {
+    bool Active = false;
+    bool Emitted = false;
+    uint64_t MaxRequiredSize = 0;
+    uint64_t CoveredDirectOpsTotal = 0;
+    uint64_t CoveredDirectOpsRemaining = 0;
+  };
+  struct MemoryBlockLinearPrecheckPlan {
+    bool Active = false;
+    bool Emitted = false;
+    bool HasPendingStride = false;
+    bool ValueEqualsFirstAddr = false;
+    uint64_t AccessWidth = 0;
+    uint64_t CoveredDirectOpsTotal = 0;
+    uint64_t CoveredDirectOpsRemaining = 0;
+    Operand PendingStrideComponents;
+  };
+  bool tryConsumeConstBlockMemoryPrecheck();
+  bool tryConsumeLinearBlockMemoryPrecheck(MInstruction *FirstAddr,
+                                           MInstruction *OrderingDep);
+  uint64_t NextMemoryBlockSeqId = 0;
+  MemoryBlockCompileStats CurBlockMemStats;
+  MemoryBlockConstPrecheckPlan CurBlockConstPrecheckPlan;
+  MemoryBlockLinearPrecheckPlan CurBlockLinearPrecheckPlan;
+
   // Helper methods for memory operations
   MInstruction *getMemoryDataPointer();
+  MInstruction *getDirectMemoryDataPointer(bool PreferCachedBase);
   MInstruction *getMemorySize();
   void reloadMemorySizeFromInstance();
   void expandMemoryIR(MInstruction *RequiredSize, MInstruction *Overflow);

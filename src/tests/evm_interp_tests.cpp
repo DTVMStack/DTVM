@@ -18,11 +18,14 @@ using namespace zen::runtime;
 
 namespace {
 
+std::filesystem::path getEvmAsmDirPath() {
+  return std::filesystem::path(__FILE__).parent_path() /
+         std::filesystem::path("../../tests/evm_asm");
+}
+
 std::vector<std::string> getAllEvmBytecodeFiles() {
   std::vector<std::string> Files;
-  std::filesystem::path DirPath =
-      std::filesystem::path(__FILE__).parent_path() /
-      std::filesystem::path("../../tests/evm_asm");
+  std::filesystem::path DirPath = getEvmAsmDirPath();
 
   if (!std::filesystem::exists(DirPath)) {
     std::cerr << "tests/evm_asm does not exist: " << DirPath.string()
@@ -134,6 +137,108 @@ ExpectedResult readExpectedResult(const std::string &FilePath) {
 
   return Result;
 }
+
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+struct EVMExecutionResult {
+  evmc_status_code Status = EVMC_INTERNAL_ERROR;
+  std::string OutputHex;
+  bool JITCompiled = false;
+};
+
+EVMExecutionResult executeEvmBytecodeFile(const std::string &FilePath,
+                                          common::RunMode Mode,
+                                          std::vector<uint8_t> CallData = {}) {
+  EVMExecutionResult Empty;
+
+  std::ifstream Fin(FilePath);
+  EXPECT_TRUE(Fin.is_open()) << "Failed to open test file: " << FilePath;
+  if (!Fin.is_open()) {
+    return Empty;
+  }
+
+  std::string Hex;
+  Fin >> Hex;
+  zen::utils::trimString(Hex);
+  auto BytecodeBuf = zen::utils::fromHex(Hex);
+  EXPECT_TRUE(BytecodeBuf) << "Failed to convert hex to bytecode";
+  if (!BytecodeBuf) {
+    return Empty;
+  }
+
+  RuntimeConfig Config;
+  Config.Mode = Mode;
+
+  auto MockedHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  auto RT = Runtime::newEVMRuntime(Config, MockedHost.get());
+  EXPECT_TRUE(RT != nullptr) << "Failed to create runtime";
+  if (!RT) {
+    return Empty;
+  }
+  MockedHost->setRuntime(RT.get());
+
+  auto ModRet =
+      RT->loadEVMModule(FilePath, BytecodeBuf->data(), BytecodeBuf->size());
+  EXPECT_TRUE(ModRet) << "Failed to load module: " << FilePath;
+  if (!ModRet) {
+    return Empty;
+  }
+  EVMModule *Mod = *ModRet;
+
+  Isolation *Iso = RT->createManagedIsolation();
+  EXPECT_TRUE(Iso != nullptr) << "Failed to create isolation: " << FilePath;
+  if (!Iso) {
+    return Empty;
+  }
+
+  uint64_t GasLimit = 0xFFFF'FFFF'FFFF;
+  const uint64_t IntrinsicGas = zen::evm::BASIC_EXECUTION_COST;
+  const uint64_t ExecutionGasLimit = GasLimit - IntrinsicGas;
+
+  auto InstRet = Iso->createEVMInstance(*Mod, ExecutionGasLimit);
+  EXPECT_TRUE(InstRet) << "Failed to create instance: " << FilePath;
+  if (!InstRet) {
+    return Empty;
+  }
+  EVMInstance *Inst = *InstRet;
+  Inst->setRevision(evmc_revision::EVMC_OSAKA);
+
+  evmc_message Msg = {
+      .kind = EVMC_CALL,
+      .flags = 0u,
+      .depth = 0,
+      .gas = static_cast<int64_t>(ExecutionGasLimit),
+      .recipient = {},
+      .sender = zen::evm::DEFAULT_DEPLOYER_ADDRESS,
+      .input_data = CallData.empty() ? nullptr : CallData.data(),
+      .input_size = CallData.size(),
+      .value = {},
+      .create2_salt = {},
+      .code_address = {},
+      .code = reinterpret_cast<const uint8_t *>(Mod->Code),
+      .code_size = Mod->CodeSize,
+  };
+
+  evmc::Result RawResult;
+  EVMExecutionResult Exec;
+#ifdef ZEN_ENABLE_JIT
+  Exec.JITCompiled = Mod->getJITCode() != nullptr && Mod->getJITCodeSize() > 0;
+#endif
+  EXPECT_NO_THROW({ RT->callEVMMain(*Inst, Msg, RawResult); });
+  Exec.Status = RawResult.status_code;
+  Exec.OutputHex =
+      zen::utils::toHex(RawResult.output_data, RawResult.output_size);
+  return Exec;
+}
+
+std::vector<uint8_t> makeUint256Calldata(uint64_t Value) {
+  std::vector<uint8_t> Data(32, 0);
+  for (size_t I = 0; I < sizeof(Value); ++I) {
+    Data[Data.size() - 1 - I] = static_cast<uint8_t>(Value & 0xff);
+    Value >>= 8;
+  }
+  return Data;
+}
+#endif
 
 } // namespace
 
@@ -260,3 +365,33 @@ INSTANTIATE_TEST_SUITE_P(
                             ? std::vector<std::string>{"NoEvmHexFiles"}
                             : EvmFiles),
     GetTestName);
+
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+TEST(EVMMultipassLinearPrecheckTest, MemoryLinearMloadStepUsesNonZeroStride) {
+  const auto FilePath =
+      (getEvmAsmDirPath() / "memory_linear_mload_step.evm.hex").string();
+  auto Exec = executeEvmBytecodeFile(FilePath, common::RunMode::MultipassMode,
+                                     makeUint256Calldata(0x20));
+
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(Exec.JITCompiled);
+#endif
+  EXPECT_EQ(Exec.Status, EVMC_SUCCESS);
+  EXPECT_EQ(Exec.OutputHex,
+            "0000000000000000000000000000000000000000000000000000000000000080");
+}
+
+TEST(EVMMultipassLinearPrecheckTest, MemoryLinearMstoreStepUsesNonZeroStride) {
+  const auto FilePath =
+      (getEvmAsmDirPath() / "memory_linear_mstore_step.evm.hex").string();
+  auto Exec = executeEvmBytecodeFile(FilePath, common::RunMode::MultipassMode,
+                                     makeUint256Calldata(0x20));
+
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(Exec.JITCompiled);
+#endif
+  EXPECT_EQ(Exec.Status, EVMC_SUCCESS);
+  EXPECT_EQ(Exec.OutputHex,
+            "0000000000000000000000000000000000000000000000000000000000000080");
+}
+#endif

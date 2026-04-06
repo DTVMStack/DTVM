@@ -662,8 +662,7 @@ void evmExpandMemoryNoGas(zen::runtime::EVMInstance *Instance,
 }
 
 uint64_t evmGetReturnDataSize(zen::runtime::EVMInstance *Instance) {
-  const auto &ReturnData = Instance->getReturnData();
-  return ReturnData.size();
+  return Instance->getReturnDataSize();
 }
 
 template <size_t MaxTopics>
@@ -796,8 +795,8 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
     return ZeroAddress;
   }
 
-  if (intx::be::load<intx::uint256>(Module->Host->get_balance(Msg->recipient)) <
-      Value) {
+  if (Value != 0 && intx::be::load<intx::uint256>(
+                        Module->Host->get_balance(Msg->recipient)) < Value) {
     Instance->setReturnData({});
     return ZeroAddress;
   }
