@@ -296,6 +296,14 @@ public:
   MOCK_VOID_STUB(handleSelfDestruct);
   MOCK_VOID_STUB(handleTStore);
 
+  void beginMemoryCompileBlock(uint64_t) {}
+  void setMemoryCompileBlockConstPrecheckPlan(uint64_t, uint64_t) {}
+  void setMemoryCompileBlockLinearPrecheckPlan(uint64_t, uint64_t, bool) {}
+  void prepareLinearBlockMemoryPrecheck(Operand) {}
+  void noteMemoryOpcodeInBlock(evmc_opcode, uint64_t) {}
+  void noteHelperOpcodeInBlock(evmc_opcode, uint64_t) {}
+  void endMemoryCompileBlock() {}
+
   void handleJump(Operand) {}
   void handleJumpI(Operand, Operand) {}
   void handleJumpDest(const uint64_t &) {}
