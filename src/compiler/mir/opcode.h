@@ -32,7 +32,7 @@ enum Opcode : uint16_t {
   OP_OTHER_EXPR_END = OP_evm_urem128_by64,
 
   OP_CTRL_STMT_START = OP_br,
-  OP_CTRL_STMT_END = OP_return,
+  OP_CTRL_STMT_END = OP_evm_tail_jump,
 
   OP_OTHER_STMT_START = OP_dassign,
   OP_OTHER_STMT_END = OP_wasm_check_stack_boundary,
@@ -50,6 +50,7 @@ public:
     switch (opcode) {
     case OP_dassign:
     case OP_return:
+    case OP_evm_tail_jump:
     case OP_store:
       return true;
     default:

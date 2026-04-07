@@ -26,6 +26,7 @@ bool MInstruction::isTerminator() const {
   case BR:
   case SWITCH:
   case RETURN:
+  case EVM_TAIL_JUMP:
     return true;
   case BR_IF: {
     const BrIfInstruction *BrIfInstr = llvm::cast<BrIfInstruction>(this);
@@ -152,6 +153,10 @@ void MInstruction::print(llvm::raw_ostream &OS) const {
       OS << " " << getOperand<0>();
     }
     OS << "\n";
+    break;
+  }
+  case EVM_TAIL_JUMP: {
+    OS << "evm_tail_jump " << getOperand<0>() << "\n";
     break;
   }
   case LOAD: {

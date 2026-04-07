@@ -107,6 +107,9 @@ public:
     case MInstruction::RETURN:
       visitReturnInstruction(static_cast<ReturnInstruction &>(I));
       break;
+    case MInstruction::EVM_TAIL_JUMP:
+      visitEVMTailJumpInstruction(static_cast<EVMTailJumpInstruction &>(I));
+      break;
     case MInstruction::CONVERSION:
       visitConversionInstruction(static_cast<ConversionInstruction &>(I));
       break;
@@ -176,6 +179,9 @@ public:
     if (I.getNumOperands() > 0) {
       VISIT_OPERAND_1
     }
+  }
+  virtual void visitEVMTailJumpInstruction(EVMTailJumpInstruction &I) {
+    VISIT_OPERAND_1
   }
   virtual void visitConversionInstruction(ConversionInstruction &I) {
     VISIT_OPERAND_1

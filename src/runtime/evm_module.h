@@ -8,10 +8,12 @@
 #include "evmc/evmc.hpp"
 #include "runtime/module.h"
 #include <limits>
+#include <memory>
 
 #ifdef ZEN_ENABLE_JIT
 namespace COMPILER {
 class EVMJITCompiler;
+class LazyEVMJITCompiler;
 }; // namespace COMPILER
 #endif
 
@@ -55,6 +57,14 @@ public:
     JITCode = Code;
     JITCodeSize = Size;
   }
+
+  COMPILER::LazyEVMJITCompiler *newLazyEVMJITCompiler();
+
+  COMPILER::LazyEVMJITCompiler *getLazyEVMJITCompiler() const {
+    return LazyJITCompiler.get();
+  }
+
+  bool hasLazyJITCompiler() const { return LazyJITCompiler != nullptr; }
 #endif // ZEN_ENABLE_JIT
 
 private:
@@ -74,6 +84,7 @@ private:
   common::CodeMemPool JITCodeMemPool;
   void *JITCode = nullptr;
   size_t JITCodeSize = 0;
+  std::unique_ptr<COMPILER::LazyEVMJITCompiler> LazyJITCompiler;
 #endif // ZEN_ENABLE_JIT
 };
 

@@ -80,7 +80,43 @@ EVMFrontendContext::EVMFrontendContext(const EVMFrontendContext &OtherCtx)
       ,
       GasRegisterEnabled(OtherCtx.GasRegisterEnabled)
 #endif
-{
+      ,
+      SegmentJumpTable(OtherCtx.SegmentJumpTable),
+      NumSegments(OtherCtx.NumSegments),
+      PCToSegmentIdxMap(OtherCtx.PCToSegmentIdxMap),
+      SegmentStartPC(OtherCtx.SegmentStartPC),
+      SegmentEndPC(OtherCtx.SegmentEndPC) {
+}
+
+uint32_t EVMFrontendContext::getSegmentIdxForPC(uint32_t PC) const {
+  if (!PCToSegmentIdxMap) {
+    return UINT32_MAX;
+  }
+  auto It = PCToSegmentIdxMap->find(PC);
+  if (It != PCToSegmentIdxMap->end()) {
+    return It->second;
+  }
+  return UINT32_MAX;
+}
+
+uint32_t EVMFrontendContext::getSegmentIdxContainingPC(uint32_t PC) const {
+  if (!PCToSegmentIdxMap) {
+    return UINT32_MAX;
+  }
+  // Fast path: exact match on StartPC
+  auto It = PCToSegmentIdxMap->find(PC);
+  if (It != PCToSegmentIdxMap->end()) {
+    return It->second;
+  }
+  // Range lookup: PCToSegmentIdxMap is ordered by StartPC.
+  // upper_bound(PC) gives the first segment with StartPC > PC.
+  // The previous entry is the candidate containing this PC.
+  auto Upper = PCToSegmentIdxMap->upper_bound(PC);
+  if (Upper != PCToSegmentIdxMap->begin()) {
+    --Upper;
+    return Upper->second;
+  }
+  return UINT32_MAX;
 }
 
 // ==================== EVMMirBuilder Implementation ====================
@@ -265,6 +301,7 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   // Create entry basic block
   MBasicBlock *EntryBB = createBasicBlock();
   setInsertBlock(EntryBB);
+  this->EntryBB = EntryBB;
 
   const auto *EvmCtx = static_cast<const EVMFrontendContext *>(&Ctx);
   const evmc_revision Rev = EvmCtx->getRevision();
@@ -285,6 +322,10 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   GasChunkEnd = EvmCtx->getGasChunkEnd();
   GasChunkCost = EvmCtx->getGasChunkCost();
   GasChunkSize = EvmCtx->getGasChunkSize();
+  // Cache segment end PC for lazy mode gas chunk boundary checking
+  if (EvmCtx->Lazy) {
+    LazySegmentEndPC = EvmCtx->getSegmentEndPC();
+  }
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   initGasRegister();
@@ -418,8 +459,24 @@ void EVMMirBuilder::meterOpcode(evmc_opcode Opcode, uint64_t PC) {
   }
   if (GasChunkEnd && GasChunkCost && PC < GasChunkSize) {
     if (GasChunkEnd[PC] > PC) {
-      meterGas(GasChunkCost[PC]);
+      // This PC is the start of a gas chunk. In lazy compilation mode, gas
+      // chunks are precomputed over the entire bytecode. A chunk starting in
+      // one segment may span into the next segment, which would cause this
+      // segment to charge gas for opcodes belonging to a different segment.
+      // Only use the chunk optimization when the chunk stays within the
+      // current segment boundary; otherwise fall through to per-opcode
+      // metering for this single opcode.
+      if (GasChunkEnd[PC] <= LazySegmentEndPC) {
+        meterGas(GasChunkCost[PC]);
+      } else {
+        // Chunk crosses segment boundary: meter only this opcode
+        const uint8_t Index = static_cast<uint8_t>(Opcode);
+        const auto &Metrics = InstructionMetrics[Index];
+        meterGas(static_cast<uint64_t>(Metrics.gas_cost));
+      }
     }
+    // GasChunkEnd[PC] <= PC: this PC is inside a chunk that was already
+    // metered at the chunk start. No additional metering needed.
     return;
   }
   const uint8_t Index = static_cast<uint8_t>(Opcode);
@@ -697,6 +754,16 @@ void EVMMirBuilder::reloadGasFromMemory() {
 #endif
 
 void EVMMirBuilder::createStackCheckBlock(int32_t MinSize, int32_t MaxSize) {
+  // Check if we're in lazy compilation mode (segment doesn't start at PC=0)
+  // In lazy mode, we skip stack check for the entry block to avoid creating
+  // control flow edges that could make entry block a loop header
+  const EVMFrontendContext *EvmCtx =
+      static_cast<const EVMFrontendContext *>(&Ctx);
+  if (EvmCtx && EvmCtx->getSegmentStartPC() != 0) {
+    // In lazy compilation mode, skip stack check
+    return;
+  }
+
   // Create a new basic block for stack checking
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   // Get runtime stack size
@@ -880,7 +947,61 @@ typename EVMMirBuilder::Operand EVMMirBuilder::stackGet(int32_t IndexFromTop) {
   return Operand(GetComponents, EVMType::UINT256);
 }
 
-void EVMMirBuilder::handleStop() {
+void EVMMirBuilder::handleStop(bool IsImplicit) {
+  // In lazy compile mode, if this segment is not the last one, the implicit
+  // STOP at the end of the segment should fall through to the next segment
+  // instead of actually stopping execution.
+  const EVMFrontendContext *EvmCtx =
+      dynamic_cast<const EVMFrontendContext *>(&Ctx);
+  if (IsImplicit && EvmCtx && EvmCtx->Lazy) {
+    uint32_t SegEnd = EvmCtx->getSegmentEndPC();
+    size_t BytecodeSize = EvmCtx->getBytecodeSize();
+    bool IsMultiSegment =
+        (EvmCtx->getSegmentStartPC() != 0 || SegEnd < BytecodeSize);
+
+    if (IsMultiSegment && SegEnd < BytecodeSize) {
+      // Fall-through to the next segment via tail call.
+      // We do NOT set LazyJumpTargetPC here because the tail call jumps
+      // directly to the target segment. If the target segment starts with
+      // JUMPDEST, handleLazySegmentDispatch will see UINT32_MAX (cleared)
+      // and fall through to the first JUMPDEST -- correct for linear
+      // fall-through.
+
+      // Sync EVM stack size back to instance
+      const int32_t StackSizeOffset =
+          zen::runtime::EVMInstance::getEVMStackSizeOffset();
+      MInstruction *StackSize = loadVariable(StackSizeVar);
+      setInstanceElement(&Ctx.I64Type, StackSize, StackSizeOffset);
+
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+      syncGasToMemoryFull();
+#endif
+
+      // Ensure LazyJumpTargetPC is cleared so that the runtime loop
+      // does not re-execute after the tail-jumped segment returns.
+      const int32_t LazyJumpOffset =
+          zen::runtime::EVMInstance::getLazyJumpTargetPCOffset();
+      MInstruction *ClearVal = createIntConstInstruction(
+          &Ctx.I32Type, static_cast<uint32_t>(UINT32_MAX));
+      setInstanceElement(&Ctx.I32Type, ClearVal, LazyJumpOffset);
+
+      // Tail jump to the next segment
+      uint32_t NextSegIdx =
+          EvmCtx->getSegmentIdxContainingPC(static_cast<uint32_t>(SegEnd));
+      uint8_t **JumpTable = EvmCtx->getSegmentJumpTable();
+      if (NextSegIdx != UINT32_MAX && JumpTable) {
+        uint64_t SlotAddr = reinterpret_cast<uint64_t>(&JumpTable[NextSegIdx]);
+        MInstruction *SlotAddrConst =
+            createIntConstInstruction(&Ctx.I64Type, SlotAddr);
+        createInstruction<EVMTailJumpInstruction>(true, &Ctx.VoidType,
+                                                  SlotAddrConst);
+      } else {
+        createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
+      }
+      return;
+    }
+  }
+
   auto Zero = createU256ConstOperand(intx::uint256{0});
   handleReturn(Zero, Zero);
 }
@@ -987,7 +1108,7 @@ void EVMMirBuilder::createJumpTable() {
       }
       const size_t RangeEnd = PC;
 
-      // Share one canonical execution block for the whole run.
+      // Create a canonical execution block for the JUMPDEST run
       MBasicBlock *BodyBB = createBasicBlock();
       BodyBB->setJumpDestBB(true);
 
@@ -1082,6 +1203,57 @@ void EVMMirBuilder::createJumpTable() {
 
 void EVMMirBuilder::implementConstantJump(uint64_t ConstDest,
                                           MBasicBlock *FailureBB) {
+  const EVMFrontendContext *EvmCtx =
+      static_cast<const EVMFrontendContext *>(&Ctx);
+
+  // In lazy mode, check if jump target is within current segment bounds
+  if (EvmCtx && EvmCtx->Lazy) {
+    uint32_t SegStart = EvmCtx->getSegmentStartPC();
+    uint32_t SegEnd = EvmCtx->getSegmentEndPC();
+    size_t BytecodeSize = EvmCtx->getBytecodeSize();
+    bool IsMultiSegment = (SegStart != 0 || SegEnd < BytecodeSize);
+
+    if (IsMultiSegment) {
+      // Check if target is within current segment bounds
+      if (ConstDest < SegStart || ConstDest >= SegEnd) {
+        // Cross-segment constant jump: tail jump directly to the target
+        // segment via SegmentJumpTable, avoiding the runtime while-loop.
+        MInstruction *TargetPCConst = createIntConstInstruction(
+            &Ctx.I32Type, static_cast<uint32_t>(ConstDest));
+        const int32_t LazyJumpOffset =
+            zen::runtime::EVMInstance::getLazyJumpTargetPCOffset();
+        setInstanceElement(&Ctx.I32Type, TargetPCConst, LazyJumpOffset);
+
+        // Sync EVM stack size back to instance
+        const int32_t StackSizeOffset =
+            zen::runtime::EVMInstance::getEVMStackSizeOffset();
+        MInstruction *StackSize = loadVariable(StackSizeVar);
+        setInstanceElement(&Ctx.I64Type, StackSize, StackSizeOffset);
+
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+        syncGasToMemoryFull();
+#endif
+
+        // Tail jump directly to the target segment's compiled stub.
+        uint32_t TargetSegIdx =
+            EvmCtx->getSegmentIdxContainingPC(static_cast<uint32_t>(ConstDest));
+        uint8_t **JumpTable = EvmCtx->getSegmentJumpTable();
+        if (TargetSegIdx != UINT32_MAX && JumpTable) {
+          uint64_t SlotAddr =
+              reinterpret_cast<uint64_t>(&JumpTable[TargetSegIdx]);
+          MInstruction *SlotAddrConst =
+              createIntConstInstruction(&Ctx.I64Type, SlotAddr);
+          createInstruction<EVMTailJumpInstruction>(true, &Ctx.VoidType,
+                                                    SlotAddrConst);
+        } else {
+          createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
+        }
+        return;
+      }
+    }
+  }
+
+  // Within-segment jump or eager mode
   if (JumpDestTable.count(ConstDest)) {
     createInstruction<BrInstruction>(true, Ctx, JumpDestTable[ConstDest]);
     addSuccessor(JumpDestTable[ConstDest]);
@@ -1093,6 +1265,40 @@ void EVMMirBuilder::implementConstantJump(uint64_t ConstDest,
 
 void EVMMirBuilder::implementIndirectJump(MInstruction *JumpTarget,
                                           MBasicBlock *FailureBB) {
+  // NOTE: For EVM lazy compilation, we use the same switch-based indirect jump
+  // as eager mode. The stub mechanism handles lazy compilation at the entry
+  // point. SegmentJumpTable is available but not used for indirect jumps in
+  // this model because EVM segments share execution context.
+  const EVMFrontendContext *EvmCtx =
+      static_cast<const EVMFrontendContext *>(&Ctx);
+  // Only use lazy indirect jump when there are multiple segments (true lazy
+  // compilation with cross-segment jumps). When there is only one segment
+  // covering the entire bytecode, fall through to the normal switch-based
+  // indirect jump which correctly routes to specific JUMPDEST basic blocks.
+  if (EvmCtx->Lazy && EvmCtx->getSegmentJumpTable()) {
+    uint32_t SegStart = EvmCtx->getSegmentStartPC();
+    uint32_t SegEnd = EvmCtx->getSegmentEndPC();
+    size_t BytecodeSize = EvmCtx->getBytecodeSize();
+    bool IsMultiSegment = (SegStart != 0 || SegEnd < BytecodeSize);
+    if (IsMultiSegment) {
+      implementLazyIndirectJump(JumpTarget, FailureBB);
+      return;
+    }
+  }
+
+  // In lazy compilation mode (segment doesn't start at PC=0), we should not
+  // create indirect jump from entry block because it would add successors to
+  // all JUMPDESTs, making entry block a loop header which violates CFG
+  // invariants. Instead, we simply jump to failure BB - the actual indirect
+  // jump handling is done by the stub resolver at runtime.
+  if (EvmCtx && EvmCtx->getSegmentStartPC() != 0) {
+    // In lazy mode, indirect jumps from entry block are not supported
+    // The stub resolver handles all indirect jumps at runtime
+    createInstruction<BrInstruction>(true, Ctx, FailureBB);
+    addUniqueSuccessor(FailureBB);
+    return;
+  }
+
   if (JumpDestTable.empty()) {
     createInstruction<BrInstruction>(true, Ctx, FailureBB);
     addUniqueSuccessor(FailureBB);
@@ -1105,6 +1311,155 @@ void EVMMirBuilder::implementIndirectJump(MInstruction *JumpTarget,
                                         JumpTargetVar->getVarIdx());
   createInstruction<BrInstruction>(true, Ctx, TargetBB);
   addUniqueSuccessor(TargetBB);
+}
+
+void EVMMirBuilder::implementLazyIndirectJump(MInstruction *JumpTarget,
+                                              MBasicBlock *FailureBB) {
+  // In lazy mode with multiple segments, JUMP/JUMPI targets may be in a
+  // different segment. Since each segment is compiled as an independent
+  // function (with its own prologue/epilogue), we cannot jump directly
+  // across segments — that would corrupt the stack frame.
+  //
+  // Strategy:
+  //   - For JUMPDESTs within the current segment: use normal switch-based
+  //     jump (direct branch to the BB, same as eager mode).
+  //   - For JUMPDESTs outside the current segment: write the target PC to
+  //     EVMInstance.LazyJumpTargetPC, sync state, and return normally.
+  //     The runtime loop will then look up and invoke the target segment.
+  const EVMFrontendContext *EvmCtx =
+      static_cast<const EVMFrontendContext *>(&Ctx);
+
+  uint32_t SegStart = EvmCtx->getSegmentStartPC();
+  uint32_t SegEnd = EvmCtx->getSegmentEndPC();
+
+  // Get bytecode to find all valid JUMPDEST PCs
+  const Byte *Bytecode = EvmCtx->getBytecode();
+  size_t BytecodeSize = EvmCtx->getBytecodeSize();
+
+  // Collect all valid JUMPDEST PCs across the entire bytecode, and classify
+  // them as within-segment or cross-segment.
+  std::vector<uint32_t> LocalJumpDestPCs;
+  std::vector<uint32_t> CrossSegmentJumpDestPCs;
+  for (size_t PC = 0; PC < BytecodeSize;) {
+    uint8_t OpcodeU8 = static_cast<uint8_t>(Bytecode[PC]);
+    if (OpcodeU8 == static_cast<uint8_t>(OP_JUMPDEST)) {
+      uint32_t DestPC = static_cast<uint32_t>(PC);
+      if (DestPC >= SegStart && DestPC < SegEnd) {
+        LocalJumpDestPCs.push_back(DestPC);
+      } else {
+        CrossSegmentJumpDestPCs.push_back(DestPC);
+      }
+    }
+    if (OpcodeU8 >= static_cast<uint8_t>(OP_PUSH1) &&
+        OpcodeU8 <= static_cast<uint8_t>(OP_PUSH32)) {
+      uint8_t NumBytes = OpcodeU8 - static_cast<uint8_t>(OP_PUSH1) + 1;
+      PC += 1 + NumBytes;
+    } else {
+      PC += 1;
+    }
+  }
+
+  if (LocalJumpDestPCs.empty() && CrossSegmentJumpDestPCs.empty()) {
+    createInstruction<BrInstruction>(true, Ctx, FailureBB);
+    addUniqueSuccessor(FailureBB);
+    return;
+  }
+
+  MType *UInt64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+
+  // Build switch cases
+  CompileVector<std::pair<ConstantInstruction *, MBasicBlock *>> Cases(
+      Ctx.MemPool);
+
+  // Save current insertion block
+  MBasicBlock *OrigInsertBlock = CurBB;
+
+  // --- Local JUMPDESTs: direct branch to the BB (same as eager mode) ---
+  for (uint32_t DestPC : LocalJumpDestPCs) {
+    if (JumpDestTable.count(DestPC)) {
+      Cases.push_back({createIntConstInstruction(UInt64Type, DestPC),
+                       JumpDestTable[DestPC]});
+      addSuccessor(JumpDestTable[DestPC]);
+    }
+    // If not in JumpDestTable, skip (shouldn't happen for valid bytecode)
+  }
+
+  // --- Cross-segment JUMPDESTs: tail jump to target segment ---
+  // For each cross-segment JUMPDEST PC, create an independent BB that
+  // writes LazyJumpTargetPC, syncs state, and tail jumps directly to the
+  // target segment via SegmentJumpTable. This avoids the runtime loop.
+  if (!CrossSegmentJumpDestPCs.empty()) {
+    uint8_t **SegJumpTable = EvmCtx->getSegmentJumpTable();
+
+    for (uint32_t DestPC : CrossSegmentJumpDestPCs) {
+      MBasicBlock *CrossSegBB = createBasicBlock();
+      setInsertBlock(CrossSegBB);
+
+      // Write the target PC to LazyJumpTargetPC so the target segment's
+      // handleLazySegmentDispatch can route to the correct JUMPDEST BB.
+      MInstruction *TargetPCConst = createIntConstInstruction(
+          &Ctx.I32Type, static_cast<uint32_t>(DestPC));
+      const int32_t LazyJumpOffset =
+          zen::runtime::EVMInstance::getLazyJumpTargetPCOffset();
+      setInstanceElement(&Ctx.I32Type, TargetPCConst, LazyJumpOffset);
+
+      // Sync EVM stack size back to instance
+      const int32_t StackSizeOffset =
+          zen::runtime::EVMInstance::getEVMStackSizeOffset();
+      MInstruction *StackSize = loadVariable(StackSizeVar);
+      setInstanceElement(&Ctx.I64Type, StackSize, StackSizeOffset);
+
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+      syncGasToMemoryFull();
+#endif
+
+      // Tail jump directly to the target segment's compiled stub.
+      uint32_t TargetSegIdx = EvmCtx->getSegmentIdxContainingPC(DestPC);
+      if (TargetSegIdx != UINT32_MAX && SegJumpTable) {
+        uint64_t SlotAddr =
+            reinterpret_cast<uint64_t>(&SegJumpTable[TargetSegIdx]);
+        MInstruction *SlotAddrConst =
+            createIntConstInstruction(&Ctx.I64Type, SlotAddr);
+        createInstruction<EVMTailJumpInstruction>(true, &Ctx.VoidType,
+                                                  SlotAddrConst);
+      } else {
+        createInstruction<ReturnInstruction>(true, &Ctx.VoidType, nullptr);
+      }
+
+      // Restore insert block so addSuccessor operates on OrigInsertBlock
+      setInsertBlock(OrigInsertBlock);
+      Cases.push_back(
+          {createIntConstInstruction(UInt64Type, DestPC), CrossSegBB});
+      addSuccessor(CrossSegBB);
+    }
+  }
+
+  // Restore insert block to create the switch
+  setInsertBlock(OrigInsertBlock);
+
+  // Store JumpTarget into JumpTargetVar so CrossSegmentBB can load it.
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), JumpTarget,
+                                        JumpTargetVar->getVarIdx());
+
+  if (LocalJumpDestPCs.empty() && !CrossSegmentJumpDestPCs.empty() &&
+      Cases.size() > 0) {
+    // All JUMPDESTs are cross-segment. Instead of using a switch (which
+    // may have issues with x86 lowering for cross-BB operands), directly
+    // branch to the CrossSegmentBB. The CrossSegmentBB writes the target
+    // PC to LazyJumpTargetPC and returns; the runtime loop validates the
+    // PC against the segment map.
+    MBasicBlock *CrossBB = Cases[0].second;
+    createInstruction<BrInstruction>(true, Ctx, CrossBB);
+    addSuccessor(CrossBB);
+  } else {
+    MInstruction *ReloadedJumpTarget = loadVariable(JumpTargetVar);
+    createInstruction<SwitchInstruction>(true, Ctx, ReloadedJumpTarget,
+                                         FailureBB, Cases);
+    addUniqueSuccessor(FailureBB);
+  }
+
+  HasIndirectJump = true;
 }
 
 // ==================== Stack Instruction Handlers ====================
@@ -1214,7 +1569,21 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
   MBasicBlock *InvalidJumpBB =
       getOrCreateExceptionSetBB(ErrorCode::EVMBadJumpDestination);
 
-  if (JumpDestTable.empty()) {
+  // In lazy compile mode with multiple segments, cross-segment JUMPDESTs
+  // are not in JumpDestTable. We must still enter the jump handling logic
+  // (implementConstantJump / implementIndirectJump) so that cross-segment
+  // jumps are correctly handled even when JumpDestTable is empty.
+  const EVMFrontendContext *EvmCtxJI =
+      static_cast<const EVMFrontendContext *>(&Ctx);
+  bool IsLazyMultiSegment = false;
+  if (EvmCtxJI && EvmCtxJI->Lazy && EvmCtxJI->getSegmentJumpTable()) {
+    uint32_t SegStartJI = EvmCtxJI->getSegmentStartPC();
+    uint32_t SegEndJI = EvmCtxJI->getSegmentEndPC();
+    size_t BytecodeSizeJI = EvmCtxJI->getBytecodeSize();
+    IsLazyMultiSegment = (SegStartJI != 0 || SegEndJI < BytecodeSizeJI);
+  }
+
+  if (JumpDestTable.empty() && !IsLazyMultiSegment) {
     createInstruction<BrIfInstruction>(true, Ctx, IsNonZero, InvalidJumpBB,
                                        FallThroughBB);
     addUniqueSuccessor(InvalidJumpBB);
@@ -1256,11 +1625,96 @@ void EVMMirBuilder::handleJumpI(Operand Dest, Operand Cond) {
   setInsertBlock(FallThroughBB);
 }
 
+void EVMMirBuilder::handleLazySegmentDispatch(uint32_t SegStartPC,
+                                              uint32_t SegEndPC) {
+  const EVMFrontendContext *EvmCtx =
+      static_cast<const EVMFrontendContext *>(&Ctx);
+  if (!EvmCtx->Lazy) {
+    return;
+  }
+
+  const Byte *Bytecode = EvmCtx->getBytecode();
+  size_t BytecodeSize = EvmCtx->getBytecodeSize();
+
+  // Collect all JUMPDEST PCs in this segment that have thunk entries
+  // (i.e., JUMPDESTs after the first one in a consecutive run).
+  std::vector<uint32_t> DispatchPCs;
+  for (uint32_t PC = SegStartPC + 1; PC < SegEndPC && PC < BytecodeSize; ++PC) {
+    if (static_cast<uint8_t>(Bytecode[PC]) ==
+        static_cast<uint8_t>(evmc_opcode::OP_JUMPDEST)) {
+      auto It = JumpDestTable.find(PC);
+      if (It != JumpDestTable.end()) {
+        DispatchPCs.push_back(PC);
+      }
+    } else {
+      break; // No longer consecutive JUMPDESTs
+    }
+  }
+
+  // Load LazyJumpTargetPC offset (needed for clearing on all paths).
+  const int32_t LazyJumpOffset =
+      zen::runtime::EVMInstance::getLazyJumpTargetPCOffset();
+
+  if (DispatchPCs.empty()) {
+    // Only one JUMPDEST or no thunks, no dispatch needed.
+    // Clear LazyJumpTargetPC so the runtime loop does not re-invoke this
+    // segment when entered via tail jump.
+    MInstruction *ClearVal = createIntConstInstruction(
+        &Ctx.I32Type, static_cast<uint32_t>(UINT32_MAX));
+    setInstanceElement(&Ctx.I32Type, ClearVal, LazyJumpOffset);
+    return;
+  }
+
+  MInstruction *LazyTargetPC = getInstanceElement(&Ctx.I32Type, LazyJumpOffset);
+
+  // Create the fall-through BB (linear execution continues here)
+  MBasicBlock *FallThroughBB = createBasicBlock();
+
+  // Build switch cases: for each JUMPDEST PC in the run (after the first),
+  // create a wrapper BB that clears LazyJumpTargetPC before jumping to the
+  // thunk BB. This prevents the runtime loop from re-invoking this segment
+  // when entered via tail jump.
+  CompileVector<std::pair<ConstantInstruction *, MBasicBlock *>> Cases(
+      DispatchPCs.size(), Ctx.MemPool);
+  for (size_t I = 0; I < DispatchPCs.size(); ++I) {
+    uint32_t DestPC = DispatchPCs[I];
+    MBasicBlock *ThunkBB = JumpDestTable[DestPC];
+
+    // Create wrapper BB: clear LazyJumpTargetPC then branch to thunk
+    MBasicBlock *WrapperBB = createBasicBlock();
+    MBasicBlock *SavedBB = CurBB;
+    setInsertBlock(WrapperBB);
+    MInstruction *ClearVal = createIntConstInstruction(
+        &Ctx.I32Type, static_cast<uint32_t>(UINT32_MAX));
+    setInstanceElement(&Ctx.I32Type, ClearVal, LazyJumpOffset);
+    WrapperBB->addSuccessor(ThunkBB);
+    createInstruction<BrInstruction>(true, Ctx, ThunkBB);
+    setInsertBlock(SavedBB);
+
+    Cases[I].first = createIntConstInstruction(&Ctx.I32Type, DestPC);
+    Cases[I].second = WrapperBB;
+    addSuccessor(WrapperBB);
+  }
+
+  // Default case: fall through to linear execution
+  createInstruction<SwitchInstruction>(true, Ctx, LazyTargetPC, FallThroughBB,
+                                       Cases);
+  addUniqueSuccessor(FallThroughBB);
+
+  // Continue inserting into the fall-through BB.
+  // Clear LazyJumpTargetPC in the fall-through path as well.
+  setInsertBlock(FallThroughBB);
+  {
+    MInstruction *ClearVal = createIntConstInstruction(
+        &Ctx.I32Type, static_cast<uint32_t>(UINT32_MAX));
+    setInstanceElement(&Ctx.I32Type, ClearVal, LazyJumpOffset);
+  }
+}
+
 void EVMMirBuilder::handleJumpDest(const uint64_t &PC) {
   auto BodyIt = JumpDestBodyTable.find(PC);
   ZEN_ASSERT(BodyIt != JumpDestBodyTable.end() && "JUMPDEST body not found");
   MBasicBlock *DestBB = BodyIt->second;
-  // Only add successor if the current BB is not ExceptionSetBB,
   bool IsExceptionSetBB = false;
   for (auto &[EC, BB] : CurFunc->getExceptionSetBBs()) {
     if (CurBB == BB) {
@@ -1268,19 +1722,23 @@ void EVMMirBuilder::handleJumpDest(const uint64_t &PC) {
       break;
     }
   }
-  if (CurBB != DestBB && !IsExceptionSetBB) {
-    if (CurBB->empty()) {
-      CurBB->addSuccessor(DestBB);
-      createInstruction<BrInstruction>(true, Ctx, DestBB);
-    } else {
-      MInstruction *LastInst = *std::prev(CurBB->end());
-      if (!LastInst->isTerminator()) {
+
+  if (CurBB != DestBB) {
+    if (!IsExceptionSetBB) {
+      if (CurBB->empty()) {
         CurBB->addSuccessor(DestBB);
         createInstruction<BrInstruction>(true, Ctx, DestBB);
+      } else {
+        MInstruction *LastInst = *std::prev(CurBB->end());
+        if (!LastInst->isTerminator()) {
+          CurBB->addSuccessor(DestBB);
+          createInstruction<BrInstruction>(true, Ctx, DestBB);
+        }
       }
     }
+    setInsertBlock(DestBB);
   }
-  setInsertBlock(DestBB);
+
 #ifdef ZEN_ENABLE_LINUX_PERF
   CurBB->setSourceOffset(PC);
   CurBB->setSourceName("JUMPDEST");

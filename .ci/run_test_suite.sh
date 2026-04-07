@@ -168,7 +168,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             git clone --depth 1 --recurse-submodules -b for_test https://github.com/DTVMStack/evmone.git
             mv build/lib/* evmone
             cd evmone
-            ./run_unittests.sh ../tests/evmone_unittests/EVMOneMultipassUnitTestsRunList.txt "./libdtvmapi.so,mode=multipass"
+            ./run_unittests.sh ../tests/evmone_unittests/EVMOneMultipassUnitTestsRunList.txt "./libdtvmapi.so,mode=multipass,enable_lazy_compile=true"
             ./run_unittests.sh ../tests/evmone_unittests/EVMOneInterpreterUnitTestsRunList.txt "./libdtvmapi.so,mode=interpreter"
             ;;
         "evmonestatetestsuite")

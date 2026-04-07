@@ -226,6 +226,11 @@ void X86MCInstLower::lower(CgInstruction *MI, llvm::MCInst &OutMI) {
     ZEN_ASSERT(OutMI.getNumOperands() == 1 && "Unexpected number of operands!");
     break;
 
+  // TAILJMPr64 is a pseudo-instruction; lower it to a real JMP64r.
+  case X86::TAILJMPr64:
+    OutMI.setOpcode(X86::JMP64r);
+    break;
+
   case X86::ADC8ri:
   case X86::ADC16ri:
   case X86::ADC32ri:

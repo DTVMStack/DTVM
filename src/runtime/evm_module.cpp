@@ -17,6 +17,7 @@
 
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
 #include "compiler/evm_compiler.h"
+#include "compiler/evm_lazy_compiler.h"
 #endif
 
 namespace zen::runtime {
@@ -83,5 +84,12 @@ const evm::EVMBytecodeCache &EVMModule::getBytecodeCache() const {
 void EVMModule::initBytecodeCache() const {
   evm::buildBytecodeCache(BytecodeCache, Code, CodeSize, Revision);
 }
+
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+COMPILER::LazyEVMJITCompiler *EVMModule::newLazyEVMJITCompiler() {
+  LazyJITCompiler = std::make_unique<COMPILER::LazyEVMJITCompiler>(this);
+  return LazyJITCompiler.get();
+}
+#endif // ZEN_ENABLE_MULTIPASS_JIT
 
 } // namespace zen::runtime

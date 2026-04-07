@@ -86,6 +86,27 @@ public:
   bool isGasRegisterEnabled() const { return GasRegisterEnabled; }
 #endif
 
+  // Segment jump table for lazy compilation
+  void setSegmentJumpTable(uint8_t **Table) { SegmentJumpTable = Table; }
+  uint8_t **getSegmentJumpTable() const { return SegmentJumpTable; }
+
+  void setNumSegments(uint32_t Num) { NumSegments = Num; }
+  uint32_t getNumSegments() const { return NumSegments; }
+
+  void setPCToSegmentIdxMap(const std::map<uint32_t, uint32_t> *Map) {
+    PCToSegmentIdxMap = Map;
+  }
+  uint32_t getSegmentIdxForPC(uint32_t PC) const;
+  uint32_t getSegmentIdxContainingPC(uint32_t PC) const;
+
+  // Segment compilation bounds for lazy compilation
+  void setSegmentBounds(uint32_t Start, uint32_t End) {
+    SegmentStartPC = Start;
+    SegmentEndPC = End;
+  }
+  uint32_t getSegmentStartPC() const { return SegmentStartPC; }
+  uint32_t getSegmentEndPC() const { return SegmentEndPC; }
+
 private:
   const Byte *Bytecode = nullptr;
   size_t BytecodeSize = 0;
@@ -93,10 +114,20 @@ private:
   const uint32_t *GasChunkEnd = nullptr;
   const uint64_t *GasChunkCost = nullptr;
   size_t GasChunkSize = 0;
+  // In lazy mode, gas chunks must not cross segment boundaries.
+  // UINT32_MAX means no segment boundary restriction (eager mode).
+  uint32_t LazySegmentEndPC = UINT32_MAX;
   evmc_revision Revision = zen::evm::DEFAULT_REVISION;
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   bool GasRegisterEnabled = false;
 #endif
+  // Segment jump table for lazy compilation
+  uint8_t **SegmentJumpTable = nullptr;
+  uint32_t NumSegments = 0;
+  const std::map<uint32_t, uint32_t> *PCToSegmentIdxMap = nullptr;
+  // Segment compilation bounds
+  uint32_t SegmentStartPC = 0;
+  uint32_t SegmentEndPC = UINT32_MAX; // Default to full bytecode
 };
 
 void buildEVMFunction(EVMFrontendContext &Context, MModule &MMod,
@@ -198,6 +229,8 @@ public:
   void createJumpTable();
   void implementConstantJump(uint64_t ConstDest, MBasicBlock *FailureBB);
   void implementIndirectJump(MInstruction *JumpTarget, MBasicBlock *FailureBB);
+  void implementLazyIndirectJump(MInstruction *JumpTarget,
+                                 MBasicBlock *FailureBB);
 
   void releaseOperand(Operand Opnd) {}
 
@@ -218,11 +251,20 @@ public:
 
   // ==================== Control Flow Instruction Handlers ====================
 
-  void handleStop();
+  void handleStop(bool IsImplicit = false);
   void handleVoidReturn();
   void handleJump(Operand Dest);
   void handleJumpI(Operand Dest, Operand Cond);
   void handleJumpDest(const uint64_t &PC);
+
+  /// In lazy compilation mode, when a merged segment starts with consecutive
+  /// JUMPDESTs, generate a runtime dispatch at the segment entry. This reads
+  /// LazyJumpTargetPC from EVMInstance and, if it points to a JUMPDEST inside
+  /// the current segment (but not the first one), jumps directly to that
+  /// JUMPDEST's thunk BB (which meters only the correct amount of gas).
+  /// For fall-through or jump to the first JUMPDEST, continues linear
+  /// execution.
+  void handleLazySegmentDispatch(uint32_t SegStartPC, uint32_t SegEndPC);
 
   // ==================== Arithmetic Instruction Handlers ====================
 
@@ -865,6 +907,7 @@ private:
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;
   MBasicBlock *CurBB = nullptr;
+  MBasicBlock *EntryBB = nullptr; // Entry block of the function
   MBasicBlock *ReturnBB = nullptr;
 #ifdef ZEN_ENABLE_LINUX_PERF
   uint64_t CurPC = 0;
@@ -893,6 +936,7 @@ private:
 
   std::map<uint64_t, std::vector<MBasicBlock *>> JumpHashTable;
   std::map<uint64_t, std::vector<uint64_t>> JumpHashReverse;
+
   uint64_t HashMask = 0;
   Variable *JumpTargetVar = nullptr;
   MBasicBlock *IndirectJumpBB = nullptr;
@@ -1011,6 +1055,9 @@ private:
   const uint32_t *GasChunkEnd = nullptr;
   const uint64_t *GasChunkCost = nullptr;
   size_t GasChunkSize = 0;
+  // In lazy mode, gas chunks must not cross segment boundaries.
+  // UINT32_MAX means no segment boundary restriction (eager mode).
+  uint32_t LazySegmentEndPC = UINT32_MAX;
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   // Gas register variable - keeps gas value in R14 during execution

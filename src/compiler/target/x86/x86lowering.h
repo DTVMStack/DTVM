@@ -93,6 +93,7 @@ public:
   CgRegister lowerCall(const CallInstructionBase &Inst);
   void lowerFormalArguments();
   void lowerReturnStmt(llvm::MVT VT, CgRegister OperandReg);
+  void lowerEVMTailJumpStmt(const EVMTailJumpInstruction &Inst);
 
   // ==================== Wasm Check Statements ====================
 

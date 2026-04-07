@@ -44,6 +44,7 @@ public:
     BR_IF,
     SWITCH,
     RETURN,
+    EVM_TAIL_JUMP,
     WASM_CHECK,
 
     //===---------- Expression & Statement Instructions ----------===//

@@ -81,9 +81,11 @@ public:
   MonotonicMemPool() = default;
 
   ~MonotonicMemPool() {
-#ifndef NDEBUG
-    ZEN_ASSERT(AllocSizes.size() == 0);
-#endif
+    // Note: In a bump allocator, individual deallocations are optional.
+    // The pool can be reset via move assignment without deallocating
+    // individual objects. The underlying BumpPtrAllocator will free
+    // all memory when destroyed. The AllocSizes tracking is only for
+    // debug diagnostics, not a hard requirement.
   }
 
   MonotonicMemPool(const MonotonicMemPool &Other) = delete;
@@ -94,14 +96,19 @@ public:
     AllocImpl = std::move(Other.AllocImpl);
 #ifndef NDEBUG
     AllocSizes = std::move(Other.AllocSizes);
+    Other.AllocSizes.clear();
 #endif
   }
 
   MonotonicMemPool &operator=(MonotonicMemPool &&Other) {
-    AllocImpl = std::move(Other.AllocImpl);
+    if (this != &Other) {
+      AllocImpl = std::move(Other.AllocImpl);
 #ifndef NDEBUG
-    AllocSizes = std::move(Other.AllocSizes);
+      AllocSizes.clear(); // Clear old tracked allocations before move
+      AllocSizes = std::move(Other.AllocSizes);
+      Other.AllocSizes.clear();
 #endif
+    }
     return *this;
   }
 

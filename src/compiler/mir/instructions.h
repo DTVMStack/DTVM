@@ -546,6 +546,34 @@ private:
   }
 };
 
+/// Tail jump to another EVM segment via SegmentJumpTable.
+/// Operand: i64 constant holding the address of SegmentJumpTable[idx].
+/// The x86 lowering loads the code pointer from that slot and emits
+/// TAILJMPr64, which carries MCID::Return so the PrologEpilogInserter
+/// automatically inserts the epilogue before the jump.
+class EVMTailJumpInstruction : public DynamicOperandInstruction {
+public:
+  static EVMTailJumpInstruction *create(CompileMemPool &MemPool, MType *type,
+                                        MInstruction *slotAddr) {
+    return DynamicOperandInstruction::create<EVMTailJumpInstruction>(
+        MemPool, 1, type, slotAddr, uint32_t(1));
+  }
+  static bool classof(const MInstruction *inst) {
+    return inst->getOpcode() == OP_evm_tail_jump;
+  }
+  MInstruction *getSlotAddr() const {
+    return const_cast<MInstruction *>(getOperand<0>());
+  }
+
+private:
+  friend class DynamicOperandInstruction;
+  EVMTailJumpInstruction(MType *type, MInstruction *slotAddr, uint32_t opnd_num)
+      : DynamicOperandInstruction(MInstruction::EVM_TAIL_JUMP, OP_evm_tail_jump,
+                                  opnd_num, type) {
+    setOperand<0>(slotAddr);
+  }
+};
+
 class CmpInstruction : public BinaryInstruction {
 public:
   enum Predicate : unsigned {

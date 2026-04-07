@@ -2008,3 +2008,57 @@ void X86CgLowering::lowerReturnStmt(llvm::MVT VT, CgRegister OperandReg) {
 
   MF->createCgInstruction(*CurBB, TII.get(RETOpc), ReturnOperands);
 }
+
+void X86CgLowering::lowerEVMTailJumpStmt(const EVMTailJumpInstruction &Inst) {
+  // Lower the operand: address of SegmentJumpTable[idx] (compile-time constant)
+  CgRegister SlotAddrReg = lowerExpr(*Inst.getSlotAddr());
+
+  // Load the target segment code pointer from SegmentJumpTable[idx]
+  // MOV64rm format: [def, base, scale, index, disp, segment]
+  CgRegister TargetCodeReg = createReg(&X86::GR64RegClass);
+  SmallVector<CgOperand, 6> LoadOperands{
+      CgOperand::createRegOperand(TargetCodeReg, true),
+      CgOperand::createRegOperand(SlotAddrReg, false),
+      CgOperand::createImmOperand(1),
+      CgOperand::createRegOperand(X86::NoRegister, false),
+      CgOperand::createImmOperand(0),
+      CgOperand::createRegOperand(X86::NoRegister, false),
+  };
+  MF->createCgInstruction(*CurBB, TII.get(X86::MOV64rm), LoadOperands);
+
+#ifdef ZEN_ENABLE_EVM_GAS_REGISTER
+  // Sync gas register back to R14 before tail jump
+  VariableIdx GasVarIdx = _mir_func.getGasRegisterVarIdx();
+  if (GasVarIdx != VariableIdx(-1)) {
+    const TargetRegisterClass *RC = &X86::GR64RegClass;
+    CgRegister GasVirtReg = getOrCreateVarReg(GasVarIdx, RC);
+    MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), GasVirtReg,
+                            X86::R14);
+  }
+#endif
+
+  // Restore Instance pointer to RDI before tail jump.
+  // Each segment function receives Instance* as its first argument (rdi).
+  // During execution, rdi may be clobbered. The target segment will read
+  // rdi via dread $0, so we must restore it from the saved function arg.
+  {
+    CgRegister InstanceVReg = getOrCreateVarReg(0, &X86::GR64RegClass);
+    SmallVector<CgOperand, 2> CopyOps{
+        CgOperand::createRegOperand(X86::RDI, true),
+        CgOperand::createRegOperand(InstanceVReg, false),
+    };
+    MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), CopyOps);
+  }
+
+  // TAILJMPr64 has MCID::Return, so prolog/epilog inserter will
+  // automatically insert the epilogue (pop rbp) before this instruction.
+  // MC lowering converts TAILJMPr64 -> JMP64r.
+  // We add RDI as an implicit use operand so that the register allocator
+  // keeps the preceding COPY alive (otherwise it would be eliminated as
+  // dead code because TAILJMPr64's implicit-use list does not mention RDI).
+  SmallVector<CgOperand, 2> JumpOperands;
+  JumpOperands.push_back(CgOperand::createRegOperand(TargetCodeReg));
+  JumpOperands.push_back(
+      CgOperand::createRegOperand(X86::RDI, /*isDef=*/false));
+  MF->createCgInstruction(*CurBB, TII.get(X86::TAILJMPr64), JumpOperands);
+}

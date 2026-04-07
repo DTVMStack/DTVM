@@ -78,7 +78,8 @@ OPCODE(br_if)
 OPCODE(switch)
 OPCODE(call)
 OPCODE(icall)
-OPCODE(return)                      // OP_CTRL_STMT_END
+OPCODE(return)
+OPCODE(evm_tail_jump)               // OP_CTRL_STMT_END, tail jump to segment
 
 OPCODE(dassign)                     // OP_OTHER_STMT_START
 OPCODE(store)

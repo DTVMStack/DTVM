@@ -75,14 +75,34 @@ private:
       EVMAnalyzer Analyzer(Ctx->getRevision());
       Analyzer.analyze(Bytecode, BytecodeSize);
 
-      const uint8_t *Ip = Bytecode;
+      // Get segment bounds for lazy compilation
+      uint32_t SegmentStartPC = 0;
+      uint32_t SegmentEndPC = static_cast<uint32_t>(BytecodeSize);
+      const EVMFrontendContext *EvmCtx =
+          dynamic_cast<const EVMFrontendContext *>(Ctx);
+      if (EvmCtx) {
+        SegmentStartPC = EvmCtx->getSegmentStartPC();
+        SegmentEndPC = EvmCtx->getSegmentEndPC();
+        if (SegmentEndPC == UINT32_MAX ||
+            SegmentEndPC > static_cast<uint32_t>(BytecodeSize)) {
+          SegmentEndPC = static_cast<uint32_t>(BytecodeSize);
+        }
+      }
+
+      const uint8_t *Ip = Bytecode + SegmentStartPC;
+      PC = SegmentStartPC;
       const bool StartsWithJumpDest =
-          BytecodeSize > 0 &&
-          static_cast<evmc_opcode>(Bytecode[0]) == OP_JUMPDEST;
+          SegmentStartPC < BytecodeSize &&
+          static_cast<evmc_opcode>(Bytecode[SegmentStartPC]) == OP_JUMPDEST;
       if (!StartsWithJumpDest) {
         handleBeginBlock(Analyzer);
+      } else if (EvmCtx && EvmCtx->Lazy) {
+        // In lazy mode, when a merged segment starts with consecutive
+        // JUMPDESTs, dispatch based on LazyJumpTargetPC to skip gas
+        // metering for JUMPDESTs before the actual jump target.
+        Builder.handleLazySegmentDispatch(SegmentStartPC, SegmentEndPC);
       }
-      const uint8_t *IpEnd = Bytecode + BytecodeSize;
+      const uint8_t *IpEnd = Bytecode + SegmentEndPC;
 
       while (Ip < IpEnd) {
         evmc_opcode Opcode = static_cast<evmc_opcode>(*Ip);
@@ -688,7 +708,12 @@ private:
         PC++; // offset 1 byte for opcode
       }
       if (!InDeadCode) {
-        handleStop();
+        // Flush any remaining evaluation stack elements to the runtime stack
+        // before handleStop(). In lazy compile mode, handleStop() may generate
+        // a fall-through to the next segment, and the runtime stack must
+        // reflect all pending push operations (e.g. GAS, PC results).
+        handleEndBlock();
+        handleStop(/*IsImplicit=*/true);
       }
     } catch (const common::Error &E) {
       ZEN_UNREACHABLE();
@@ -766,7 +791,7 @@ private:
     InDeadCode = true;
   }
 
-  void handleStop() { Builder.handleStop(); }
+  void handleStop(bool IsImplicit = false) { Builder.handleStop(IsImplicit); }
 
   static bool isHelperSensitiveOpcode(evmc_opcode Opcode) {
     switch (Opcode) {

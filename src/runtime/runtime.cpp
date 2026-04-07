@@ -19,9 +19,13 @@
 #include "evm/evm.h"
 #include "evm/interpreter.h"
 #include "runtime/evm_instance.h"
+#include "runtime/evm_module.h"
 #include "utils/evm.h"
 #include <evmc/hex.hpp>
 #include <memory>
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+#include "compiler/evm_lazy_compiler.h"
+#endif // ZEN_ENABLE_MULTIPASS_JIT
 #endif // ZEN_ENABLE_EVM
 #include "runtime/codeholder.h"
 #include "runtime/instance.h"

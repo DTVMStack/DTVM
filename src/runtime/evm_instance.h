@@ -193,6 +193,19 @@ public:
   void exit(int32_t ExitCode);
   int32_t getExitCode() const { return InstanceExitCode; }
 
+  // Lazy compile: cross-segment jump support
+  uint32_t getLazyJumpTargetPC() const { return LazyJumpTargetPC; }
+  void setLazyJumpTargetPC(uint32_t PC) { LazyJumpTargetPC = PC; }
+  void clearLazyJumpTargetPC() { LazyJumpTargetPC = UINT32_MAX; }
+  bool hasLazyJumpTarget() const { return LazyJumpTargetPC != UINT32_MAX; }
+
+  static constexpr int32_t getLazyJumpTargetPCOffset() {
+    static_assert(offsetof(EVMInstance, LazyJumpTargetPC) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "EVMInstance offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(EVMInstance, LazyJumpTargetPC));
+  }
+
   static constexpr int32_t getGasFieldOffset() {
     static_assert(offsetof(EVMInstance, Gas) <=
                       std::numeric_limits<int32_t>::max(),
@@ -403,6 +416,13 @@ private:
 
   // Instance-level cache storage (shared across all messages in execution)
   ExecutionCache InstanceExecutionCache;
+
+  // Lazy compile: cross-segment jump target PC.
+  // When a JIT-compiled segment needs to jump to a JUMPDEST in another
+  // segment, it writes the target PC here and returns normally. The runtime
+  // loop then looks up and invokes the target segment. UINT32_MAX means "no
+  // pending cross-segment jump".
+  uint32_t LazyJumpTargetPC = UINT32_MAX;
 
   // Runtime stack data for EVM.
   uint8_t EVMStack[EVMStackCapacity];

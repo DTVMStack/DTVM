@@ -144,6 +144,21 @@ CompileContext::~CompileContext() {
   for (MPointerType *PtrType : PtrTypeSet) {
     ThreadMemPool.deleteObject(PtrType);
   }
+#else
+  // In release mode, we still need to clean up when using ThreadMemPool
+  // (SysMemPool handles its own memory management)
+  for (const auto &[_, MConstFp] : FPConstants) {
+    ThreadMemPool.deleteObject(MConstFp);
+  }
+  for (const auto &[_, MConstInt] : IntConstants) {
+    ThreadMemPool.deleteObject(MConstInt);
+  }
+  for (MFunctionType *FuncType : FuncTypeSet) {
+    ThreadMemPool.deleteObject(FuncType);
+  }
+  for (MPointerType *PtrType : PtrTypeSet) {
+    ThreadMemPool.deleteObject(PtrType);
+  }
 #endif
 }
 

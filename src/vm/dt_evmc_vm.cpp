@@ -251,6 +251,10 @@ enum evmc_set_option_result set_option(evmc_vm *VMInstance, const char *Name,
     } else if (std::strcmp(Value, "multipass") == 0) {
       VM->Config.Mode = RunMode::MultipassMode;
       return EVMC_SET_OPTION_SUCCESS;
+    } else if (std::strcmp(Value, "lazy") == 0) {
+      VM->Config.Mode = RunMode::MultipassMode;
+      VM->Config.EnableMultipassLazy = true;
+      return EVMC_SET_OPTION_SUCCESS;
     } else {
       return EVMC_SET_OPTION_INVALID_VALUE;
     }
@@ -260,6 +264,18 @@ enum evmc_set_option_result set_option(evmc_vm *VMInstance, const char *Name,
       return EVMC_SET_OPTION_SUCCESS;
     } else if (std::strcmp(Value, "false") == 0) {
       VM->Config.EnableEvmGasMetering = false;
+      return EVMC_SET_OPTION_SUCCESS;
+    } else {
+      return EVMC_SET_OPTION_INVALID_VALUE;
+    }
+  } else if (std::strcmp(Name, "enable_lazy_compile") == 0) {
+    bool ParsedValue = false;
+    if (parseBoolEnvValue(Value, ParsedValue)) {
+      VM->Config.EnableMultipassLazy = ParsedValue;
+      // Lazy compile requires multipass mode
+      if (ParsedValue) {
+        VM->Config.Mode = RunMode::MultipassMode;
+      }
       return EVMC_SET_OPTION_SUCCESS;
     } else {
       return EVMC_SET_OPTION_INVALID_VALUE;
@@ -587,6 +603,9 @@ DTVM::DTVM()
       Config.Mode = RunMode::InterpMode;
     } else if (std::strcmp(Mode, "multipass") == 0) {
       Config.Mode = RunMode::MultipassMode;
+    } else if (std::strcmp(Mode, "lazy") == 0) {
+      Config.Mode = RunMode::MultipassMode;
+      Config.EnableMultipassLazy = true;
     } else {
       ZEN_LOG_WARN("ignore invalid DTVM_EVM_MODE=%s", Mode);
     }
@@ -599,6 +618,16 @@ DTVM::DTVM()
       Config.EnableEvmGasMetering = ParsedEnableGas;
     } else {
       ZEN_LOG_WARN("ignore invalid DTVM_EVM_ENABLE_GAS_METERING=%s", EnableGas);
+    }
+  }
+
+  if (const char *EnableLazy = std::getenv("DTVM_EVM_LAZY_COMPILE");
+      EnableLazy != nullptr) {
+    bool ParsedEnableLazy = false;
+    if (parseBoolEnvValue(EnableLazy, ParsedEnableLazy)) {
+      Config.EnableMultipassLazy = ParsedEnableLazy;
+    } else {
+      ZEN_LOG_WARN("ignore invalid DTVM_EVM_LAZY_COMPILE=%s", EnableLazy);
     }
   }
 }

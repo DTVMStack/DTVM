@@ -11,6 +11,7 @@
 #include "compiler/compiler.h"
 #ifdef ZEN_ENABLE_EVM
 #include "compiler/evm_compiler.h"
+#include "compiler/evm_lazy_compiler.h"
 #endif // ZEN_ENABLE_EVM
 #endif
 
@@ -47,7 +48,8 @@ void performEVMJITCompile(runtime::EVMModule &Mod) {
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
   case common::RunMode::MultipassMode: {
     if (Mod.getRuntime()->getConfig().EnableMultipassLazy) {
-      ZEN_LOG_WARN("EVMJIT does not support lazy compilation now");
+      auto *LCompiler = Mod.newLazyEVMJITCompiler();
+      LCompiler->precompile();
     } else {
       COMPILER::EagerEVMJITCompiler ECompiler(&Mod);
       ECompiler.compile();
