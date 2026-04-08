@@ -270,7 +270,7 @@ bool CgLiveRangeCalc::findReachingDefs(CgLiveRange &LR, CgBasicBlock &UseMBB,
 
   LiveIn.clear();
   FoundUndef |= (TheVNI == nullptr || TheVNI == &UndefVNI);
-  if (!Undefs.empty() && FoundUndef)
+  if (FoundUndef)
     UniqueVNI = false;
 
   // Both updateSSA() and CgLiveRangeUpdater benefit from ordered blocks, but
