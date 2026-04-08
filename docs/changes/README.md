@@ -47,7 +47,7 @@ Typical triggers:
 
 | Date | Name | Status | Tier | Description |
 |------|------|--------|------|-------------|
-| 2026-03-10 | [evm-stack-ssa-lifting](2026-03-10-evm-stack-ssa-lifting/README.md) | Implemented | Full | True-SSA stack lifting for EVM multipass JIT |
+| 2026-03-23 | [U256 MUL BMI2/ADX](2026-03-23-u256-mul-bmi2-adx/) | Implemented | Light | Optimize x86 U256 MUL with BMI2+ADX row-wise MULX + ADCX/ADOX schedule |
 
 ## Workflow
 
