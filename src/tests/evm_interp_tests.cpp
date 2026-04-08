@@ -169,6 +169,7 @@ EVMExecutionResult executeEvmBytecodeFile(const std::string &FilePath,
   Config.Mode = Mode;
 
   auto MockedHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  MockedHost->tx_context.tx_origin = zen::evm::DEFAULT_DEPLOYER_ADDRESS;
   auto RT = Runtime::newEVMRuntime(Config, MockedHost.get());
   EXPECT_TRUE(RT != nullptr) << "Failed to create runtime";
   if (!RT) {
@@ -268,6 +269,7 @@ TEST_P(EVMSampleTest, ExecuteSample) {
   Config.Mode = common::RunMode::InterpMode;
 
   auto MockedHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  MockedHost->tx_context.tx_origin = zen::evm::DEFAULT_DEPLOYER_ADDRESS;
 
   auto RT = Runtime::newEVMRuntime(Config, MockedHost.get());
   ASSERT_TRUE(RT != nullptr) << "Failed to create runtime";
