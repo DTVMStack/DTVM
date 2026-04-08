@@ -418,6 +418,11 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
       Host.tx_context.block_base_fee =
           zen::utils::parseUint256(TxContext["block_base_fee"].GetString());
     }
+
+    if (TxContext.HasMember("tx_origin") && TxContext["tx_origin"].IsString()) {
+      Host.tx_context.tx_origin =
+          zen::utils::parseAddress(TxContext["tx_origin"].GetString());
+    }
   }
 
   return true;

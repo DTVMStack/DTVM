@@ -379,6 +379,13 @@ int main(int argc, char *argv[]) {
                                .SenderAddress = SenderAddress,
                                .ContractAddress = ContractAddress};
     evmc_message Msg = createEvmMessage(MockedHost, MsgConfig, Bytecode);
+
+    // Set tx_origin from sender address (fallback if not loaded from state)
+    evmc::address SenderAddr = zen::utils::parseAddress(SenderAddress);
+    if (MockedHost.tx_context.tx_origin == evmc::address{}) {
+      MockedHost.tx_context.tx_origin = SenderAddr;
+    }
+
     RT->callEVMMain(*Inst, Msg, ExeResult);
 
     if (EVMC_CREATE == MsgKind && ExeResult.status_code == EVMC_SUCCESS) {
