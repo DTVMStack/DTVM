@@ -47,7 +47,7 @@ Typical triggers:
 
 | Date | Name | Status | Tier | Description |
 |------|------|--------|------|-------------|
-| 2026-03-10 | [evm-stack-ssa-lifting](2026-03-10-evm-stack-ssa-lifting/README.md) | Implemented | Full | True-SSA stack lifting for EVM multipass JIT |
+| 2026-03-24 | [Relax JIT fallback thresholds](2026-03-24-relax-jit-fallback-thresholds/) | Implemented | Light | Relax EVM JIT precompile fallback MIR/RA thresholds for benchmark corpus |
 
 ## Workflow
 
