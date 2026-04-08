@@ -1,25 +1,6 @@
-<!-- OPENSPEC:START -->
-# OpenSpec Instructions
-
-These instructions are for AI assistants working in this project.
-
-Always open `@/openspec/AGENTS.md` when the request:
-- Mentions planning or proposals (words like proposal, spec, change, plan)
-- Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
-- Sounds ambiguous and you need the authoritative spec before coding
-
-Use `@/openspec/AGENTS.md` to learn:
-- How to create and apply change proposals
-- Spec format and conventions
-- Project structure and guidelines
-
-Keep this managed block so 'openspec update' can refresh the instructions.
-
-<!-- OPENSPEC:END -->
-
 # DTVM Agent Guide
 
-Instructions for working in this repo beyond the OpenSpec block.
+Instructions for AI assistants working in this repo.
 
 ## Project Snapshot
 
@@ -35,7 +16,7 @@ Instructions for working in this repo beyond the OpenSpec block.
 - `evmc/`: EVM compatibility components
 - `rust_crate/`: Rust bindings
 - `tools/`: helper scripts and utilities
-- `openspec/`: spec-driven change proposals and references
+- `docs/`: documentation, module specifications, change proposals, and feature specs
 
 ## Build (CMake)
 
@@ -65,6 +46,54 @@ Instructions for working in this repo beyond the OpenSpec block.
 - Keep edits minimal and localized; follow existing patterns.
 - Update or add tests when behavior changes; call out if tests were not run.
 - When asked to commit, follow `docs/COMMIT_CONVENTION.md`.
+
+## Workflow
+
+Use the `dev-workflow` skill for feature development. It covers the full cycle: propose, plan, implement, verify, and archive.
+
+For archiving completed features, use the standalone `archive` skill.
+
+## Change Decision Tree
+
+```
+New requirement?
+├─ Bug fix (restore intended behavior)? -> Fix directly
+├─ Formatting/comments/typos?           -> Fix directly
+├─ New feature/capability?              -> Create change proposal in docs/changes/
+├─ Breaking change?                     -> Create change proposal in docs/changes/
+├─ Architecture change?                 -> Create change proposal in docs/changes/
+└─ Uncertain?                           -> Create change proposal (safer)
+```
+
+## Change Proposals
+
+New changes go in `docs/changes/YYYY-MM-DD-<slug>/README.md`.
+
+Choose a tier:
+- **Full**: architecture changes, cross-module impact, new capabilities
+- **Light**: single-module improvements, well-scoped enhancements
+
+See `docs/changes/README.md` for naming conventions and status definitions.
+
+## Module Consultation
+
+Before modifying code in a module, consult `docs/modules/<module>/spec.md` for boundaries, API contracts, and invariants.
+
+## General Guidelines
+
+- Do not duplicate module SSOT content in change proposals; use references
+- When code conflicts with specifications, code takes precedence, but update specs to stay in sync
+- Follow `docs/COMMIT_CONVENTION.md` for commit conventions
+- Maintain determinism: avoid introducing host-specific non-deterministic behavior
+- Prefer modifying code within `src/`; only modify `third_party/` when explicitly required
+
+## Agent Skills
+
+Skills are defined in `.agents/skills/` (single source of truth). `.claude/skills/` contains auto-generated mirrors for Claude Code; do not edit mirrors directly. After modifying any skill, regenerate mirrors:
+
+```bash
+python3 .agents/tooling/generate_skill_mirrors.py
+```
 
 ## Documentation Pointers
 

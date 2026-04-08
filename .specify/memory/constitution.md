@@ -38,7 +38,7 @@ DTVM (DeTerministic Virtual Machine) is a next-generation deterministic virtual 
 
 ### Architecture Patterns
 
-- **Modular layered architecture**: modules under `src/` are organized by function (runtime, compiler, singlepass, evm, host, etc.), with each module's boundaries and contracts defined by spec.md files under `specs/modules/`
+- **Modular layered architecture**: modules under `src/` are organized by function (runtime, compiler, singlepass, evm, host, etc.), with each module's boundaries and contracts defined by spec.md files under `docs/modules/`
 - **IR-driven**: all frontend instruction sets (Wasm, EVM, future RISC-V) are uniformly translated to dMIR, then the backend generates target code
 - **Multiple execution modes**: interpreter, singlepass JIT (single-pass compilation), multipass JIT (multi-pass optimized compilation, depends on LLVM 15)
 - **EVMC interface**: EVM compatibility provided through the standard EVMC interface
@@ -125,9 +125,8 @@ Strictly follow [Conventional Commits](https://www.conventionalcommits.org/), se
 
 This project adopts specification-driven development (SDD):
 
-1. **Module specs** (`specs/modules/`): each module has `spec.md` and `data-model.md`, defining module boundaries, API contracts, and data models
-2. **Feature development** (`specs/features/`): new features follow the speckit workflow: specify → clarify → plan → tasks → implement
-3. **Change management**: architecture-level changes are managed through the proposal process in `specs/features/`
+1. **Module specs** (`docs/modules/`): each module has `spec.md` and `data-model.md`, defining module boundaries, API contracts, and data models
+2. **Change proposals** (`docs/changes/`): new changes follow the `dev-workflow` skill: propose → plan → implement → verify → archive
 
 ### Change Decision Tree
 
@@ -135,10 +134,10 @@ This project adopts specification-driven development (SDD):
 New requirement?
 ├─ Bug fix (restoring expected behavior)? → Fix directly
 ├─ Formatting/comments/typo fix? → Fix directly
-├─ New feature/capability? → Create feature spec
-├─ Breaking change? → Create feature spec
-├─ Architecture change? → Create feature spec
-└─ Unsure? → Create feature spec (safer)
+├─ New feature/capability? → Create change proposal in docs/changes/
+├─ Breaking change? → Create change proposal in docs/changes/
+├─ Architecture change? → Create change proposal in docs/changes/
+└─ Unsure? → Create change proposal (safer)
 ```
 
 ### Code Review Requirements
@@ -185,8 +184,8 @@ New requirement?
 ### Communication Protocols
 
 - Technical discussions are conducted through GitHub Issues and Pull Requests
-- Major design decisions are recorded in proposal documents under the specs directory
-- AI-assisted development follows the behavioral guidelines in `AGENTS.md` and `specs/AGENTS.md`
+- Major design decisions are recorded in proposal documents under the docs directory
+- AI-assisted development follows the behavioral guidelines in `AGENTS.md`
 
 ### Decision Process
 
@@ -196,10 +195,18 @@ New requirement?
 
 ### Knowledge Management
 
-- Module contracts are documented in `specs/modules/`
+- Module contracts are documented in `docs/modules/`
+- Change proposals are in `docs/changes/`
 - Build and usage guides are in `docs/`
 - Constitution and memory documents are in `.specify/memory/`
-- AI Agent behavioral rules are in `AGENTS.md` and `specs/AGENTS.md`
+- AI Agent behavioral rules are in `AGENTS.md`
+
+### Agent Skills SSOT
+
+- `.agents/skills/` is the single source of truth for all agent skills
+- `.claude/skills/` contains auto-generated mirrors for Claude Code consumption
+- Mirrors must not be edited directly; regenerate with `python3 .agents/tooling/generate_skill_mirrors.py`
+- Use `--check` mode in CI to verify mirrors stay in sync: `python3 .agents/tooling/generate_skill_mirrors.py --check`
 
 ### Editing Discipline
 
@@ -238,13 +245,14 @@ DTVM/
 ├── third_party/            # Third-party dependencies
 ├── tools/                  # Helper tools
 ├── docs/                   # Documentation
-├── specs/                  # SDD specs
 │   ├── modules/            # Module specs
-│   └── features/           # Feature specs
-├── .agents/skills/         # AI Agent skills
+│   ├── changes/            # Change proposals
+│   └── _archive/           # Archived changes
+├── .agents/skills/         # AI Agent skills (SSOT)
+├── .claude/skills/         # Auto-generated skill mirrors (do not edit)
 └── .specify/               # Spec-Kit configuration
 ```
 
 ---
 
-*Last updated: 2026-03-13*
+*Last updated: 2026-04-08*

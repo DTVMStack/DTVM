@@ -41,3 +41,8 @@ bazel-testlogs
 
 # fuzzer
 /wtf
+
+# Claude Code local config (keep generated skill mirrors)
+.claude/*
+!.claude/skills/
+!.claude/skills/**
