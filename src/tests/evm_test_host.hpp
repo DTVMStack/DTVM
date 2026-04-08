@@ -481,7 +481,7 @@ public:
     if (It == accounts.end() || It->second.code.empty()) {
       // No contract found, return parent result
       ZEN_LOG_DEBUG(
-          "No contract found for code address {}, return parent result",
+          "No contract found for code address %s, return parent result",
           evmc::hex(evmc::bytes_view(CodeAddr.bytes, 20)).c_str());
       if (Msg.kind == EVMC_CALL && !applyCallValueTransfer(Msg)) {
         return ParentResult;
@@ -517,7 +517,7 @@ public:
       auto ModRet =
           RT->loadEVMModule(ModName, ContractCode.data(), ContractCode.size());
       if (!ModRet) {
-        ZEN_LOG_ERROR("Failed to load EVM module: {}", ModName.c_str());
+        ZEN_LOG_ERROR("Failed to load EVM module: %s", ModName.c_str());
         return ParentResult;
       }
 
@@ -526,7 +526,7 @@ public:
       IsolationPtr Iso(nullptr, IsolationDeleter{RT});
       Iso.reset(RT->createManagedIsolation());
       if (!Iso) {
-        ZEN_LOG_ERROR("Failed to create isolation for module: {}",
+        ZEN_LOG_ERROR("Failed to create isolation for module: %s",
                       ModName.c_str());
         return ParentResult;
       }
@@ -534,7 +534,7 @@ public:
       // Create EVM instance
       auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
       if (!InstRet) {
-        ZEN_LOG_ERROR("Failed to create EVM instance for module: {}",
+        ZEN_LOG_ERROR("Failed to create EVM instance for module: %s",
                       ModName.c_str());
         return ParentResult;
       }
@@ -573,7 +573,7 @@ public:
           RT->callEVMMain(*Inst, CallMsg, ExecResult);
         }
       } catch (const std::exception &E) {
-        ZEN_LOG_ERROR("Error in recursive call: {}", E.what());
+        ZEN_LOG_ERROR("Error in recursive call: %s", E.what());
         restoreHostState(StateSnapshot);
         return ParentResult;
       }
@@ -599,7 +599,7 @@ public:
 
     } catch (const std::exception &E) {
       // On error, return parent result
-      ZEN_LOG_ERROR("Error in recursive call: {}", E.what());
+      ZEN_LOG_ERROR("Error in recursive call: %s", E.what());
       restoreHostState(StateSnapshot);
       return ParentResult;
     }
@@ -695,7 +695,7 @@ public:
       if (!IsNewAccount) {
         ensureAccountHasCodeHash(It->second);
         if (isCreateCollision(It->second)) {
-          ZEN_LOG_ERROR("Create collision at address {}",
+          ZEN_LOG_ERROR("Create collision at address %s",
                         evmc::hex(NewAddr).c_str());
           auto SenderIt = accounts.find(Msg.sender);
           if (SenderIt != accounts.end() &&
@@ -721,7 +721,7 @@ public:
       auto ModRet = RT->loadEVMModule(ModName, InitcodePtr, InitcodeSize);
       if (!ModRet) {
         restoreHostState(StateSnapshot);
-        ZEN_LOG_ERROR("Failed to load EVM module: {}", ModName.c_str());
+        ZEN_LOG_ERROR("Failed to load EVM module: %s", ModName.c_str());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
       }
       EVMModule *Mod = *ModRet;
@@ -730,7 +730,7 @@ public:
       Iso.reset(RT->createManagedIsolation());
       if (!Iso) {
         restoreHostState(StateSnapshot);
-        ZEN_LOG_ERROR("Failed to create isolation for module: {}",
+        ZEN_LOG_ERROR("Failed to create isolation for module: %s",
                       ModName.c_str());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
       }
@@ -738,7 +738,7 @@ public:
       auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
       if (!InstRet) {
         restoreHostState(StateSnapshot);
-        ZEN_LOG_ERROR("Failed to create EVM instance for module: {}",
+        ZEN_LOG_ERROR("Failed to create EVM instance for module: %s",
                       ModName.c_str());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
       }
@@ -761,7 +761,7 @@ public:
           intx::be::load<intx::uint256>(SenderAcc.balance);
       if (SenderBalance < Value) {
         restoreHostState(StateSnapshot);
-        ZEN_LOG_ERROR("Insufficient balance for CREATE: have {}, need {}",
+        ZEN_LOG_ERROR("Insufficient balance for CREATE: have %s, need %s",
                       SenderBalance, Value);
         return evmc::Result{EVMC_INSUFFICIENT_BALANCE, Msg.gas, 0, NewAddr};
       }
@@ -799,7 +799,7 @@ public:
         }
       } catch (const std::exception &E) {
         restoreHostState(StateSnapshot);
-        ZEN_LOG_ERROR("Error in handleCreate execution: {}", E.what());
+        ZEN_LOG_ERROR("Error in handleCreate execution: %s", E.what());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, evmc::address{}};
       }
 
@@ -889,7 +889,7 @@ public:
       CreateResult.create_address = NewAddr;
       return CreateResult;
     } catch (const std::exception &E) {
-      ZEN_LOG_ERROR("Error in handleCreate: {}", E.what());
+      ZEN_LOG_ERROR("Error in handleCreate: %s", E.what());
       restoreHostState(StateSnapshot);
       return evmc::Result{EVMC_FAILURE, Msg.gas, 0, evmc::address{}};
     }

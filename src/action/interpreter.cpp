@@ -580,7 +580,7 @@ private:
         break;
       }
       default:
-        ZEN_LOG_ERROR("unimplemented opcode : {%d}", Opcode);
+        ZEN_LOG_ERROR("unimplemented opcode : 0x%x", Opcode);
         ZEN_ASSERT_TODO();
         break;
       }

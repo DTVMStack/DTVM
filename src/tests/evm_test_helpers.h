@@ -146,7 +146,7 @@ inline std::string decimalToHex(const std::string &DecimalStr) {
     return "0";
   }
   if (TrimmedStr[0] == '-') {
-    ZEN_LOG_ERROR("Negative values are not supported. Value: {}",
+    ZEN_LOG_ERROR("Negative values are not supported. Value: %s",
                   DecimalStr.c_str());
     return "0";
   }
@@ -162,11 +162,11 @@ inline std::string decimalToHex(const std::string &DecimalStr) {
   try {
     Value = std::stoull(TrimmedStr);
   } catch (const std::out_of_range &E) {
-    ZEN_LOG_ERROR("Value exceeds uint64_t range. Value: {}",
+    ZEN_LOG_ERROR("Value exceeds uint64_t range. Value: %s",
                   DecimalStr.c_str());
     return "0";
   } catch (const std::invalid_argument &E) {
-    ZEN_LOG_ERROR("Invalid decimal string (parsing failed). Value: {}",
+    ZEN_LOG_ERROR("Invalid decimal string (parsing failed). Value: %s",
                   DecimalStr.c_str());
     return "0";
   }
