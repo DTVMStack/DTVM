@@ -5,10 +5,13 @@
 #include "common/errors.h"
 #include "evm/gas_storage_cost.h"
 #include "evm/interpreter.h"
+#include "evm/keccak_cache.h"
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
 #include "host/evm/crypto.h"
 #include "runtime/evm_instance.h"
+
+static thread_local zen::evm::KeccakCache TLKeccakCache;
 
 thread_local zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
 thread_local zen::evm::InterpreterExecContext
@@ -832,8 +835,20 @@ void Keccak256Handler::doExecute() {
 
   const uint8_t *InputData = Frame->Memory.data() + MemOffset;
 
+  // Keccak cache: avoid recomputing hash for repeated inputs (e.g. storage
+  // slot keys in ERC20 transfer).
+  const uint32_t Len32 = static_cast<uint32_t>(DataLength);
+  if (const evmc::bytes32 *Cached = TLKeccakCache.lookup(InputData, Len32)) {
+    Frame->push(intx::be::load<intx::uint256>(*Cached));
+    return;
+  }
+
   uint8_t HashResult[32];
   host::evm::crypto::keccak256(InputData, DataLength, HashResult);
+
+  evmc::bytes32 HashBytes;
+  std::memcpy(HashBytes.bytes, HashResult, 32);
+  TLKeccakCache.insert(InputData, Len32, HashBytes);
 
   const auto ResultValue = intx::be::load<intx::uint256>(HashResult);
   Frame->push(ResultValue);

@@ -5,6 +5,7 @@
 #include "common/errors.h"
 #include "evm/gas_storage_cost.h"
 #include "evm/interpreter.h"
+#include "evm/keccak_cache.h"
 #include "host/evm/crypto.h"
 #include "runtime/evm_instance.h"
 #include "runtime/evm_module.h"
@@ -15,45 +16,7 @@
 
 namespace {
 
-static constexpr uint32_t KeccakCacheSlots = 16;
-static constexpr uint32_t KeccakCacheMaxInputLen = 128;
-
-struct KeccakCacheEntry {
-  uint8_t Input[KeccakCacheMaxInputLen];
-  uint32_t InputLen = 0;
-  evmc::bytes32 Result;
-  bool Valid = false;
-};
-
-struct KeccakCache {
-  KeccakCacheEntry Slots[KeccakCacheSlots];
-  uint32_t NextSlot = 0;
-
-  const evmc::bytes32 *lookup(const uint8_t *Data, uint32_t Len) const {
-    if (Len > KeccakCacheMaxInputLen)
-      return nullptr;
-    for (uint32_t I = 0; I < KeccakCacheSlots; ++I) {
-      auto &S = Slots[I];
-      if (S.Valid && S.InputLen == Len &&
-          std::memcmp(S.Input, Data, Len) == 0) {
-        return &S.Result;
-      }
-    }
-    return nullptr;
-  }
-
-  void insert(const uint8_t *Data, uint32_t Len, const evmc::bytes32 &Result) {
-    if (Len > KeccakCacheMaxInputLen)
-      return;
-    auto &S = Slots[NextSlot];
-    std::memcpy(S.Input, Data, Len);
-    S.InputLen = Len;
-    S.Result = Result;
-    S.Valid = true;
-    NextSlot = (NextSlot + 1) % KeccakCacheSlots;
-  }
-};
-
+using zen::evm::KeccakCache;
 static thread_local KeccakCache TLKeccakCache;
 
 } // namespace
