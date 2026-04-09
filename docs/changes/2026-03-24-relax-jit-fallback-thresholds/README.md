@@ -24,5 +24,5 @@ Some benchmark contracts were falling back to the interpreter due to conservativ
 
 - [x] Implementation complete
 - [x] Tests added/updated (static analyzer sweep: fallback_contracts=0)
-- [ ] Module specs in `docs/modules/` updated (if affected)
+- [x] Module specs in `docs/modules/` updated (if affected)
 - [x] Build and tests pass

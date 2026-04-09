@@ -122,10 +122,10 @@ From `common/errors.h`, used by the compiler module:
 | Threshold | Description |
 |------|------|
 | `MAX_JIT_BYTECODE_SIZE` (0x6000) | Bytecode size exceeds limit |
-| `MAX_JIT_MIR_ESTIMATE` (50000) | Linear MIR estimate exceeds limit |
-| `MAX_CONSECUTIVE_RA_EXPENSIVE` (128) | Consecutive RA-expensive opcodes exceed limit |
-| `MAX_BLOCK_RA_EXPENSIVE` (256) | RA-expensive count in a single basic block exceeds limit |
-| `MAX_DUP_FEEDBACK_PATTERN` (64) | DUPn + RA-expensive pattern exceeds limit |
+| `MAX_JIT_MIR_ESTIMATE` (0x50000) | Linear MIR estimate exceeds limit |
+| `MAX_CONSECUTIVE_RA_EXPENSIVE` (0x3000) | Consecutive RA-expensive opcodes exceed limit |
+| `MAX_BLOCK_RA_EXPENSIVE` (0x3000) | RA-expensive count in a single basic block exceeds limit |
+| `MAX_DUP_FEEDBACK_PATTERN` (0x3000) | DUPn + RA-expensive pattern exceeds limit |
 
 **RA-expensive opcode classification**: SHL (0x1b), SHR (0x1c), SAR (0x1d), MUL (0x02), SIGNEXTEND (0x0b).
 

@@ -255,7 +255,7 @@ Used for `DenseSet` deduplication of `MFunctionType`, `MPointerType` key and has
 | Constant | Value |
 |------|-----|
 | `MAX_JIT_BYTECODE_SIZE` | 0x6000 |
-| `MAX_JIT_MIR_ESTIMATE` | 50000 |
-| `MAX_CONSECUTIVE_RA_EXPENSIVE` | 128 |
-| `MAX_BLOCK_RA_EXPENSIVE` | 256 |
-| `MAX_DUP_FEEDBACK_PATTERN` | 64 |
+| `MAX_JIT_MIR_ESTIMATE` | 0x50000 |
+| `MAX_CONSECUTIVE_RA_EXPENSIVE` | 0x3000 |
+| `MAX_BLOCK_RA_EXPENSIVE` | 0x3000 |
+| `MAX_DUP_FEEDBACK_PATTERN` | 0x3000 |
