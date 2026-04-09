@@ -49,7 +49,12 @@ private:
     }
   }
 
-  MInstruction *rewriteExprTree(MInstruction *Inst, MBasicBlock &BB) {
+  MInstruction *rewriteExprTree(MInstruction *Inst, MBasicBlock &BB,
+                                uint32_t Depth = 0) {
+    if (Depth > 16) {
+      return Inst;
+    }
+
     auto CacheIt = RewriteCache.find(Inst);
     if (CacheIt != RewriteCache.end()) {
       return CacheIt->second;
@@ -58,7 +63,7 @@ private:
     for (uint32_t OperandIdx = 0; OperandIdx < Inst->getNumOperands();
          ++OperandIdx) {
       MInstruction *Operand = Inst->getOperand(OperandIdx);
-      MInstruction *Rewritten = rewriteExprTree(Operand, BB);
+      MInstruction *Rewritten = rewriteExprTree(Operand, BB, Depth + 1);
       if (Rewritten != Operand) {
         Inst->setOperand(OperandIdx, Rewritten);
         Changed = true;
@@ -69,7 +74,7 @@ private:
     if (MInstruction *Replacement = tryRewrite(*Inst, BB)) {
       if (Replacement != Inst) {
         Changed = true;
-        Result = rewriteExprTree(Replacement, BB);
+        Result = rewriteExprTree(Replacement, BB, Depth + 1);
       } else {
         Result = Replacement;
       }
@@ -351,11 +356,20 @@ private:
   /// Carry-dead analysis: returns true when the carry/borrow output of the
   /// instruction that feeds this ADC/SBB is provably zero.
   ///
-  /// Currently handles:
-  ///   - const(0) operand (legacy placeholder or genuine chain-head zero)
-  ///   - add(x, 0) / add(0, x): x + 0 never overflows, carry = 0
-  ///   - adc(x, 0, prev) where isCarryDead(prev): x + 0 + 0 never overflows
-  bool isCarryDead(const MInstruction &CarryProducer) const {
+  /// Handles:
+  ///   1. const(0): zero constant has no carry (chain-head sentinel)
+  ///   2. add(x, 0): adding zero never overflows, carry = 0
+  ///   3. adc(x, 0, prev) / adc(0, y, prev) where isCarryDead(prev):
+  ///      x + 0 + 0 never overflows
+  ///   4. sub(x, 0): subtracting zero never borrows
+  ///   5. sbb(x, 0, prev) where isCarryDead(prev): x - 0 - 0 never borrows
+  ///   6. zext(icmp_ult(x, 0)): comparison with zero always false, zext
+  ///      produces 0
+  bool isCarryDead(const MInstruction &CarryProducer,
+                   uint32_t Depth = 0) const {
+    if (Depth > 8) {
+      return false; // Conservative: assume carry is live
+    }
     // A const(0) carry operand means "no incoming carry" (chain head).
     if (isZeroConst(CarryProducer)) {
       return true;
@@ -374,7 +388,7 @@ private:
       const auto &Adc = llvm::cast<AdcInstruction>(CarryProducer);
       if ((isZeroConst(*Adc.getOperand<0>()) ||
            isZeroConst(*Adc.getOperand<1>())) &&
-          isCarryDead(*Adc.getOperand<2>())) {
+          isCarryDead(*Adc.getOperand<2>(), Depth + 1)) {
         return true;
       }
     }
@@ -390,7 +404,7 @@ private:
     if (CarryProducer.getOpcode() == OP_sbb) {
       const auto &Sbb = llvm::cast<SbbInstruction>(CarryProducer);
       if (isZeroConst(*Sbb.getOperand<1>()) &&
-          isCarryDead(*Sbb.getOperand<2>())) {
+          isCarryDead(*Sbb.getOperand<2>(), Depth + 1)) {
         return true;
       }
     }
@@ -790,6 +804,12 @@ private:
       }
       break;
     case OP_load: {
+      // NOTE: Load instructions are compared structurally (by address
+      // computation parameters). This assumes no intervening stores between the
+      // two loads. In the current EVM frontend, each load comes from
+      // extractU256Operand and produces a unique instruction, so pointer
+      // equality catches all real cases. If the frontend evolves to produce
+      // aliased loads, this must be revisited.
       const auto &LHSLoad = llvm::cast<LoadInstruction>(LHS);
       const auto &RHSLoad = llvm::cast<LoadInstruction>(RHS);
       if (LHSLoad.getScale() != RHSLoad.getScale() ||

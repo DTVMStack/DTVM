@@ -4407,6 +4407,11 @@ EVMMirBuilder::handleMLoad(Operand AddrComponents) {
   return Result;
 }
 
+// The old ordering hack (ValueDep = or(parts) & 0) was needed to prevent
+// flag-clobbering interleaving when add/adc chains were emitted as separate
+// instructions. With the introduction of EvmU256AddInstruction pseudo-ops,
+// the carry chain is atomic and cannot be interleaved, making the hack
+// unnecessary.
 void EVMMirBuilder::handleMStore(Operand AddrComponents,
                                  Operand ValueComponents) {
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER

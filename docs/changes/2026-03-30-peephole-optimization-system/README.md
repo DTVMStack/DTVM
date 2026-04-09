@@ -6,7 +6,7 @@
 
 ## Overview
 
-A two-level peephole optimization system targeting both dMIR (mid-level IR) and x86 CgIR (code generation IR). The dMIR level has 67 accepted rewrite rules covering identity elimination, boolean algebra, shift-zero, and carry-dead rewrites. The x86 CgIR level has 13 declarative JSON rules for self-moves, zero-shifts, redundant CMP/TEST, fallthrough branches, and setcc+test+jne chain folding. Includes Z3-verified synthesized rules and a CI validation gate.
+A two-level peephole optimization system targeting both dMIR (mid-level IR) and x86 CgIR (code generation IR). The dMIR level has 65 accepted rewrite rules (plus 5 seed rules) covering identity elimination, boolean algebra, shift-zero, and carry-dead rewrites. The x86 CgIR level has 13 declarative JSON rules for self-moves, zero-shifts, redundant CMP/TEST, fallthrough branches, and setcc+test+jne chain folding. Includes Z3-verified synthesized rules and a CI validation gate.
 
 ## Motivation
 
