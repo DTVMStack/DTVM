@@ -1260,6 +1260,8 @@ X86CgLowering::lowerEvmU256MulExprLegacy(const EvmU256MulInstruction &Inst) {
   return R0;
 }
 
+// BMI2+ADX U256 multiply implementation. This path is only reachable from the
+// EVMJIT pipeline; the EVM interpreter never calls x86 codegen.
 CgRegister
 X86CgLowering::lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst) {
   static constexpr size_t NumLimbs = 4;

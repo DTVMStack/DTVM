@@ -15,7 +15,7 @@ U256 multiplication is one of the most expensive EVM operations in the JIT (~100
 ## Impact
 
 - Module: `docs/modules/compiler/` (x86 lowering for U256 MUL)
-- 3 files changed, +165/-28 lines
+- 5 files changed, +165/-28 lines
 - Performance: single-shot +0.55% (noise), hot MUL loop +7.5-10.5%
 - Hardware requirement: BMI2+ADX (Intel Haswell+, AMD Zen+); graceful fallback on older CPUs
 - No functional behavior change; gas and output match in all cases
