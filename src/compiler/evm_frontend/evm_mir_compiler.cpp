@@ -2101,10 +2101,233 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
     return Operand(intxToU256Value(Result));
   }
 
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
-                        const intx::uint256 &, const intx::uint256 &>(
-      RuntimeFunctions.GetAddMod, AugendOp, AddendOp, ModulusOp);
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+
+  U256Inst Augend = extractU256Operand(AugendOp);
+  U256Inst Addend = extractU256Operand(AddendOp);
+  U256Inst Modulus = extractU256Operand(ModulusOp);
+
+  // Fast-path eligibility: mod[3] != 0 && x[3] <= mod[3] && y[3] <= mod[3]
+  // Note: mod[3] != 0 implies mod != 0, so the mod == 0 case is handled
+  // by the slow path (runtime call) which returns 0 for zero modulus.
+  MInstruction *ModHi = Modulus[3];
+  MInstruction *ModHiNonZero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::ICMP_NE, I64Type, ModHi, Zero);
+  MInstruction *AugendHiLE = createInstruction<CmpInstruction>(
+      false, CmpInstruction::ICMP_ULE, I64Type, Augend[3], ModHi);
+  MInstruction *AddendHiLE = createInstruction<CmpInstruction>(
+      false, CmpInstruction::ICMP_ULE, I64Type, Addend[3], ModHi);
+
+  // FastEligible = ModHiNonZero && AugendHiLE && AddendHiLE
+  MInstruction *FastEligible = createInstruction<BinaryInstruction>(
+      false, OP_and, I64Type, ModHiNonZero, AugendHiLE);
+  FastEligible = createInstruction<BinaryInstruction>(false, OP_and, I64Type,
+                                                      FastEligible, AddendHiLE);
+
+  // Prepare result variables
+  U256Var ResultVars = {};
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    ResultVars[I] = CurFunc->createVariable(I64Type);
+  }
+
+  auto storeResult = [&](const U256Inst &Values) {
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      createInstruction<DassignInstruction>(true, &(Ctx.VoidType), Values[I],
+                                            ResultVars[I]->getVarIdx());
+    }
+  };
+
+  auto loadResult = [&]() -> U256Inst {
+    U256Inst Values = {};
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      Values[I] = loadVariable(ResultVars[I]);
+    }
+    return Values;
+  };
+
+  // Branch: FastEligible ? FastBB : SlowBB
+  MBasicBlock *FastBB = createBasicBlock();
+  MBasicBlock *SlowBB = createBasicBlock();
+  MBasicBlock *AfterBB = createBasicBlock();
+  createInstruction<BrIfInstruction>(true, Ctx, FastEligible, FastBB, SlowBB);
+  addSuccessor(FastBB);
+  addSuccessor(SlowBB);
+
+  // === Fast path (inline addmod) ===
+  setInsertBlock(FastBB);
+  {
+    // Step 1: Normalize augend — if augend >= mod, use augend - mod
+    // Compute augend < mod using cascaded limb comparison
+    MInstruction *AugLtMod = nullptr;
+    {
+      // u256 LT comparison: augend < modulus (high-to-low cascade)
+      MInstruction *CmpResult = nullptr;
+      MInstruction *AllEqual = nullptr;
+      for (int I = EVM_ELEMENTS_COUNT - 1; I >= 0; --I) {
+        MInstruction *LT = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_ULT, I64Type, Augend[I], Modulus[I]);
+        MInstruction *EQ = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_EQ, I64Type, Augend[I], Modulus[I]);
+        if (CmpResult == nullptr) {
+          CmpResult = LT;
+          AllEqual = EQ;
+        } else {
+          CmpResult = createInstruction<SelectInstruction>(
+              false, I64Type, AllEqual, LT, CmpResult);
+          AllEqual = createInstruction<BinaryInstruction>(
+              false, OP_and, I64Type, AllEqual, EQ);
+        }
+      }
+      AugLtMod = CmpResult;
+    }
+
+    // Compute augend - mod (u256 SUB chain)
+    Operand AugSubMod =
+        handleBinaryArithmetic<BinaryOperator::BO_SUB>(AugendOp, ModulusOp);
+    U256Inst AugDiff = extractU256Operand(AugSubMod);
+
+    // NormAugend = AugLtMod ? Augend : AugDiff  (if augend < mod, keep augend)
+    U256Inst NormAugend = {};
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      NormAugend[I] = createInstruction<SelectInstruction>(
+          false, I64Type, AugLtMod, Augend[I], AugDiff[I]);
+    }
+
+    // Step 2: Normalize addend — if addend >= mod, use addend - mod
+    MInstruction *AddLtMod = nullptr;
+    {
+      MInstruction *CmpResult = nullptr;
+      MInstruction *AllEqual = nullptr;
+      for (int I = EVM_ELEMENTS_COUNT - 1; I >= 0; --I) {
+        MInstruction *LT = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_ULT, I64Type, Addend[I], Modulus[I]);
+        MInstruction *EQ = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_EQ, I64Type, Addend[I], Modulus[I]);
+        if (CmpResult == nullptr) {
+          CmpResult = LT;
+          AllEqual = EQ;
+        } else {
+          CmpResult = createInstruction<SelectInstruction>(
+              false, I64Type, AllEqual, LT, CmpResult);
+          AllEqual = createInstruction<BinaryInstruction>(
+              false, OP_and, I64Type, AllEqual, EQ);
+        }
+      }
+      AddLtMod = CmpResult;
+    }
+
+    Operand AddSubMod =
+        handleBinaryArithmetic<BinaryOperator::BO_SUB>(AddendOp, ModulusOp);
+    U256Inst AddDiff = extractU256Operand(AddSubMod);
+
+    // NormAddend = AddLtMod ? Addend : AddDiff
+    U256Inst NormAddend = {};
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      NormAddend[I] = createInstruction<SelectInstruction>(
+          false, I64Type, AddLtMod, Addend[I], AddDiff[I]);
+    }
+
+    // Step 3: Sum = NormAugend + NormAddend (u256 ADD chain)
+    Operand NormAugendOp(NormAugend, EVMType::UINT256);
+    Operand NormAddendOp(NormAddend, EVMType::UINT256);
+    Operand SumOp = handleBinaryArithmetic<BinaryOperator::BO_ADD>(
+        NormAugendOp, NormAddendOp);
+    U256Inst Sum = extractU256Operand(SumOp);
+
+    // Detect overflow: sum < NormAugend (unsigned comparison)
+    MInstruction *Overflow = nullptr;
+    {
+      MInstruction *CmpResult = nullptr;
+      MInstruction *AllEqual = nullptr;
+      for (int I = EVM_ELEMENTS_COUNT - 1; I >= 0; --I) {
+        MInstruction *LT = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_ULT, I64Type, Sum[I], NormAugend[I]);
+        MInstruction *EQ = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_EQ, I64Type, Sum[I], NormAugend[I]);
+        if (CmpResult == nullptr) {
+          CmpResult = LT;
+          AllEqual = EQ;
+        } else {
+          CmpResult = createInstruction<SelectInstruction>(
+              false, I64Type, AllEqual, LT, CmpResult);
+          AllEqual = createInstruction<BinaryInstruction>(
+              false, OP_and, I64Type, AllEqual, EQ);
+        }
+      }
+      Overflow = CmpResult;
+    }
+
+    // Step 4: SumSubMod = Sum - Mod (u256 SUB chain)
+    Operand ModulusOpLocal(Modulus, EVMType::UINT256);
+    Operand SumSubModOp =
+        handleBinaryArithmetic<BinaryOperator::BO_SUB>(SumOp, ModulusOpLocal);
+    U256Inst SumSubMod = extractU256Operand(SumSubModOp);
+
+    // Detect borrow: Sum < Mod
+    MInstruction *SumLtMod = nullptr;
+    {
+      MInstruction *CmpResult = nullptr;
+      MInstruction *AllEqual = nullptr;
+      for (int I = EVM_ELEMENTS_COUNT - 1; I >= 0; --I) {
+        MInstruction *LT = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_ULT, I64Type, Sum[I], Modulus[I]);
+        MInstruction *EQ = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_EQ, I64Type, Sum[I], Modulus[I]);
+        if (CmpResult == nullptr) {
+          CmpResult = LT;
+          AllEqual = EQ;
+        } else {
+          CmpResult = createInstruction<SelectInstruction>(
+              false, I64Type, AllEqual, LT, CmpResult);
+          AllEqual = createInstruction<BinaryInstruction>(
+              false, OP_and, I64Type, AllEqual, EQ);
+        }
+      }
+      SumLtMod = CmpResult;
+    }
+
+    // Result selection: if (overflow || !borrow) use SumSubMod, else Sum
+    // !borrow means Sum >= Mod, i.e., !SumLtMod
+    // overflow || !SumLtMod  =>  use SumSubMod
+    //
+    // Equivalently: use Sum only when (!overflow && SumLtMod)
+    // UseSumSubMod = Overflow || !SumLtMod
+    // Since SumLtMod is 0 or 1:  !SumLtMod = (SumLtMod == 0)
+    MInstruction *One = createIntConstInstruction(I64Type, 1);
+    MInstruction *NotBorrow = createInstruction<BinaryInstruction>(
+        false, OP_xor, I64Type, SumLtMod, One);
+    MInstruction *UseSumSubMod = createInstruction<BinaryInstruction>(
+        false, OP_or, I64Type, Overflow, NotBorrow);
+
+    U256Inst FastResult = {};
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      FastResult[I] = createInstruction<SelectInstruction>(
+          false, I64Type, UseSumSubMod, SumSubMod[I], Sum[I]);
+    }
+
+    storeResult(FastResult);
+    createInstruction<BrInstruction>(true, Ctx, AfterBB);
+    addSuccessor(AfterBB);
+  }
+
+  // === Slow path (runtime call, handles mod == 0 and small moduli) ===
+  setInsertBlock(SlowBB);
+  {
+    // Runtime handles all cases including mod == 0.
+    const auto &RuntimeFunctions = getRuntimeFunctionTable();
+    U256Inst SlowResult = extractU256Operand(
+        callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
+                       const intx::uint256 &, const intx::uint256 &>(
+            RuntimeFunctions.GetAddMod, AugendOp, AddendOp, ModulusOp));
+    storeResult(SlowResult);
+    createInstruction<BrInstruction>(true, Ctx, AfterBB);
+    addSuccessor(AfterBB);
+  }
+
+  // === After block: load result ===
+  setInsertBlock(AfterBB);
+  return Operand(loadResult(), EVMType::UINT256);
 }
 
 typename EVMMirBuilder::Operand
