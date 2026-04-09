@@ -153,7 +153,7 @@ inline std::string decimalToHex(const std::string &DecimalStr) {
   for (char C : TrimmedStr) {
     if (!std::isdigit(C)) {
       ZEN_LOG_ERROR(
-          "Invalid decimal string (contains non-digit characters). Value: {}",
+          "Invalid decimal string (contains non-digit characters). Value: %s",
           DecimalStr.c_str());
       return "0";
     }
@@ -175,7 +175,7 @@ inline std::string decimalToHex(const std::string &DecimalStr) {
   std::string HexStr = S.str();
   if (HexStr.size() > 64) {
     ZEN_LOG_ERROR(
-        "Hex value exceeds 64 characters (uint256 max). Length: {}, Value: {}",
+        "Hex value exceeds 64 characters (uint256 max). Length: %zu, Value: %s",
         HexStr.size(), HexStr.c_str());
     HexStr = HexStr.substr(HexStr.size() - 64);
   }

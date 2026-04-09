@@ -504,7 +504,7 @@ public:
       const auto &ContractCode = It->second.code;
       if (ContractCode.empty()) {
         ZEN_LOG_DEBUG(
-            "Contract code is empty for recipient {}",
+            "Contract code is empty for recipient %s",
             evmc::hex(evmc::bytes_view(Msg.recipient.bytes, 20)).c_str());
         return ParentResult;
       }
@@ -761,8 +761,10 @@ public:
           intx::be::load<intx::uint256>(SenderAcc.balance);
       if (SenderBalance < Value) {
         restoreHostState(StateSnapshot);
+        const auto SenderBalanceStr = intx::to_string(SenderBalance);
+        const auto ValueStr = intx::to_string(Value);
         ZEN_LOG_ERROR("Insufficient balance for CREATE: have %s, need %s",
-                      SenderBalance, Value);
+                      SenderBalanceStr.c_str(), ValueStr.c_str());
         return evmc::Result{EVMC_INSUFFICIENT_BALANCE, Msg.gas, 0, NewAddr};
       }
       SenderBalance -= Value;
