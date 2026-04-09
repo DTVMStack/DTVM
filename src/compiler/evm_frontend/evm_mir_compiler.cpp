@@ -2816,10 +2816,13 @@ EVMMirBuilder::handleLeftShift(const U256Inst &Value, MInstruction *ShiftAmount,
   // shift_mod = shift % 64 (shift amount within 64-bit range)
   // shift_comp = shift / 64 (which component index shift from)
   // remaining_bits = 64 - shift_mod (remaining bits for carry calculation)
+  // Strength-reduce: shift % 64 == shift & 63, shift / 64 == shift >> 6
+  MInstruction *Const63 = createIntConstInstruction(MirI64Type, 63);
+  MInstruction *Const6 = createIntConstInstruction(MirI64Type, 6);
   MInstruction *ShiftMod64 = createInstruction<BinaryInstruction>(
-      false, OP_urem, MirI64Type, ShiftAmount, Const64);
+      false, OP_and, MirI64Type, ShiftAmount, Const63);
   MInstruction *ComponentShift = createInstruction<BinaryInstruction>(
-      false, OP_udiv, MirI64Type, ShiftAmount, Const64);
+      false, OP_ushr, MirI64Type, ShiftAmount, Const6);
   MInstruction *RemainingBits = createInstruction<BinaryInstruction>(
       false, OP_sub, MirI64Type, Const64, ShiftMod64);
 
@@ -3009,10 +3012,13 @@ EVMMirBuilder::handleLogicalRightShift(const U256Inst &Value,
   // DMIR implementation maps 256-bit shift to 4x64-bit components
   // shift_mod = shift % 64 (shift amount within 64-bit range)
   // shift_comp = shift / 64 (which component index shift from)
+  // Strength-reduce: shift % 64 == shift & 63, shift / 64 == shift >> 6
+  MInstruction *Const63 = createIntConstInstruction(MirI64Type, 63);
+  MInstruction *Const6 = createIntConstInstruction(MirI64Type, 6);
   MInstruction *ShiftMod64 = createInstruction<BinaryInstruction>(
-      false, OP_urem, MirI64Type, ShiftAmount, Const64);
+      false, OP_and, MirI64Type, ShiftAmount, Const63);
   MInstruction *ComponentShift = createInstruction<BinaryInstruction>(
-      false, OP_udiv, MirI64Type, ShiftAmount, Const64);
+      false, OP_ushr, MirI64Type, ShiftAmount, Const6);
 
   MInstruction *MaxIndex =
       createIntConstInstruction(MirI64Type, EVM_ELEMENTS_COUNT);
@@ -3206,11 +3212,13 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
 
   // intra-component shifts = shift % 64
   // shift_comp = shift / 64 (which component index shift from)
+  // Strength-reduce: shift % 64 == shift & 63, shift / 64 == shift >> 6
   MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
+  MInstruction *Const6 = createIntConstInstruction(MirI64Type, 6);
   MInstruction *ShiftMod64 = createInstruction<BinaryInstruction>(
-      false, OP_urem, MirI64Type, ShiftAmount, Const64);
+      false, OP_and, MirI64Type, ShiftAmount, Const63);
   MInstruction *ComponentShift = createInstruction<BinaryInstruction>(
-      false, OP_udiv, MirI64Type, ShiftAmount, Const64);
+      false, OP_ushr, MirI64Type, ShiftAmount, Const6);
 
   MInstruction *MaxIndex =
       createIntConstInstruction(MirI64Type, EVM_ELEMENTS_COUNT);
