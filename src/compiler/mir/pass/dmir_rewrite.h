@@ -358,7 +358,7 @@ private:
   ///
   /// Handles:
   ///   1. const(0): zero constant has no carry (chain-head sentinel)
-  ///   2. add(x, 0): adding zero never overflows, carry = 0
+  ///   2. add(x, 0) / add(0, x): adding zero never overflows, carry = 0
   ///   3. adc(x, 0, prev) / adc(0, y, prev) where isCarryDead(prev):
   ///      x + 0 + 0 never overflows
   ///   4. sub(x, 0): subtracting zero never borrows
