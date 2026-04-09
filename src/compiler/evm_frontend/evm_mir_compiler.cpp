@@ -2791,20 +2791,25 @@ EVMMirBuilder::handleAddU64Const(const Operand &FullOp,
   for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
     LHS[I] = protectUnsafeValue(LHS[I], MirI64Type);
   }
-  RHS0 = protectUnsafeValue(RHS0, MirI64Type);
-  MInstruction *ProtectedZero = protectUnsafeValue(RHSZero, MirI64Type);
+  // RHS constants (immediate MOV) never clobber flags — no barrier needed.
 
   U256Inst Result = {};
   // Limb 0: ADD with the actual u64 value
   Result[0] = protectUnsafeValue(createInstruction<BinaryInstruction>(
                                      false, OP_add, MirI64Type, LHS[0], RHS0),
                                  MirI64Type);
-  // Limbs 1-3: ADC with shared zero (carry propagation only)
+  // Limbs 1-3: ADC with zero (carry propagation only)
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
-    Result[I] =
-        protectUnsafeValue(createInstruction<AdcInstruction>(
-                               false, MirI64Type, LHS[I], ProtectedZero, Carry),
-                           MirI64Type);
+    MInstruction *AdcInst = createInstruction<AdcInstruction>(
+        false, MirI64Type, LHS[I], RHSZero, Carry);
+    // Last ADC: carry flag is dead after this point, no subsequent ADC
+    // consumes it. The barrier is only needed for intermediate ADCs to
+    // force immediate execution while CF is live.
+    if (I < EVM_ELEMENTS_COUNT - 1) {
+      Result[I] = protectUnsafeValue(AdcInst, MirI64Type);
+    } else {
+      Result[I] = AdcInst;
+    }
   }
   return Operand(Result, EVMType::UINT256);
 }
@@ -2829,13 +2834,15 @@ EVMMirBuilder::handleSubU64Const(const Operand &LHSOp,
   Borrow = zeroExtendToI64(Borrow);
 
   U256Inst Result = {};
-  Result[0] = protectUnsafeValue(Diff0, MirI64Type);
+  // No SBB instructions used — explicit borrow computation means carry flag
+  // is never live, so no protectUnsafeValue barriers are needed.
+  Result[0] = Diff0;
 
   // Limbs 1-3: only subtract the borrow (RHS is 0 for upper limbs)
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
     MInstruction *Diff = createInstruction<BinaryInstruction>(
         false, OP_sub, MirI64Type, LHS[I], Borrow);
-    Result[I] = protectUnsafeValue(Diff, MirI64Type);
+    Result[I] = Diff;
 
     if (I < EVM_ELEMENTS_COUNT - 1) {
       // New borrow: LHS[I] < Borrow
