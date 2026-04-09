@@ -14,11 +14,11 @@ Some benchmark contracts were falling back to the interpreter due to conservativ
 
 ## Impact
 
-- Module: `docs/modules/evm/` (JIT fallback thresholds only)
+- Module: `docs/modules/compiler/` (JIT fallback thresholds only)
 - 1 file changed, +8/-6 lines
 - Benchmark geomean: +0.28%, sum ratio: +0.69%
 - Former fallback-heavy cases (memory_grow_mstore) improve; signextend/snailtracer regress slightly
-- No functional behavior change; only affects which contracts use JIT vs interpreter
+- EVM semantic behavior is unchanged; execution strategy (JIT vs interpreter path selection) may differ for contracts near the old thresholds.
 
 ## Checklist
 

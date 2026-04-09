@@ -116,15 +116,15 @@ struct JITSuitabilityResult {
   size_t DupFeedbackPatternCount = 0; // DUPn immediately before RA-expensive
 };
 
-/// Thresholds for JIT suitability fallback. Keep the bytecode size cap intact,
-/// but raise the MIR / RA pattern limits high enough that the current evmone
-/// benchmark corpus stays on the JIT path (including the pathological
-/// signextend micro benchmark).
+/// Thresholds for JIT suitability fallback. These limits bound bytecode size
+/// and estimated MIR / RA complexity to avoid pathological JIT compile-time
+/// blowups (e.g., superlinear register allocation on dense RA-expensive
+/// instruction patterns), while keeping typical contracts on the JIT path.
 static constexpr size_t MAX_JIT_BYTECODE_SIZE = 0x6000;
-static constexpr size_t MAX_JIT_MIR_ESTIMATE = 0x50000;
-static constexpr size_t MAX_CONSECUTIVE_RA_EXPENSIVE = 0x3000;
-static constexpr size_t MAX_BLOCK_RA_EXPENSIVE = 0x3000;
-static constexpr size_t MAX_DUP_FEEDBACK_PATTERN = 0x3000;
+static constexpr size_t MAX_JIT_MIR_ESTIMATE = 0x50000;        // 327,680
+static constexpr size_t MAX_CONSECUTIVE_RA_EXPENSIVE = 0x3000; // 12,288
+static constexpr size_t MAX_BLOCK_RA_EXPENSIVE = 0x3000;       // 12,288
+static constexpr size_t MAX_DUP_FEEDBACK_PATTERN = 0x3000;     // 12,288
 
 class EVMAnalyzer {
   using Byte = zen::common::Byte;
