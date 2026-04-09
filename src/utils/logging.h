@@ -6,7 +6,9 @@
 
 #include "common/defines.h"
 #include "platform/platform.h"
+#include <cstdio>
 #include <memory>
+#include <string>
 
 #ifdef ZEN_ENABLE_SPDLOG
 namespace spdlog {
