@@ -303,6 +303,10 @@ int main(int argc, char *argv[]) {
 #ifdef ZEN_ENABLE_EVM
   if (Config.Format == InputFormat::EVM) {
     auto MockedEVMHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+    // Set tx_origin from sender address before loading state,
+    // so loadState() can override it if tx_origin is present in state.json
+    MockedEVMHost->tx_context.tx_origin =
+        zen::utils::parseAddress(SenderAddress);
     // Load state if specified
     if (!LoadStateFile.empty() &&
         !zen::utils::loadState(*MockedEVMHost, LoadStateFile)) {
@@ -379,12 +383,6 @@ int main(int argc, char *argv[]) {
                                .SenderAddress = SenderAddress,
                                .ContractAddress = ContractAddress};
     evmc_message Msg = createEvmMessage(MockedHost, MsgConfig, Bytecode);
-
-    // Set tx_origin from sender address (fallback if not loaded from state)
-    evmc::address SenderAddr = zen::utils::parseAddress(SenderAddress);
-    if (MockedHost.tx_context.tx_origin == evmc::address{}) {
-      MockedHost.tx_context.tx_origin = SenderAddr;
-    }
 
     RT->callEVMMain(*Inst, Msg, ExeResult);
 

@@ -269,6 +269,10 @@ bool saveState(const evmc::MockedHost &Host, const std::string &FilePath) {
   File << "    \"block_base_fee\": ";
   writeJsonString(File, toHex(Host.tx_context.block_base_fee.bytes,
                               sizeof(Host.tx_context.block_base_fee.bytes)));
+  File << ",\n";
+  File << "    \"tx_origin\": ";
+  writeJsonString(File, toHex(Host.tx_context.tx_origin.bytes,
+                              sizeof(Host.tx_context.tx_origin.bytes)));
   File << "\n";
   File << "  }\n";
 
