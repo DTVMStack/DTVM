@@ -346,7 +346,7 @@ bool getBoolOrOtherReg(const CgInstruction &Inst, CgRegister BoolReg,
 bool collectZeroDefChainBefore(CgBasicBlock &MBB,
                                CgBasicBlock::iterator StartMII,
                                CgRegister ZeroReg,
-                               std::vector<CgInstruction *> &ZeroToErase) {
+                               SmallVector<CgInstruction *, 4> &ZeroToErase) {
   CgRegister CurrentReg = ZeroReg;
   for (auto LocalMII = StartMII; LocalMII != MBB.begin();) {
     --LocalMII;
@@ -408,7 +408,7 @@ CgOperand cloneRegOperand(const CgOperand &Operand) {
 
 CgInstruction *getImmMoveDef(CgRegister Reg, CgRegisterInfo &MRI,
                              int64_t ImmValue) {
-  std::vector<CgRegister> Visited;
+  SmallVector<CgRegister, 4> Visited;
   while (Reg.isVirtual()) {
     if (std::find(Visited.begin(), Visited.end(), Reg) != Visited.end()) {
       return nullptr;
@@ -464,12 +464,14 @@ bool getSimplifiedSetccAfterTest(int64_t SetCond, bool &UseConst,
   }
 }
 
+/// Match and fold: setcc -> zext -> or-with-zero -> test -> jcc
+/// into:           cmp -> jcc (eliminating intermediate bool materialization)
 bool matchDirectBoolBranch(CgBasicBlock &MBB, CgBasicBlock::iterator StartMII,
                            CgRegister BoolReg, int64_t SetCond,
-                           std::vector<CgInstruction *> &ToErase,
+                           SmallVector<CgInstruction *, 4> &ToErase,
                            CgInstruction *&BranchInst, int64_t &FoldedCond) {
-  std::vector<CgInstruction *> LocalToErase;
-  std::vector<CgInstruction *> ZeroChainToErase;
+  SmallVector<CgInstruction *, 4> LocalToErase;
+  SmallVector<CgInstruction *, 4> ZeroChainToErase;
   CgRegister ZeroReg = 0;
   for (auto LocalMII = StartMII; LocalMII != MBB.end(); ++LocalMII) {
     auto &Inst = *LocalMII;
@@ -503,7 +505,7 @@ bool matchDirectBoolBranch(CgBasicBlock &MBB, CgBasicBlock::iterator StartMII,
     CgRegister OrDstReg = 0;
     CgRegister OrOtherReg = 0;
     if (getBoolOrOtherReg(Inst, BoolReg, OrDstReg, OrOtherReg)) {
-      std::vector<CgInstruction *> MatchedZeroToErase;
+      SmallVector<CgInstruction *, 4> MatchedZeroToErase;
       if (ZeroReg != 0 && OrOtherReg == ZeroReg) {
         MatchedZeroToErase = ZeroChainToErase;
       } else if (!collectZeroDefChainBefore(MBB, LocalMII, OrOtherReg,
@@ -562,11 +564,13 @@ bool matchDirectBoolBranch(CgBasicBlock &MBB, CgBasicBlock::iterator StartMII,
   return false;
 }
 
+/// Match and fold: setcc -> mov 0 -> mov 1 -> test -> cmov -> test -> jcc
+/// into:           cmp -> jcc (eliminating CMOV-based bool select)
 bool matchCmovBoolBranch(CgBasicBlock &MBB, CgBasicBlock::iterator StartMII,
                          CgRegister BoolReg, int64_t SetCond,
-                         std::vector<CgInstruction *> &ToErase,
+                         SmallVector<CgInstruction *, 4> &ToErase,
                          CgInstruction *&BranchInst, int64_t &FoldedCond) {
-  std::vector<CgInstruction *> LocalToErase;
+  SmallVector<CgInstruction *, 4> LocalToErase;
   CgInstruction *ZeroInst = nullptr;
   CgInstruction *OneInst = nullptr;
   for (auto LocalMII = StartMII; LocalMII != MBB.end(); ++LocalMII) {
@@ -689,6 +693,11 @@ void X86CgPeephole::peepholeOptimize(CgBasicBlock &MBB,
   if (isTestOpcode(Inst.getOpcode())) {
     optimizeTestSetcc(MBB, MII);
   }
+  // NOTE: x86 TEST instructions have the MCID::Compare flag set, so both
+  // optimizeTestSetcc (above) and optimizeCmp (below) fire on TEST.
+  // optimizeTestSetcc runs first to simplify the condition code (e.g.,
+  // SETA -> SETNE) before optimizeCmp attempts the branch fold.
+  // This composition is intentional and order-dependent.
   if (Inst.isCompare()) {
     optimizeCmp(MBB, MII);
   }
@@ -760,7 +769,7 @@ void X86CgPeephole::optimizeCmp(CgBasicBlock &MBB,
   }
 
   const auto SetCond = SetccInst.getOperand(1).getImm();
-  std::vector<CgInstruction *> ToErase;
+  SmallVector<CgInstruction *, 4> ToErase;
   ToErase.push_back(&SetccInst);
   CgRegister TestReg = SetccDst.getReg();
 
@@ -818,6 +827,9 @@ void X86CgPeephole::optimizeNoOpImm(CgBasicBlock &MBB,
     return;
   }
   auto NextMII = std::next(MII);
+  // Whitelist of observed successor patterns in current JIT output.
+  // areFlagsDeadAfter already guarantees flags safety; this extra guard
+  // limits the optimization to patterns we have verified in practice.
   if (Inst.getOpcode() == X86::ADD64ri8) {
     if (NextMII == MBB.end() || (NextMII->getOpcode() != X86::MOV64mr &&
                                  NextMII->getOpcode() != X86::MOV64rm &&
@@ -851,7 +863,7 @@ void X86CgPeephole::optimizeAdcZeroReg(CgBasicBlock &MBB,
     return;
   }
 
-  std::vector<CgInstruction *> Uses;
+  SmallVector<CgInstruction *, 4> Uses;
   for (auto &UseInst : MRI.use_instructions(RHS.getReg())) {
     if (UseInst.getNumOperands() < 3 ||
         getAdcImmOpcode(UseInst.getOpcode()) == InvalidOpcode ||
@@ -898,7 +910,10 @@ void X86CgPeephole::optimizeAddZeroReg(CgBasicBlock &MBB,
     return;
   }
 
-  std::vector<CgInstruction *> ZeroToErase;
+  // The zero-def chain is intentionally not erased here: the zero register
+  // may have other uses beyond this ADD. Dead zero-def instructions will
+  // be cleaned up by subsequent DCE.
+  SmallVector<CgInstruction *, 4> ZeroToErase;
   if (!collectZeroDefChainBefore(MBB, MII, RHS.getReg(), ZeroToErase)) {
     return;
   }
