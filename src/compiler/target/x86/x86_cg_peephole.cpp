@@ -465,8 +465,9 @@ bool getSimplifiedSetccAfterTest(int64_t SetCond, bool &UseConst,
 }
 
 /// Match and fold: setcc -> [zext -> or-with-zero ->] test -> jcc
-/// into:           cmp/test -> jcc (eliminating intermediate bool materialization)
-/// The or-with-zero step is optional; direct self-test is also matched.
+/// into:           cmp/test -> jcc (eliminating intermediate bool
+/// materialization) The or-with-zero step is optional; direct self-test is also
+/// matched.
 bool matchDirectBoolBranch(CgBasicBlock &MBB, CgBasicBlock::iterator StartMII,
                            CgRegister BoolReg, int64_t SetCond,
                            SmallVector<CgInstruction *, 4> &ToErase,
