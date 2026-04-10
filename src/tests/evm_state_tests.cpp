@@ -153,6 +153,10 @@ RuntimeConfig buildRuntimeConfig() {
 }
 
 std::string getDefaultTestDir() {
+  const char *EnvTestDir = std::getenv("DTVM_TEST_DIR");
+  if (EnvTestDir != nullptr && std::strlen(EnvTestDir) > 0) {
+    return std::string(EnvTestDir);
+  }
   std::filesystem::path DirPath =
       std::filesystem::path(__FILE__).parent_path() /
       std::filesystem::path("../../tests/evm_spec_test/state_tests");
@@ -504,12 +508,17 @@ const std::vector<StateTestFixture> &getStateFixtures() {
               << DEFAULT_TEST_DIR << std::endl;
 #endif // NDEBUG
     for (const auto &FilePath : JsonFiles) {
-      auto FixturesFromFile = parseStateTestFile(FilePath);
-      for (auto &Fixture : FixturesFromFile) {
+      try {
+        auto FixturesFromFile = parseStateTestFile(FilePath);
+        for (auto &Fixture : FixturesFromFile) {
 #ifndef NDEBUG
-        std::cout << "Loaded fixture: " << Fixture.TestName << std::endl;
+          std::cout << "Loaded fixture: " << Fixture.TestName << std::endl;
 #endif // NDEBUG
-        Loaded.push_back(std::move(Fixture));
+          Loaded.push_back(std::move(Fixture));
+        }
+      } catch (const std::exception &E) {
+        std::cerr << "ERROR loading " << FilePath << ": " << E.what()
+                  << std::endl;
       }
     }
 
@@ -626,6 +635,7 @@ std::string sanitizeTestName(const std::string &Name) {
 }
 
 class EVMStateTest : public testing::TestWithParam<StateTestCaseParam> {};
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(EVMStateTest);
 
 TEST_P(EVMStateTest, ExecutesStateTest) {
   const auto &Param = GetParam();
