@@ -45,14 +45,16 @@ Typical triggers:
 
 ## Current Proposals
 
-| Date | Name | Status | Tier | Description |
-|------|------|--------|------|-------------|
-| 2026-03-23 | [U256 MUL BMI2/ADX](2026-03-23-u256-mul-bmi2-adx/) | Implemented | Light | Optimize x86 U256 MUL with BMI2+ADX row-wise MULX + ADCX/ADOX schedule |
+Each active proposal lives in its own subdirectory. Browse `docs/changes/*/README.md`
+to see all current proposals, or use:
+
+```bash
+ls docs/changes/*/README.md
+```
 
 ## Workflow
 
 1. Copy the appropriate template into a new `YYYY-MM-DD-<slug>/` directory
 2. Fill in the change document
-3. Update the table above with the new entry
-4. Follow the `dev-workflow` skill for implementation
-5. After merging, move the completed change to `docs/_archive/`
+3. Follow the `dev-workflow` skill for implementation
+4. After merging, move the completed change to `docs/_archive/`
