@@ -47,7 +47,7 @@ Typical triggers:
 
 | Date | Name | Status | Tier | Description |
 |------|------|--------|------|-------------|
-| *(none yet)* | | | | |
+| 2026-03-10 | [evm-stack-ssa-lifting](2026-03-10-evm-stack-ssa-lifting/README.md) | Implemented | Full | True-SSA stack lifting for EVM multipass JIT |
 
 ## Workflow
 
