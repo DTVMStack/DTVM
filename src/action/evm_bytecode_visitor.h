@@ -928,6 +928,8 @@ private:
   }
 
   void finalizeBlockExit(std::vector<Operand> Values, bool Materialize) {
+    Builder.endMemoryCompileBlock();
+    CurBlockLinearPrecheckPlan = BlockLinearPrecheckPlan();
     if (Materialize) {
       if (CurrentBlockLifted) {
         spillTrackedStackPreservingPrefix(Values,
