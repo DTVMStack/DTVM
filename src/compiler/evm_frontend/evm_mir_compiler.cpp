@@ -1737,6 +1737,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDivModGeneral(
     const Operand &DividendOp, const Operand &DivisorOp, bool WantQuotient) {
   MType *I64Type = &Ctx.I64Type;
   MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+  MInstruction *One = createIntConstInstruction(I64Type, 1);
 
   U256Inst A = extractU256Operand(DividendOp);
   U256Inst B = extractU256Operand(DivisorOp);
@@ -1748,10 +1749,13 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDivModGeneral(
   MInstruction *HasUpperLimbs = createInstruction<CmpInstruction>(
       false, CmpInstruction::ICMP_NE, I64Type, UpperOr, Zero);
 
-  // Also check if B[0] is zero (combined with upper limbs being zero means
-  // divisor == 0 → EVM returns 0)
+  // Guard B[0] against zero to prevent hardware divide-by-zero trap.
+  // EVM DIV/MOD(a, 0) = 0, but x86 DIV with zero divisor raises SIGFPE.
+  // Replace zero divisor with 1 (harmless), then select result to 0 afterward.
   MInstruction *IsB0Zero = createInstruction<CmpInstruction>(
       false, CmpInstruction::ICMP_EQ, I64Type, B[0], Zero);
+  MInstruction *SafeB0 =
+      createInstruction<SelectInstruction>(false, I64Type, IsB0Zero, One, B[0]);
 
   // Result variables for cross-BB communication
   U256Var ResultVars = {};
@@ -1774,57 +1778,50 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDivModGeneral(
     return Values;
   };
 
-  // Branch structure:
-  //   if (HasUpperLimbs) goto MultiLimbBB else goto SingleLimbCheckBB
-  //   SingleLimbCheckBB:
-  //     if (IsB0Zero) goto ZeroDivisorBB else goto SingleLimbBB
-  //   ZeroDivisorBB: result = 0; goto AfterBB
-  //   SingleLimbBB: inline cascading 128/64 div; goto AfterBB
+  // Branch structure (3-block, matches handleDiv pattern):
+  //   if (HasUpperLimbs) goto MultiLimbBB else goto SingleLimbBB
+  //   SingleLimbBB: inline cascading 128/64 div with SafeB0; goto AfterBB
   //   MultiLimbBB: runtime call; goto AfterBB
-  //   AfterBB: phi
+  //   AfterBB: load result
   MBasicBlock *MultiLimbBB = createBasicBlock();
-  MBasicBlock *SingleLimbCheckBB = createBasicBlock();
-  MBasicBlock *ZeroDivisorBB = createBasicBlock();
   MBasicBlock *SingleLimbBB = createBasicBlock();
   MBasicBlock *AfterBB = createBasicBlock();
 
   createInstruction<BrIfInstruction>(true, Ctx, HasUpperLimbs, MultiLimbBB,
-                                     SingleLimbCheckBB);
-  addSuccessor(MultiLimbBB);
-  addSuccessor(SingleLimbCheckBB);
-
-  // --- SingleLimbCheckBB: check for zero divisor ---
-  setInsertBlock(SingleLimbCheckBB);
-  createInstruction<BrIfInstruction>(true, Ctx, IsB0Zero, ZeroDivisorBB,
                                      SingleLimbBB);
-  addSuccessor(ZeroDivisorBB);
+  addSuccessor(MultiLimbBB);
   addSuccessor(SingleLimbBB);
 
-  // --- ZeroDivisorBB: divisor == 0, EVM returns 0 ---
-  setInsertBlock(ZeroDivisorBB);
-  U256Inst ZeroResult = {Zero, Zero, Zero, Zero};
-  storeResult(ZeroResult);
-  createInstruction<BrInstruction>(true, Ctx, AfterBB);
-  addSuccessor(AfterBB);
-
   // --- SingleLimbBB: 1-limb divisor, cascading 128/64 division ---
+  // Uses SafeB0 (guaranteed non-zero) to avoid hardware DIV-by-zero.
+  // If B[0] was actually zero, IsB0Zero selects result to 0 afterward.
   setInsertBlock(SingleLimbBB);
-  // Cascading: (0:A[3])/B[0], (R3:A[2])/B[0], (R2:A[1])/B[0],
-  // (R1:A[0])/B[0]
-  MInstruction *Div3 = createEvmUdiv128By64(Zero, A[3], B[0]);
+  // Cascading: (0:A[3])/SafeB0, (R3:A[2])/SafeB0, ...
+  MInstruction *Div3 = createEvmUdiv128By64(Zero, A[3], SafeB0);
   MInstruction *Rem3 = createEvmUrem128By64(Div3);
-  MInstruction *Div2 = createEvmUdiv128By64(Rem3, A[2], B[0]);
+  MInstruction *Div2 = createEvmUdiv128By64(Rem3, A[2], SafeB0);
   MInstruction *Rem2 = createEvmUrem128By64(Div2);
-  MInstruction *Div1 = createEvmUdiv128By64(Rem2, A[1], B[0]);
+  MInstruction *Div1 = createEvmUdiv128By64(Rem2, A[1], SafeB0);
   MInstruction *Rem1 = createEvmUrem128By64(Div1);
-  MInstruction *Div0 = createEvmUdiv128By64(Rem1, A[0], B[0]);
+  MInstruction *Div0 = createEvmUdiv128By64(Rem1, A[0], SafeB0);
   MInstruction *Rem0 = createEvmUrem128By64(Div0);
 
   if (WantQuotient) {
-    U256Inst QuotResult = {Div0, Div1, Div2, Div3};
+    // Select each quotient limb to 0 when divisor was zero
+    U256Inst QuotResult = {createInstruction<SelectInstruction>(
+                               false, I64Type, IsB0Zero, Zero, Div0),
+                           createInstruction<SelectInstruction>(
+                               false, I64Type, IsB0Zero, Zero, Div1),
+                           createInstruction<SelectInstruction>(
+                               false, I64Type, IsB0Zero, Zero, Div2),
+                           createInstruction<SelectInstruction>(
+                               false, I64Type, IsB0Zero, Zero, Div3)};
     storeResult(QuotResult);
   } else {
-    U256Inst RemResult = {Rem0, Zero, Zero, Zero};
+    // Select remainder to 0 when divisor was zero (only limb 0 matters)
+    U256Inst RemResult = {createInstruction<SelectInstruction>(
+                              false, I64Type, IsB0Zero, Zero, Rem0),
+                          Zero, Zero, Zero};
     storeResult(RemResult);
   }
   createInstruction<BrInstruction>(true, Ctx, AfterBB);
