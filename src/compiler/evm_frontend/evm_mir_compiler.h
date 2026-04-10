@@ -115,6 +115,14 @@ public:
   using U256Value = std::array<uint64_t, EVM_ELEMENTS_COUNT>;
   using U256ConstInt = std::array<MConstantInt *, EVM_ELEMENTS_COUNT>;
 
+  // Range classification for u256 operands.  Narrower ranges enable
+  // single-instruction fast paths instead of expensive multi-limb arithmetic.
+  enum class ValueRange : uint8_t {
+    U64,  // Fits in 64 bits  (limbs [1..3] == 0)
+    U128, // Fits in 128 bits (limbs [2..3] == 0)
+    U256, // Full 256 bits — conservative default
+  };
+
   EVMMirBuilder(CompilerContext &Context, MFunction &MFunc);
 
   class Operand {
@@ -136,6 +144,13 @@ public:
       ZEN_ASSERT(Type == EVMType::UINT256 && "Multi-component only for U256");
     }
 
+    // Constructor for U256 multi-component with explicit range
+    Operand(U256Inst Components, EVMType Type, ValueRange Range)
+        : Type(Type), Range(Range), U256Components(Components),
+          IsU256MultiComponent(true) {
+      ZEN_ASSERT(Type == EVMType::UINT256 && "Multi-component only for U256");
+    }
+
     Operand(U256Var VarComponents, EVMType Type)
         : Type(Type), U256VarComponents(VarComponents),
           IsU256MultiComponent(true) {
@@ -143,7 +158,16 @@ public:
     }
 
     Operand(const U256Value &ConstValue)
-        : Type(EVMType::UINT256), ConstValue(ConstValue), IsConstant(true) {}
+        : Type(EVMType::UINT256), ConstValue(ConstValue), IsConstant(true) {
+      // Auto-derive range from constant value
+      if (ConstValue[1] == 0 && ConstValue[2] == 0 && ConstValue[3] == 0) {
+        Range = ValueRange::U64;
+      } else if (ConstValue[2] == 0 && ConstValue[3] == 0) {
+        Range = ValueRange::U128;
+      } else {
+        Range = ValueRange::U256;
+      }
+    }
 
     static Operand createDeferredBitwiseNot(U256Inst BaseComponents) {
       Operand Result;
@@ -224,6 +248,14 @@ public:
       return U256Components;
     }
 
+    // Provable value range — narrower ranges enable fast arithmetic paths
+    ValueRange getRange() const { return Range; }
+
+    // Check whether both operands provably fit in u64
+    static bool bothFitU64(const Operand &A, const Operand &B) {
+      return A.getRange() == ValueRange::U64 && B.getRange() == ValueRange::U64;
+    }
+
     constexpr bool isReg() { return false; }
     constexpr bool isTempReg() { return true; }
 
@@ -231,6 +263,7 @@ public:
     MInstruction *Instr = nullptr;
     Variable *Var = nullptr;
     EVMType Type = EVMType::VOID;
+    ValueRange Range = ValueRange::U256;
 
     // For EVMU256Type: 4 I64 components [0]=low, [1]=mid-low, [2]=mid-high,
     // [3]=high
@@ -327,6 +360,29 @@ public:
     if constexpr (Operator == BinaryOperator::BO_SUB) {
       if (RHSOp.isZeroConstant()) {
         return LHSOp;
+      }
+    }
+
+    // Phase 1: Range-based u64 fast path for ADD
+    // When both operands provably fit in u64, emit single ADD + carry
+    // instead of the full 4-limb ADC chain.  Result fits in u128.
+    if constexpr (Operator == BinaryOperator::BO_ADD) {
+      if (Operand::bothFitU64(LHSOp, RHSOp) && !LHSOp.isConstant() &&
+          !RHSOp.isConstant()) {
+        MType *MirI64Type =
+            EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+        MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+        U256Inst LHS = extractU256Operand(LHSOp);
+        U256Inst RHS = extractU256Operand(RHSOp);
+        MInstruction *Sum = createInstruction<BinaryInstruction>(
+            false, OP_add, MirI64Type, LHS[0], RHS[0]);
+        Sum = protectUnsafeValue(Sum, MirI64Type);
+        // Carry = (Sum < LHS[0]) ? 1 : 0
+        MInstruction *CarryCmp = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_ULT, MirI64Type, Sum, LHS[0]);
+        MInstruction *CarryExt = zeroExtendToI64(CarryCmp);
+        U256Inst Result = {Sum, CarryExt, Zero, Zero};
+        return Operand(Result, EVMType::UINT256, ValueRange::U128);
       }
     }
 
@@ -498,7 +554,8 @@ public:
     }
 
     U256Inst Result = handleCompareImpl<Operator>(LHSOp, RHSOp, &Ctx.I64Type);
-    return Operand(Result, EVMType::UINT256);
+    // Comparison results are always 0 or 1
+    return Operand(Result, EVMType::UINT256, ValueRange::U64);
   }
 
   // EVM bitwise opcode: and, or, xor
@@ -562,7 +619,33 @@ public:
         for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
           Result[I] = Zero;
         }
-        return Operand(Result, EVMType::UINT256);
+        return Operand(Result, EVMType::UINT256, ValueRange::U64);
+      }
+
+      // Non-constant AND with a U128 mask: result fits in U128
+      if (LHSOp.getRange() <= ValueRange::U128 ||
+          RHSOp.getRange() <= ValueRange::U128) {
+        // AND narrows to the smaller operand range
+        ValueRange NarrowRange = std::min(LHSOp.getRange(), RHSOp.getRange());
+        U256Inst LHS = extractU256Operand(LHSOp);
+        U256Inst RHS = extractU256Operand(RHSOp);
+        MType *MirI64Type =
+            EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+        MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+        U256Inst Result = {};
+        for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+          if (NarrowRange == ValueRange::U64 && I >= 1) {
+            Result[I] = Zero;
+          } else if (NarrowRange == ValueRange::U128 && I >= 2) {
+            Result[I] = Zero;
+          } else {
+            Result[I] = protectUnsafeValue(
+                createInstruction<BinaryInstruction>(false, OP_and, MirI64Type,
+                                                     LHS[I], RHS[I]),
+                MirI64Type);
+          }
+        }
+        return Operand(Result, EVMType::UINT256, NarrowRange);
       }
     }
 

@@ -1754,6 +1754,21 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
     return MultiplicandOp;
   }
 
+  // Phase 1: Range-based u64×u64 → u128 fast path
+  // When both operands provably fit in u64, a single 64×64→128 multiply
+  // replaces the expensive 4×4 schoolbook multiplication.
+  if (Operand::bothFitU64(MultiplicandOp, MultiplierOp) &&
+      !MultiplicandOp.isConstant() && !MultiplierOp.isConstant()) {
+    U256Inst A = extractU256Operand(MultiplicandOp);
+    U256Inst B = extractU256Operand(MultiplierOp);
+    MType *I64Type = &Ctx.I64Type;
+    MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+    MInstruction *MulLo = createEvmUmul128(A[0], B[0]);
+    MInstruction *MulHi = createEvmUmul128Hi(MulLo);
+    U256Inst Result = {MulLo, MulHi, Zero, Zero};
+    return Operand(Result, EVMType::UINT256, ValueRange::U128);
+  }
+
   // Phase 4: u64 fast path - one operand fits in u64 (4x1 multiplication)
   bool AIsU64 = MultiplicandOp.isConstU64();
   bool BIsU64 = MultiplierOp.isConstU64();
@@ -1865,6 +1880,31 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
       Operand ShiftOp(U256Value{ShiftAmt, 0, 0, 0});
       return handleShift<BinaryOperator::BO_SHR_U>(ShiftOp, DividendOp);
     }
+  }
+
+  // Range-based u64÷u64 fast path: single OP_udiv with div-by-zero guard.
+  // DIV(u64, u64) → u64 result.  Inserted before the isConstU64() path so
+  // that non-constant operands with proven narrow range benefit too.
+  if (Operand::bothFitU64(DividendOp, DivisorOp) && !DividendOp.isConstant() &&
+      !DivisorOp.isConstant()) {
+    U256Inst A = extractU256Operand(DividendOp);
+    U256Inst B = extractU256Operand(DivisorOp);
+    MType *I64Type = &Ctx.I64Type;
+    MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+    MInstruction *One = createIntConstInstruction(I64Type, 1);
+
+    // Guard against div-by-zero: EVM DIV(x, 0) = 0, but x86 traps
+    MInstruction *IsZero = createInstruction<CmpInstruction>(
+        false, CmpInstruction::ICMP_EQ, I64Type, B[0], Zero);
+    MInstruction *SafeB =
+        createInstruction<SelectInstruction>(false, I64Type, IsZero, One, B[0]);
+    MInstruction *Quotient = createInstruction<BinaryInstruction>(
+        false, OP_udiv, I64Type, A[0], SafeB);
+    MInstruction *DivResult = createInstruction<SelectInstruction>(
+        false, I64Type, IsZero, Zero, Quotient);
+
+    U256Inst Result = {DivResult, Zero, Zero, Zero};
+    return Operand(Result, EVMType::UINT256, ValueRange::U64);
   }
 
   // u64 divisor: inline cascading 128/64 division
@@ -2014,6 +2054,30 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
       Operand MaskOp(intxToU256Value(D - 1));
       return handleBitwiseOp<BinaryOperator::BO_AND>(DividendOp, MaskOp);
     }
+  }
+
+  // Range-based u64%u64 fast path: single OP_urem with div-by-zero guard.
+  // MOD(u64, u64) → u64 result (remainder < divisor).
+  if (Operand::bothFitU64(DividendOp, DivisorOp) && !DividendOp.isConstant() &&
+      !DivisorOp.isConstant()) {
+    U256Inst A = extractU256Operand(DividendOp);
+    U256Inst B = extractU256Operand(DivisorOp);
+    MType *I64Type = &Ctx.I64Type;
+    MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+    MInstruction *One = createIntConstInstruction(I64Type, 1);
+
+    // Guard against div-by-zero: EVM MOD(x, 0) = 0
+    MInstruction *IsZero = createInstruction<CmpInstruction>(
+        false, CmpInstruction::ICMP_EQ, I64Type, B[0], Zero);
+    MInstruction *SafeB =
+        createInstruction<SelectInstruction>(false, I64Type, IsZero, One, B[0]);
+    MInstruction *Remainder = createInstruction<BinaryInstruction>(
+        false, OP_urem, I64Type, A[0], SafeB);
+    MInstruction *ModResult = createInstruction<SelectInstruction>(
+        false, I64Type, IsZero, Zero, Remainder);
+
+    U256Inst Result = {ModResult, Zero, Zero, Zero};
+    return Operand(Result, EVMType::UINT256, ValueRange::U64);
   }
 
   // u64 divisor: inline cascading 128/64 mod
@@ -2884,7 +2948,7 @@ EVMMirBuilder::handleCompareEqU64(const Operand &FullOp, uint64_t U64Val) {
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
     Result[I] = Zero;
   }
-  return Operand(Result, EVMType::UINT256);
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
 typename EVMMirBuilder::Operand
@@ -2919,7 +2983,7 @@ EVMMirBuilder::handleCompareLtRhsU64(const Operand &LHSOp, uint64_t RhsU64) {
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
     Result[I] = Zero;
   }
-  return Operand(Result, EVMType::UINT256);
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
 typename EVMMirBuilder::Operand
@@ -2955,7 +3019,7 @@ EVMMirBuilder::handleCompareGtRhsU64(const Operand &LHSOp, uint64_t RhsU64) {
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
     Result[I] = Zero;
   }
-  return Operand(Result, EVMType::UINT256);
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
 typename EVMMirBuilder::Operand
@@ -3571,7 +3635,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
     for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
       ResultComponents[I] = Zero;
     }
-    return Operand(ResultComponents, EVMType::UINT256);
+    // BYTE always produces a single byte value (0..255)
+    return Operand(ResultComponents, EVMType::UINT256, ValueRange::U64);
   };
 
   if (IndexOp.isConstant() && ValueOp.isConstant()) {
