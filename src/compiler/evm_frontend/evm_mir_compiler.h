@@ -1011,6 +1011,11 @@ private:
   Operand handleDivU64Dividend(uint64_t Dividend, const Operand &DivisorOp);
   Operand handleModU64Dividend(uint64_t Dividend, const Operand &DivisorOp);
 
+  // General u256 div/mod with runtime divisor-size branching.
+  // WantQuotient=true returns quotient (DIV), false returns remainder (MOD).
+  Operand handleDivModGeneral(const Operand &DividendOp,
+                              const Operand &DivisorOp, bool WantQuotient);
+
   // ==================== EVM to MIR Opcode Mapping ====================
 
   Opcode getMirOpcode(BinaryOperator BinOpr);

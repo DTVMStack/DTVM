@@ -1733,6 +1733,125 @@ EVMMirBuilder::handleModU64Dividend(uint64_t Dividend,
   return Operand(Result, EVMType::UINT256);
 }
 
+typename EVMMirBuilder::Operand EVMMirBuilder::handleDivModGeneral(
+    const Operand &DividendOp, const Operand &DivisorOp, bool WantQuotient) {
+  MType *I64Type = &Ctx.I64Type;
+  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+
+  U256Inst A = extractU256Operand(DividendOp);
+  U256Inst B = extractU256Operand(DivisorOp);
+
+  // Check if divisor upper limbs are all zero (runtime 1-limb divisor)
+  MInstruction *UpperOr = createInstruction<BinaryInstruction>(
+      false, OP_or, I64Type, B[1],
+      createInstruction<BinaryInstruction>(false, OP_or, I64Type, B[2], B[3]));
+  MInstruction *HasUpperLimbs = createInstruction<CmpInstruction>(
+      false, CmpInstruction::ICMP_NE, I64Type, UpperOr, Zero);
+
+  // Also check if B[0] is zero (combined with upper limbs being zero means
+  // divisor == 0 → EVM returns 0)
+  MInstruction *IsB0Zero = createInstruction<CmpInstruction>(
+      false, CmpInstruction::ICMP_EQ, I64Type, B[0], Zero);
+
+  // Result variables for cross-BB communication
+  U256Var ResultVars = {};
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    ResultVars[I] = CurFunc->createVariable(I64Type);
+  }
+
+  auto storeResult = [&](const U256Inst &Values) {
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      createInstruction<DassignInstruction>(true, &(Ctx.VoidType), Values[I],
+                                            ResultVars[I]->getVarIdx());
+    }
+  };
+
+  auto loadResult = [&]() -> U256Inst {
+    U256Inst Values = {};
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      Values[I] = loadVariable(ResultVars[I]);
+    }
+    return Values;
+  };
+
+  // Branch structure:
+  //   if (HasUpperLimbs) goto MultiLimbBB else goto SingleLimbCheckBB
+  //   SingleLimbCheckBB:
+  //     if (IsB0Zero) goto ZeroDivisorBB else goto SingleLimbBB
+  //   ZeroDivisorBB: result = 0; goto AfterBB
+  //   SingleLimbBB: inline cascading 128/64 div; goto AfterBB
+  //   MultiLimbBB: runtime call; goto AfterBB
+  //   AfterBB: phi
+  MBasicBlock *MultiLimbBB = createBasicBlock();
+  MBasicBlock *SingleLimbCheckBB = createBasicBlock();
+  MBasicBlock *ZeroDivisorBB = createBasicBlock();
+  MBasicBlock *SingleLimbBB = createBasicBlock();
+  MBasicBlock *AfterBB = createBasicBlock();
+
+  createInstruction<BrIfInstruction>(true, Ctx, HasUpperLimbs, MultiLimbBB,
+                                     SingleLimbCheckBB);
+  addSuccessor(MultiLimbBB);
+  addSuccessor(SingleLimbCheckBB);
+
+  // --- SingleLimbCheckBB: check for zero divisor ---
+  setInsertBlock(SingleLimbCheckBB);
+  createInstruction<BrIfInstruction>(true, Ctx, IsB0Zero, ZeroDivisorBB,
+                                     SingleLimbBB);
+  addSuccessor(ZeroDivisorBB);
+  addSuccessor(SingleLimbBB);
+
+  // --- ZeroDivisorBB: divisor == 0, EVM returns 0 ---
+  setInsertBlock(ZeroDivisorBB);
+  U256Inst ZeroResult = {Zero, Zero, Zero, Zero};
+  storeResult(ZeroResult);
+  createInstruction<BrInstruction>(true, Ctx, AfterBB);
+  addSuccessor(AfterBB);
+
+  // --- SingleLimbBB: 1-limb divisor, cascading 128/64 division ---
+  setInsertBlock(SingleLimbBB);
+  // Cascading: (0:A[3])/B[0], (R3:A[2])/B[0], (R2:A[1])/B[0],
+  // (R1:A[0])/B[0]
+  MInstruction *Div3 = createEvmUdiv128By64(Zero, A[3], B[0]);
+  MInstruction *Rem3 = createEvmUrem128By64(Div3);
+  MInstruction *Div2 = createEvmUdiv128By64(Rem3, A[2], B[0]);
+  MInstruction *Rem2 = createEvmUrem128By64(Div2);
+  MInstruction *Div1 = createEvmUdiv128By64(Rem2, A[1], B[0]);
+  MInstruction *Rem1 = createEvmUrem128By64(Div1);
+  MInstruction *Div0 = createEvmUdiv128By64(Rem1, A[0], B[0]);
+  MInstruction *Rem0 = createEvmUrem128By64(Div0);
+
+  if (WantQuotient) {
+    U256Inst QuotResult = {Div0, Div1, Div2, Div3};
+    storeResult(QuotResult);
+  } else {
+    U256Inst RemResult = {Rem0, Zero, Zero, Zero};
+    storeResult(RemResult);
+  }
+  createInstruction<BrInstruction>(true, Ctx, AfterBB);
+  addSuccessor(AfterBB);
+
+  // --- MultiLimbBB: multi-limb divisor, fall back to runtime ---
+  setInsertBlock(MultiLimbBB);
+  const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  Operand RuntimeResult;
+  if (WantQuotient) {
+    RuntimeResult = callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
+                                   const intx::uint256 &>(
+        RuntimeFunctions.GetDiv, DividendOp, DivisorOp);
+  } else {
+    RuntimeResult = callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
+                                   const intx::uint256 &>(
+        RuntimeFunctions.GetMod, DividendOp, DivisorOp);
+  }
+  storeResult(extractU256Operand(RuntimeResult));
+  createInstruction<BrInstruction>(true, Ctx, AfterBB);
+  addSuccessor(AfterBB);
+
+  // --- AfterBB: merge results ---
+  setInsertBlock(AfterBB);
+  return Operand(loadResult(), EVMType::UINT256);
+}
+
 typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
                                                          Operand MultiplierOp) {
   // Phase 0: Constant folding
@@ -1980,10 +2099,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
     return handleDivU64Dividend(A, DivisorOp);
   }
 
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
-                        const intx::uint256 &>(RuntimeFunctions.GetDiv,
-                                               DividendOp, DivisorOp);
+  return handleDivModGeneral(DividendOp, DivisorOp, /*WantQuotient=*/true);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleSDiv(Operand DividendOp,
@@ -2093,10 +2209,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
     return handleModU64Dividend(A, DivisorOp);
   }
 
-  const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
-                        const intx::uint256 &>(RuntimeFunctions.GetMod,
-                                               DividendOp, DivisorOp);
+  return handleDivModGeneral(DividendOp, DivisorOp, /*WantQuotient=*/false);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleSMod(Operand DividendOp,
