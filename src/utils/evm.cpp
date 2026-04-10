@@ -21,11 +21,34 @@ void trimString(std::string &Str) {
 }
 
 std::optional<std::vector<uint8_t>> fromHex(std::string_view HexStr) {
-  if (auto Data = evmc::from_hex(HexStr)) {
+  // Handle odd-length hex strings (e.g. "0x1" -> "0x01") which are common
+  // in Ethereum's compact hex format but rejected by evmc::from_hex
+  std::string PaddedStorage;
+  std::string_view Effective = HexStr;
+  if (HexStr.size() >= 2 && HexStr[0] == '0' &&
+      (HexStr[1] == 'x' || HexStr[1] == 'X')) {
+    auto Stripped = HexStr.substr(2);
+    if (Stripped.length() % 2 != 0) {
+      PaddedStorage = std::string("0x0") + std::string(Stripped);
+      Effective = PaddedStorage;
+    }
+  }
+  if (auto Data = evmc::from_hex(Effective)) {
     return std::vector<uint8_t>(Data->begin(), Data->end());
   } else {
     return std::nullopt;
   }
+}
+
+static std::string padHexToEvenLength(const std::string &HexStr) {
+  if (HexStr.size() >= 2 && (HexStr[0] == '0') &&
+      (HexStr[1] == 'x' || HexStr[1] == 'X')) {
+    std::string Stripped = HexStr.substr(2);
+    if (Stripped.length() % 2 != 0) {
+      return "0x0" + Stripped;
+    }
+  }
+  return HexStr;
 }
 
 std::string stripHexPrefix(const std::string &HexStr) {
@@ -73,7 +96,8 @@ evmc::address parseAddress(const std::string &HexAddr) {
 
 evmc::bytes32 parseBytes32(const std::string &HexStr) {
   evmc::bytes32 Result{};
-  if (auto Data = evmc::from_hex(HexStr)) {
+  std::string Padded = padHexToEvenLength(HexStr);
+  if (auto Data = evmc::from_hex(Padded)) {
     if (Data->size() <= 32) {
       std::memcpy(Result.bytes + (32 - Data->size()), Data->data(),
                   Data->size());
@@ -87,7 +111,8 @@ evmc::bytes32 parseBytes32(const std::string &HexStr) {
 
 evmc::uint256be parseUint256(const std::string &HexStr) {
   evmc::uint256be Result{};
-  if (auto Data = evmc::from_hex(HexStr)) {
+  std::string Padded = padHexToEvenLength(HexStr);
+  if (auto Data = evmc::from_hex(Padded)) {
     if (Data->size() <= 32) {
       std::memcpy(Result.bytes + (32 - Data->size()), Data->data(),
                   Data->size());
