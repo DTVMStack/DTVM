@@ -28,6 +28,21 @@ namespace {
 using namespace zen::runtime;
 using namespace zen::common;
 
+// RAII helper for temporarily changing runtime configuration
+class ScopedConfig {
+public:
+  ScopedConfig(Runtime *Runtime, const RuntimeConfig &NewConfig)
+      : RT(Runtime), PreviousConfig(Runtime->getConfig()) {
+    RT->setConfig(NewConfig);
+  }
+
+  ~ScopedConfig() { RT->setConfig(PreviousConfig); }
+
+private:
+  Runtime *RT;
+  RuntimeConfig PreviousConfig;
+};
+
 // Forward declaration for InstanceGuard
 struct DTVM;
 

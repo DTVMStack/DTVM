@@ -106,7 +106,9 @@ EVMModuleUniquePtr EVMModule::newEVMModule(Runtime &RT,
     COMPILER::EVMAnalyzer Analyzer(Rev);
     Analyzer.analyze(reinterpret_cast<const uint8_t *>(Mod->Code),
                      Mod->CodeSize);
-    Mod->ShouldFallbackToInterp = Analyzer.getJITSuitability().ShouldFallback;
+    Mod->ShouldFallbackToInterp =
+        Analyzer.getJITSuitability().ShouldFallback ||
+        hasUnresolvedCompatibleDynamicReturnTrampoline(Analyzer);
     if (!Mod->ShouldFallbackToInterp)
 #endif // ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
     {
@@ -128,24 +130,5 @@ const evm::EVMBytecodeCache &EVMModule::getBytecodeCache() const {
 void EVMModule::initBytecodeCache() const {
   evm::buildBytecodeCache(BytecodeCache, Code, CodeSize, Revision);
 }
-
-#ifdef ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
-bool EVMModule::shouldInterpretInMultipass() const {
-  if (!MultipassFallbackInfoInitialized) {
-    initializeMultipassFallbackInfo();
-  }
-  return ShouldInterpretInMultipass;
-}
-
-void EVMModule::initializeMultipassFallbackInfo() const {
-  COMPILER::EVMAnalyzer Analyzer(Revision);
-  Analyzer.analyze(reinterpret_cast<const uint8_t *>(Code), CodeSize);
-  const auto &JITResult = Analyzer.getJITSuitability();
-  ShouldInterpretInMultipass =
-      JITResult.ShouldFallback ||
-      hasUnresolvedCompatibleDynamicReturnTrampoline(Analyzer);
-  MultipassFallbackInfoInitialized = true;
-}
-#endif
 
 } // namespace zen::runtime
