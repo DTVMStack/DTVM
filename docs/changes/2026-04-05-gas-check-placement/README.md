@@ -62,9 +62,22 @@ unchanged). JIT semantics are preserved (no frontend changes).
 
 ### Metrics
 
-Metrics need to be re-measured on top of current `upstream/main` (which
-includes true-SSA stack lifting from PR #395). Previous numbers reported on a
-stale base are no longer comparable and have been dropped from this document.
+Measured via `evmone-bench` against `upstream/main@a14a9de` on the
+`external/total/(main|micro)/*` benchmark set (3 repetitions, median).
+
+- **Geometric mean: −10.13%** across 27 benchmarks.
+- Large wins on memory-growth and signextend chunks:
+  - `micro/memory_grow_mload/*`: −19% to −24%
+  - `micro/memory_grow_mstore/*`: −19% to −20%
+  - `micro/signextend/{one,zero}`: −19% to −20%
+- Headline contract: `main/snailtracer/benchmark`: −7.53%
+- A handful of small regressions remain (≤ +6%) on
+  `sha1_shifts/5311`, `structarray_alloc/nfts_rank`, `weierstrudel/1`,
+  `blake2b_shifts/8415nulls` — these are jump-heavy Solidity patterns where
+  the added CFG edges apparently perturb chunk layout slightly.
+
+Correctness: 223/223 multipass evmone-unittests, 215/215 interpreter
+evmone-unittests, 2723/2723 evmone-statetests on `fork_Cancun`.
 
 ## Implementation Plan
 
