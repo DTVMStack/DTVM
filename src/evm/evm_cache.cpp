@@ -192,8 +192,10 @@ struct GasBlock {
   uint32_t End = 0;
   uint32_t LastPc = 0;
   uint32_t PrevPc = UINT32_MAX;
+  uint32_t Prev2Pc = UINT32_MAX;
   uint8_t LastOpcode = 0;
   uint8_t PrevOpcode = 0;
+  uint8_t Prev2Opcode = 0;
   uint64_t Cost = 0;
   std::vector<uint32_t> Succs;
   std::vector<uint32_t> Preds;
@@ -318,6 +320,8 @@ static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
       }
 
       const uint8_t CurOpcodeU8 = static_cast<uint8_t>(Code[CurPc]);
+      Block.Prev2Pc = Block.PrevPc;
+      Block.Prev2Opcode = Block.PrevOpcode;
       Block.PrevPc = Block.LastPc;
       Block.PrevOpcode = Block.LastOpcode;
       Block.LastPc = static_cast<uint32_t>(CurPc);
@@ -338,6 +342,27 @@ static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
   }
 }
 
+// Decode a PUSH immediate at PushPc and validate it as a JUMPDEST address.
+// Returns true and sets DestPc on success.
+static bool decodePushAsJumpDest(const std::vector<intx::uint256> &PushValueMap,
+                                 const std::vector<uint8_t> &JumpDestMap,
+                                 size_t CodeSize, uint32_t PushPc,
+                                 uint32_t &DestPc) {
+  const intx::uint256 Value = PushValueMap[PushPc];
+  if ((Value >> 64) != 0) {
+    return false;
+  }
+  const uint64_t Dest = static_cast<uint64_t>(Value);
+  if (Dest >= CodeSize) {
+    return false;
+  }
+  if (JumpDestMap[Dest] == 0) {
+    return false;
+  }
+  DestPc = static_cast<uint32_t>(Dest);
+  return true;
+}
+
 static bool resolveConstantJumpTarget(const std::vector<uint8_t> &JumpDestMap,
                                       const std::vector<intx::uint256> &PushMap,
                                       size_t CodeSize, const GasBlock &Block,
@@ -354,22 +379,69 @@ static bool resolveConstantJumpTarget(const std::vector<uint8_t> &JumpDestMap,
     return false;
   }
 
-  const intx::uint256 Value = PushMap[Block.PrevPc];
-  if ((Value >> 64) != 0) {
-    return false;
-  }
+  return decodePushAsJumpDest(PushMap, JumpDestMap, CodeSize, Block.PrevPc,
+                              DestPc);
+}
 
-  const uint64_t Dest = static_cast<uint64_t>(Value);
-  if (Dest >= CodeSize) {
-    return false;
-  }
+// Build CFG edges for all blocks.
+// When ResolvedTargets is null, uses over-approximation (all JUMPDESTs) for
+// unresolved dynamic jumps. When non-null, uses resolved targets for known
+// SWAPn→JUMP return patterns and falls back to over-approximation for the rest.
+static void
+buildCFGEdges(std::vector<GasBlock> &Blocks,
+              const std::vector<uint32_t> &BlockAtPc,
+              const std::vector<uint8_t> &JumpDestMap,
+              const std::vector<intx::uint256> &PushValueMap,
+              const std::vector<uint32_t> &JumpDestBlocks, size_t CodeSize,
+              const std::unordered_map<uint32_t, std::vector<uint32_t>>
+                  *ResolvedTargets) {
+  for (size_t BlockId = 0; BlockId < Blocks.size(); ++BlockId) {
+    auto &Block = Blocks[BlockId];
+    const bool IsTerminator = isControlFlowTerminator(Block.LastOpcode);
 
-  if (JumpDestMap[Dest] == 0) {
-    return false;
-  }
+    // Add fallthrough edge for non-terminating opcodes (CALL/CREATE/GAS,
+    // JUMPI included via the generic !IsTerminator path).
+    if (!IsTerminator && Block.End < CodeSize) {
+      const uint32_t SuccId = BlockAtPc[Block.End];
+      if (SuccId != UINT32_MAX) {
+        addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
+      }
+    }
 
-  DestPc = static_cast<uint32_t>(Dest);
-  return true;
+    // Add jump target edge(s).
+    if (isJumpOpcode(Block.LastOpcode)) {
+      uint32_t DestPc = 0;
+      if (resolveConstantJumpTarget(JumpDestMap, PushValueMap, CodeSize, Block,
+                                    DestPc)) {
+        // Static (constant) jump: single known target.
+        const uint32_t SuccId = BlockAtPc[DestPc];
+        if (SuccId != UINT32_MAX) {
+          addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
+        }
+      } else if (ResolvedTargets != nullptr) {
+        // Second-pass: use call-site resolved targets if available.
+        auto It = ResolvedTargets->find(Block.LastPc);
+        if (It != ResolvedTargets->end()) {
+          for (uint32_t TargetPc : It->second) {
+            const uint32_t SuccId = BlockAtPc[TargetPc];
+            if (SuccId != UINT32_MAX) {
+              addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
+            }
+          }
+        } else {
+          // Still unresolved: over-approx to all jump destinations.
+          for (uint32_t SuccId : JumpDestBlocks) {
+            addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
+          }
+        }
+      } else {
+        // First-pass (no resolved targets yet): over-approx.
+        for (uint32_t SuccId : JumpDestBlocks) {
+          addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
+        }
+      }
+    }
+  }
 }
 
 static size_t bitsetWordCount(size_t NumBits) { return (NumBits + 63) / 64; }
@@ -876,10 +948,17 @@ static bool lemma614Update(uint32_t NodeId, const std::vector<GasBlock> &Blocks,
       continue;
     }
     if (AllowedMask && !bitsetTest(*AllowedMask, Succ)) {
+      // Non-back-edge successor excluded from shifting — its path would
+      // see the inflated parent cost without compensation.
+      MinSucc = 0;
       continue;
     }
-    // Only consider successors with exactly one effective predecessor.
     if (effectivePredCount(Blocks[Succ]) != 1) {
+      MinSucc = 0;
+      continue;
+    }
+    if (isGasChunkTerminator(Blocks[Succ].LastOpcode)) {
+      MinSucc = 0;
       continue;
     }
     MinSucc = std::min(MinSucc, Metering[Succ]);
@@ -900,10 +979,165 @@ static bool lemma614Update(uint32_t NodeId, const std::vector<GasBlock> &Blocks,
     if (effectivePredCount(Blocks[Succ]) != 1) {
       continue;
     }
+    if (isGasChunkTerminator(Blocks[Succ].LastOpcode)) {
+      continue;
+    }
     Metering[Succ] -= MinSucc;
   }
 
   return true;
+}
+
+static constexpr size_t MAX_REVERSE_REACHABILITY_DEPTH = 200;
+
+// Check if opcode is a SWAP instruction (SWAP1-SWAP16).
+static bool isSwapOpcode(uint8_t OpcodeU8) {
+  return OpcodeU8 >= static_cast<uint8_t>(evmc_opcode::OP_SWAP1) &&
+         OpcodeU8 <= static_cast<uint8_t>(evmc_opcode::OP_SWAP16);
+}
+
+// Resolve jump targets for function-return patterns (SWAPn → JUMP) using
+// call-site enumeration. For each unresolved JUMP preceded by SWAPn, find
+// the containing function's entry JUMPDEST via reverse reachability, then
+// collect return addresses from all call sites targeting that entry.
+//
+// Call site pattern: PUSH <ret_addr> → PUSH <func_entry> → JUMP
+// Return pattern: SWAPn → JUMP (return address was pushed by caller)
+static void resolveCallSiteTargets(
+    const std::vector<GasBlock> &Blocks, const std::vector<uint32_t> &BlockAtPc,
+    const std::vector<uint8_t> &JumpDestMap,
+    const std::vector<intx::uint256> &PushValueMap, size_t CodeSize,
+    std::unordered_map<uint32_t, std::vector<uint32_t>> &ResolvedTargets) {
+
+  // Step 1: Identify call sites (PUSH ret → PUSH func → JUMP).
+  // Map from function entry PC → list of return address PCs.
+  std::unordered_map<uint32_t, std::vector<uint32_t>> CallTargets;
+  for (const auto &Block : Blocks) {
+    if (Block.LastOpcode != static_cast<uint8_t>(evmc_opcode::OP_JUMP)) {
+      continue;
+    }
+    // Need at least 3 instructions: PUSH ret, PUSH func, JUMP
+    // Check: PrevOpcode is PUSH (func entry), and the instruction before
+    // PrevPc is also a PUSH (return addr).
+    if (!isPushOpcode(Block.PrevOpcode) || Block.PrevPc == UINT32_MAX) {
+      continue;
+    }
+
+    const uint32_t Prev2Pc = Block.Prev2Pc;
+    const uint8_t Prev2Opcode = Block.Prev2Opcode;
+
+    if (!isPushOpcode(Prev2Opcode) || Prev2Pc == UINT32_MAX) {
+      continue;
+    }
+
+    // Verify contiguous instruction sequence: PUSH ret → PUSH func → JUMP
+    if (Prev2Pc + opcodeLen(Prev2Opcode) != Block.PrevPc) {
+      continue;
+    }
+    if (Block.PrevPc + opcodeLen(Block.PrevOpcode) != Block.LastPc) {
+      continue;
+    }
+
+    // Decode function entry and return address
+    uint32_t FuncEntry = 0;
+    if (!decodePushAsJumpDest(PushValueMap, JumpDestMap, CodeSize, Block.PrevPc,
+                              FuncEntry)) {
+      continue;
+    }
+
+    uint32_t RetAddr = 0;
+    if (!decodePushAsJumpDest(PushValueMap, JumpDestMap, CodeSize, Prev2Pc,
+                              RetAddr)) {
+      continue;
+    }
+
+    CallTargets[FuncEntry].push_back(RetAddr);
+  }
+
+  if (CallTargets.empty()) {
+    return;
+  }
+
+  // Step 2: For each SWAPn → JUMP block, find function entry via reverse
+  // reachability, then resolve targets from call sites.
+  std::vector<uint8_t> VisitedGen(Blocks.size(), 0);
+  uint8_t Generation = 0;
+  for (size_t BlockId = 0; BlockId < Blocks.size(); ++BlockId) {
+    const auto &Block = Blocks[BlockId];
+    if (Block.LastOpcode != static_cast<uint8_t>(evmc_opcode::OP_JUMP)) {
+      continue;
+    }
+    // Skip already-resolved (PUSH → JUMP)
+    if (isPushOpcode(Block.PrevOpcode)) {
+      continue;
+    }
+    // Must be SWAPn → JUMP
+    if (!isSwapOpcode(Block.PrevOpcode)) {
+      continue;
+    }
+
+    ++Generation;
+    if (Generation == 0) { // overflow: reset
+      std::fill(VisitedGen.begin(), VisitedGen.end(), 0);
+      Generation = 1;
+    }
+
+    // Reverse reachability: walk backward from this block to find a
+    // JUMPDEST that is a known call target.
+    uint32_t FuncEntry = UINT32_MAX;
+    {
+      std::vector<uint32_t> Worklist;
+      Worklist.push_back(static_cast<uint32_t>(BlockId));
+      size_t Limit = MAX_REVERSE_REACHABILITY_DEPTH;
+      while (!Worklist.empty() && Limit-- > 0) {
+        uint32_t Bid = Worklist.back();
+        Worklist.pop_back();
+        if (VisitedGen[Bid] == Generation) {
+          continue;
+        }
+        VisitedGen[Bid] = Generation;
+        // Check if this block starts at a call-target JUMPDEST
+        if (Blocks[Bid].Start < CodeSize &&
+            JumpDestMap[Blocks[Bid].Start] != 0 &&
+            CallTargets.count(Blocks[Bid].Start) != 0) {
+          FuncEntry = Blocks[Bid].Start;
+          break;
+        }
+        for (uint32_t Pid : Blocks[Bid].Preds) {
+          if (VisitedGen[Pid] != Generation) {
+            Worklist.push_back(Pid);
+          }
+        }
+      }
+    }
+
+    if (FuncEntry == UINT32_MAX) {
+      continue;
+    }
+
+    // Collect return addresses from all call sites targeting this function.
+    const auto &RetAddrs = CallTargets[FuncEntry];
+    std::vector<uint32_t> ValidTargets;
+    for (uint32_t Ra : RetAddrs) {
+      if (Ra < CodeSize && JumpDestMap[Ra] != 0) {
+        const uint32_t TargetBlock = BlockAtPc[Ra];
+        if (TargetBlock != UINT32_MAX) {
+          ValidTargets.push_back(Ra);
+        }
+      }
+    }
+
+    // Deduplicate targets — a function called multiple times from the same
+    // return address would produce duplicates, blocking the size()==1
+    // direct-branch optimization.
+    std::sort(ValidTargets.begin(), ValidTargets.end());
+    ValidTargets.erase(std::unique(ValidTargets.begin(), ValidTargets.end()),
+                       ValidTargets.end());
+
+    if (!ValidTargets.empty()) {
+      ResolvedTargets[Block.LastPc] = std::move(ValidTargets);
+    }
+  }
 }
 
 static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
@@ -920,27 +1154,8 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     return true;
   }
 
-  bool HasDynamicJump = false;
-  for (const auto &Block : Blocks) {
-    if (!isJumpOpcode(Block.LastOpcode)) {
-      continue;
-    }
-    uint32_t DestPc = 0;
-    if (!resolveConstantJumpTarget(JumpDestMap, PushValueMap, CodeSize, Block,
-                                   DestPc)) {
-      HasDynamicJump = true;
-      break;
-    }
-  }
-  if (HasDynamicJump) {
-    for (const auto &Block : Blocks) {
-      if (Block.Start < CodeSize) {
-        GasChunkEnd[Block.Start] = Block.End;
-        GasChunkCost[Block.Start] = Block.Cost;
-      }
-    }
-    return true;
-  }
+  // Always build CFG — no early exit for dynamic jumps.
+  // Unresolved jumps get over-approximated edges to all JUMPDESTs.
 
   std::vector<uint32_t> JumpDestBlocks;
   if (!JumpDestMap.empty()) {
@@ -960,36 +1175,29 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     }
   }
 
-  // Build CFG
-  for (size_t BlockId = 0; BlockId < Blocks.size(); ++BlockId) {
-    auto &Block = Blocks[BlockId];
-    const bool IsTerminator = isControlFlowTerminator(Block.LastOpcode);
+  // Build initial CFG with over-approximation for unresolved jumps.
+  // This is needed before call-site enumeration because reverse reachability
+  // requires predecessor edges.
+  buildCFGEdges(Blocks, BlockAtPc, JumpDestMap, PushValueMap, JumpDestBlocks,
+                CodeSize, nullptr);
 
-    // Add fallthrough edge for non-terminating opcodes (CALL/CREATE/GAS
-    // included).
-    if (!IsTerminator && Block.End < CodeSize) {
-      const uint32_t SuccId = BlockAtPc[Block.End];
-      if (SuccId != UINT32_MAX) {
-        addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
-      }
-    }
+  // Resolve function-return jump targets via call-site enumeration.
+  // This uses the initial CFG (with over-approximated edges) for reverse
+  // reachability to find function entries.
+  std::unordered_map<uint32_t, std::vector<uint32_t>> ResolvedTargets;
+  resolveCallSiteTargets(Blocks, BlockAtPc, JumpDestMap, PushValueMap, CodeSize,
+                         ResolvedTargets);
 
-    // Add jump edge (if static jump)
-    if (isJumpOpcode(Block.LastOpcode)) {
-      uint32_t DestPc = 0;
-      if (resolveConstantJumpTarget(JumpDestMap, PushValueMap, CodeSize, Block,
-                                    DestPc)) {
-        const uint32_t SuccId = BlockAtPc[DestPc];
-        if (SuccId != UINT32_MAX) {
-          addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
-        }
-      } else {
-        // Dynamic jump: over-approx to all jump destinations.
-        for (uint32_t SuccId : JumpDestBlocks) {
-          addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
-        }
-      }
+  // If call-site enumeration resolved any targets, rebuild CFG with
+  // precise edges for those jumps.
+  if (!ResolvedTargets.empty()) {
+    // Clear all edges and rebuild with refined edges
+    for (auto &Block : Blocks) {
+      Block.Succs.clear();
+      Block.Preds.clear();
     }
+    buildCFGEdges(Blocks, BlockAtPc, JumpDestMap, PushValueMap, JumpDestBlocks,
+                  CodeSize, &ResolvedTargets);
   }
 
   // Split critical edges (required for safe SPP optimization)
