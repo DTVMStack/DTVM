@@ -66,13 +66,15 @@ public:
   bool isGasMeteringEnabled() const { return GasMeteringEnabled; }
 
   void setGasChunkInfo(const uint32_t *ChunkEnd, const uint64_t *ChunkCost,
-                       size_t Size) {
+                       const uint64_t *ChunkCostSPP, size_t Size) {
     GasChunkEnd = ChunkEnd;
     GasChunkCost = ChunkCost;
+    GasChunkCostSPP = ChunkCostSPP;
     GasChunkSize = Size;
   }
   const uint32_t *getGasChunkEnd() const { return GasChunkEnd; }
   const uint64_t *getGasChunkCost() const { return GasChunkCost; }
+  const uint64_t *getGasChunkCostSPP() const { return GasChunkCostSPP; }
   size_t getGasChunkSize() const { return GasChunkSize; }
   bool hasGasChunks() const {
     return GasChunkEnd && GasChunkCost && GasChunkSize > 0;
@@ -98,6 +100,7 @@ private:
   bool GasMeteringEnabled = false;
   const uint32_t *GasChunkEnd = nullptr;
   const uint64_t *GasChunkCost = nullptr;
+  const uint64_t *GasChunkCostSPP = nullptr;
   size_t GasChunkSize = 0;
   evmc_revision Revision = zen::evm::DEFAULT_REVISION;
   uint8_t MemoryLinearStrideSkipLeadingZeroLimbStores = 0;
@@ -1275,6 +1278,7 @@ private:
   // Chunk gas metering
   const uint32_t *GasChunkEnd = nullptr;
   const uint64_t *GasChunkCost = nullptr;
+  const uint64_t *GasChunkCostSPP = nullptr;
   size_t GasChunkSize = 0;
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER

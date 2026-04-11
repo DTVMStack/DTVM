@@ -78,6 +78,7 @@ EVMFrontendContext::EVMFrontendContext(const EVMFrontendContext &OtherCtx)
       BytecodeSize(OtherCtx.BytecodeSize),
       GasMeteringEnabled(OtherCtx.GasMeteringEnabled),
       GasChunkEnd(OtherCtx.GasChunkEnd), GasChunkCost(OtherCtx.GasChunkCost),
+      GasChunkCostSPP(OtherCtx.GasChunkCostSPP),
       GasChunkSize(OtherCtx.GasChunkSize), Revision(OtherCtx.Revision),
       MemoryLinearStrideSkipLeadingZeroLimbStores(
           OtherCtx.MemoryLinearStrideSkipLeadingZeroLimbStores)
@@ -393,6 +394,7 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
 
   GasChunkEnd = EvmCtx->getGasChunkEnd();
   GasChunkCost = EvmCtx->getGasChunkCost();
+  GasChunkCostSPP = EvmCtx->getGasChunkCostSPP();
   GasChunkSize = EvmCtx->getGasChunkSize();
 
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
@@ -527,7 +529,12 @@ void EVMMirBuilder::meterOpcode(evmc_opcode Opcode, uint64_t PC) {
   }
   if (GasChunkEnd && GasChunkCost && PC < GasChunkSize) {
     if (GasChunkEnd[PC] > PC) {
-      meterGas(GasChunkCost[PC]);
+      // Prefer SPP-shifted cost when available — it preserves per-path totals
+      // while reducing the number of non-zero entries the JIT must emit a
+      // gas check for.
+      const uint64_t Cost =
+          GasChunkCostSPP ? GasChunkCostSPP[PC] : GasChunkCost[PC];
+      meterGas(Cost);
     }
     return;
   }
@@ -570,7 +577,7 @@ void EVMMirBuilder::meterOpcodeRange(uint64_t StartPC,
     uint64_t Cost = 0;
     if (GasChunkEnd && GasChunkCost && PC < GasChunkSize &&
         GasChunkEnd[PC] > PC) {
-      Cost = GasChunkCost[PC];
+      Cost = GasChunkCostSPP ? GasChunkCostSPP[PC] : GasChunkCost[PC];
     } else {
       const uint8_t Opcode = static_cast<uint8_t>(Bytecode[PC]);
       Cost = static_cast<uint64_t>(InstructionMetrics[Opcode].gas_cost);
@@ -1307,7 +1314,7 @@ void EVMMirBuilder::createJumpTable() {
             uint64_t Cost = 0;
             if (GasChunkEnd && GasChunkCost && Pc < GasChunkSize &&
                 GasChunkEnd[Pc] > Pc) {
-              Cost = GasChunkCost[Pc];
+              Cost = GasChunkCostSPP ? GasChunkCostSPP[Pc] : GasChunkCost[Pc];
             } else {
               // All bytes in the run are JUMPDEST opcode bytes (PUSH payload is
               // skipped in the scan above), so the fallback is a constant.

@@ -1145,7 +1145,8 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
                               const std::vector<uint8_t> &JumpDestMap,
                               const std::vector<intx::uint256> &PushValueMap,
                               std::vector<uint32_t> &GasChunkEnd,
-                              std::vector<uint64_t> &GasChunkCost) {
+                              std::vector<uint64_t> &GasChunkCost,
+                              std::vector<uint64_t> &GasChunkCostSPP) {
   std::vector<GasBlock> Blocks;
   std::vector<uint32_t> BlockAtPc;
   buildGasBlocks(Code, CodeSize, MetricsTable, Blocks, BlockAtPc);
@@ -1327,6 +1328,10 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     }
     GasChunkEnd[Blocks[Id].Start] = Blocks[Id].End;
     GasChunkCost[Blocks[Id].Start] = Blocks[Id].Cost;
+    // Export SPP-shifted cost on a separate output array so the JIT can read
+    // it without perturbing the interpreter fast path, which continues to see
+    // the unshifted per-block cost above.
+    GasChunkCostSPP[Blocks[Id].Start] = Metering[Id];
   }
 
   return true;
@@ -1340,6 +1345,7 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
   Cache.PushValueMap.resize(CodeSize);
   Cache.GasChunkEnd.assign(CodeSize, 0);
   Cache.GasChunkCost.assign(CodeSize, 0);
+  Cache.GasChunkCostSPP.assign(CodeSize, 0);
 
   buildJumpDestMapAndPushCache(Code, CodeSize, Cache.JumpDestMap,
                                Cache.PushValueMap);
@@ -1349,7 +1355,8 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
   }
 
   buildGasChunksSPP(Code, CodeSize, MetricsTable, Cache.JumpDestMap,
-                    Cache.PushValueMap, Cache.GasChunkEnd, Cache.GasChunkCost);
+                    Cache.PushValueMap, Cache.GasChunkEnd, Cache.GasChunkCost,
+                    Cache.GasChunkCostSPP);
 }
 
 } // namespace zen::evm

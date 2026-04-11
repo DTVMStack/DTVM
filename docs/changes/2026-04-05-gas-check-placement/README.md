@@ -18,11 +18,11 @@ reachability. Achieves high jump resolution rate on typical Solidity contracts.
 
 `GasChunkCost` continues to write the original `Blocks[Id].Cost` (not the
 SPP-shifted `Metering[Id]`) — the interpreter's gas chunk fast path requires
-unshifted per-block costs, as established by PR #371. The SPP pipeline still
-runs so that mixed-CFG gains benefit the downstream `isGasChunkTerminator`
-shifting guards, but shifted values are not exported back to the chunk tables.
-Wiring shifted values into the JIT via a separate JIT-only output path is left
-as a follow-up.
+unshifted per-block costs, as established by PR #371. A second parallel array
+`GasChunkCostSPP` is added to `EVMBytecodeCache` specifically for the multipass
+JIT: the SPP metering pass writes shifted values into it, and the JIT prefers
+it over the unshifted table when emitting gas checks. The interpreter never
+reads the new array, preserving #371 semantics.
 
 ## Motivation
 
@@ -91,14 +91,24 @@ evmone-unittests, 2723/2723 evmone-statetests on `fork_Cancun`.
 - [x] Add `resolveCallSiteTargets()` for `SWAPn→JUMP` patterns
 - [x] Identify call sites and collect return addresses via reverse reachability
 
-### Phase 3: JIT integration (deferred)
+### Phase 3: JIT integration
 
-- [ ] Plumb SPP-shifted metering into a JIT-only output path without perturbing
-      the interpreter chunk tables
+- [x] Add `EVMBytecodeCache::GasChunkCostSPP` parallel array populated from
+      `Metering[]` in `buildGasChunksSPP`
+- [x] Plumb through `EVMFrontendContext::setGasChunkInfo` and `EVMMirBuilder`
+- [x] Swap reads in `meterOpcode`, `meterOpcodeRange`, and the JUMPDEST-run
+      suffix-sum precompute to prefer `GasChunkCostSPP` when non-null
+- [x] Interpreter continues reading the unshifted `GasChunkCost` — no change
 
 ## Changed Files
 
-- `src/evm/evm_cache.cpp`
+- `src/evm/evm_cache.h` — add `GasChunkCostSPP` field
+- `src/evm/evm_cache.cpp` — mixed-CFG, call-site enumeration, SPP export
+- `src/compiler/evm_frontend/evm_mir_compiler.h` — plumb SPP pointer through
+  context and builder
+- `src/compiler/evm_frontend/evm_mir_compiler.cpp` — prefer SPP-shifted cost
+  at the three chunk-cost read sites
+- `src/compiler/evm_compiler.cpp` — pass the new pointer via `setGasChunkInfo`
 
 ## Risks
 
