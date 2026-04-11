@@ -114,6 +114,9 @@ EVMModule::newEVMModule(Runtime &RT, CodeHolderUniquePtr CodeHolder,
     if (!Mod->ShouldFallbackToInterp)
 #endif // ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
     {
+      // JIT is about to compile this module — mark the bytecode cache so the
+      // SPP metering pipeline runs on first access.
+      Mod->CacheNeedsSPP = true;
       action::performEVMJITCompile(*Mod);
     }
   }
@@ -130,7 +133,8 @@ const evm::EVMBytecodeCache &EVMModule::getBytecodeCache() const {
 }
 
 void EVMModule::initBytecodeCache() const {
-  evm::buildBytecodeCache(BytecodeCache, Code, CodeSize, Revision);
+  evm::buildBytecodeCache(BytecodeCache, Code, CodeSize, Revision,
+                          CacheNeedsSPP);
 }
 
 } // namespace zen::runtime

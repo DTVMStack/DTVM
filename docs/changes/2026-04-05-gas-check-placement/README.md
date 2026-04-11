@@ -100,6 +100,18 @@ evmone-unittests, 2723/2723 evmone-statetests on `fork_Cancun`.
       suffix-sum precompute to prefer `GasChunkCostSPP` when non-null
 - [x] Interpreter continues reading the unshifted `GasChunkCost` — no change
 
+### Phase 4: SPP pipeline gating
+
+- [x] Add `buildBytecodeCache(..., bool EnableSPP)` parameter
+- [x] When `EnableSPP == false`, skip the expensive CFG / call-site /
+      metering pipeline entirely and emit unshifted per-block costs
+- [x] `EVMModule::CacheNeedsSPP` is flipped to `true` only immediately
+      before `performEVMJITCompile` runs, so interpreter-only modules never
+      pay the SPP pipeline cost
+- [x] `evm_compiler.cpp` passes `nullptr` for `GasChunkCostSPP` when the
+      cache array is empty, so the JIT falls back to the unshifted array if
+      a module somehow ends up JIT-compiled without SPP being built
+
 ## Changed Files
 
 - `src/evm/evm_cache.h` — add `GasChunkCostSPP` field

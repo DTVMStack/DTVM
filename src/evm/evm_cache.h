@@ -27,8 +27,13 @@ struct EVMBytecodeCache {
   std::vector<uint64_t> GasChunkCostSPP;
 };
 
+// Build the bytecode cache. When EnableSPP is true, the expensive SPP
+// metering pipeline runs and GasChunkCostSPP is populated with shifted
+// per-chunk costs for the multipass JIT. When false (interpreter-only
+// modules), the pipeline is skipped and GasChunkCostSPP stays empty.
 void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
-                        size_t CodeSize, evmc_revision Rev);
+                        size_t CodeSize, evmc_revision Rev,
+                        bool EnableSPP = false);
 
 } // namespace zen::evm
 

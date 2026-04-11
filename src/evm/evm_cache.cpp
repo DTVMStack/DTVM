@@ -1146,12 +1146,27 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
                               const std::vector<intx::uint256> &PushValueMap,
                               std::vector<uint32_t> &GasChunkEnd,
                               std::vector<uint64_t> &GasChunkCost,
-                              std::vector<uint64_t> &GasChunkCostSPP) {
+                              std::vector<uint64_t> &GasChunkCostSPP,
+                              bool EnableSPP) {
   std::vector<GasBlock> Blocks;
   std::vector<uint32_t> BlockAtPc;
   buildGasBlocks(Code, CodeSize, MetricsTable, Blocks, BlockAtPc);
 
   if (Blocks.empty()) {
+    return true;
+  }
+
+  if (!EnableSPP) {
+    // Interpreter-only fast path: emit unshifted per-block costs and skip
+    // the expensive CFG / call-site / metering pipeline. The JIT consumer
+    // path (which would read GasChunkCostSPP) is never wired up for this
+    // module, so no SPP-shifted values are needed.
+    for (const auto &Block : Blocks) {
+      if (Block.Start < CodeSize) {
+        GasChunkEnd[Block.Start] = Block.End;
+        GasChunkCost[Block.Start] = Block.Cost;
+      }
+    }
     return true;
   }
 
@@ -1340,12 +1355,16 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
 } // namespace
 
 void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
-                        size_t CodeSize, evmc_revision Rev) {
+                        size_t CodeSize, evmc_revision Rev, bool EnableSPP) {
   Cache.JumpDestMap.assign(CodeSize, 0);
   Cache.PushValueMap.resize(CodeSize);
   Cache.GasChunkEnd.assign(CodeSize, 0);
   Cache.GasChunkCost.assign(CodeSize, 0);
-  Cache.GasChunkCostSPP.assign(CodeSize, 0);
+  if (EnableSPP) {
+    Cache.GasChunkCostSPP.assign(CodeSize, 0);
+  } else {
+    Cache.GasChunkCostSPP.clear();
+  }
 
   buildJumpDestMapAndPushCache(Code, CodeSize, Cache.JumpDestMap,
                                Cache.PushValueMap);
@@ -1356,7 +1375,7 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
 
   buildGasChunksSPP(Code, CodeSize, MetricsTable, Cache.JumpDestMap,
                     Cache.PushValueMap, Cache.GasChunkEnd, Cache.GasChunkCost,
-                    Cache.GasChunkCostSPP);
+                    Cache.GasChunkCostSPP, EnableSPP);
 }
 
 } // namespace zen::evm
