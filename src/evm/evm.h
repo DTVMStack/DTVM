@@ -15,8 +15,15 @@ constexpr uint64_t MAX_REQUIRED_MEMORY_SIZE = 16 * 1024 * 1024; // 16MB
 
 constexpr evmc_revision DEFAULT_REVISION = EVMC_CANCUN;
 
-// About gas cost
+// Transaction intrinsic gas constants
 constexpr auto BASIC_EXECUTION_COST = 21000;
+constexpr auto TX_CREATE_COST = 32000;
+constexpr auto TX_DATA_ZERO_GAS = 4;
+constexpr auto TX_DATA_NON_ZERO_GAS = 16;
+constexpr auto TX_DATA_NON_ZERO_GAS_PRE_ISTANBUL = 68;
+constexpr auto INITCODE_WORD_GAS = 2;
+
+// Account access gas constants
 constexpr auto COLD_ACCOUNT_ACCESS_COST = 2600;
 constexpr auto WARM_ACCOUNT_ACCESS_COST = 100;
 constexpr auto ADDITIONAL_COLD_ACCOUNT_ACCESS_COST =

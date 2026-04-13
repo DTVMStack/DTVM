@@ -384,6 +384,16 @@ int main(int argc, char *argv[]) {
                                .ContractAddress = ContractAddress};
     evmc_message Msg = createEvmMessage(MockedHost, MsgConfig, Bytecode);
 
+    // Deduct intrinsic gas before EVM execution.
+    const int64_t IntrinsicGas = zen::utils::computeIntrinsicGas(
+        EvmRevision, MsgKind, Msg.input_data, Msg.input_size);
+    if (Msg.gas < IntrinsicGas) {
+      ZEN_LOG_ERROR("intrinsic gas (%ld) exceeds gas limit (%ld)",
+                    (long)IntrinsicGas, (long)Msg.gas);
+      return exitMain(EVMC_OUT_OF_GAS, RT.get());
+    }
+    Msg.gas -= IntrinsicGas;
+
     // EIP-2929/EIP-3651: Pre-warm transaction-level accounts.
     zen::utils::prewarmTransactionAccounts(
         MockedHost, EvmRevision, Msg.sender, Msg.recipient,

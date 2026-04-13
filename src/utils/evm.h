@@ -33,6 +33,12 @@ evmc::address computeCreateAddress(const evmc::address &Sender,
 bool saveState(const evmc::MockedHost &Host, const std::string &FilePath);
 bool loadState(evmc::MockedHost &Host, const std::string &FilePath);
 
+/// Compute the intrinsic gas cost of a transaction (EIP-2028, EIP-3860).
+/// Includes: 21000 base + calldata cost + CREATE cost + initcode cost.
+/// Does NOT include access list cost or authorization list cost; callers
+/// that need those (e.g. state tests) should add them separately.
+int64_t computeIntrinsicGas(evmc_revision Revision, evmc_call_kind MsgKind,
+                            const uint8_t *InputData, size_t InputSize);
 /// Pre-warm transaction-level accounts per EIP-2929 and EIP-3651.
 /// EIP-2929 (Berlin+): warms sender, recipient, and precompiled contracts
 /// (0x01-0x09).
