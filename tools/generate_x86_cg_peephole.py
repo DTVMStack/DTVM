@@ -149,11 +149,18 @@ def emit_capture(bind: str, capture: Dict, miss_return: str) -> List[str]:
     guard_lines, operand_expr = resolve_operand_expr(bind, operand)
     guard_lines = [line.format(miss_return=miss_return) for line in guard_lines]
     if field == "reg":
-        return guard_lines + [
+        result = guard_lines + [
             f"  if (!{bind}.getOperand({operand_expr}).isReg())",
             f"    return {miss_return};",
             f"  auto {name} = {bind}.getOperand({operand_expr}).getReg();",
         ]
+        if capture.get("require_single_use"):
+            result.extend([
+                f"  if ({name}.isVirtual() &&",
+                f"      !MBB.getParent()->getRegInfo().hasOneNonDBGUse({name}))",
+                f"    return {miss_return};",
+            ])
+        return result
     if field == "imm":
         return guard_lines + [
             f"  if (!{bind}.getOperand({operand_expr}).isImm())",

@@ -107,7 +107,8 @@
             {
               "name": "setcc_dst",
               "operand": 0,
-              "field": "reg"
+              "field": "reg",
+              "require_single_use": true
             },
             {
               "name": "setcc_cc",
