@@ -429,6 +429,36 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
     }
   }
 
+  // Parse and pre-warm EIP-2930 access list if present.
+  // Warm addresses cost 100 gas instead of cold 2600, warm storage slots
+  // cost 100 gas instead of cold 2100.
+  if (Doc.HasMember("access_list") && Doc["access_list"].IsArray()) {
+    for (const auto &Entry : Doc["access_list"].GetArray()) {
+      if (!Entry.IsObject() || !Entry.HasMember("address") ||
+          !Entry["address"].IsString()) {
+        continue;
+      }
+      evmc::address Address =
+          zen::utils::parseAddress(Entry["address"].GetString());
+      Host.access_account(Address);
+
+      if (!Entry.HasMember("storage_keys") ||
+          !Entry["storage_keys"].IsArray()) {
+        continue;
+      }
+      auto AccIt = Host.accounts.find(Address);
+      if (AccIt == Host.accounts.end()) {
+        continue;
+      }
+      for (const auto &KeyVal : Entry["storage_keys"].GetArray()) {
+        if (!KeyVal.IsString()) {
+          continue;
+        }
+        evmc::bytes32 Key = zen::utils::parseBytes32(KeyVal.GetString());
+        AccIt->second.storage[Key].access_status = EVMC_ACCESS_WARM;
+      }
+    }
+  }
   return true;
 }
 
