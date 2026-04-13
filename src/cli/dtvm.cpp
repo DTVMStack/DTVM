@@ -384,18 +384,10 @@ int main(int argc, char *argv[]) {
                                .ContractAddress = ContractAddress};
     evmc_message Msg = createEvmMessage(MockedHost, MsgConfig, Bytecode);
 
-    // EIP-2929: Pre-warm sender and recipient addresses before execution.
-    // The sender and recipient are always considered "warm" at the start of
-    // a transaction. Without this, cold access checks during execution will
-    // incorrectly charge an extra 2500 gas for these addresses.
-    if (EvmRevision >= EVMC_BERLIN) {
-      MockedHost.access_account(Msg.sender);
-      MockedHost.access_account(Msg.recipient);
-    }
-    // EIP-3651: Warm COINBASE starting from Shanghai.
-    if (EvmRevision >= EVMC_SHANGHAI) {
-      MockedHost.access_account(MockedHost.tx_context.block_coinbase);
-    }
+    // EIP-2929/EIP-3651: Pre-warm transaction-level accounts.
+    zen::utils::prewarmTransactionAccounts(
+        MockedHost, EvmRevision, Msg.sender, Msg.recipient,
+        MockedHost.tx_context.block_coinbase);
 
     RT->callEVMMain(*Inst, Msg, ExeResult);
 

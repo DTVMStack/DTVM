@@ -432,4 +432,26 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
   return true;
 }
 
+void prewarmTransactionAccounts(evmc::MockedHost &Host, evmc_revision Revision,
+                                const evmc::address &Sender,
+                                const evmc::address &Recipient,
+                                const evmc::address &Coinbase) {
+  // EIP-2929 (Berlin+): sender, recipient, and precompiled contracts
+  // (0x01-0x09) are always warm at the start of a transaction.
+  if (Revision >= EVMC_BERLIN) {
+    Host.access_account(Sender);
+    Host.access_account(Recipient);
+    for (int PrecompileIdx = 1; PrecompileIdx <= 9; ++PrecompileIdx) {
+      evmc::address PrecompileAddr{};
+      PrecompileAddr.bytes[19] = static_cast<uint8_t>(PrecompileIdx);
+      Host.access_account(PrecompileAddr);
+    }
+  }
+
+  // EIP-3651 (Shanghai+): coinbase is warm at the start of a transaction.
+  if (Revision >= EVMC_SHANGHAI) {
+    Host.access_account(Coinbase);
+  }
+}
+
 } // namespace zen::utils

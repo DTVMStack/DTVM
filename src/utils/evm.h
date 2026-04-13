@@ -32,6 +32,18 @@ evmc::address computeCreateAddress(const evmc::address &Sender,
                                    uint64_t SenderNonce);
 bool saveState(const evmc::MockedHost &Host, const std::string &FilePath);
 bool loadState(evmc::MockedHost &Host, const std::string &FilePath);
+
+/// Pre-warm transaction-level accounts per EIP-2929 and EIP-3651.
+/// EIP-2929 (Berlin+): warms sender, recipient, and precompiled contracts
+/// (0x01-0x09).
+/// EIP-3651 (Shanghai+): warms the coinbase address.
+/// This should be called before EVM execution to ensure correct gas
+/// accounting for cold/warm access.
+void prewarmTransactionAccounts(evmc::MockedHost &Host, evmc_revision Revision,
+                                const evmc::address &Sender,
+                                const evmc::address &Recipient,
+                                const evmc::address &Coinbase);
+
 } // namespace zen::utils
 
 #endif // ZEN_UTILS_EVM_H

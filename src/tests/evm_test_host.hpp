@@ -150,10 +150,10 @@ public:
       GasLimit *= Config.GasLimitMultiplier;
     }
 
-    // EIP-3651: coinbase is warm starting from Shanghai
-    if (ActiveRevision >= EVMC_SHANGHAI) {
-      access_account(tx_context.block_coinbase);
-    }
+    // EIP-2929/EIP-3651: Pre-warm transaction-level accounts.
+    zen::utils::prewarmTransactionAccounts(
+        *this, ActiveRevision, Config.Message.sender,
+        Config.Message.recipient, tx_context.block_coinbase);
 
     uint64_t AvailableGas = GasLimit;
 

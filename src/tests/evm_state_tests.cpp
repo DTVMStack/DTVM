@@ -365,10 +365,6 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     }
     HostPtr->loadInitialState(TxContext, InitialAccounts, true);
 
-    // Warm sender and recipient (required by EIP-2929)
-    HostPtr->access_account(PT.Message->sender);
-    HostPtr->access_account(PT.Message->recipient);
-
     auto RT = Runtime::newEVMRuntime(Config, HostPtr.get());
     if (!RT) {
       return MakeFailure("Failed to create EVM runtime for " +
