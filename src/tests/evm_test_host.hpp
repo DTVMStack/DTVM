@@ -151,9 +151,16 @@ public:
     }
 
     // EIP-2929/EIP-3651: Pre-warm transaction-level accounts.
+    // For CREATE/CREATE2, the parsed message recipient is not the effective
+    // created address at this point, so avoid pre-warming it here.
+    const evmc::address TransactionRecipient =
+        (Config.Message.kind == EVMC_CREATE ||
+         Config.Message.kind == EVMC_CREATE2)
+            ? evmc::address{}
+            : Config.Message.recipient;
     zen::utils::prewarmTransactionAccounts(
-        *this, ActiveRevision, Config.Message.sender,
-        Config.Message.recipient, tx_context.block_coinbase);
+        *this, ActiveRevision, Config.Message.sender, TransactionRecipient,
+        tx_context.block_coinbase);
 
     uint64_t AvailableGas = GasLimit;
 

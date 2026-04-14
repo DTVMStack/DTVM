@@ -37,8 +37,8 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath);
 /// EIP-2929 (Berlin+): warms sender, recipient, and precompiled contracts
 /// (0x01-0x09).
 /// EIP-3651 (Shanghai+): warms the coinbase address.
-/// This should be called before EVM execution to ensure correct gas
-/// accounting for cold/warm access.
+/// For contract-creation transactions, pass a zero address as Recipient
+/// to skip recipient warming (CREATE txs have no transaction-level "to").
 void prewarmTransactionAccounts(evmc::MockedHost &Host, evmc_revision Revision,
                                 const evmc::address &Sender,
                                 const evmc::address &Recipient,

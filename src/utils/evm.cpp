@@ -440,7 +440,12 @@ void prewarmTransactionAccounts(evmc::MockedHost &Host, evmc_revision Revision,
   // (0x01-0x09) are always warm at the start of a transaction.
   if (Revision >= EVMC_BERLIN) {
     Host.access_account(Sender);
-    Host.access_account(Recipient);
+    // Contract-creation transactions do not have a transaction-level recipient.
+    // In this codebase CREATE messages use the zero address as a placeholder,
+    // so avoid pre-warming it here.
+    if (Recipient != evmc::address{}) {
+      Host.access_account(Recipient);
+    }
     for (int PrecompileIdx = 1; PrecompileIdx <= 9; ++PrecompileIdx) {
       evmc::address PrecompileAddr{};
       PrecompileAddr.bytes[19] = static_cast<uint8_t>(PrecompileIdx);
