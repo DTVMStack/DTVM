@@ -7,6 +7,8 @@
 #include "evm_test_host.hpp"
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <gtest/gtest.h>
 #include <intx/intx.hpp>
 
@@ -507,6 +509,7 @@ const std::vector<StateTestFixture> &getStateFixtures() {
     std::cout << "Found " << JsonFiles.size() << " JSON test files in "
               << DEFAULT_TEST_DIR << std::endl;
 #endif // NDEBUG
+    int LoadErrors = 0;
     for (const auto &FilePath : JsonFiles) {
       try {
         auto FixturesFromFile = parseStateTestFile(FilePath);
@@ -517,14 +520,17 @@ const std::vector<StateTestFixture> &getStateFixtures() {
           Loaded.push_back(std::move(Fixture));
         }
       } catch (const std::exception &E) {
+        ++LoadErrors;
         std::cerr << "ERROR loading " << FilePath << ": " << E.what()
                   << std::endl;
       }
     }
 
-#ifndef NDEBUG
-    std::cout << "Total fixtures loaded: " << Loaded.size() << std::endl;
-#endif // NDEBUG
+    std::cout << "Total fixtures loaded: " << Loaded.size();
+    if (LoadErrors > 0) {
+      std::cout << " (" << LoadErrors << " files failed to load)";
+    }
+    std::cout << std::endl;
 
     return Loaded;
   }();
@@ -635,7 +641,6 @@ std::string sanitizeTestName(const std::string &Name) {
 }
 
 class EVMStateTest : public testing::TestWithParam<StateTestCaseParam> {};
-GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(EVMStateTest);
 
 TEST_P(EVMStateTest, ExecutesStateTest) {
   const auto &Param = GetParam();
