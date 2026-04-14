@@ -136,10 +136,16 @@ const uint8_t *skipCurrentBlock(const uint8_t *Ip, const uint8_t *End) {
       break;
 
     case F32_CONST:
+      if (Ip + sizeof(float) > End) {
+        return nullptr;
+      }
       Ip += sizeof(float); // float value
       break;
 
     case F64_CONST:
+      if (Ip + sizeof(double) > End) {
+        return nullptr;
+      }
       Ip += sizeof(double); // double value
       break;
 
