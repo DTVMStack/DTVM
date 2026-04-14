@@ -481,7 +481,7 @@ WasmMemoryData WasmMemoryAllocator::allocInitWasmMemory(
 
 void WasmMemoryAllocator::internalFreeWasmMemory(const WasmMemoryData &Data) {
   if (Data.Type == WM_MEMORY_DATA_TYPE_SINGLE_MMAP) {
-    if (0 != ::munmap(Data.MemoryData, Data.MemorySize)) {
+    if (0 != ::munmap(Data.MemoryData, WasmMemoryAllocatorMmapSize)) {
       ZEN_ABORT();
     }
   } else if (Data.Type == WM_MEMORY_DATA_TYPE_MALLOC) {
