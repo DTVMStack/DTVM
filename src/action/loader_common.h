@@ -69,7 +69,9 @@ protected:
     if (utils::addOverflow(Ptr, sizeof(uint32_t), Ptr) || Ptr > End) {
       throw getError(ErrorCode::UnexpectedEnd);
     }
-    return *reinterpret_cast<const uint32_t *>(PrevPtr);
+    uint32_t Result;
+    std::memcpy(&Result, PrevPtr, sizeof(uint32_t));
+    return Result;
   }
 
   template <typename T>

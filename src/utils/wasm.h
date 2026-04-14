@@ -106,6 +106,7 @@ template <typename T>
 const uint8_t *readFixedNumber(const uint8_t *Ip, const uint8_t *End,
                                T &Value) {
   if (Ip + sizeof(T) > End) {
+    Value = T{};
     return End;
   }
 

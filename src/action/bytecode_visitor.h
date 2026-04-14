@@ -816,9 +816,14 @@ private:
   const uint8_t *handleBranchTable(const uint8_t *Ip, const uint8_t *End,
                                    uint32_t Count) {
     std::vector<uint32_t> Levels;
-    Levels.reserve(Count + 1); // includes last default target
+    uint32_t TotalTargets = Count + 1; // includes last default target
+    if (TotalTargets == 0) {
+      // Count == UINT32_MAX causes overflow; treat as invalid
+      return End;
+    }
+    Levels.reserve(TotalTargets);
     WASMType Type = WASMType::VOID;
-    for (uint32_t I = 0; I < Count + 1; ++I) {
+    for (uint32_t I = 0; I < TotalTargets; ++I) {
       uint32_t TargetLevel;
       Ip = readSafeLEBNumber(Ip, TargetLevel);
       if (Ip >= End) {

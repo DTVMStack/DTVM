@@ -65,13 +65,6 @@ bool resolveDelegatedCallCodeAddress(EVMFrame *Frame, evmc::address Dest,
       Frame->Host->access_account(CodeAddress) == EVMC_ACCESS_COLD
           ? COLD_ACCOUNT_ACCESS_COST
           : WARM_STORAGE_READ_COST;
-  std::fprintf(stderr,
-               "delegation interp hit rev=%d copied=%zu cost=%llu "
-               "dest=%02x%02x code=%02x%02x gas=%lld\n",
-               static_cast<int>(currentRevision()), Copied,
-               static_cast<unsigned long long>(DelegateAccessCost),
-               Dest.bytes[0], Dest.bytes[1], CodeAddress.bytes[0],
-               CodeAddress.bytes[1], static_cast<long long>(Frame->Msg.gas));
   if (static_cast<uint64_t>(Frame->Msg.gas) < DelegateAccessCost) {
     auto *Context = EVMResource::getInterpreterExecContext();
     if (Context) {
