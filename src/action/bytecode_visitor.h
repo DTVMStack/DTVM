@@ -1000,6 +1000,11 @@ private:
     }
 
     // check opportunity for macro-fusion
+    if (Ip >= End) {
+      auto Result = Builder.template handleCompareOp<Type, Opr>(CmpLHS, CmpRHS);
+      push(Result);
+      return Ip;
+    }
     uint8_t Opcode = *Ip;
     uint32_t U32Val;
     switch (Opcode) {
