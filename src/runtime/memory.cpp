@@ -487,6 +487,7 @@ void WasmMemoryAllocator::internalFreeWasmMemory(const WasmMemoryData &Data) {
   } else if (Data.Type == WM_MEMORY_DATA_TYPE_MALLOC) {
     CurRuntime->deallocate(Data.MemoryData);
   } else if (Data.Type == WM_MEMORY_DATA_TYPE_BUCKET_MMAP) {
+    common::LockGuard<common::Mutex> _(BucketLock);
     auto MmapBucketIt = MemoryAddrToMmapAddr->find(Data.MemoryData);
     ZEN_ASSERT(MmapBucketIt != MemoryAddrToMmapAddr->end());
     auto *MmapBucket = MmapBucketIt->second;
