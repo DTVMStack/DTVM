@@ -432,7 +432,7 @@ def main():
     parser.add_argument("--disable-multipass-multithread", action="store_true",
                         help="Disable multipass multithreading")
     parser.add_argument("--gas-limit", type=lambda x: int(x, 0), default=0xFFFFFFFFFFFF,
-                        help="Transaction gas limit passed to the EVM execution")
+                        help="Transaction gas limit; intrinsic gas is deducted before EVM execution")
     parser.add_argument("--single-case", dest="single_case", default=None,
                     help="Path to a single test case file (e.g., tests/evm_asm/add_simple.evm.hex)")
     parser.add_argument("--enable-evm-gas", action="store_true",
