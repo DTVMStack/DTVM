@@ -77,9 +77,13 @@ void JITStubBuilder::compileStubResolver() {
 }
 
 void JITStubBuilder::allocateStubSpace(uint32_t NumInternalFunctions) {
-  size_t TotalStubCodeSize = NumInternalFunctions * EachStubCodeSize;
+  TotalStubCodeSize = NumInternalFunctions * EachStubCodeSize;
   StubsCodePtr = reinterpret_cast<uint8_t *>(
       CodeMPool.allocate(TotalStubCodeSize, common::CodeMemPool::PageSize));
+  platform::mprotect(StubsCodePtr, TotalStubCodeSize, PROT_WRITE);
+}
+
+void JITStubBuilder::finalizeStubs() {
   platform::mprotect(StubsCodePtr, TotalStubCodeSize, PROT_WRITE | PROT_EXEC);
 }
 

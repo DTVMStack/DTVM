@@ -23,6 +23,8 @@ public:
 
   void compileFunctionToStub(uint32_t FuncIdx);
 
+  void finalizeStubs();
+
   uint8_t *getFuncStubCodePtr(uint32_t FuncIdx) const {
     return StubsCodePtr + FuncIdx * EachStubCodeSize;
   }
@@ -39,6 +41,7 @@ private:
   // need put it in module's code ptr so the relative offset in int32 range
   uint8_t *StubResolverPtr = nullptr;
   uint8_t *StubsCodePtr = nullptr;
+  size_t TotalStubCodeSize = 0;
 };
 
 } // namespace COMPILER
