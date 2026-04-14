@@ -438,24 +438,32 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
           !Entry["address"].IsString()) {
         continue;
       }
-      evmc::address Address =
-          zen::utils::parseAddress(Entry["address"].GetString());
+      evmc::address Address;
+      try {
+        Address = zen::utils::parseAddress(Entry["address"].GetString());
+      } catch (...) {
+        continue;
+      }
       Host.access_account(Address);
 
       if (!Entry.HasMember("storage_keys") ||
           !Entry["storage_keys"].IsArray()) {
         continue;
       }
-      auto AccIt = Host.accounts.find(Address);
-      if (AccIt == Host.accounts.end()) {
-        continue;
-      }
+      // EIP-2930 requires access-list storage keys to be warm even when the
+      // account is not yet present in the initial host state (e.g. when the
+      // contract is created later in the same transaction). Use the host
+      // access_storage API so the account entry is materialized automatically.
       for (const auto &KeyVal : Entry["storage_keys"].GetArray()) {
         if (!KeyVal.IsString()) {
           continue;
         }
-        evmc::bytes32 Key = zen::utils::parseBytes32(KeyVal.GetString());
-        AccIt->second.storage[Key].access_status = EVMC_ACCESS_WARM;
+        try {
+          evmc::bytes32 Key = zen::utils::parseBytes32(KeyVal.GetString());
+          Host.access_storage(Address, Key);
+        } catch (...) {
+          continue;
+        }
       }
     }
   }
