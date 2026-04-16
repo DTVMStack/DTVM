@@ -8,13 +8,19 @@
 
 Remove all-or-nothing dynamic jump fallback — previously any unresolved dynamic
 jump caused the entire contract to fall back to per-block gas metering (zero SPP
-benefit). Now always builds a CFG with mixed edges: precise for resolved jumps,
-over-approximated for unresolved ones.
+benefit). Now always builds a CFG with over-approximated edges for all unresolved
+dynamic jumps and precise edges for static jumps (PUSH → JUMP). The CFG is
+intentionally kept over-approximate — using resolved targets to narrow edges
+would under-approximate the CFG when resolution is incomplete, causing
+`lemma614Update` to shift gas along non-existent edges and produce unsafe
+metering.
 
 Add call-site enumeration for function returns: resolves `SWAPn→JUMP` patterns
 (Solidity internal function returns) by identifying call sites
 (`PUSH ret → PUSH func → JUMP`) and collecting return addresses via reverse
-reachability. Achieves high jump resolution rate on typical Solidity contracts.
+reachability. Resolved targets are exported through `ResolvedJumpTargets` for
+downstream consumers (e.g. MIR direct-branch optimization with runtime guard),
+not used for CFG refinement.
 
 `GasChunkCost` continues to write the original `Blocks[Id].Cost` (not the
 SPP-shifted `Metering[Id]`) — the interpreter's gas chunk fast path requires
@@ -47,7 +53,8 @@ This PR is scoped to the cache-side CFG improvements only:
 - Tighten the SPP shifting guards to bail out of the shift when a successor is
   a `isGasChunkTerminator` — prevents masking gas cost across chunk boundaries.
 
-No frontend/MIR changes are included in this PR.
+No frontend/MIR changes are included in this PR. Resolved jump targets are
+exported via `EVMBytecodeCache::ResolvedJumpTargets` for future use.
 
 ## Impact
 
@@ -114,13 +121,23 @@ evmone-unittests, 2723/2723 evmone-statetests on `fork_Cancun`.
 
 ## Changed Files
 
-- `src/evm/evm_cache.h` — add `GasChunkCostSPP` field
-- `src/evm/evm_cache.cpp` — mixed-CFG, call-site enumeration, SPP export
+- `src/evm/evm_cache.h` — add `GasChunkCostSPP` array and `ResolvedJumpTargets` map
+- `src/evm/evm_cache.cpp` — mixed-CFG, call-site enumeration, SPP export,
+  soundness fix (always over-approximate CFG for dynamic jumps)
 - `src/compiler/evm_frontend/evm_mir_compiler.h` — plumb SPP pointer through
   context and builder
 - `src/compiler/evm_frontend/evm_mir_compiler.cpp` — prefer SPP-shifted cost
   at the three chunk-cost read sites
 - `src/compiler/evm_compiler.cpp` — pass the new pointer via `setGasChunkInfo`
+
+### Phase 5: Soundness fix
+
+- [x] Remove two-pass CFG rebuild — `buildCFGEdges` always over-approximates
+      dynamic jumps (edges to all JUMPDESTs)
+- [x] Export `ResolvedJumpTargets` through `EVMBytecodeCache` for downstream
+      MIR direct-branch optimization (with runtime guard)
+- [x] Tighten `lemma614Update` to set `MinSucc = 0` when encountering
+      excluded successors or gas-chunk terminators
 
 ## Risks
 
@@ -130,3 +147,6 @@ evmone-unittests, 2723/2723 evmone-statetests on `fork_Cancun`.
   `PUSH ret → PUSH func → JUMP` pattern; non-standard compilers may not match.
 - Reverse-reachability walk is bounded by `MAX_REVERSE_REACHABILITY_DEPTH` to
   cap worst-case compile-time cost.
+- Reverse-reachability BFS uses over-approximate predecessor edges, so it may
+  cross function boundaries and find a wrong entry. This is benign because
+  resolved targets are only used with runtime guards downstream.
