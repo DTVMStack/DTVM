@@ -101,6 +101,11 @@ private:
       case Opcode::UNREACHABLE:
         handleUnreachable();
         Ip = skipCurrentBlock(Ip, IpEnd);
+        if (!Ip) {
+          throw getErrorWithExtraMessage(
+              ErrorCode::UnexpectedEnd,
+              "malformed bytecode: unbalanced blocks after UNREACHABLE");
+        }
         CurBlock.setReachable(false);
         break;
 
@@ -138,6 +143,11 @@ private:
         Ip = readSafeLEBNumber(Ip, U32);
         handleBranch(U32);
         Ip = skipCurrentBlock(Ip, IpEnd);
+        if (!Ip) {
+          throw getErrorWithExtraMessage(
+              ErrorCode::UnexpectedEnd,
+              "malformed bytecode: unbalanced blocks after BR");
+        }
         CurBlock.setReachable(false);
         break;
 
@@ -150,11 +160,21 @@ private:
         Ip = readSafeLEBNumber(Ip, U32);
         Ip = handleBranchTable(Ip, IpEnd, U32);
         Ip = skipCurrentBlock(Ip, IpEnd);
+        if (!Ip) {
+          throw getErrorWithExtraMessage(
+              ErrorCode::UnexpectedEnd,
+              "malformed bytecode: unbalanced blocks after BR_TABLE");
+        }
         CurBlock.setReachable(false);
         break;
 
       case Opcode::RETURN:
         Ip = skipCurrentBlock(Ip, IpEnd);
+        if (!Ip) {
+          throw getErrorWithExtraMessage(
+              ErrorCode::UnexpectedEnd,
+              "malformed bytecode: unbalanced blocks after RETURN");
+        }
         handleReturn();
         CurBlock.setReachable(false);
         break;
