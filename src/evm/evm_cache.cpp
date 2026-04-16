@@ -383,18 +383,15 @@ static bool resolveConstantJumpTarget(const std::vector<uint8_t> &JumpDestMap,
                               DestPc);
 }
 
-// Build CFG edges for all blocks.
-// When ResolvedTargets is null, uses over-approximation (all JUMPDESTs) for
-// unresolved dynamic jumps. When non-null, uses resolved targets for known
-// SWAPn→JUMP return patterns and falls back to over-approximation for the rest.
-static void
-buildCFGEdges(std::vector<GasBlock> &Blocks,
-              const std::vector<uint32_t> &BlockAtPc,
-              const std::vector<uint8_t> &JumpDestMap,
-              const std::vector<intx::uint256> &PushValueMap,
-              const std::vector<uint32_t> &JumpDestBlocks, size_t CodeSize,
-              const std::unordered_map<uint32_t, std::vector<uint32_t>>
-                  *ResolvedTargets) {
+// Build CFG edges for all blocks. Static jumps (PUSH → JUMP) get precise
+// single-target edges; all other dynamic jumps get over-approximated edges
+// to every JUMPDEST to keep the CFG sound for SPP metering.
+static void buildCFGEdges(std::vector<GasBlock> &Blocks,
+                          const std::vector<uint32_t> &BlockAtPc,
+                          const std::vector<uint8_t> &JumpDestMap,
+                          const std::vector<intx::uint256> &PushValueMap,
+                          const std::vector<uint32_t> &JumpDestBlocks,
+                          size_t CodeSize) {
   for (size_t BlockId = 0; BlockId < Blocks.size(); ++BlockId) {
     auto &Block = Blocks[BlockId];
     const bool IsTerminator = isControlFlowTerminator(Block.LastOpcode);
@@ -418,24 +415,11 @@ buildCFGEdges(std::vector<GasBlock> &Blocks,
         if (SuccId != UINT32_MAX) {
           addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
         }
-      } else if (ResolvedTargets != nullptr) {
-        // Second-pass: use call-site resolved targets if available.
-        auto It = ResolvedTargets->find(Block.LastPc);
-        if (It != ResolvedTargets->end()) {
-          for (uint32_t TargetPc : It->second) {
-            const uint32_t SuccId = BlockAtPc[TargetPc];
-            if (SuccId != UINT32_MAX) {
-              addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
-            }
-          }
-        } else {
-          // Still unresolved: over-approx to all jump destinations.
-          for (uint32_t SuccId : JumpDestBlocks) {
-            addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
-          }
-        }
       } else {
-        // First-pass (no resolved targets yet): over-approx.
+        // Dynamic jump: over-approximate to all jump destinations.
+        // This keeps the CFG sound — under-approximation would let
+        // lemma614Update shift gas along edges that don't exist at
+        // runtime, causing unsafe metering on missed paths.
         for (uint32_t SuccId : JumpDestBlocks) {
           addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
         }
@@ -1084,6 +1068,11 @@ static void resolveCallSiteTargets(
 
     // Reverse reachability: walk backward from this block to find a
     // JUMPDEST that is a known call target.
+    // NOTE: predecessor edges include over-approximate dynamic jump edges from
+    // the first-pass CFG, so the BFS may cross function boundaries and find a
+    // wrong entry. This is acceptable because resolved targets are only used
+    // with a runtime guard (JumpTarget == constant?) — wrong resolution just
+    // misses an optimization, never causes miscompilation.
     uint32_t FuncEntry = UINT32_MAX;
     {
       std::vector<uint32_t> Worklist;
@@ -1140,14 +1129,15 @@ static void resolveCallSiteTargets(
   }
 }
 
-static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
-                              const evmc_instruction_metrics *MetricsTable,
-                              const std::vector<uint8_t> &JumpDestMap,
-                              const std::vector<intx::uint256> &PushValueMap,
-                              std::vector<uint32_t> &GasChunkEnd,
-                              std::vector<uint64_t> &GasChunkCost,
-                              std::vector<uint64_t> &GasChunkCostSPP,
-                              bool EnableSPP) {
+static bool buildGasChunksSPP(
+    const zen::common::Byte *Code, size_t CodeSize,
+    const evmc_instruction_metrics *MetricsTable,
+    const std::vector<uint8_t> &JumpDestMap,
+    const std::vector<intx::uint256> &PushValueMap,
+    std::vector<uint32_t> &GasChunkEnd, std::vector<uint64_t> &GasChunkCost,
+    std::vector<uint64_t> &GasChunkCostSPP,
+    std::unordered_map<uint32_t, std::vector<uint32_t>> &ResolvedJumpTargets,
+    bool EnableSPP) {
   std::vector<GasBlock> Blocks;
   std::vector<uint32_t> BlockAtPc;
   buildGasBlocks(Code, CodeSize, MetricsTable, Blocks, BlockAtPc);
@@ -1191,30 +1181,22 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     }
   }
 
-  // Build initial CFG with over-approximation for unresolved jumps.
-  // This is needed before call-site enumeration because reverse reachability
-  // requires predecessor edges.
+  // Build CFG with over-approximation for all unresolved dynamic jumps.
+  // Static jumps (PUSH → JUMP) get precise single-target edges; dynamic
+  // jumps get edges to every JUMPDEST. This is intentionally conservative —
+  // using call-site-resolved targets to narrow edges would under-approximate
+  // the CFG when resolution is incomplete, causing lemma614Update to shift
+  // gas along non-existent edges and produce unsafe metering.
   buildCFGEdges(Blocks, BlockAtPc, JumpDestMap, PushValueMap, JumpDestBlocks,
-                CodeSize, nullptr);
+                CodeSize);
 
   // Resolve function-return jump targets via call-site enumeration.
-  // This uses the initial CFG (with over-approximated edges) for reverse
-  // reachability to find function entries.
+  // The resolved targets are NOT used to refine CFG edges (see above) but
+  // are exported through the cache for downstream consumers such as the MIR
+  // compiler's direct-branch optimization (guarded by a runtime check).
   std::unordered_map<uint32_t, std::vector<uint32_t>> ResolvedTargets;
   resolveCallSiteTargets(Blocks, BlockAtPc, JumpDestMap, PushValueMap, CodeSize,
                          ResolvedTargets);
-
-  // If call-site enumeration resolved any targets, rebuild CFG with
-  // precise edges for those jumps.
-  if (!ResolvedTargets.empty()) {
-    // Clear all edges and rebuild with refined edges
-    for (auto &Block : Blocks) {
-      Block.Succs.clear();
-      Block.Preds.clear();
-    }
-    buildCFGEdges(Blocks, BlockAtPc, JumpDestMap, PushValueMap, JumpDestBlocks,
-                  CodeSize, &ResolvedTargets);
-  }
 
   // Split critical edges (required for safe SPP optimization)
   splitCriticalEdges(Blocks, CodeSize);
@@ -1349,6 +1331,10 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     GasChunkCostSPP[Blocks[Id].Start] = Metering[Id];
   }
 
+  // Export resolved jump targets for downstream consumers (e.g. MIR
+  // direct-branch optimization with runtime guard).
+  ResolvedJumpTargets = std::move(ResolvedTargets);
+
   return true;
 }
 
@@ -1375,7 +1361,8 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
 
   buildGasChunksSPP(Code, CodeSize, MetricsTable, Cache.JumpDestMap,
                     Cache.PushValueMap, Cache.GasChunkEnd, Cache.GasChunkCost,
-                    Cache.GasChunkCostSPP, EnableSPP);
+                    Cache.GasChunkCostSPP, Cache.ResolvedJumpTargets,
+                    EnableSPP);
 }
 
 } // namespace zen::evm

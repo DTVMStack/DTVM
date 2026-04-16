@@ -36,8 +36,8 @@ work on the resolved portion of the CFG.
 This PR is scoped to the cache-side CFG improvements only:
 
 - Remove the `HasDynamicJump` early-exit bailout in `buildGasChunksSPP`.
-- Factor out `buildCFGEdges()` so the CFG can be built twice: once with
-  over-approximation, once with call-site-resolved targets mixed in.
+- Factor out `buildCFGEdges()` with over-approximation for all unresolved
+  dynamic jumps (sound for SPP metering).
 - Add `resolveCallSiteTargets()` — identifies `SWAPn→JUMP` return patterns and
   walks predecessors to find the enclosing function entry, then collects valid
   return addresses from matching call sites.
