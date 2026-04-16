@@ -53,8 +53,7 @@ This PR is scoped to the cache-side CFG improvements only:
 - Tighten the SPP shifting guards to bail out of the shift when a successor is
   a `isGasChunkTerminator` — prevents masking gas cost across chunk boundaries.
 
-No frontend/MIR changes are included in this PR. Resolved jump targets are
-exported via `EVMBytecodeCache::ResolvedJumpTargets` for future use.
+No frontend/MIR changes are included in this PR.
 
 ## Impact
 
@@ -121,9 +120,9 @@ evmone-unittests, 2723/2723 evmone-statetests on `fork_Cancun`.
 
 ## Changed Files
 
-- `src/evm/evm_cache.h` — add `GasChunkCostSPP` array and `ResolvedJumpTargets` map
-- `src/evm/evm_cache.cpp` — mixed-CFG, call-site enumeration, SPP export,
-  soundness fix (always over-approximate CFG for dynamic jumps)
+- `src/evm/evm_cache.h` — add `GasChunkCostSPP` array
+- `src/evm/evm_cache.cpp` — mixed-CFG, SPP export, soundness fix (always
+  over-approximate CFG for dynamic jumps)
 - `src/compiler/evm_frontend/evm_mir_compiler.h` — plumb SPP pointer through
   context and builder
 - `src/compiler/evm_frontend/evm_mir_compiler.cpp` — prefer SPP-shifted cost
@@ -134,8 +133,7 @@ evmone-unittests, 2723/2723 evmone-statetests on `fork_Cancun`.
 
 - [x] Remove two-pass CFG rebuild — `buildCFGEdges` always over-approximates
       dynamic jumps (edges to all JUMPDESTs)
-- [x] Export `ResolvedJumpTargets` through `EVMBytecodeCache` for downstream
-      MIR direct-branch optimization (with runtime guard)
+- [x] Remove dead call-site enumeration code (no downstream consumer yet)
 - [x] Tighten `lemma614Update` to set `MinSucc = 0` when encountering
       excluded successors or gas-chunk terminators
 
@@ -143,10 +141,3 @@ evmone-unittests, 2723/2723 evmone-statetests on `fork_Cancun`.
 
 - Over-approximated edges for unresolved jumps may pessimize gas placement for
   pathological contracts with many unresolved targets.
-- Call-site enumeration assumes the Solidity-style
-  `PUSH ret → PUSH func → JUMP` pattern; non-standard compilers may not match.
-- Reverse-reachability walk is bounded by `MAX_REVERSE_REACHABILITY_DEPTH` to
-  cap worst-case compile-time cost.
-- Reverse-reachability BFS uses over-approximate predecessor edges, so it may
-  cross function boundaries and find a wrong entry. This is benign because
-  resolved targets are only used with runtime guards downstream.
