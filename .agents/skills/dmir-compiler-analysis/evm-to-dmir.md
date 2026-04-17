@@ -10,191 +10,191 @@ for every EVM opcode.
 ## 0. Source Trace Table (Authoritative)
 
 Every EVM opcode is dispatched in `EVMByteCodeVisitor::decode()` at
-`src/action/evm_bytecode_visitor.h:108`. The visitor calls local `handle*()` wrappers
+`src/action/evm_bytecode_visitor.h`. The visitor calls local `handle*()` wrappers
 that pop/push the EVM stack and delegate to `EVMMirBuilder::handle*()` for dMIR generation.
 
 ### Arithmetic
 
 | EVM Opcode | Hex | Visitor Dispatch (evm_bytecode_visitor.h) | Builder Function | Builder Location |
 |---|---|---|---|---|
-| STOP | 0x00 | :109 `handleStop()` | `EVMMirBuilder::handleStop` | evm_mir_compiler.cpp:879 |
-| ADD | 0x01 | :113 `handleBinaryArithmetic<BO_ADD>()` | `EVMMirBuilder::handleBinaryArithmetic<BO_ADD>` | evm_mir_compiler.h:225 (template, inline) |
-| MUL | 0x02 | :117 `handleMul()` | `EVMMirBuilder::handleMul` | evm_mir_compiler.cpp:1301 |
-| SUB | 0x03 | :120 `handleBinaryArithmetic<BO_SUB>()` | `EVMMirBuilder::handleBinaryArithmetic<BO_SUB>` | evm_mir_compiler.h:225 (template, inline) |
-| DIV | 0x04 | :122 `handleDiv()` | `EVMMirBuilder::handleDiv` | evm_mir_compiler.cpp:1400 |
-| SDIV | 0x05 | :125 `handleSDiv()` | `EVMMirBuilder::handleSDiv` | evm_mir_compiler.cpp:1408 |
-| MOD | 0x06 | :128 `handleMod()` | `EVMMirBuilder::handleMod` | evm_mir_compiler.cpp:1416 |
-| SMOD | 0x07 | :131 `handleSMod()` | `EVMMirBuilder::handleSMod` | evm_mir_compiler.cpp:1424 |
-| ADDMOD | 0x08 | :134 `handleAddMod()` | `EVMMirBuilder::handleAddMod` | evm_mir_compiler.cpp:1432 |
-| MULMOD | 0x09 | :137 `handleMulMod()` | `EVMMirBuilder::handleMulMod` | evm_mir_compiler.cpp:1442 |
-| EXP | 0x0A | :140 `handleExp()` | `EVMMirBuilder::handleExp` | evm_mir_compiler.cpp:1450 |
-| SIGNEXTEND | 0x0B | :143 `handleSignextend()` | `EVMMirBuilder::handleSignextend` | evm_mir_compiler.cpp:2348 |
+| STOP | 0x00 | `handleStop()` | `EVMMirBuilder::handleStop` | evm_mir_compiler.cpp |
+| ADD | 0x01 | `handleBinaryArithmetic<BO_ADD>()` | `EVMMirBuilder::handleBinaryArithmetic<BO_ADD>` | evm_mir_compiler.h (template, inline) |
+| MUL | 0x02 | `handleMul()` | `EVMMirBuilder::handleMul` | evm_mir_compiler.cpp |
+| SUB | 0x03 | `handleBinaryArithmetic<BO_SUB>()` | `EVMMirBuilder::handleBinaryArithmetic<BO_SUB>` | evm_mir_compiler.h (template, inline) |
+| DIV | 0x04 | `handleDiv()` | `EVMMirBuilder::handleDiv` | evm_mir_compiler.cpp |
+| SDIV | 0x05 | `handleSDiv()` | `EVMMirBuilder::handleSDiv` | evm_mir_compiler.cpp |
+| MOD | 0x06 | `handleMod()` | `EVMMirBuilder::handleMod` | evm_mir_compiler.cpp |
+| SMOD | 0x07 | `handleSMod()` | `EVMMirBuilder::handleSMod` | evm_mir_compiler.cpp |
+| ADDMOD | 0x08 | `handleAddMod()` | `EVMMirBuilder::handleAddMod` | evm_mir_compiler.cpp |
+| MULMOD | 0x09 | `handleMulMod()` | `EVMMirBuilder::handleMulMod` | evm_mir_compiler.cpp |
+| EXP | 0x0A | `handleExp()` | `EVMMirBuilder::handleExp` | evm_mir_compiler.cpp |
+| SIGNEXTEND | 0x0B | `handleSignextend()` | `EVMMirBuilder::handleSignextend` | evm_mir_compiler.cpp |
 
 ### Comparison
 
 | EVM Opcode | Hex | Visitor Dispatch | Builder Function | Builder Location |
 |---|---|---|---|---|
-| LT | 0x10 | :147 `handleCompare<CO_LT>()` | `handleCompareOp<CO_LT>` -> `handleCompareGT_LT` | .h:311 (template) -> .cpp:1784 |
-| GT | 0x11 | :150 `handleCompare<CO_GT>()` | `handleCompareOp<CO_GT>` -> `handleCompareGT_LT` | .h:311 -> .cpp:1784 |
-| SLT | 0x12 | :153 `handleCompare<CO_LT_S>()` | `handleCompareOp<CO_LT_S>` -> `handleCompareGT_LT` | .h:311 -> .cpp:1784 |
-| SGT | 0x13 | :156 `handleCompare<CO_GT_S>()` | `handleCompareOp<CO_GT_S>` -> `handleCompareGT_LT` | .h:311 -> .cpp:1784 |
-| EQ | 0x14 | :159 `handleCompare<CO_EQ>()` | `handleCompareOp<CO_EQ>` -> `handleCompareEQ` | .h:311 -> .cpp:1752 |
-| ISZERO | 0x15 | :162 `handleCompare<CO_EQZ>()` | `handleCompareOp<CO_EQZ>` -> `handleCompareEQZ` | .h:311 -> .cpp:1720 |
+| LT | 0x10 | `handleCompare<CO_LT>()` | `handleCompareOp<CO_LT>` -> `handleCompareGT_LT` | .h (template) -> .cpp |
+| GT | 0x11 | `handleCompare<CO_GT>()` | `handleCompareOp<CO_GT>` -> `handleCompareGT_LT` | .h -> .cpp |
+| SLT | 0x12 | `handleCompare<CO_LT_S>()` | `handleCompareOp<CO_LT_S>` -> `handleCompareGT_LT` | .h -> .cpp |
+| SGT | 0x13 | `handleCompare<CO_GT_S>()` | `handleCompareOp<CO_GT_S>` -> `handleCompareGT_LT` | .h -> .cpp |
+| EQ | 0x14 | `handleCompare<CO_EQ>()` | `handleCompareOp<CO_EQ>` -> `handleCompareEQ` | .h -> .cpp |
+| ISZERO | 0x15 | `handleCompare<CO_EQZ>()` | `handleCompareOp<CO_EQZ>` -> `handleCompareEQZ` | .h -> .cpp |
 
 ### Bitwise
 
 | EVM Opcode | Hex | Visitor Dispatch | Builder Function | Builder Location |
 |---|---|---|---|---|
-| AND | 0x16 | :164 `handleBitwiseOp<BO_AND>()` | `EVMMirBuilder::handleBitwiseOp<BO_AND>` | evm_mir_compiler.h:318 (template, inline) |
-| OR | 0x17 | :167 `handleBitwiseOp<BO_OR>()` | `EVMMirBuilder::handleBitwiseOp<BO_OR>` | evm_mir_compiler.h:318 |
-| XOR | 0x18 | :170 `handleBitwiseOp<BO_XOR>()` | `EVMMirBuilder::handleBitwiseOp<BO_XOR>` | evm_mir_compiler.h:318 |
-| NOT | 0x19 | :174 `handleNot()` | `EVMMirBuilder::handleNot` | evm_mir_compiler.cpp:1856 |
-| BYTE | 0x1A | :177 `handleByte()` | `EVMMirBuilder::handleByte` | evm_mir_compiler.cpp:2273 |
-| SHL | 0x1B | :180 `handleShift<BO_SHL>()` | `handleShift<BO_SHL>` -> `handleLeftShift` | .h:341 -> .cpp:1880 |
-| SHR | 0x1C | :183 `handleShift<BO_SHR_U>()` | `handleShift<BO_SHR_U>` -> `handleLogicalRightShift` | .h:341 -> .cpp:2014 |
-| SAR | 0x1D | :186 `handleShift<BO_SHR_S>()` | `handleShift<BO_SHR_S>` -> `handleArithmeticRightShift` | .h:341 -> .cpp:2142 |
-| CLZ | 0x1E | :189 `handleClz()` | `EVMMirBuilder::handleClz` | evm_mir_compiler.cpp:1873 |
+| AND | 0x16 | `handleBitwiseOp<BO_AND>()` | `EVMMirBuilder::handleBitwiseOp<BO_AND>` | evm_mir_compiler.h (template, inline) |
+| OR | 0x17 | `handleBitwiseOp<BO_OR>()` | `EVMMirBuilder::handleBitwiseOp<BO_OR>` | evm_mir_compiler.h |
+| XOR | 0x18 | `handleBitwiseOp<BO_XOR>()` | `EVMMirBuilder::handleBitwiseOp<BO_XOR>` | evm_mir_compiler.h |
+| NOT | 0x19 | `handleNot()` | `EVMMirBuilder::handleNot` | evm_mir_compiler.cpp |
+| BYTE | 0x1A | `handleByte()` | `EVMMirBuilder::handleByte` | evm_mir_compiler.cpp |
+| SHL | 0x1B | `handleShift<BO_SHL>()` | `handleShift<BO_SHL>` -> `handleLeftShift` | .h -> .cpp |
+| SHR | 0x1C | `handleShift<BO_SHR_U>()` | `handleShift<BO_SHR_U>` -> `handleLogicalRightShift` | .h -> .cpp |
+| SAR | 0x1D | `handleShift<BO_SHR_S>()` | `handleShift<BO_SHR_S>` -> `handleArithmeticRightShift` | .h -> .cpp |
+| CLZ | 0x1E | `handleClz()` | `EVMMirBuilder::handleClz` | evm_mir_compiler.cpp |
 
 ### Stack
 
 | EVM Opcode | Hex | Visitor Dispatch | Builder Function | Builder Location |
 |---|---|---|---|---|
-| POP | 0x50 | :192 `handlePop()` | (visitor-level only, pops eval stack) | evm_bytecode_visitor.h |
-| PUSH0-32 | 0x5F-0x7F | :195-231 `handlePush(N)` | `EVMMirBuilder::handlePush` | evm_mir_compiler.cpp:1143 |
-| DUP1-16 | 0x80-0x8F | :234-252 `handleDup(N)` | `EVMMirBuilder::stackGet` | evm_mir_compiler.cpp:855 |
-| SWAP1-16 | 0x90-0x9F | :255-273 `handleSwap(N)` | `EVMMirBuilder::stackGet/stackSet` | evm_mir_compiler.cpp:835/855 |
+| POP | 0x50 | `handlePop()` | (visitor-level only, pops eval stack) | evm_bytecode_visitor.h |
+| PUSH0-32 | 0x5F-0x7F | `handlePush(N)` | `EVMMirBuilder::handlePush` | evm_mir_compiler.cpp |
+| DUP1-16 | 0x80-0x8F | `handleDup(N)` | `EVMMirBuilder::stackGet` | evm_mir_compiler.cpp |
+| SWAP1-16 | 0x90-0x9F | `handleSwap(N)` | `EVMMirBuilder::stackGet/stackSet` | evm_mir_compiler.cpp |
 
 ### Memory
 
 | EVM Opcode | Hex | Visitor Dispatch | Builder Function | Builder Location |
 |---|---|---|---|---|
-| MLOAD | 0x51 | :471 | `EVMMirBuilder::handleMLoad` | evm_mir_compiler.cpp:2690 |
-| MSTORE | 0x52 | :478 | `EVMMirBuilder::handleMStore` | evm_mir_compiler.cpp:2734 |
-| MSTORE8 | 0x53 | :485 | `EVMMirBuilder::handleMStore8` | evm_mir_compiler.cpp:2793 |
-| MCOPY | 0x5E | :526 | `EVMMirBuilder::handleMCopy` | evm_mir_compiler.cpp:2838 |
-| MSIZE | 0x59 | :506 | `EVMMirBuilder::handleMSize` | evm_mir_compiler.cpp:2642 |
+| MLOAD | 0x51 | inline `Builder.handleMLoad()` | `EVMMirBuilder::handleMLoad` | evm_mir_compiler.cpp |
+| MSTORE | 0x52 | inline `Builder.handleMStore()` | `EVMMirBuilder::handleMStore` | evm_mir_compiler.cpp |
+| MSTORE8 | 0x53 | inline `Builder.handleMStore8()` | `EVMMirBuilder::handleMStore8` | evm_mir_compiler.cpp |
+| MCOPY | 0x5E | inline `Builder.handleMCopy()` | `EVMMirBuilder::handleMCopy` | evm_mir_compiler.cpp |
+| MSIZE | 0x59 | inline `Builder.handleMSize()` | `EVMMirBuilder::handleMSize` | evm_mir_compiler.cpp |
 
 ### Storage
 
 | EVM Opcode | Hex | Visitor Dispatch | Builder Function | Builder Location |
 |---|---|---|---|---|
-| SLOAD | 0x54 | :492 | `EVMMirBuilder::handleSLoad` | evm_mir_compiler.cpp:3183 |
-| SSTORE | 0x55 | :499 | `EVMMirBuilder::handleSStore` | evm_mir_compiler.cpp:3195 |
-| TLOAD | 0x5C | :512 | `EVMMirBuilder::handleTLoad` | evm_mir_compiler.cpp:3207 |
-| TSTORE | 0x5D | :519 | `EVMMirBuilder::handleTStore` | evm_mir_compiler.cpp:3212 |
+| SLOAD | 0x54 | inline `Builder.handleSLoad()` | `EVMMirBuilder::handleSLoad` | evm_mir_compiler.cpp |
+| SSTORE | 0x55 | inline `Builder.handleSStore()` | `EVMMirBuilder::handleSStore` | evm_mir_compiler.cpp |
+| TLOAD | 0x5C | inline `Builder.handleTLoad()` | `EVMMirBuilder::handleTLoad` | evm_mir_compiler.cpp |
+| TSTORE | 0x5D | inline `Builder.handleTStore()` | `EVMMirBuilder::handleTStore` | evm_mir_compiler.cpp |
 
 ### Environment
 
 | EVM Opcode | Hex | Builder Function | Builder Location |
 |---|---|---|---|
-| ADDRESS | 0x30 | `handleAddress` | evm_mir_compiler.cpp:2474 |
-| BALANCE | 0x31 | `handleBalance` | evm_mir_compiler.cpp:2479 |
-| ORIGIN | 0x32 | `handleOrigin` | evm_mir_compiler.cpp:2492 |
-| CALLER | 0x33 | `handleCaller` | evm_mir_compiler.cpp:2497 |
-| CALLVALUE | 0x34 | `handleCallValue` | evm_mir_compiler.cpp:2502 |
-| CALLDATALOAD | 0x35 | `handleCallDataLoad` | evm_mir_compiler.cpp:2508 |
-| CALLDATASIZE | 0x36 | `handleCallDataSize` | evm_mir_compiler.cpp:2521 |
-| CALLDATACOPY | 0x37 | `handleCallDataCopy` | evm_mir_compiler.cpp:3933 |
-| CODESIZE | 0x38 | `handleCodeSize` | evm_mir_compiler.cpp:2526 |
-| CODECOPY | 0x39 | `handleCodeCopy` | evm_mir_compiler.cpp:2531 |
-| GASPRICE | 0x3A | `handleGasPrice` | evm_mir_compiler.cpp:2516 |
-| EXTCODESIZE | 0x3B | `handleExtCodeSize` | evm_mir_compiler.cpp:2551 |
-| EXTCODECOPY | 0x3C | `handleExtCodeCopy` | evm_mir_compiler.cpp:3953 |
-| RETURNDATASIZE | 0x3D | `handleReturnDataSize` | evm_mir_compiler.cpp:4000 |
-| RETURNDATACOPY | 0x3E | `handleReturnDataCopy` | evm_mir_compiler.cpp:3977 |
-| EXTCODEHASH | 0x3F | `handleExtCodeHash` | evm_mir_compiler.cpp:2565 |
-| BLOCKHASH | 0x40 | `handleBlockHash` | evm_mir_compiler.cpp:2579 |
-| COINBASE | 0x41 | `handleCoinBase` | evm_mir_compiler.cpp:2587 |
-| TIMESTAMP | 0x42 | `handleTimestamp` | evm_mir_compiler.cpp:2592 |
-| NUMBER | 0x43 | `handleNumber` | evm_mir_compiler.cpp:2597 |
-| PREVRANDAO | 0x44 | `handlePrevRandao` | evm_mir_compiler.cpp:2602 |
-| GASLIMIT | 0x45 | `handleGasLimit` | evm_mir_compiler.cpp:2607 |
-| CHAINID | 0x46 | `handleChainId` | evm_mir_compiler.cpp:2612 |
-| SELFBALANCE | 0x47 | `handleSelfBalance` | evm_mir_compiler.cpp:2617 |
-| BASEFEE | 0x48 | `handleBaseFee` | evm_mir_compiler.cpp:2622 |
-| BLOBHASH | 0x49 | `handleBlobHash` | evm_mir_compiler.cpp:2627 |
-| BLOBBASEFEE | 0x4A | `handleBlobBaseFee` | evm_mir_compiler.cpp:2637 |
-| PC | 0x58 | `handlePC` | evm_mir_compiler.cpp:2457 |
-| GAS | 0x5A | `handleGas` | evm_mir_compiler.cpp:2466 |
+| ADDRESS | 0x30 | `handleAddress` | evm_mir_compiler.cpp |
+| BALANCE | 0x31 | `handleBalance` | evm_mir_compiler.cpp |
+| ORIGIN | 0x32 | `handleOrigin` | evm_mir_compiler.cpp |
+| CALLER | 0x33 | `handleCaller` | evm_mir_compiler.cpp |
+| CALLVALUE | 0x34 | `handleCallValue` | evm_mir_compiler.cpp |
+| CALLDATALOAD | 0x35 | `handleCallDataLoad` | evm_mir_compiler.cpp |
+| CALLDATASIZE | 0x36 | `handleCallDataSize` | evm_mir_compiler.cpp |
+| CALLDATACOPY | 0x37 | `handleCallDataCopy` | evm_mir_compiler.cpp |
+| CODESIZE | 0x38 | `handleCodeSize` | evm_mir_compiler.cpp |
+| CODECOPY | 0x39 | `handleCodeCopy` | evm_mir_compiler.cpp |
+| GASPRICE | 0x3A | `handleGasPrice` | evm_mir_compiler.cpp |
+| EXTCODESIZE | 0x3B | `handleExtCodeSize` | evm_mir_compiler.cpp |
+| EXTCODECOPY | 0x3C | `handleExtCodeCopy` | evm_mir_compiler.cpp |
+| RETURNDATASIZE | 0x3D | `handleReturnDataSize` | evm_mir_compiler.cpp |
+| RETURNDATACOPY | 0x3E | `handleReturnDataCopy` | evm_mir_compiler.cpp |
+| EXTCODEHASH | 0x3F | `handleExtCodeHash` | evm_mir_compiler.cpp |
+| BLOCKHASH | 0x40 | `handleBlockHash` | evm_mir_compiler.cpp |
+| COINBASE | 0x41 | `handleCoinBase` | evm_mir_compiler.cpp |
+| TIMESTAMP | 0x42 | `handleTimestamp` | evm_mir_compiler.cpp |
+| NUMBER | 0x43 | `handleNumber` | evm_mir_compiler.cpp |
+| PREVRANDAO | 0x44 | `handlePrevRandao` | evm_mir_compiler.cpp |
+| GASLIMIT | 0x45 | `handleGasLimit` | evm_mir_compiler.cpp |
+| CHAINID | 0x46 | `handleChainId` | evm_mir_compiler.cpp |
+| SELFBALANCE | 0x47 | `handleSelfBalance` | evm_mir_compiler.cpp |
+| BASEFEE | 0x48 | `handleBaseFee` | evm_mir_compiler.cpp |
+| BLOBHASH | 0x49 | `handleBlobHash` | evm_mir_compiler.cpp |
+| BLOBBASEFEE | 0x4A | `handleBlobBaseFee` | evm_mir_compiler.cpp |
+| PC | 0x58 | `handlePC` | evm_mir_compiler.cpp |
+| GAS | 0x5A | `handleGas` | evm_mir_compiler.cpp |
 
 ### Control Flow
 
 | EVM Opcode | Hex | Builder Function | Builder Location |
 |---|---|---|---|
-| JUMP | 0x56 | `handleJump` | evm_mir_compiler.cpp:1150 |
-| JUMPI | 0x57 | `handleJumpI` | evm_mir_compiler.cpp:1185 |
-| JUMPDEST | 0x5B | `handleJumpDest` | evm_mir_compiler.cpp:1255 |
-| Jump table setup | -- | `createJumpTable` | evm_mir_compiler.cpp:956 |
-| Constant jump | -- | `implementConstantJump` | evm_mir_compiler.cpp:1079 |
-| Indirect jump | -- | `implementIndirectJump` | evm_mir_compiler.cpp:1090 |
+| JUMP | 0x56 | `handleJump` | evm_mir_compiler.cpp |
+| JUMPI | 0x57 | `handleJumpI` | evm_mir_compiler.cpp |
+| JUMPDEST | 0x5B | `handleJumpDest` | evm_mir_compiler.cpp |
+| Jump table setup | -- | `createJumpTable` | evm_mir_compiler.cpp |
+| Constant jump | -- | `implementConstantJump` | evm_mir_compiler.cpp |
+| Indirect jump | -- | `implementIndirectJump` | evm_mir_compiler.cpp |
 
 ### Calls and Creates
 
 | EVM Opcode | Hex | Builder Function | Builder Location |
 |---|---|---|---|
-| CREATE | 0xF0 | `handleCreate` | evm_mir_compiler.cpp:2969 |
-| CALL | 0xF1 | `handleCall` | evm_mir_compiler.cpp:3005 |
-| CALLCODE | 0xF2 | `handleCallCode` | evm_mir_compiler.cpp:3032 |
-| RETURN | 0xF3 | `handleReturn` | evm_mir_compiler.cpp:3058 |
-| DELEGATECALL | 0xF4 | `handleDelegateCall` | evm_mir_compiler.cpp:3083 |
-| CREATE2 | 0xF5 | `handleCreate2` | evm_mir_compiler.cpp:2985 |
-| STATICCALL | 0xFA | `handleStaticCall` | evm_mir_compiler.cpp:3109 |
-| REVERT | 0xFD | `handleRevert` | evm_mir_compiler.cpp:3134 |
-| INVALID | 0xFE | `handleInvalid` | evm_mir_compiler.cpp:3157 |
-| SELFDESTRUCT | 0xFF | `handleSelfDestruct` | evm_mir_compiler.cpp:3217 |
+| CREATE | 0xF0 | `handleCreate` | evm_mir_compiler.cpp |
+| CALL | 0xF1 | `handleCall` | evm_mir_compiler.cpp |
+| CALLCODE | 0xF2 | `handleCallCode` | evm_mir_compiler.cpp |
+| RETURN | 0xF3 | `handleReturn` | evm_mir_compiler.cpp |
+| DELEGATECALL | 0xF4 | `handleDelegateCall` | evm_mir_compiler.cpp |
+| CREATE2 | 0xF5 | `handleCreate2` | evm_mir_compiler.cpp |
+| STATICCALL | 0xFA | `handleStaticCall` | evm_mir_compiler.cpp |
+| REVERT | 0xFD | `handleRevert` | evm_mir_compiler.cpp |
+| INVALID | 0xFE | `handleInvalid` | evm_mir_compiler.cpp |
+| SELFDESTRUCT | 0xFF | `handleSelfDestruct` | evm_mir_compiler.cpp |
 
 ### Other
 
 | EVM Opcode | Hex | Builder Function | Builder Location |
 |---|---|---|---|
-| KECCAK256 | 0x20 | `handleKeccak256` | evm_mir_compiler.cpp:3238 |
-| LOG0-LOG4 | 0xA0-A4 | `handleLogWithTopics<N>` | evm_mir_compiler.cpp:2935 (template) |
+| KECCAK256 | 0x20 | `handleKeccak256` | evm_mir_compiler.cpp |
+| LOG0-LOG4 | 0xA0-A4 | `handleLogWithTopics<N>` | evm_mir_compiler.cpp (template) |
 
 ### Gas Metering (Injected at chunk boundaries)
 
 | Function | Location |
 |---|---|
-| `EVMMirBuilder::meterOpcode` | evm_mir_compiler.cpp:411 |
-| `EVMMirBuilder::meterOpcodeRange` | evm_mir_compiler.cpp:426 |
-| `EVMMirBuilder::meterGas` | evm_mir_compiler.cpp:489 |
+| `EVMMirBuilder::meterOpcode` | evm_mir_compiler.cpp |
+| `EVMMirBuilder::meterOpcodeRange` | evm_mir_compiler.cpp |
+| `EVMMirBuilder::meterGas` | evm_mir_compiler.cpp |
 
 ### x86 Lowering Functions (for reference)
 
 Each dMIR opcode is lowered by `X86CgLowering` in `src/compiler/target/x86/x86lowering.cpp`:
 
-| dMIR opcode | x86 Lowering Function | Line |
+| dMIR opcode | x86 Lowering Function | File |
 |---|---|---|
 | add/sub/mul/and/or/xor | `CgLowering::lowerBinaryOpExpr` (base) -> `fastEmit_rr` | lowering.h (generic) |
-| not | `X86CgLowering::lowerNotExpr` | x86lowering.cpp:23 |
-| sdiv/udiv/srem/urem | `X86CgLowering::lowerDivRemExpr` | x86lowering.cpp:95 |
-| shl/sshr/ushr/rotl/rotr | `X86CgLowering::lowerShiftExpr` | x86lowering.cpp:197 |
-| cmp | `X86CgLowering::lowerCmpExpr` | x86lowering.cpp:858 |
-| adc | `X86CgLowering::lowerAdcExpr` | x86lowering.cpp:906 |
-| evm_umul128_lo | `X86CgLowering::lowerEvmUmul128Expr` | x86lowering.cpp:946 |
-| evm_umul128_hi | `X86CgLowering::lowerEvmUmul128HiExpr` | x86lowering.cpp:991 |
-| select | `X86CgLowering::lowerSelectExpr` | x86lowering.cpp:999 |
-| load | `X86CgLowering::lowerLoadExpr` | x86lowering.cpp:1159 |
-| store | `X86CgLowering::lowerStoreStmt` | x86lowering.cpp:1195 |
-| br | `X86CgLowering::lowerBrStmt` | x86lowering.cpp:1251 |
-| br_if | `X86CgLowering::lowerBrIfStmt` | x86lowering.cpp:1258 |
-| switch | `X86CgLowering::lowerSwitchStmt` | x86lowering.cpp:1291 |
-| call/icall | `X86CgLowering::lowerCall` | x86lowering.cpp:1531 |
-| return | `X86CgLowering::lowerReturnStmt` | x86lowering.cpp:1708 |
-| trunc | `X86CgLowering::lowerIntTruncExpr` | x86lowering.cpp:392 |
-| uext | `X86CgLowering::lowerUExtExpr` | x86lowering.cpp:408 |
-| fpabs | `X86CgLowering::lowerFPAbsExpr` | x86lowering.cpp:33 |
-| fpneg | `X86CgLowering::lowerFPNegExpr` | x86lowering.cpp:51 |
-| fpsqrt | `X86CgLowering::lowerFPSqrtExpr` | x86lowering.cpp:60 |
-| fpround_* | `X86CgLowering::lowerFPRoundExpr` | x86lowering.cpp:67 |
-| fpmin/fpmax | `X86CgLowering::lowerFPMinMaxExpr` | x86lowering.cpp:260 |
-| fpcopysign | `X86CgLowering::lowerFPCopySignExpr` | x86lowering.cpp:360 |
-| sitofp | `X86CgLowering::lowerSIToFPExpr` | x86lowering.cpp:546 |
-| uitofp | `X86CgLowering::lowerUIToFPExpr` | x86lowering.cpp:455 |
-| fpext | `X86CgLowering::lowerFPExtExpr` | x86lowering.cpp:447 |
-| fptrunc | `X86CgLowering::lowerFPTruncExpr` | x86lowering.cpp:451 |
-| dread (variable) | `X86CgLowering::lowerVariable` | x86lowering.cpp:565 |
-| const (int) | `X86CgLowering::X86MaterializeInt` | x86lowering.cpp:585/596 |
-| const (float) | `X86CgLowering::X86MaterializeFP` | x86lowering.cpp:644 |
+| not | `X86CgLowering::lowerNotExpr` | x86lowering.cpp |
+| sdiv/udiv/srem/urem | `X86CgLowering::lowerDivRemExpr` | x86lowering.cpp |
+| shl/sshr/ushr/rotl/rotr | `X86CgLowering::lowerShiftExpr` | x86lowering.cpp |
+| cmp | `X86CgLowering::lowerCmpExpr` | x86lowering.cpp |
+| adc | `X86CgLowering::lowerAdcExpr` | x86lowering.cpp |
+| evm_umul128_lo | `X86CgLowering::lowerEvmUmul128Expr` | x86lowering.cpp |
+| evm_umul128_hi | `X86CgLowering::lowerEvmUmul128HiExpr` | x86lowering.cpp |
+| select | `X86CgLowering::lowerSelectExpr` | x86lowering.cpp |
+| load | `X86CgLowering::lowerLoadExpr` | x86lowering.cpp |
+| store | `X86CgLowering::lowerStoreStmt` | x86lowering.cpp |
+| br | `X86CgLowering::lowerBrStmt` | x86lowering.cpp |
+| br_if | `X86CgLowering::lowerBrIfStmt` | x86lowering.cpp |
+| switch | `X86CgLowering::lowerSwitchStmt` | x86lowering.cpp |
+| call/icall | `X86CgLowering::lowerCall` | x86lowering.cpp |
+| return | `X86CgLowering::lowerReturnStmt` | x86lowering.cpp |
+| trunc | `X86CgLowering::lowerIntTruncExpr` | x86lowering.cpp |
+| uext | `X86CgLowering::lowerUExtExpr` | x86lowering.cpp |
+| fpabs | `X86CgLowering::lowerFPAbsExpr` | x86lowering.cpp |
+| fpneg | `X86CgLowering::lowerFPNegExpr` | x86lowering.cpp |
+| fpsqrt | `X86CgLowering::lowerFPSqrtExpr` | x86lowering.cpp |
+| fpround_* | `X86CgLowering::lowerFPRoundExpr` | x86lowering.cpp |
+| fpmin/fpmax | `X86CgLowering::lowerFPMinMaxExpr` | x86lowering.cpp |
+| fpcopysign | `X86CgLowering::lowerFPCopySignExpr` | x86lowering.cpp |
+| sitofp | `X86CgLowering::lowerSIToFPExpr` | x86lowering.cpp |
+| uitofp | `X86CgLowering::lowerUIToFPExpr` | x86lowering.cpp |
+| fpext | `X86CgLowering::lowerFPExtExpr` | x86lowering.cpp |
+| fptrunc | `X86CgLowering::lowerFPTruncExpr` | x86lowering.cpp |
+| dread (variable) | `X86CgLowering::lowerVariable` | x86lowering.cpp |
+| const (int) | `X86CgLowering::X86MaterializeInt` | x86lowering.cpp |
+| const (float) | `X86CgLowering::X86MaterializeFP` | x86lowering.cpp |
 
 ---
 
