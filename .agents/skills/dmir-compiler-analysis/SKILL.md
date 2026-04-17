@@ -226,6 +226,6 @@ Evaluate overall impact:
 
 ## Additional Resources
 
-- For detailed EVM-to-dMIR pseudocode per opcode with **exact source locations**, see [evm-to-dmir.md](evm-to-dmir.md)
-- For dMIR-to-x86 lowering patterns with **exact lowering functions**, see [dmir-to-x86.md](dmir-to-x86.md)
+- For detailed EVM-to-dMIR pseudocode per opcode with its **source file and handler symbol**, see [evm-to-dmir.md](evm-to-dmir.md)
+- For dMIR-to-x86 lowering patterns with the **lowering function symbol**, see [dmir-to-x86.md](dmir-to-x86.md)
 - For the dMIR instruction x86 cost table and implementation comparison methodology, see [cost-model.md](cost-model.md)
