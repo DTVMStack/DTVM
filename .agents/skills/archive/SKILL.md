@@ -61,14 +61,8 @@ After confirmation:
 2. Move the change directory: `docs/changes/YYYY-MM-DD-<slug>/` to `docs/_archive/<YYYY-MM>/<slug>/`
 3. Add a row to the "Current Entries" table in `docs/_archive/README.md`
 
-### 4. Cleanup (Optional)
-
-Ask the user:
-- **Branch cleanup**: `git branch -d <branch-name>` (if merged)
-- **Worktree cleanup**: `rm -rf <path> && git worktree prune` (if used).
-  - Do NOT use `git worktree remove` — it fails on DTVM worktrees because
-    they carry submodules, so `rm -rf` + `git worktree prune` is the
-    supported sequence.
+Branch and worktree cleanup are out of scope for this skill — leave them
+to the user.
 
 ## Batch Archival
 
