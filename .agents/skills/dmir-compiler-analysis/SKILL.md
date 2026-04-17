@@ -73,7 +73,7 @@ Defined in `src/compiler/mir/opcodes.def`:
 - **Overflow**: `wasm_sadd_overflow`, `wasm_uadd_overflow`, `wasm_ssub_overflow`, `wasm_usub_overflow`, `wasm_smul_overflow`, `wasm_umul_overflow`
 - **Conversion**: `inttoptr`, `ptrtoint`, `trunc`, `sext`, `uext`, `fptrunc`, `fpext`, `sitofp`, `uitofp`, `bitcast`, `wasm_fptosi`, `wasm_fptoui`
 - **Other exprs**: `phi`, `dread`, `const`, `cmp`, `adc`, `sbb`, `select`, `load`, `wasm_sadd128_overflow`, `wasm_uadd128_overflow`, `wasm_ssub128_overflow`, `wasm_usub128_overflow`
-- **EVM-specific**: `evm_umul128_lo` (64x64->64 low), `evm_umul128_hi` (high 64 from the preceding `evm_umul128_lo`), `evm_u256_mul`, `evm_u256_mul_result`, `evm_udiv128_by64`, `evm_urem128_by64`
+- **EVM-specific**: `evm_umul128_lo` (64×64→64, low half) and `evm_umul128_hi` (extracts the high half from the preceding `evm_umul128_lo`); `evm_u256_mul` (256×256→256 pseudo-op) and `evm_u256_mul_result` (extracts extra limb from the preceding `evm_u256_mul`); `evm_udiv128_by64` (128/64 unsigned quotient) and `evm_urem128_by64` (remainder of the same 128/64 division).
 - **Control flow**: `br`, `br_if`, `switch`, `call`, `icall`, `return`
 - **Statements**: `dassign`, `store`, `wasm_check_memory_access`, `wasm_visit_stack_guard`, `wasm_check_stack_boundary`
 

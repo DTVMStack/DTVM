@@ -163,10 +163,9 @@ tracks this:
 | SAR (0x1D) | ~52 Selects, sign-extended variant |
 
 Source: `isRAExpensiveOpcode()` in `src/compiler/evm_frontend/evm_analyzer.h`.
-Note: MUL (0x02) also has a heavy partial-product fan-out (~80 dMIR) but is
-not currently flagged by this heuristic — it survives RA via the schoolbook
-`evm_umul128_*` pattern without generating the dense Select chains that
-drive superlinear greedy RA cost.
+MUL (0x02) has a heavy partial-product fan-out (~80 dMIR) but is excluded
+from this heuristic: its `evm_umul128_*` schoolbook pattern does not generate
+the dense Select chains that drive superlinear greedy RA cost.
 
 If an optimization reduces dMIR count enough, these opcodes may no longer trigger
 JIT fallback, which is itself a significant performance improvement (JIT vs interpreter).

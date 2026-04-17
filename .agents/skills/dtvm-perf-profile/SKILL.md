@@ -41,10 +41,9 @@ Check `CMakeCache.txt` for `ZEN_ENABLE_LINUX_PERF:BOOL=ON`. If OFF, reconfigure 
   --num-extra-compilations=0 --num-extra-executions=99999
 ```
 
-The script lives next to this skill at
-`<repo>/.agents/skills/dtvm-perf-profile/scripts/perf_profile.sh`. The
-`.claude/skills/dtvm-perf-profile/` directory is only an auto-generated
-stub mirror and does not contain `scripts/`.
+The script lives under the skill SSOT at
+`<repo>/.agents/skills/dtvm-perf-profile/scripts/perf_profile.sh` — not
+under the `.claude/skills/` mirror.
 
 Key flags for the dtvm command:
 - `--num-extra-executions=N`: More iterations = better sampling of execution (vs compilation). Use 99999+ for meaningful data.
