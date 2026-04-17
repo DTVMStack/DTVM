@@ -182,7 +182,7 @@ Read these when deeper analysis is needed:
 | EVM analyzer (weights) | `src/compiler/evm_frontend/evm_analyzer.h` |
 | dMIR -> CGIR lowering | `src/compiler/cgir/lowering.h` |
 | x86 lowering class | `src/compiler/target/x86/x86lowering.h` |
-| x86 lowering impl | `src/compiler/target/x86/x86lowering.cpp` |
+| x86 lowering impl | `src/compiler/target/x86/x86lowering.cpp` (core), `x86lowering_wasm.cpp` (wasm-specific), `x86lowering_fallback.cpp` (fallback paths) |
 | x86 MC emission | `src/compiler/target/x86/x86_mc_lowering.h` |
 | Virtual reg map | `src/compiler/cgir/pass/virt_reg_map.h` |
 | Compiler pipeline | `src/compiler/compiler.cpp` |

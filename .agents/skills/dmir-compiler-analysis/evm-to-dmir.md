@@ -169,8 +169,11 @@ wrapper) into `Builder.handle*()`.
 
 ### x86 Lowering Functions (for reference)
 
-All lowering functions live in `src/compiler/target/x86/x86lowering.cpp`
-except the generic base in `src/compiler/cgir/lowering.h`.
+Most `X86CgLowering::*` definitions live in
+`src/compiler/target/x86/x86lowering.cpp`. A smaller set lives in
+`x86lowering_wasm.cpp` (wasm-specific lowerings) and
+`x86lowering_fallback.cpp` (fallback / slow paths). The generic base
+lives in `src/compiler/cgir/lowering.h`.
 
 | dMIR opcode | x86 Lowering Function |
 |---|---|
