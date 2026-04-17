@@ -14,9 +14,9 @@ function names for every EVM opcode handler. The code may have evolved since thi
 skill was written; treat discrepancies as the code being correct.
 
 For each EVM opcode, the complete source trace is:
-1. **Dispatch**: `EVMByteCodeVisitor::decode()` in `src/action/evm_bytecode_visitor.h` (line ~108)
+1. **Dispatch**: `EVMByteCodeVisitor::decode()` in `src/action/evm_bytecode_visitor.h`
 2. **Builder**: `EVMMirBuilder::handle*()` in `src/compiler/evm_frontend/evm_mir_compiler.h` (templates) and `evm_mir_compiler.cpp` (implementations)
-3. **x86 lowering**: `X86CgLowering::lower*()` in `src/compiler/target/x86/x86lowering.cpp`
+3. **x86 lowering**: `X86CgLowering::lower*()` in `src/compiler/target/x86/x86lowering.cpp` (definitions) and `x86lowering.h` (class)
 
 See [evm-to-dmir.md](evm-to-dmir.md) for the full per-opcode source location table.
 
@@ -72,12 +72,12 @@ Defined in `src/compiler/mir/opcodes.def`:
 - **Binary**: `add`, `sub`, `mul`, `sdiv`, `udiv`, `srem`, `urem`, `and`, `or`, `xor`, `shl`, `sshr`, `ushr`, `rotl`, `rotr`, `fpdiv`, `fpmin`, `fpmax`, `fpcopysign`
 - **Overflow**: `wasm_sadd_overflow`, `wasm_uadd_overflow`, `wasm_ssub_overflow`, `wasm_usub_overflow`, `wasm_smul_overflow`, `wasm_umul_overflow`
 - **Conversion**: `inttoptr`, `ptrtoint`, `trunc`, `sext`, `uext`, `fptrunc`, `fpext`, `sitofp`, `uitofp`, `bitcast`, `wasm_fptosi`, `wasm_fptoui`
-- **Other exprs**: `dread`, `const`, `cmp`, `adc`, `select`, `load`
-- **EVM-specific**: `evm_umul128_lo` (64x64->64 low), `evm_umul128_hi` (extract high 64 from umul128)
+- **Other exprs**: `phi`, `dread`, `const`, `cmp`, `adc`, `sbb`, `select`, `load`, `wasm_sadd128_overflow`, `wasm_uadd128_overflow`, `wasm_ssub128_overflow`, `wasm_usub128_overflow`
+- **EVM-specific**: `evm_umul128_lo` (64x64->64 low), `evm_umul128_hi` (high 64 from the preceding `evm_umul128_lo`), `evm_u256_mul`, `evm_u256_mul_result`, `evm_udiv128_by64`, `evm_urem128_by64`
 - **Control flow**: `br`, `br_if`, `switch`, `call`, `icall`, `return`
 - **Statements**: `dassign`, `store`, `wasm_check_memory_access`, `wasm_visit_stack_guard`, `wasm_check_stack_boundary`
 
-Condition codes (`src/compiler/mir/cond_codes.def`): `ieq`, `ine`, `iugt`, `iuge`, `iult`, `iule`, `isgt`, `isge`, `islt`, `isle` (integer); `foeq`, `fogt`, `foge`, `folt`, `fole`, `fone`, `ford`, `funo`, `fueq`, `fugt`, `fuge`, `fult`, `fule`, `fune` (float).
+Condition codes (`src/compiler/mir/cond_codes.def`): `ieq`, `ine`, `iugt`, `iuge`, `iult`, `iule`, `isgt`, `isge`, `islt`, `isle` (integer); `ffalse`, `foeq`, `fogt`, `foge`, `folt`, `fole`, `fone`, `ford`, `funo`, `fueq`, `fugt`, `fuge`, `fult`, `fule`, `fune`, `ftrue` (float; `ffalse`/`ftrue` are always folded).
 
 ## dMIR Textual Format
 
