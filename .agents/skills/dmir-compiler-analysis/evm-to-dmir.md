@@ -558,9 +558,10 @@ store $nth[0..3] to stack[0]
 
 ### POP (0x50)
 
-Handler: `handlePop`
+Handler: `handlePop` (visitor-level only; the builder is not called)
 
-Just decrements the virtual stack pointer. ~2 dMIR instructions.
+The visitor just pops the evaluation stack and returns. Emits 0 dMIR
+instructions.
 
 ---
 
