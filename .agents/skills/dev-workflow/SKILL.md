@@ -19,8 +19,6 @@ End-to-end workflow for implementing changes: propose, plan, execute, verify, an
 
 3. Fill in the document and set status to `Proposed`
 
-4. Add the entry to the table in `docs/changes/README.md`
-
 ## Phase B - Plan
 
 After the change proposal is accepted:
