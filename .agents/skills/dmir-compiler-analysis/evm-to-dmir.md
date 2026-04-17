@@ -14,9 +14,10 @@ Every EVM opcode is dispatched from `EVMByteCodeVisitor::decode()` in
 opcode ends up in a handler on `EVMMirBuilder`. Unless noted:
 
 - Non-template handlers live in `src/compiler/evm_frontend/evm_mir_compiler.cpp`.
-- Templated handlers (`handleBinaryArithmetic<...>`, `handleBitwiseOp<...>`,
-  `handleShift<...>`, `handleCompareOp<...>`, `handleLogWithTopics<N>`) are
-  defined inline in `src/compiler/evm_frontend/evm_mir_compiler.h`.
+- Templated handlers `handleBinaryArithmetic<...>`, `handleBitwiseOp<...>`,
+  `handleShift<...>`, `handleCompareOp<...>` are defined inline in
+  `src/compiler/evm_frontend/evm_mir_compiler.h`. `handleLogWithTopics<N>`
+  is a template but its definition lives in the `.cpp`.
 
 Grep the symbol name to find the current definition; line numbers drift.
 
