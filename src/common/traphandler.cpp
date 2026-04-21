@@ -109,7 +109,8 @@ bool initPlatformTrapHandler() {
       sigset_t SignalSet;
       sigemptyset(&SignalSet);
       sigaddset(&SignalSet, SigNum);
-      sigprocmask(SIG_UNBLOCK, &SignalSet, nullptr);
+      int UnblockResult = sigprocmask(SIG_UNBLOCK, &SignalSet, nullptr);
+      ZEN_ASSERT(UnblockResult == 0);
 
       if ((PrevSigAction->sa_flags & SA_SIGINFO) != 0) {
         PrevSigAction->sa_sigaction(SigNum, SigInfo, Ctx);

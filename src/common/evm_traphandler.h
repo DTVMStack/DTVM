@@ -84,7 +84,8 @@ public:
     sigset_t SigSet;
     sigemptyset(&SigSet);
     sigaddset(&SigSet, Signum);
-    sigprocmask(SIG_UNBLOCK, &SigSet, nullptr);
+    int UnblockResult = sigprocmask(SIG_UNBLOCK, &SigSet, nullptr);
+    ZEN_ASSERT(UnblockResult == 0);
     longjmp(*JmpBuf, Signum);
   }
 
