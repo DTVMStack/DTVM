@@ -23,6 +23,6 @@ Without the fix, a crafted or truncated WASM module where a compare is the final
 ## Checklist
 
 - [x] Implementation complete
-- [x] Tests added/updated
+- [ ] Tests added/updated (defensive check; unreachable via normal WASM validation)
 - [x] Module specs in `docs/modules/` updated (if affected)
 - [x] Build and tests pass
