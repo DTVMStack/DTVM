@@ -3,6 +3,7 @@
 
 #include "utils/evm.h"
 #include "common/errors.h"
+#include "evm/evm.h"
 #include "host/evm/crypto.h"
 #include "intx/intx.hpp"
 #include "utils/rlp_encoding.h"
@@ -20,8 +21,27 @@ void trimString(std::string &Str) {
   Str.erase(Str.find_last_not_of(" \n\r\t") + 1);
 }
 
+/// Pad an odd-length hex string to even length by inserting a leading '0'
+/// after the optional 0x prefix. Handles both prefixed ("0x1" -> "0x01")
+/// and non-prefixed ("1" -> "01") inputs.
+static std::string padHexToEvenLength(const std::string &HexStr) {
+  if (HexStr.size() >= 2 && (HexStr[0] == '0') &&
+      (HexStr[1] == 'x' || HexStr[1] == 'X')) {
+    std::string Stripped = HexStr.substr(2);
+    if (Stripped.length() % 2 != 0) {
+      return "0x0" + Stripped;
+    }
+  } else if (!HexStr.empty() && HexStr.length() % 2 != 0) {
+    return "0" + HexStr;
+  }
+  return HexStr;
+}
+
 std::optional<std::vector<uint8_t>> fromHex(std::string_view HexStr) {
-  if (auto Data = evmc::from_hex(HexStr)) {
+  // Handle odd-length hex strings (e.g. "0x1" -> "0x01", "1" -> "01")
+  // which are rejected by evmc::from_hex
+  std::string Padded = padHexToEvenLength(std::string(HexStr));
+  if (auto Data = evmc::from_hex(Padded)) {
     return std::vector<uint8_t>(Data->begin(), Data->end());
   } else {
     return std::nullopt;
@@ -73,7 +93,8 @@ evmc::address parseAddress(const std::string &HexAddr) {
 
 evmc::bytes32 parseBytes32(const std::string &HexStr) {
   evmc::bytes32 Result{};
-  if (auto Data = evmc::from_hex(HexStr)) {
+  std::string Padded = padHexToEvenLength(HexStr);
+  if (auto Data = evmc::from_hex(Padded)) {
     if (Data->size() <= 32) {
       std::memcpy(Result.bytes + (32 - Data->size()), Data->data(),
                   Data->size());
@@ -87,7 +108,8 @@ evmc::bytes32 parseBytes32(const std::string &HexStr) {
 
 evmc::uint256be parseUint256(const std::string &HexStr) {
   evmc::uint256be Result{};
-  if (auto Data = evmc::from_hex(HexStr)) {
+  std::string Padded = padHexToEvenLength(HexStr);
+  if (auto Data = evmc::from_hex(Padded)) {
     if (Data->size() <= 32) {
       std::memcpy(Result.bytes + (32 - Data->size()), Data->data(),
                   Data->size());
@@ -429,7 +451,97 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
     }
   }
 
+  // Parse and pre-warm EIP-2930 access list if present.
+  // Warm addresses cost 100 gas instead of cold 2600, warm storage slots
+  // cost 100 gas instead of cold 2100.
+  if (Doc.HasMember("access_list") && Doc["access_list"].IsArray()) {
+    for (const auto &Entry : Doc["access_list"].GetArray()) {
+      if (!Entry.IsObject() || !Entry.HasMember("address") ||
+          !Entry["address"].IsString()) {
+        continue;
+      }
+      evmc::address Address;
+      try {
+        Address = zen::utils::parseAddress(Entry["address"].GetString());
+      } catch (...) {
+        continue;
+      }
+      Host.access_account(Address);
+
+      if (!Entry.HasMember("storage_keys") ||
+          !Entry["storage_keys"].IsArray()) {
+        continue;
+      }
+      // EIP-2930 requires access-list storage keys to be warm even when the
+      // account is not yet present in the initial host state (e.g. when the
+      // contract is created later in the same transaction). Use the host
+      // access_storage API so the account entry is materialized automatically.
+      for (const auto &KeyVal : Entry["storage_keys"].GetArray()) {
+        if (!KeyVal.IsString()) {
+          continue;
+        }
+        try {
+          evmc::bytes32 Key = zen::utils::parseBytes32(KeyVal.GetString());
+          Host.access_storage(Address, Key);
+        } catch (...) {
+          continue;
+        }
+      }
+    }
+  }
   return true;
+}
+
+int64_t computeIntrinsicGas(evmc_revision Revision, evmc_call_kind MsgKind,
+                            const uint8_t *InputData, size_t InputSize) {
+  using namespace zen::evm;
+  int64_t Gas = BASIC_EXECUTION_COST;
+
+  // Calldata cost (EIP-2028)
+  const int64_t NonZeroCost = Revision >= EVMC_ISTANBUL
+                                  ? TX_DATA_NON_ZERO_GAS
+                                  : TX_DATA_NON_ZERO_GAS_PRE_ISTANBUL;
+  for (size_t Idx = 0; Idx < InputSize; ++Idx) {
+    Gas += InputData[Idx] == 0 ? TX_DATA_ZERO_GAS : NonZeroCost;
+  }
+
+  // CREATE cost (Homestead+) and initcode cost (EIP-3860, Shanghai+)
+  const bool IsCreate = MsgKind == EVMC_CREATE || MsgKind == EVMC_CREATE2;
+  if (IsCreate && Revision >= EVMC_HOMESTEAD) {
+    Gas += TX_CREATE_COST;
+    if (Revision >= EVMC_SHANGHAI && InputSize > 0) {
+      Gas += static_cast<int64_t>((InputSize + 31) / 32) * INITCODE_WORD_GAS;
+    }
+  }
+
+  return Gas;
+}
+
+void prewarmTransactionAccounts(evmc::MockedHost &Host, evmc_revision Revision,
+                                const evmc::address &Sender,
+                                const evmc::address &Recipient,
+                                const evmc::address &Coinbase) {
+  // EIP-2929 (Berlin+): sender, recipient, and precompiled contracts
+  // (0x01-0x09) are always warm at the start of a transaction.
+  if (Revision >= EVMC_BERLIN) {
+    Host.access_account(Sender);
+    // Contract-creation transactions do not have a transaction-level recipient.
+    // In this codebase CREATE messages use the zero address as a placeholder,
+    // so avoid pre-warming it here.
+    if (Recipient != evmc::address{}) {
+      Host.access_account(Recipient);
+    }
+    for (int PrecompileIdx = 1; PrecompileIdx <= 9; ++PrecompileIdx) {
+      evmc::address PrecompileAddr{};
+      PrecompileAddr.bytes[19] = static_cast<uint8_t>(PrecompileIdx);
+      Host.access_account(PrecompileAddr);
+    }
+  }
+
+  // EIP-3651 (Shanghai+): coinbase is warm at the start of a transaction.
+  if (Revision >= EVMC_SHANGHAI) {
+    Host.access_account(Coinbase);
+  }
 }
 
 } // namespace zen::utils

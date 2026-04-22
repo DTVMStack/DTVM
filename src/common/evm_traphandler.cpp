@@ -16,7 +16,7 @@ namespace evm_traphandler {
 void EVMCallThreadState::setJITTraces() {
   void *FrameAddr = TrapFrameAddr;
   void *StartAddr = StartFrame.FrameAddr;
-  if (Inst) {
+  if (!Inst) {
     return;
   }
   if (!FrameAddr || !StartAddr) {

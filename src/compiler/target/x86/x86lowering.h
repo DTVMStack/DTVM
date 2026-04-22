@@ -115,6 +115,25 @@ private:
   static unsigned X86ChooseCmpImmediateOpcode(MVT VT, int64_t Val);
   static unsigned X86ChooseCmpImmediateOpcode(MVT VT, const APInt &Value);
   static unsigned X86ChooseCmpOpcode(MVT VT);
+  CgRegister emitAdd64NoCarry(const TargetRegisterClass *RC, CgRegister LHSReg,
+                              CgRegister RHSReg);
+  std::pair<CgRegister, CgRegister>
+  emitAdd64WithCarryCounter(const TargetRegisterClass *RC, CgRegister SumReg,
+                            CgRegister CarryReg, CgRegister TermReg);
+  CgRegister emitAdcx64(const TargetRegisterClass *RC, CgRegister DstReg,
+                        CgRegister SrcReg);
+  CgRegister emitAdox64(const TargetRegisterClass *RC, CgRegister DstReg,
+                        CgRegister SrcReg);
+  CgRegister collectCarryChains(const TargetRegisterClass *RC,
+                                CgRegister CarryReg, CgRegister ZeroReg);
+  void clearCarryChains(CgRegister ZeroReg);
+  std::pair<CgRegister, CgRegister>
+  emitMulx64(const TargetRegisterClass *RC, CgRegister &MulxSourceReg,
+             CgRegister &DeadMulxHiReg, CgRegister SourceReg,
+             CgRegister OperandReg, bool NeedHigh);
+
+  CgRegister lowerEvmU256MulExprLegacy(const EvmU256MulInstruction &Inst);
+  CgRegister lowerEvmU256MulExprAdx(const EvmU256MulInstruction &Inst);
 
   void lowerFastCompareExpr(const MInstruction *LHS, const MInstruction *RHS,
                             MVT VT);

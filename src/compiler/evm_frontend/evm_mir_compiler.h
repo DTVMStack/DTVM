@@ -119,6 +119,13 @@ public:
 
   class Operand {
   public:
+    enum class DeferredKind : uint8_t {
+      NONE,
+      BITWISE_NOT,
+      ZERO_TEST_EQ,
+      ZERO_TEST_NE
+    };
+
     Operand() = default;
     Operand(MInstruction *Instr, EVMType Type) : Instr(Instr), Type(Type) {}
     Operand(Variable *Var, EVMType Type) : Var(Var), Type(Type) {}
@@ -138,20 +145,65 @@ public:
     Operand(const U256Value &ConstValue)
         : Type(EVMType::UINT256), ConstValue(ConstValue), IsConstant(true) {}
 
+    static Operand createDeferredBitwiseNot(U256Inst BaseComponents) {
+      Operand Result;
+      Result.Type = EVMType::UINT256;
+      Result.DeferredValueKind = DeferredKind::BITWISE_NOT;
+      Result.U256Components = BaseComponents;
+      return Result;
+    }
+
+    static Operand createDeferredZeroTest(U256Inst BaseComponents,
+                                          bool IsNegated) {
+      Operand Result;
+      Result.Type = EVMType::UINT256;
+      Result.DeferredValueKind =
+          IsNegated ? DeferredKind::ZERO_TEST_NE : DeferredKind::ZERO_TEST_EQ;
+      Result.U256Components = BaseComponents;
+      return Result;
+    }
+
     MInstruction *getInstr() const { return Instr; }
     Variable *getVar() const { return Var; }
     EVMType getType() const { return Type; }
 
     bool isEmpty() const {
       return !Instr && !Var && !IsU256MultiComponent && !IsConstant &&
-             Type == EVMType::VOID;
+             DeferredValueKind == DeferredKind::NONE && Type == EVMType::VOID;
     }
 
     bool isU256MultiComponent() const { return IsU256MultiComponent; }
     bool isConstant() const { return IsConstant; }
+    bool isZeroConstant() const {
+      return IsConstant && ConstValue[0] == 0 && ConstValue[1] == 0 &&
+             ConstValue[2] == 0 && ConstValue[3] == 0;
+    }
+    bool isOneConstant() const {
+      return IsConstant && ConstValue[0] == 1 && ConstValue[1] == 0 &&
+             ConstValue[2] == 0 && ConstValue[3] == 0;
+    }
+    bool isAllOnesConstant() const {
+      return IsConstant && ConstValue[0] == UINT64_MAX &&
+             ConstValue[1] == UINT64_MAX && ConstValue[2] == UINT64_MAX &&
+             ConstValue[3] == UINT64_MAX;
+    }
     bool isConstU64() const {
       return IsConstant && ConstValue[1] == 0 && ConstValue[2] == 0 &&
              ConstValue[3] == 0;
+    }
+    bool isDeferredValue() const {
+      return DeferredValueKind != DeferredKind::NONE;
+    }
+    bool isDeferredBitwiseNot() const {
+      return DeferredValueKind == DeferredKind::BITWISE_NOT;
+    }
+    bool isDeferredZeroTest() const {
+      return DeferredValueKind == DeferredKind::ZERO_TEST_EQ ||
+             DeferredValueKind == DeferredKind::ZERO_TEST_NE;
+    }
+    bool isDeferredZeroTestNegated() const {
+      ZEN_ASSERT(isDeferredZeroTest() && "Not a deferred zero-test value");
+      return DeferredValueKind == DeferredKind::ZERO_TEST_NE;
     }
 
     const U256Inst &getU256Components() const {
@@ -165,6 +217,11 @@ public:
     const U256Value &getConstValue() const {
       ZEN_ASSERT(IsConstant && "Not a constant value");
       return ConstValue;
+    }
+    const U256Inst &getDeferredBaseComponents() const {
+      ZEN_ASSERT(DeferredValueKind != DeferredKind::NONE &&
+                 "Not a deferred value");
+      return U256Components;
     }
 
     constexpr bool isReg() { return false; }
@@ -182,6 +239,7 @@ public:
     U256Value ConstValue = {};
     bool IsConstant = false;
     bool IsU256MultiComponent = false;
+    DeferredKind DeferredValueKind = DeferredKind::NONE;
   };
 
   bool compile(CompilerContext *Context);
@@ -255,6 +313,21 @@ public:
         ZEN_ASSERT_TODO();
       }
       return Operand(intxToU256Value(Res));
+    }
+
+    if constexpr (Operator == BinaryOperator::BO_ADD) {
+      if (LHSOp.isZeroConstant()) {
+        return RHSOp;
+      }
+      if (RHSOp.isZeroConstant()) {
+        return LHSOp;
+      }
+    }
+
+    if constexpr (Operator == BinaryOperator::BO_SUB) {
+      if (RHSOp.isZeroConstant()) {
+        return LHSOp;
+      }
     }
 
     // Phase 2: u64 fast path for ADD - share zero const for upper RHS limbs
@@ -357,6 +430,14 @@ public:
         uint64_t R = (V[0] == 0 && V[1] == 0 && V[2] == 0 && V[3] == 0) ? 1 : 0;
         return Operand(U256Value{R, 0, 0, 0});
       }
+
+      if (LHSOp.isDeferredZeroTest()) {
+        return Operand::createDeferredZeroTest(
+            LHSOp.getDeferredBaseComponents(),
+            !LHSOp.isDeferredZeroTestNegated());
+      }
+
+      return Operand::createDeferredZeroTest(extractU256Operand(LHSOp), false);
     } else {
       if (LHSOp.isConstant() && RHSOp.isConstant()) {
         intx::uint256 L = u256ValueToIntx(LHSOp.getConstValue());
@@ -438,6 +519,28 @@ public:
         }
       }
       return Operand(Res);
+    }
+
+    if constexpr (Operator == BinaryOperator::BO_AND) {
+      if (LHSOp.isZeroConstant() || RHSOp.isZeroConstant()) {
+        return Operand(U256Value{0, 0, 0, 0});
+      }
+      if (LHSOp.isAllOnesConstant()) {
+        return RHSOp;
+      }
+      if (RHSOp.isAllOnesConstant()) {
+        return LHSOp;
+      }
+    }
+
+    if constexpr (Operator == BinaryOperator::BO_OR ||
+                  Operator == BinaryOperator::BO_XOR) {
+      if (LHSOp.isZeroConstant()) {
+        return RHSOp;
+      }
+      if (RHSOp.isZeroConstant()) {
+        return LHSOp;
+      }
     }
 
     // Phase 1: u64 fast path for AND - upper limbs are annihilated to 0
@@ -772,7 +875,8 @@ private:
     }
   }
 
-  U256Inst handleCompareEQZ(const U256Inst &LHS, MType *ResultType);
+  U256Inst handleCompareEQZ(const U256Inst &LHS, MType *ResultType,
+                            bool IsNegated = false);
 
   U256Inst handleCompareEQ(const U256Inst &LHS, const U256Inst &RHS,
                            MType *ResultType);

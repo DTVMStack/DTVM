@@ -651,6 +651,7 @@ void LazyJITCompiler::precompile() {
   for (uint32_t I = 0; I < NumInternalFunctions; ++I) {
     StubBuilder.compileFunctionToStub(I);
   }
+  StubBuilder.finalizeStubs();
   if (ThreadPool) {
     ThreadPool->pushTask(
         [this](WasmFrontendContext *Ctx) { dispatchEntryCompileTasks(*Ctx); });

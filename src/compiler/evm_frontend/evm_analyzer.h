@@ -116,13 +116,15 @@ struct JITSuitabilityResult {
   size_t DupFeedbackPatternCount = 0; // DUPn immediately before RA-expensive
 };
 
-/// Thresholds for JIT suitability fallback.  Normal contracts have <20
-/// RA-expensive ops per block; these values are conservatively high.
+/// Thresholds for JIT suitability fallback. These limits bound bytecode size
+/// and estimated MIR / RA complexity to avoid pathological JIT compile-time
+/// blowups (e.g., superlinear register allocation on dense RA-expensive
+/// instruction patterns), while keeping typical contracts on the JIT path.
 static constexpr size_t MAX_JIT_BYTECODE_SIZE = 0x6000;
-static constexpr size_t MAX_JIT_MIR_ESTIMATE = 50000;
-static constexpr size_t MAX_CONSECUTIVE_RA_EXPENSIVE = 128;
-static constexpr size_t MAX_BLOCK_RA_EXPENSIVE = 256;
-static constexpr size_t MAX_DUP_FEEDBACK_PATTERN = 64;
+static constexpr size_t MAX_JIT_MIR_ESTIMATE = 0x50000;        // 327,680
+static constexpr size_t MAX_CONSECUTIVE_RA_EXPENSIVE = 0x3000; // 12,288
+static constexpr size_t MAX_BLOCK_RA_EXPENSIVE = 0x3000;       // 12,288
+static constexpr size_t MAX_DUP_FEEDBACK_PATTERN = 0x3000;     // 12,288
 
 class EVMAnalyzer {
   using Byte = zen::common::Byte;

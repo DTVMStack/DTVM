@@ -14,9 +14,9 @@ function names for every EVM opcode handler. The code may have evolved since thi
 skill was written; treat discrepancies as the code being correct.
 
 For each EVM opcode, the complete source trace is:
-1. **Dispatch**: `EVMByteCodeVisitor::decode()` in `src/action/evm_bytecode_visitor.h` (line ~108)
+1. **Dispatch**: `EVMByteCodeVisitor::decode()` in `src/action/evm_bytecode_visitor.h`
 2. **Builder**: `EVMMirBuilder::handle*()` in `src/compiler/evm_frontend/evm_mir_compiler.h` (templates) and `evm_mir_compiler.cpp` (implementations)
-3. **x86 lowering**: `X86CgLowering::lower*()` in `src/compiler/target/x86/x86lowering.cpp`
+3. **x86 lowering**: `X86CgLowering::lower*()` in `src/compiler/target/x86/x86lowering.cpp` (definitions) and `x86lowering.h` (class)
 
 See [evm-to-dmir.md](evm-to-dmir.md) for the full per-opcode source location table.
 
@@ -72,12 +72,12 @@ Defined in `src/compiler/mir/opcodes.def`:
 - **Binary**: `add`, `sub`, `mul`, `sdiv`, `udiv`, `srem`, `urem`, `and`, `or`, `xor`, `shl`, `sshr`, `ushr`, `rotl`, `rotr`, `fpdiv`, `fpmin`, `fpmax`, `fpcopysign`
 - **Overflow**: `wasm_sadd_overflow`, `wasm_uadd_overflow`, `wasm_ssub_overflow`, `wasm_usub_overflow`, `wasm_smul_overflow`, `wasm_umul_overflow`
 - **Conversion**: `inttoptr`, `ptrtoint`, `trunc`, `sext`, `uext`, `fptrunc`, `fpext`, `sitofp`, `uitofp`, `bitcast`, `wasm_fptosi`, `wasm_fptoui`
-- **Other exprs**: `dread`, `const`, `cmp`, `adc`, `select`, `load`
-- **EVM-specific**: `evm_umul128_lo` (64x64->64 low), `evm_umul128_hi` (extract high 64 from umul128)
+- **Other exprs**: `phi`, `dread`, `const`, `cmp`, `adc`, `sbb`, `select`, `load`, `wasm_sadd128_overflow`, `wasm_uadd128_overflow`, `wasm_ssub128_overflow`, `wasm_usub128_overflow`
+- **EVM-specific**: `evm_umul128_lo` (64×64→64, low half) and `evm_umul128_hi` (extracts the high half from the preceding `evm_umul128_lo`); `evm_u256_mul` (256×256→256 pseudo-op) and `evm_u256_mul_result` (extracts extra limb from the preceding `evm_u256_mul`); `evm_udiv128_by64` (128/64 unsigned quotient) and `evm_urem128_by64` (remainder of the same 128/64 division).
 - **Control flow**: `br`, `br_if`, `switch`, `call`, `icall`, `return`
 - **Statements**: `dassign`, `store`, `wasm_check_memory_access`, `wasm_visit_stack_guard`, `wasm_check_stack_boundary`
 
-Condition codes (`src/compiler/mir/cond_codes.def`): `ieq`, `ine`, `iugt`, `iuge`, `iult`, `iule`, `isgt`, `isge`, `islt`, `isle` (integer); `foeq`, `fogt`, `foge`, `folt`, `fole`, `fone`, `ford`, `funo`, `fueq`, `fugt`, `fuge`, `fult`, `fule`, `fune` (float).
+Condition codes (`src/compiler/mir/cond_codes.def`): `ieq`, `ine`, `iugt`, `iuge`, `iult`, `iule`, `isgt`, `isge`, `islt`, `isle` (integer); `ffalse`, `foeq`, `fogt`, `foge`, `folt`, `fole`, `fone`, `ford`, `funo`, `fueq`, `fugt`, `fuge`, `fult`, `fule`, `fune`, `ftrue` (float; `ffalse`/`ftrue` are always folded).
 
 ## dMIR Textual Format
 
@@ -181,7 +181,8 @@ Read these when deeper analysis is needed:
 | EVM bytecode dispatch | `src/action/evm_bytecode_visitor.h` |
 | EVM analyzer (weights) | `src/compiler/evm_frontend/evm_analyzer.h` |
 | dMIR -> CGIR lowering | `src/compiler/cgir/lowering.h` |
-| x86 lowering | `src/compiler/target/x86/x86lowering.cpp` |
+| x86 lowering class | `src/compiler/target/x86/x86lowering.h` |
+| x86 lowering impl | `src/compiler/target/x86/x86lowering.cpp` (core), `x86lowering_wasm.cpp` (wasm-specific), `x86lowering_fallback.cpp` (fallback paths) |
 | x86 MC emission | `src/compiler/target/x86/x86_mc_lowering.h` |
 | Virtual reg map | `src/compiler/cgir/pass/virt_reg_map.h` |
 | Compiler pipeline | `src/compiler/compiler.cpp` |
@@ -226,6 +227,6 @@ Evaluate overall impact:
 
 ## Additional Resources
 
-- For detailed EVM-to-dMIR pseudocode per opcode with **exact source locations**, see [evm-to-dmir.md](evm-to-dmir.md)
-- For dMIR-to-x86 lowering patterns with **exact lowering functions**, see [dmir-to-x86.md](dmir-to-x86.md)
+- For detailed EVM-to-dMIR pseudocode per opcode with its **source file and handler symbol**, see [evm-to-dmir.md](evm-to-dmir.md)
+- For dMIR-to-x86 lowering patterns with the **lowering function symbol**, see [dmir-to-x86.md](dmir-to-x86.md)
 - For the dMIR instruction x86 cost table and implementation comparison methodology, see [cost-model.md](cost-model.md)

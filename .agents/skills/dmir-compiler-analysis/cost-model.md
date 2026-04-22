@@ -155,13 +155,17 @@ slowly (superlinear cost). This affects JIT compilation latency, not runtime
 execution speed. The `isRAExpensiveOpcode()` heuristic in `evm_analyzer.h`
 tracks this:
 
-| EVM Opcode | Why RA-Expensive | Source |
-|---|---|---|
-| MUL (0x02) | ~80 dMIR, heavy partial-product fan-out | evm_analyzer.h:80 |
-| SIGNEXTEND (0x0B) | ~21 Selects, two dependency chain loops | evm_analyzer.h:81 |
-| SHL (0x1B) | ~92 Selects, nested J,K loops | evm_analyzer.h:82 |
-| SHR (0x1C) | ~96 Selects, nested J,K loops | evm_analyzer.h:83 |
-| SAR (0x1D) | ~52 Selects, sign-extended variant | evm_analyzer.h:84 |
+| EVM Opcode | Why RA-Expensive |
+|---|---|
+| SIGNEXTEND (0x0B) | ~21 Selects, two dependency chain loops |
+| SHL (0x1B) | ~92 Selects, nested J,K loops |
+| SHR (0x1C) | ~96 Selects, nested J,K loops |
+| SAR (0x1D) | ~52 Selects, sign-extended variant |
+
+Source: `isRAExpensiveOpcode()` in `src/compiler/evm_frontend/evm_analyzer.h`.
+MUL (0x02) has a heavy partial-product fan-out (~80 dMIR) but is excluded
+from this heuristic: its `evm_umul128_*` schoolbook pattern does not generate
+the dense Select chains that drive superlinear greedy RA cost.
 
 If an optimization reduces dMIR count enough, these opcodes may no longer trigger
 JIT fallback, which is itself a significant performance improvement (JIT vs interpreter).
@@ -226,7 +230,7 @@ This illustrates why the current ADD+ADC chain is already near-optimal for x86.
 ## Source Reference
 
 For current implementation weights used by the JIT suitability checker:
-`MIR_OPCODE_WEIGHT[256]` in `src/compiler/evm_frontend/evm_analyzer.h:31`.
+`MIR_OPCODE_WEIGHT[256]` in `src/compiler/evm_frontend/evm_analyzer.h`.
 
 Note: this weight table reflects the **current** handler implementations. When you
 optimize a handler and change its dMIR output count, this table should also be

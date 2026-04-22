@@ -31,7 +31,8 @@ Check `CMakeCache.txt` for `ZEN_ENABLE_LINUX_PERF:BOOL=ON`. If OFF, reconfigure 
 ### 2. Run the profiling script
 
 ```bash
-./scripts/perf_profile.sh --perf ./perf --output-dir perf_results -- \
+.agents/skills/dtvm-perf-profile/scripts/perf_profile.sh \
+  --perf ./perf --output-dir perf_results -- \
   ./build/dtvm -m multipass --format evm --gas-limit 0xFFFFFFFFFFFF \
   <bytecode.hex> \
   --calldata <hex> \
@@ -40,7 +41,9 @@ Check `CMakeCache.txt` for `ZEN_ENABLE_LINUX_PERF:BOOL=ON`. If OFF, reconfigure 
   --num-extra-compilations=0 --num-extra-executions=99999
 ```
 
-The script path is relative to this skill: use the absolute path `<repo>/.claude/skills/dtvm-perf-profile/scripts/perf_profile.sh`.
+The script lives under the skill SSOT at
+`<repo>/.agents/skills/dtvm-perf-profile/scripts/perf_profile.sh` — not
+under the `.claude/skills/` mirror.
 
 Key flags for the dtvm command:
 - `--num-extra-executions=N`: More iterations = better sampling of execution (vs compilation). Use 99999+ for meaningful data.

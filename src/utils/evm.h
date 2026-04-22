@@ -32,6 +32,24 @@ evmc::address computeCreateAddress(const evmc::address &Sender,
                                    uint64_t SenderNonce);
 bool saveState(const evmc::MockedHost &Host, const std::string &FilePath);
 bool loadState(evmc::MockedHost &Host, const std::string &FilePath);
+
+/// Compute the intrinsic gas cost of a transaction (EIP-2028, EIP-3860).
+/// Includes: 21000 base + calldata cost + CREATE cost + initcode cost.
+/// Does NOT include access list cost or authorization list cost; callers
+/// that need those (e.g. state tests) should add them separately.
+int64_t computeIntrinsicGas(evmc_revision Revision, evmc_call_kind MsgKind,
+                            const uint8_t *InputData, size_t InputSize);
+/// Pre-warm transaction-level accounts per EIP-2929 and EIP-3651.
+/// EIP-2929 (Berlin+): warms sender, recipient, and precompiled contracts
+/// (0x01-0x09).
+/// EIP-3651 (Shanghai+): warms the coinbase address.
+/// For contract-creation transactions, pass a zero address as Recipient
+/// to skip recipient warming (CREATE txs have no transaction-level "to").
+void prewarmTransactionAccounts(evmc::MockedHost &Host, evmc_revision Revision,
+                                const evmc::address &Sender,
+                                const evmc::address &Recipient,
+                                const evmc::address &Coinbase);
+
 } // namespace zen::utils
 
 #endif // ZEN_UTILS_EVM_H

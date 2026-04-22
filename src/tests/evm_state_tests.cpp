@@ -7,6 +7,8 @@
 #include "evm_test_host.hpp"
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <gtest/gtest.h>
 #include <intx/intx.hpp>
 
@@ -153,6 +155,10 @@ RuntimeConfig buildRuntimeConfig() {
 }
 
 std::string getDefaultTestDir() {
+  const char *EnvTestDir = std::getenv("DTVM_TEST_DIR");
+  if (EnvTestDir != nullptr && std::strlen(EnvTestDir) > 0) {
+    return std::string(EnvTestDir);
+  }
   std::filesystem::path DirPath =
       std::filesystem::path(__FILE__).parent_path() /
       std::filesystem::path("../../tests/evm_spec_test/state_tests");
@@ -365,10 +371,6 @@ ExecutionResult executeStateTest(const StateTestFixture &Fixture,
     }
     HostPtr->loadInitialState(TxContext, InitialAccounts, true);
 
-    // Warm sender and recipient (required by EIP-2929)
-    HostPtr->access_account(PT.Message->sender);
-    HostPtr->access_account(PT.Message->recipient);
-
     auto RT = Runtime::newEVMRuntime(Config, HostPtr.get());
     if (!RT) {
       return MakeFailure("Failed to create EVM runtime for " +
@@ -503,19 +505,28 @@ const std::vector<StateTestFixture> &getStateFixtures() {
     std::cout << "Found " << JsonFiles.size() << " JSON test files in "
               << DEFAULT_TEST_DIR << std::endl;
 #endif // NDEBUG
+    int LoadErrors = 0;
     for (const auto &FilePath : JsonFiles) {
-      auto FixturesFromFile = parseStateTestFile(FilePath);
-      for (auto &Fixture : FixturesFromFile) {
+      try {
+        auto FixturesFromFile = parseStateTestFile(FilePath);
+        for (auto &Fixture : FixturesFromFile) {
 #ifndef NDEBUG
-        std::cout << "Loaded fixture: " << Fixture.TestName << std::endl;
+          std::cout << "Loaded fixture: " << Fixture.TestName << std::endl;
 #endif // NDEBUG
-        Loaded.push_back(std::move(Fixture));
+          Loaded.push_back(std::move(Fixture));
+        }
+      } catch (const std::exception &E) {
+        ++LoadErrors;
+        std::cerr << "ERROR loading " << FilePath << ": " << E.what()
+                  << std::endl;
       }
     }
 
-#ifndef NDEBUG
-    std::cout << "Total fixtures loaded: " << Loaded.size() << std::endl;
-#endif // NDEBUG
+    std::cout << "Total fixtures loaded: " << Loaded.size();
+    if (LoadErrors > 0) {
+      std::cout << " (" << LoadErrors << " files failed to load)";
+    }
+    std::cout << std::endl;
 
     return Loaded;
   }();
