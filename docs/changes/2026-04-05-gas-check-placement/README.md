@@ -6,65 +6,84 @@
 
 ## Overview
 
-Remove all-or-nothing dynamic jump fallback — previously any unresolved dynamic
-jump caused the entire contract to fall back to per-block gas metering (zero SPP
-benefit). Now always builds a CFG with over-approximated edges for all unresolved
-dynamic jumps and precise edges for static jumps (PUSH → JUMP). The CFG is
-intentionally kept over-approximate — using resolved targets to narrow edges
-would under-approximate the CFG when resolution is incomplete, causing
-`lemma614Update` to shift gas along non-existent edges and produce unsafe
-metering.
+Remove the all-or-nothing dynamic-jump fallback in the EVM bytecode cache's
+SPP gas-metering pipeline. Previously, any unresolved dynamic jump caused the
+entire contract to fall back to per-block gas metering (zero SPP benefit).
+The cache now always builds a CFG with mixed-precision edges and runs the
+SPP shifting pass, while keeping the unshifted per-block cost available for
+the interpreter.
 
-Add call-site enumeration for function returns: resolves `SWAPn→JUMP` patterns
-(Solidity internal function returns) by identifying call sites
-(`PUSH ret → PUSH func → JUMP`) and collecting return addresses via reverse
-reachability. Resolved targets are exported through `ResolvedJumpTargets` for
-downstream consumers (e.g. MIR direct-branch optimization with runtime guard),
-not used for CFG refinement.
+The final design has three pieces:
 
-`GasChunkCost` continues to write the original `Blocks[Id].Cost` (not the
-SPP-shifted `Metering[Id]`) — the interpreter's gas chunk fast path requires
-unshifted per-block costs, as established by PR #371. A second parallel array
-`GasChunkCostSPP` is added to `EVMBytecodeCache` specifically for the multipass
-JIT: the SPP metering pass writes shifted values into it, and the JIT prefers
-it over the unshifted table when emitting gas checks. The interpreter never
-reads the new array, preserving #371 semantics.
+- **Mixed-precision CFG**: static jumps (`PUSH → JUMP`) get a single precise
+  edge to the resolved `JUMPDEST`; every other dynamic jump gets
+  over-approximated edges to all `JUMPDEST` blocks. The over-approximation
+  is intentional — narrowing dynamic-jump edges with partially-resolved
+  call-site information would under-approximate the CFG and let the SPP
+  pass shift gas along edges that don't exist at runtime, producing unsafe
+  metering. See `buildCFGEdges` in `src/evm/evm_cache.cpp` (lines 386–429,
+  in particular the dynamic-jump branch at line 419).
+- **SPP-shifted gas cost on a separate array**: the interpreter's gas-chunk
+  fast path requires unshifted per-block costs (PR #371). To preserve those
+  semantics while enabling SPP for the JIT, the cache exposes two parallel
+  arrays. `EVMBytecodeCache::GasChunkCost` keeps the unshifted base cost
+  (written from `Blocks[Id].Cost` at `evm_cache.cpp:1161`), and a new
+  `EVMBytecodeCache::GasChunkCostSPP` carries the SPP-shifted value
+  (written from the metering function `Metering[Id]` at
+  `evm_cache.cpp:1165`). The interpreter (`src/evm/interpreter.cpp:382`)
+  reads only `GasChunkCost`; the multipass JIT prefers `GasChunkCostSPP`
+  when non-null and falls back to `GasChunkCost` otherwise
+  (`src/compiler/evm_frontend/evm_mir_compiler.cpp:534, 578`).
+- **Interpreter-mode gating**: the SPP pipeline (CFG construction + metering
+  pass) is expensive and only useful for the JIT consumer. `buildBytecodeCache`
+  takes an `EnableSPP` parameter; when false, it emits unshifted per-block
+  costs and skips the CFG/metering work entirely. `EVMModule::CacheNeedsSPP`
+  is set to `true` immediately before `performEVMJITCompile` runs, so
+  interpreter-only modules never pay the SPP pipeline cost. When the JIT
+  somehow runs without SPP being built, `evm_compiler.cpp` passes `nullptr`
+  for `GasChunkCostSPP` so the JIT falls back to the unshifted array.
 
 ## Motivation
 
-The existing all-or-nothing fallback meant that any contract with unresolvable
-dynamic jumps got zero benefit from SPP. Real-world contracts mix static and
-dynamic jumps, so a mixed-edge CFG approach is needed to let the pass do useful
-work on the resolved portion of the CFG.
+The existing all-or-nothing fallback meant any contract with unresolvable
+dynamic jumps got zero benefit from SPP. Real-world Solidity contracts mix
+static and dynamic jumps, so a mixed-edge CFG is needed to let the SPP pass
+do useful work on the resolved portion of the CFG while staying sound on
+the unresolved portion.
 
 ## Scope
 
-This PR is scoped to the cache-side CFG improvements only:
+This PR is scoped to the cache-side CFG and JIT-cost wiring:
 
 - Remove the `HasDynamicJump` early-exit bailout in `buildGasChunksSPP`.
 - Factor out `buildCFGEdges()` with over-approximation for all unresolved
   dynamic jumps (sound for SPP metering).
-- Add `resolveCallSiteTargets()` — identifies `SWAPn→JUMP` return patterns and
-  walks predecessors to find the enclosing function entry, then collects valid
-  return addresses from matching call sites.
-- Introduce `decodePushAsJumpDest()` as a shared helper, and add `Prev2Pc` /
-  `Prev2Opcode` tracking on `GasBlock` to support the 3-instruction call-site
-  window lookup.
-- Tighten the SPP shifting guards to bail out of the shift when a successor is
-  a `isGasChunkTerminator` — prevents masking gas cost across chunk boundaries.
+- Add `EVMBytecodeCache::GasChunkCostSPP` and write SPP-shifted costs into
+  it, leaving `GasChunkCost` unshifted for the interpreter.
+- Plumb the SPP pointer through `EVMFrontendContext::setGasChunkInfo` and
+  `EVMMirBuilder`; swap the JIT's chunk-cost reads (`meterOpcode`,
+  `meterOpcodeRange`, JUMPDEST-run suffix-sum precompute) to prefer
+  `GasChunkCostSPP` when non-null.
+- Add an `EnableSPP` parameter to `buildBytecodeCache` and gate the
+  pipeline on JIT-consumer modules only.
+- Tighten the SPP shifting guards to bail out of the shift when a successor
+  is a `isGasChunkTerminator` — prevents masking gas cost across chunk
+  boundaries.
 
-No frontend/MIR changes are included in this PR.
+No frontend/MIR changes beyond the cost-source swap are included.
 
 ## Impact
 
 ### Affected Modules
 
-- `docs/modules/evm/` — EVM bytecode cache, CFG construction, jump resolution
+- `docs/modules/evm/` — EVM bytecode cache, CFG construction, SPP metering
 
 ### Compatibility
 
 No breaking changes. Interpreter semantics are preserved (`GasChunkCost`
-unchanged). JIT semantics are preserved (no frontend changes).
+remains the unshifted per-block cost, matching PR #371). JIT semantics are
+preserved when SPP is enabled (the JIT now reads SPP-shifted costs from a
+separate array instead of overwriting the interpreter's table).
 
 ### Metrics
 
@@ -80,64 +99,65 @@ Measured via `evmone-bench` against `upstream/main@a14a9de` on the
 - A handful of small regressions remain (≤ +6%) on
   `sha1_shifts/5311`, `structarray_alloc/nfts_rank`, `weierstrudel/1`,
   `blake2b_shifts/8415nulls` — these are jump-heavy Solidity patterns where
-  the added CFG edges apparently perturb chunk layout slightly.
+  the added CFG edges perturb chunk layout slightly.
 
 Correctness: 223/223 multipass evmone-unittests, 215/215 interpreter
 evmone-unittests, 2723/2723 evmone-statetests on `fork_Cancun`.
 
 ## Implementation Plan
 
-### Phase 1: Remove all-or-nothing fallback
+### Mixed CFG construction
 
-- [x] Remove the fallback that disabled SPP when any dynamic jump was unresolved
-- [x] Build mixed CFG with over-approximated edges for unresolved jumps
+- [x] Remove the all-or-nothing fallback that disabled SPP on any unresolved
+      dynamic jump
+- [x] Factor `buildCFGEdges()` so static jumps get precise single-target
+      edges and unresolved dynamic jumps get over-approximated edges to
+      every `JUMPDEST`
 
-### Phase 2: Call-site enumeration
+### JIT cost wiring
 
-- [x] Add `resolveCallSiteTargets()` for `SWAPn→JUMP` patterns
-- [x] Identify call sites and collect return addresses via reverse reachability
-
-### Phase 3: JIT integration
-
-- [x] Add `EVMBytecodeCache::GasChunkCostSPP` parallel array populated from
-      `Metering[]` in `buildGasChunksSPP`
-- [x] Plumb through `EVMFrontendContext::setGasChunkInfo` and `EVMMirBuilder`
-- [x] Swap reads in `meterOpcode`, `meterOpcodeRange`, and the JUMPDEST-run
-      suffix-sum precompute to prefer `GasChunkCostSPP` when non-null
+- [x] Add `EVMBytecodeCache::GasChunkCostSPP` parallel array, populated from
+      the SPP metering function in `buildGasChunksSPP`
+- [x] Plumb the SPP pointer through `EVMFrontendContext::setGasChunkInfo`
+      and `EVMMirBuilder`
+- [x] In `meterOpcode`, `meterOpcodeRange`, and the JUMPDEST-run suffix-sum
+      precompute, prefer `GasChunkCostSPP` when non-null
 - [x] Interpreter continues reading the unshifted `GasChunkCost` — no change
 
-### Phase 4: SPP pipeline gating
+### SPP pipeline gating
 
 - [x] Add `buildBytecodeCache(..., bool EnableSPP)` parameter
-- [x] When `EnableSPP == false`, skip the expensive CFG / call-site /
-      metering pipeline entirely and emit unshifted per-block costs
-- [x] `EVMModule::CacheNeedsSPP` is flipped to `true` only immediately
-      before `performEVMJITCompile` runs, so interpreter-only modules never
-      pay the SPP pipeline cost
+- [x] When `EnableSPP == false`, skip the CFG / metering pipeline and emit
+      unshifted per-block costs only
+- [x] `EVMModule::CacheNeedsSPP` is flipped to `true` immediately before
+      `performEVMJITCompile` runs, so interpreter-only modules never pay
+      the SPP pipeline cost
 - [x] `evm_compiler.cpp` passes `nullptr` for `GasChunkCostSPP` when the
-      cache array is empty, so the JIT falls back to the unshifted array if
-      a module somehow ends up JIT-compiled without SPP being built
+      array is empty, so the JIT falls back to the unshifted array if a
+      module is JIT-compiled without SPP being built
 
-## Changed Files
+### Soundness guards
 
-- `src/evm/evm_cache.h` — add `GasChunkCostSPP` array
-- `src/evm/evm_cache.cpp` — mixed-CFG, SPP export, soundness fix (always
-  over-approximate CFG for dynamic jumps)
-- `src/compiler/evm_frontend/evm_mir_compiler.h` — plumb SPP pointer through
-  context and builder
-- `src/compiler/evm_frontend/evm_mir_compiler.cpp` — prefer SPP-shifted cost
-  at the three chunk-cost read sites
-- `src/compiler/evm_compiler.cpp` — pass the new pointer via `setGasChunkInfo`
-
-### Phase 5: Soundness fix
-
-- [x] Remove two-pass CFG rebuild — `buildCFGEdges` always over-approximates
-      dynamic jumps (edges to all JUMPDESTs)
-- [x] Remove dead call-site enumeration code (no downstream consumer yet)
 - [x] Tighten `lemma614Update` to set `MinSucc = 0` when encountering
       excluded successors or gas-chunk terminators
 
+## Changed Files
+
+- `src/evm/evm_cache.h` — add `GasChunkCostSPP` array, document
+  interpreter vs JIT consumer split
+- `src/evm/evm_cache.cpp` — mixed-CFG `buildCFGEdges`, SPP-shifted cost
+  export, `EnableSPP` gating
+- `src/compiler/evm_frontend/evm_mir_compiler.h` — plumb SPP pointer
+  through context and builder
+- `src/compiler/evm_frontend/evm_mir_compiler.cpp` — prefer SPP-shifted
+  cost at the three chunk-cost read sites
+- `src/compiler/evm_compiler.cpp` — pass the new pointer via
+  `setGasChunkInfo`, with `nullptr` fallback when the SPP array is empty
+- `src/runtime/evm_module.h` — `CacheNeedsSPP` flag
+
 ## Risks
 
-- Over-approximated edges for unresolved jumps may pessimize gas placement for
-  pathological contracts with many unresolved targets.
+- Over-approximated edges for unresolved jumps may pessimize gas placement
+  for pathological contracts with many unresolved targets. Acceptable
+  because the alternative (narrowed edges from partial resolution) is
+  unsound for SPP.
