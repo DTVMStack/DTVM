@@ -1,0 +1,13 @@
+// Fast-path with x == mod: AugLtMod evaluates false, normalize subtract zeroes x.
+// y < mod stays as-is, sum = 0 + y = y, no overflow, sum < mod -> result = y.
+// mod = 2^192 + 2^128 + 12345; x = mod; y = 2^192 + 7 (< mod since mod[2]=1, y[2]=0)
+// (x + y) % mod = (mod + y) % mod = y
+PUSH32 0x0000000000000001000000000000000100000000000000000000000000003039
+PUSH32 0x0000000000000001000000000000000000000000000000000000000000000007
+PUSH32 0x0000000000000001000000000000000100000000000000000000000000003039
+ADDMOD
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

@@ -1,0 +1,16 @@
+// Fast-path with carry out of limb 3: x + y overflows 256-bit, exercises Overflow detection.
+// mod = 2^255  (mod[3] = 1<<63, eligible for fast path)
+// x = y = (1<<63)<<192 | (2^192 - 1)  -> x[3] = mod[3], x < mod
+// sum_257 = 2^256 + 2^193 - 2; sum_256 = 2^193 - 2; overflow = 1
+// SumLtMod = (sum_256 < mod) = true, NotBorrow = 0
+// UseSumSubMod = overflow | NotBorrow = 1 -> result = SumSubMod = 2^256 + 2^193 - 2 - 2^255
+// Equivalent to (2x) mod 2^255 = 2^193 - 2
+PUSH32 0x8000000000000000000000000000000000000000000000000000000000000000
+PUSH32 0x8000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+PUSH32 0x8000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+ADDMOD
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN
