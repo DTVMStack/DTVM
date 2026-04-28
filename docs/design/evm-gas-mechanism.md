@@ -18,9 +18,11 @@ unchanged.
 
 Both execution engines read from a single
 `zen::evm::EVMBytecodeCache` (`src/evm/evm_cache.h`). The cache is
-built lazily on first access via `EVMModule::initBytecodeCache`
-(`src/runtime/evm_module.cpp:117-135`) and exposes four parallel
-arrays indexed by program counter (PC):
+built lazily on first access — `EVMModule::initBytecodeCache` is
+defined at `src/runtime/evm_module.cpp:133-136`; the SPP-gating site
+that flips `CacheNeedsSPP` lives at `src/runtime/evm_module.cpp:117`.
+The cache exposes five parallel arrays indexed by program counter
+(PC):
 
 | Field            | Indexed by | Meaning                                                                                 |
 | ---------------- | ---------- | --------------------------------------------------------------------------------------- |
@@ -30,12 +32,18 @@ arrays indexed by program counter (PC):
 | `GasChunkCost`   | chunk-start PC | **Unshifted** sum of opcode gas costs in the chunk (interpreter consumer).         |
 | `GasChunkCostSPP`| chunk-start PC | **SPP-shifted** chunk cost (JIT consumer). Empty when SPP is disabled for this module. |
 
-A "gas chunk" is a maximal straight-line region with no internal
-control-flow boundary that can change gas obligations: it ends at
-`JUMP`/`JUMPI`/`STOP`/`RETURN`/`REVERT`/`SELFDESTRUCT`/`INVALID`,
-just before a `JUMPDEST`, before `SSTORE`/`CALL`/`CREATE`/`GAS`
-(opcodes whose actual cost depends on runtime state), or at the end
-of the bytecode.
+A "gas chunk" is a maximal straight-line region whose static gas
+cost can be summed once at chunk construction. It ends at any
+**gas-chunk terminator** (`isGasChunkTerminator` at
+`src/evm/evm_cache.cpp:41-62`): the control-flow exits
+`STOP`/`RETURN`/`REVERT`/`SELFDESTRUCT`/`INVALID`/`JUMP`/`JUMPI` and
+the gas-sensitive opcodes
+`SSTORE`/`CALL`/`CALLCODE`/`DELEGATECALL`/`STATICCALL`/`CREATE`/
+`CREATE2`/`GAS`. The terminator is **inside** its chunk — its static
+cost is included in `GasChunkCost` (`evm_cache.cpp:329`) and a fresh
+chunk starts at the *next* PC (`evm_cache.cpp:291-296`). A chunk also
+ends just before a `JUMPDEST` (since `JUMPDEST` itself begins a new
+chunk) and at the end of the bytecode.
 
 ```mermaid
 flowchart LR
@@ -43,10 +51,10 @@ flowchart LR
     JD[JumpDestMap]
     PV[PushValueMap]
     CE[GasChunkEnd]
-    CC[GasChunkCost\n(unshifted)]
-    SPP[GasChunkCostSPP\n(shifted, optional)]
+    CC["GasChunkCost<br/>(unshifted)"]
+    SPP["GasChunkCostSPP<br/>(shifted, optional)"]
 
-    Bytecode --> Builder["buildBytecodeCache\n(src/evm/evm_cache.cpp)"]
+    Bytecode --> Builder["buildBytecodeCache<br/>(src/evm/evm_cache.cpp)"]
     Builder --> JD
     Builder --> PV
     Builder --> CE
@@ -58,7 +66,7 @@ flowchart LR
     CE --> Interpreter
     CC --> Interpreter
 
-    JD --> JIT["Multipass JIT\n(EVMMirBuilder)"]
+    JD --> JIT["Multipass JIT<br/>(EVMMirBuilder)"]
     PV --> JIT
     CE --> JIT
     CC --> JIT
@@ -81,20 +89,18 @@ path** first:
 
 ```mermaid
 flowchart TD
-    Start([outer iter\nPc = ChunkStartPc]) --> Q1{ChunkStartPc\nis a chunk start?\n(GasChunkEnd[Pc] > Pc)}
-    Q1 -- "no" --> Slow["Per-opcode dispatch\n(switch/handler call)\nchargeGas(opcode metric)"]
-    Slow --> SlowOOG{gas < cost?}
-    SlowOOG -- "yes" --> OOG[setStatus(EVMC_OUT_OF_GAS)\nbreak]
-    SlowOOG -- "no" --> Pcpp[Frame->Pc++]
+    Start(["outer iter<br/>Pc = ChunkStartPc"]) --> Cond{"GasChunkEnd[Pc] &gt; Pc<br/>AND<br/>gas &gt;= GasChunkCost[Pc]?"}
+    Cond -- "no (either side)" --> Slow["Per-opcode dispatch<br/>(switch/handler call,<br/>line 1610+)<br/>handler invokes chargeGas"]
+    Slow --> SlowOOG{"chargeGas:<br/>gas &lt; opcode cost?"}
+    SlowOOG -- "yes" --> OOG["setStatus(EVMC_OUT_OF_GAS)<br/>break"]
+    SlowOOG -- "no" --> Pcpp["Frame->Pc++"]
     Pcpp --> Start
 
-    Q1 -- "yes" --> Q2{Frame->Msg.gas\n>= GasChunkCost[Pc]?}
-    Q2 -- "no" --> OOG
-    Q2 -- "yes" --> Pre["Frame->Msg.gas -= GasChunkCost[Pc]\n(pre-charge entire chunk)"]
-    Pre --> CG["Computed-goto fast path\nuntil Pc >= ChunkEnd"]
-    CG --> Restart{control-flow\nopcode hit?}
+    Cond -- "yes" --> Pre["Frame->Msg.gas -= GasChunkCost[Pc]<br/>(pre-charge entire chunk)"]
+    Pre --> CG["Computed-goto fast path<br/>until Pc &gt;= ChunkEnd"]
+    CG --> Restart{"control-flow<br/>opcode hit?"}
     Restart -- "no" --> Start
-    Restart -- "yes (JUMP/JUMPI/...)\nupdate Pc, restart" --> Start
+    Restart -- "yes (JUMP/JUMPI/...)<br/>update Pc, restart" --> Start
 ```
 
 Key properties:
@@ -104,15 +110,21 @@ Key properties:
   computed-goto loop simply executes opcodes, advances `Pc`, and
   checks `Pc >= ChunkEnd` to exit
   (`DISPATCH_NEXT` macro at `src/evm/interpreter.cpp:525`).
-- For opcodes whose cost depends on runtime state (`SSTORE`, `CALL*`,
-  `CREATE*`, dynamic memory growth), a chunk boundary is forced
-  before them so their dynamic gas can be charged separately by the
-  per-handler `chargeGas` calls
-  (`src/evm/interpreter.cpp:33-50`).
+- Opcodes whose behaviour depends on `gas_left` at runtime
+  (`SSTORE`, `CALL*`, `CREATE*`, `GAS`) are gas-chunk terminators —
+  each is the **last** opcode of its chunk, so the chunk's static
+  pre-charge has been applied before the handler runs and any
+  dynamic delta the handler charges (via `chargeGas` at
+  `src/evm/interpreter.cpp:33-50`) is layered on top of an accurate
+  `gas_left` value.
+- Memory expansion is **not** a chunk boundary: opcodes that touch
+  memory (`MLOAD`, `MSTORE`, `MSTORE8`, `KECCAK256`, the various
+  `*COPY` opcodes, `RETURN`, `REVERT`, …) charge their dynamic
+  expansion delta inline by calling `expandMemoryAndChargeGas`
+  (`src/evm/opcode_handlers.cpp:261`) from within the handler.
 - The interpreter intentionally consumes the **unshifted** cost
-  (PR #371). Shifting costs across blocks would charge gas for an
-  opcode before that opcode runs, which is observable to users via
-  the `GAS` opcode mid-chunk and via `gas_left` reported by callbacks.
+  (PR #371). The cache must keep an unshifted column available
+  regardless of whether SPP runs.
 
 ## Multipass JIT mode
 
@@ -121,48 +133,59 @@ The JIT lowers EVM bytecode to dMIR via `EVMMirBuilder`
 is woven into MIR generation by two helpers:
 
 - `meterOpcode(Opcode, PC)` — emit the gas check for one opcode at
-  `PC` (`src/compiler/evm_frontend/evm_mir_compiler.cpp:528`).
+  `PC` (`src/compiler/evm_frontend/evm_mir_compiler.cpp:524`).
 - `meterOpcodeRange(StartPC, EndPCExclusive)` — emit the gas check
   for a contiguous PC range, used by the JUMPDEST run optimization
-  (`src/compiler/evm_frontend/evm_mir_compiler.cpp:548`).
+  (`src/compiler/evm_frontend/evm_mir_compiler.cpp:544`).
 
 Both ultimately call `meterGas(Cost)` to emit the actual dMIR
-sequence (`src/compiler/evm_frontend/evm_mir_compiler.cpp:607`):
+sequence (`src/compiler/evm_frontend/evm_mir_compiler.cpp:607`,
+short-circuits when `GasCost == 0` at line 608):
 
 ```mermaid
 flowchart TD
-    A["meterOpcode(Op, PC)"] --> B{GasMeteringEnabled?}
-    B -- "no" --> X([return])
-    B -- "yes" --> C{PC < GasChunkSize\n&& GasChunkEnd[PC] > PC?}
-    C -- "no (mid-chunk PC)" --> D["Cost = InstructionMetrics[Op].gas_cost\nmeterGas(Cost)"]
-    C -- "yes (chunk start)" --> E["Cost = GasChunkCostSPP[PC]\n  ?? GasChunkCost[PC]\nmeterGas(Cost)"]
-    D --> Emit
-    E --> Emit
+    A["meterOpcode(Op, PC)"] --> B{"GasMeteringEnabled?"}
+    B -- "no" --> X(["return (no MIR)"])
+    B -- "yes" --> Cache{"Chunk cache populated?<br/>(GasChunkEnd &amp;&amp; GasChunkCost<br/>&amp;&amp; PC &lt; GasChunkSize)"}
+    Cache -- "no (cache absent)" --> PerOp["Cost = InstructionMetrics[Op].gas_cost<br/>meterGas(Cost)"]
+    Cache -- "yes" --> ChunkStart{"GasChunkEnd[PC] &gt; PC?<br/>(this PC is a chunk start)"}
+    ChunkStart -- "no (mid-chunk PC)" --> Skip(["return (no MIR;<br/>chunk start already paid)"])
+    ChunkStart -- "yes" --> Sel["Cost = GasChunkCostSPP[PC]<br/>  ?? GasChunkCost[PC]<br/>meterGas(Cost)"]
+    PerOp --> Emit
+    Sel --> Emit
 
-    Emit["meterGas(Cost)\nemit dMIR:\n  CurrentGas = load gas\n  IsOutOfGas = (CurrentGas < Cost)\n  brif IsOutOfGas, OOGBlock, ContinueBlock\n  NewGas = CurrentGas - Cost\n  store NewGas"]
-    Emit --> Cont([fall through to opcode lowering])
+    Emit["meterGas(Cost) emits dMIR:<br/>  CurrentGas = load gas<br/>  IsOutOfGas = (CurrentGas &lt; Cost)<br/>  brif IsOutOfGas, OOGBlock, ContinueBlock<br/>  NewGas = CurrentGas - Cost<br/>  store NewGas"]
+    Emit --> Cont(["fall through to opcode lowering"])
 ```
 
 Two consequences:
 
 1. The JIT emits **at most one gas check per chunk** — the call at
    the chunk-start opcode covers every opcode up to (but not
-   including) the next chunk start. Calls inside the chunk see
-   `GasChunkEnd[PC] == 0` and short-circuit out of `meterOpcode`.
-   The `JUMPDEST` run suffix-sum precompute
-   (`JumpDestRunLastPC`/`JumpDestRunSkipCost`,
-   `evm_mir_compiler.cpp:548-572`) lets the dispatcher skip a whole
-   run of consecutive `JUMPDEST`s with one `meterGas` call.
+   including) the next chunk start. Calls at mid-chunk PCs see
+   `GasChunkEnd[PC] == 0` and return without emitting any MIR
+   (`evm_mir_compiler.cpp:529, 537`). The fast path at line 553-572
+   in `meterOpcodeRange` consumes a precomputed
+   `JumpDestRunLastPC`/`JumpDestRunSkipCost` table; the table itself
+   is populated when the JUMPDEST run jump-table is materialized
+   (`evm_mir_compiler.cpp:1297-1335`), so dispatching across a run
+   of consecutive `JUMPDEST`s costs one `meterGas` call.
 2. The OOG branch is shared across all gas checks in the function
    via `getOrCreateExceptionSetBB(ErrorCode::GasLimitExceeded)`,
    keeping the cold path out of the hot block layout
    (`evm_mir_compiler.cpp:626, 663`).
 
 When the build is configured with `ZEN_ENABLE_EVM_GAS_REGISTER`, the
-gas value lives in a virtual register instead of being reloaded from
-memory on every check; the synchronization to `EVMInstance` happens
-only at `CALL`/`CREATE`/return boundaries
-(`evm_mir_compiler.cpp:614-642`).
+gas value lives in a virtual register (`GasRegVar`,
+`evm_mir_compiler.cpp:614-642`) instead of being reloaded from
+memory on every `meterGas`. Synchronization back to `EVMInstance`
+happens at any host-call boundary that may read or update gas —
+not just `CALL*`/`CREATE*`/return, but also runtime helpers such as
+the balance/code/keccak/memory-load handlers (`syncGasToMemory`
+calls at `evm_mir_compiler.cpp:3556, 3623, 3638, 3652, 3745, 3776,
+3857, 3976, 4054, 4136`; `syncGasToMemoryFull` is invoked at module
+return / `RETURN` / `REVERT` / `STOP` /
+`SELFDESTRUCT` paths around lines 1246, 4167-4259).
 
 ## SPP cost shifting
 
@@ -182,6 +205,12 @@ After SPP (min successor = 5 charged at A):
                 /                \
        Block B' (0)           Block C' (2)
 ```
+
+(The diagram assumes B and C each have only A as predecessor and
+neither ends with a gas-chunk terminator — `lemma614Update` only
+shifts when those preconditions hold; see the
+`effectivePredCount == 1` and `isGasChunkTerminator` guards at
+`evm_cache.cpp:940, 944, 966`.)
 
 Per-path totals are preserved: A→B is `3+5 = 8` before and
 `8+0 = 8` after; A→C is `3+7 = 10` before and `8+2 = 10` after. The
@@ -287,13 +316,13 @@ unshifted array and remains correct.
 
 ## Failure mode summary
 
-| Trigger                                               | Where                                                              | Result                                       |
-| ----------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------- |
-| Interpreter chunk-start, gas < `GasChunkCost[Pc]`     | `interpreter.cpp:397-398`                                          | Exit outer loop, `setStatus(EVMC_OUT_OF_GAS)` |
-| Interpreter slow path, gas < per-opcode cost          | `chargeGas` at `interpreter.cpp:33-50`                             | Same                                         |
-| JIT chunk-start `meterGas`, gas < `Cost`              | `meterGas` `IsOutOfGas` branch (`evm_mir_compiler.cpp:622-631`)    | Branch to shared `OutOfGasBB`                 |
-| JIT mid-chunk per-opcode `meterGas`, gas < `Cost`     | Same code path, just smaller `Cost`                                 | Same shared `OutOfGasBB`                      |
-| Dynamic-cost opcode (SSTORE/CALL*/CREATE*) underpaid  | Forced chunk boundary; charged by handler call                     | Returns OOG status to dispatcher              |
+| Trigger                                                       | Where                                                              | Result                                       |
+| ------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------- |
+| Interpreter, gas insufficient for full chunk pre-charge       | Combined check at `interpreter.cpp:397-398`                        | Skip fast path; fall through to slow path    |
+| Interpreter slow path, gas < per-opcode cost                  | `chargeGas` at `interpreter.cpp:33-50`                             | `setStatus(EVMC_OUT_OF_GAS)`, exit outer loop |
+| JIT chunk-start `meterGas`, gas < `Cost`                      | `meterGas` `IsOutOfGas` branch (`evm_mir_compiler.cpp:622-631`)    | Branch to shared `OutOfGasBB`                 |
+| JIT mid-chunk per-opcode `meterGas`, gas < `Cost`             | Same code path, just smaller `Cost`                                 | Same shared `OutOfGasBB`                      |
+| Dynamic-cost opcode (`SSTORE`/`CALL*`/`CREATE*`) underpaid    | Forced chunk boundary; charged by handler call                     | Returns OOG status to dispatcher              |
 
 ## References
 
