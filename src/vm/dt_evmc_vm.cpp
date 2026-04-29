@@ -205,8 +205,19 @@ struct DTVM : evmc_vm {
   uint64_t ModCounter = 0;
   // Cached EVMInstance to avoid alloc/free (~33KB) on every call
   EVMInstance *CachedMainInst = nullptr;
-  // Cached InterpreterExecContext (interpreter mode only)
+  // Cached InterpreterExecContext for the top-level call (depth == 0).
   std::unique_ptr<zen::evm::InterpreterExecContext> CachedCtx;
+  // Per-depth InterpreterExecContext pool for nested calls (depth > 0).
+  // Indexed by Msg->depth.  Each entry persists across calls so that the
+  // 32 KB EVMFrame stack array inside InterpreterExecContext::FrameStack
+  // is allocated *at most once per depth* and reused on subsequent
+  // recursive calls.  Without this pool, every nested CALL/CREATE went
+  // through std::make_unique<InterpreterExecContext>() + a fresh
+  // FrameStack.emplace_back() (32 KB zero-init), which dominated runtime
+  // in deeply recursive workloads (e.g. transStorageOK, ~24x slowdown
+  // vs evmone baseline).  DTVM is single-threaded per VM instance, so a
+  // depth-indexed pool is safe without locking.
+  std::vector<std::unique_ptr<zen::evm::InterpreterExecContext>> NestedCtxPool;
   // Instance pool for depth > 0
   std::vector<EVMInstance *> CacheInsts;
 
@@ -497,18 +508,19 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
   TheInst->setExeResult(evmc::Result{EVMC_SUCCESS, 0, 0});
   TheInst->pushMessage(&MsgWithCode);
 
-  const bool ReuseCachedInstance = !IsTransientMod && Msg->depth == 0;
+  const bool ReuseTopLevel = !IsTransientMod && Msg->depth == 0;
 
-  // For nested calls, create a new InterpreterExecContext
-  // For cacheable top-level calls, reuse cached context
-  std::unique_ptr<zen::evm::InterpreterExecContext> TempCtx;
+  // Pick the InterpreterExecContext to run this call in:
+  //  * Top-level (depth == 0, non-transient): reuse VM->CachedCtx.
+  //  * Nested:    reuse VM->NestedCtxPool[depth] (grow on demand).
+  // The previous implementation allocated a *fresh* InterpreterExecContext
+  // for every nested call, which silently triggered a 32 KB EVMFrame
+  // zero-init via FrameStack.emplace_back() on every recursion level.
+  // Tests that recurse hundreds of times (e.g. transStorageOK) became
+  // 24x slower than evmone baseline; the pool below makes the EVMFrame
+  // allocation amortized O(1) per depth.
   zen::evm::InterpreterExecContext *CtxPtr = nullptr;
-  if (!ReuseCachedInstance) {
-    // Nested call or transient module: create temporary context
-    TempCtx = std::make_unique<zen::evm::InterpreterExecContext>(TheInst);
-    CtxPtr = TempCtx.get();
-  } else {
-    // Top-level call: reuse cached context
+  if (ReuseTopLevel) {
     if (!VM->CachedCtx) {
       VM->CachedCtx =
           std::make_unique<zen::evm::InterpreterExecContext>(TheInst);
@@ -516,6 +528,21 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
       VM->CachedCtx->resetForNewCall(TheInst);
     }
     CtxPtr = VM->CachedCtx.get();
+  } else {
+    ZEN_ASSERT(Msg->depth >= 0 && Msg->depth <= 1024 &&
+               "EVMC depth out of valid range [0, 1024]");
+    const size_t Depth = static_cast<size_t>(Msg->depth);
+    auto &Pool = VM->NestedCtxPool;
+    if (Depth >= Pool.size()) {
+      Pool.resize(Depth + 1);
+    }
+    auto &Slot = Pool[Depth];
+    if (!Slot) {
+      Slot = std::make_unique<zen::evm::InterpreterExecContext>(TheInst);
+    } else {
+      Slot->resetForNewCall(TheInst);
+    }
+    CtxPtr = Slot.get();
   }
 
   auto &Ctx = *CtxPtr;
