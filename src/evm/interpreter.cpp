@@ -547,280 +547,70 @@ void BaseInterpreter::interpret() {
         // Initial dispatch
         goto *cgoto_table[static_cast<uint8_t>(Code[Pc])];
 
-      // ---- Inline binary arithmetic/logic ops ----
-      TARGET_ADD : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = A + B;
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_MUL : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = A * B;
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_SUB : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = A - B;
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_DIV : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = (B == 0) ? intx::uint256(0) : (A / B);
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_SDIV : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).quot;
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_MOD : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = (B == 0) ? intx::uint256(0) : A % B;
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_SMOD : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).rem;
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_LT : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = intx::uint256(A < B);
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_GT : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = intx::uint256(A > B);
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_SLT : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = intx::uint256(intx::slt(A, B));
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_SGT : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = intx::uint256(intx::slt(B, A));
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_EQ : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = intx::uint256(A == B);
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_AND : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = A & B;
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_OR : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = A | B;
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_XOR : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = A ^ B;
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_SHL : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = (A < 256) ? (B << A) : intx::uint256(0);
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_SHR : {
-        if (INTX_UNLIKELY(sp < 2)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        B = (A < 256) ? (B >> A) : intx::uint256(0);
-        --sp;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
+      // ---- Binary arithmetic/logic ops (delegate to doExecute) ----
+      TARGET_ADD:
+        HANDLER_CALL(AddHandler::doExecute());
+      TARGET_MUL:
+        HANDLER_CALL(MulHandler::doExecute());
+      TARGET_SUB:
+        HANDLER_CALL(SubHandler::doExecute());
+      TARGET_DIV:
+        HANDLER_CALL(DivHandler::doExecute());
+      TARGET_SDIV:
+        HANDLER_CALL(SDivHandler::doExecute());
+      TARGET_MOD:
+        HANDLER_CALL(ModHandler::doExecute());
+      TARGET_SMOD:
+        HANDLER_CALL(SModHandler::doExecute());
+      TARGET_LT:
+        HANDLER_CALL(LtHandler::doExecute());
+      TARGET_GT:
+        HANDLER_CALL(GtHandler::doExecute());
+      TARGET_SLT:
+        HANDLER_CALL(SltHandler::doExecute());
+      TARGET_SGT:
+        HANDLER_CALL(SgtHandler::doExecute());
+      TARGET_EQ:
+        HANDLER_CALL(EqHandler::doExecute());
+      TARGET_AND:
+        HANDLER_CALL(AndHandler::doExecute());
+      TARGET_OR:
+        HANDLER_CALL(OrHandler::doExecute());
+      TARGET_XOR:
+        HANDLER_CALL(XorHandler::doExecute());
+      TARGET_SHL:
+        HANDLER_CALL(ShlHandler::doExecute());
+      TARGET_SHR:
+        HANDLER_CALL(ShrHandler::doExecute());
 
-      // ---- Inline ternary ops ----
-      TARGET_ADDMOD : {
-        if (INTX_UNLIKELY(sp < 3)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        auto &C = Frame->Stack[sp - 3];
-        C = (C == 0) ? intx::uint256(0) : intx::addmod(A, B, C);
-        sp -= 2;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_MULMOD : {
-        if (INTX_UNLIKELY(sp < 3)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        auto &B = Frame->Stack[sp - 2];
-        auto &C = Frame->Stack[sp - 3];
-        C = (C == 0) ? intx::uint256(0) : intx::mulmod(A, B, C);
-        sp -= 2;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
+      // ---- Ternary ops (delegate to doExecute) ----
+      TARGET_ADDMOD:
+        HANDLER_CALL(AddmodHandler::doExecute());
+      TARGET_MULMOD:
+        HANDLER_CALL(MulmodHandler::doExecute());
 
-      // ---- Inline unary ops ----
-      TARGET_ISZERO : {
-        if (INTX_UNLIKELY(sp < 1)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        A = intx::uint256(A == 0);
-        ++Pc;
-        DISPATCH_NEXT;
-      }
-      TARGET_NOT : {
-        if (INTX_UNLIKELY(sp < 1)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        auto &A = Frame->Stack[sp - 1];
-        A = ~A;
-        ++Pc;
-        DISPATCH_NEXT;
-      }
+      // ---- Unary ops (delegate to doExecute) ----
+      TARGET_ISZERO:
+        HANDLER_CALL(IsZeroHandler::doExecute());
+      TARGET_NOT:
+        HANDLER_CALL(NotHandler::doExecute());
       TARGET_CLZ : {
-        if (INTX_UNLIKELY(sp < 1)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
+        if (INTX_UNLIKELY(Revision < EVMC_OSAKA)) {
+          Context.setStatus(EVMC_UNDEFINED_INSTRUCTION);
           goto cgoto_error;
         }
-        auto &A = Frame->Stack[sp - 1];
-        A = intx::clz(A);
-        ++Pc;
-        DISPATCH_NEXT;
+        HANDLER_CALL(ClzHandler::doExecute());
       }
 
-      // ---- Inline stack ops ----
+      // ---- Stack ops (delegate to NoGas helpers) ----
       TARGET_POP : {
-        if (INTX_UNLIKELY(sp < 1)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        --sp;
+        Frame->Sp = sp;
+        Frame->Pc = Pc;
+        executePopOpcodeNoGas(Frame, Context);
+        sp = Frame->Sp;
         ++Pc;
+        if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
+          goto cgoto_error;
         DISPATCH_NEXT;
       }
       TARGET_PUSH0 : {
@@ -828,55 +618,46 @@ void BaseInterpreter::interpret() {
           Context.setStatus(EVMC_UNDEFINED_INSTRUCTION);
           goto cgoto_error;
         }
-        if (INTX_UNLIKELY(sp >= MAXSTACK)) {
-          Context.setStatus(EVMC_STACK_OVERFLOW);
-          goto cgoto_error;
-        }
-        Frame->Stack[sp++] = 0;
+        Frame->Sp = sp;
+        Frame->Pc = Pc;
+        executePush0OpcodeNoGas(Frame, Context);
+        sp = Frame->Sp;
         ++Pc;
+        if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
+          goto cgoto_error;
         DISPATCH_NEXT;
       }
       TARGET_PUSHX : {
-        if (INTX_UNLIKELY(sp >= MAXSTACK)) {
-          Context.setStatus(EVMC_STACK_OVERFLOW);
+        Frame->Sp = sp;
+        Frame->Pc = Pc;
+        const uint8_t OpcodeU8 = static_cast<uint8_t>(Code[Pc]);
+        executePushNOpcodeNoGas(Frame, Context, OpcodeU8, PushValueMap);
+        sp = Frame->Sp;
+        Pc = Frame->Pc + 1;
+        if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
           goto cgoto_error;
-        }
-        Frame->Stack[sp++] = PushValueMap[Pc];
-        const uint8_t NumBytes = static_cast<uint8_t>(Code[Pc]) -
-                                 static_cast<uint8_t>(evmc_opcode::OP_PUSH1) +
-                                 1;
-        Pc += 1 + NumBytes;
         DISPATCH_NEXT;
       }
       TARGET_DUPX : {
-        const uint32_t N = static_cast<uint8_t>(Code[Pc]) -
-                           static_cast<uint8_t>(evmc_opcode::OP_DUP1) + 1;
-        if (INTX_UNLIKELY(sp < N)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        if (INTX_UNLIKELY(sp >= MAXSTACK)) {
-          Context.setStatus(EVMC_STACK_OVERFLOW);
-          goto cgoto_error;
-        }
-        Frame->Stack[sp] = Frame->Stack[sp - N];
-        ++sp;
+        Frame->Sp = sp;
+        Frame->Pc = Pc;
+        const uint8_t OpcodeU8 = static_cast<uint8_t>(Code[Pc]);
+        executeDupOpcodeNoGas(Frame, Context, OpcodeU8);
+        sp = Frame->Sp;
         ++Pc;
+        if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
+          goto cgoto_error;
         DISPATCH_NEXT;
       }
       TARGET_SWAPX : {
-        const uint32_t N = static_cast<uint8_t>(Code[Pc]) -
-                           static_cast<uint8_t>(evmc_opcode::OP_SWAP1) + 1;
-        if (INTX_UNLIKELY(sp < N + 1)) {
-          Context.setStatus(EVMC_STACK_UNDERFLOW);
-          goto cgoto_error;
-        }
-        const size_t TopIdx = sp - 1;
-        const size_t NthIdx = sp - 1 - N;
-        const intx::uint256 Tmp = Frame->Stack[TopIdx];
-        Frame->Stack[TopIdx] = Frame->Stack[NthIdx];
-        Frame->Stack[NthIdx] = Tmp;
+        Frame->Sp = sp;
+        Frame->Pc = Pc;
+        const uint8_t OpcodeU8 = static_cast<uint8_t>(Code[Pc]);
+        executeSwapOpcodeNoGas(Frame, Context, OpcodeU8);
+        sp = Frame->Sp;
         ++Pc;
+        if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
+          goto cgoto_error;
         DISPATCH_NEXT;
       }
 
