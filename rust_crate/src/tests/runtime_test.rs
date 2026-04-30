@@ -161,3 +161,54 @@ mod tests {
         assert_eq!("get_host_number", import_func0_name);
     }
 }
+
+#[cfg(test)]
+mod from_raw_pointer_tests {
+    use crate::core::instance::ZenInstance;
+    use crate::core::r#extern::{ZenInstanceExtern, ZenSetInstanceCustomData};
+    use crate::core::runtime::ZenRuntime;
+    use std::cell::RefCell;
+    use std::ptr;
+    use std::rc::Rc;
+    fn create_runtime() -> RefCell<Rc<ZenRuntime>> {
+        RefCell::new(ZenRuntime::new(None))
+    }
+    /// Helper: create a real WASM instance and return its raw C pointer.
+    /// The returned pointer is valid for the lifetime of the returned
+    /// `ZenInstance`, which must be kept alive by the caller.
+    fn create_real_instance() -> Rc<ZenInstance<i64>> {
+        let rt = create_runtime();
+        let wasm_path = "./example/fib.0.wasm";
+        let wasm_mod = rt.borrow_mut().load_module(wasm_path).unwrap();
+        let isolation = rt.borrow_mut().new_isolation().unwrap();
+        let gas_limit: u64 = 100000000;
+        wasm_mod.new_instance(isolation, gas_limit).unwrap()
+    }
+    #[test]
+    #[should_panic(expected = "from_raw_pointer: c_ptr is null")]
+    fn test_from_raw_pointer_null_c_ptr_panics() {
+        let null_ptr: *mut ZenInstanceExtern = ptr::null_mut();
+        let _inst: &ZenInstance<i64> = ZenInstance::from_raw_pointer(null_ptr);
+    }
+    #[test]
+    #[should_panic(expected = "from_raw_pointer: custom data pointer is null")]
+    fn test_from_raw_pointer_null_custom_data_panics() {
+        let inst = create_real_instance();
+        let c_ptr = inst.ptr;
+        unsafe {
+            ZenSetInstanceCustomData(c_ptr, ptr::null());
+        }
+        let _result: &ZenInstance<i64> = ZenInstance::from_raw_pointer(c_ptr);
+    }
+    #[test]
+    #[should_panic(expected = "from_raw_pointer: custom data pointer is misaligned")]
+    fn test_from_raw_pointer_misaligned_custom_data_panics() {
+        let inst = create_real_instance();
+        let c_ptr = inst.ptr;
+        let misaligned_ptr = 0x1usize as *const cty::c_void;
+        unsafe {
+            ZenSetInstanceCustomData(c_ptr, misaligned_ptr);
+        }
+        let _result: &ZenInstance<i64> = ZenInstance::from_raw_pointer(c_ptr);
+    }
+}

@@ -71,10 +71,20 @@ impl<T> ZenInstance<T> {
     }
 
     /// get rust ZenInstance from c instance* pointer
+    ///
+    /// # Panics
+    /// Panics if `c_ptr` is null or if the returned custom data pointer is
+    /// null or misaligned.
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn from_raw_pointer(c_ptr: *mut ZenInstanceExtern) -> &'static ZenInstance<T> {
+        assert!(!c_ptr.is_null(), "from_raw_pointer: c_ptr is null");
         let rust_ptr: *const ZenInstance<T> =
             unsafe { ZenGetInstanceCustomData(c_ptr) as *const ZenInstance<T> };
+        assert!(!rust_ptr.is_null(), "from_raw_pointer: custom data pointer is null");
+        assert!(
+            (rust_ptr as usize) % core::mem::align_of::<ZenInstance<T>>() == 0,
+            "from_raw_pointer: custom data pointer is misaligned"
+        );
         unsafe { &*rust_ptr }
     }
 
