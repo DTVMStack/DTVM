@@ -530,7 +530,9 @@ void BaseInterpreter::interpret() {
   } while (0)
 
 // Write back local sp/Pc, set EVMResource, call handler, reload sp,
-// advance Pc, check status, and dispatch next opcode
+// check status (Pc is only advanced on success so error reporting points
+// at the faulting opcode, matching the non-computed-goto loops), then
+// dispatch the next opcode.
 #define HANDLER_CALL(handler_expr)                                             \
   do {                                                                         \
     Frame->Sp = sp;                                                            \
@@ -538,9 +540,9 @@ void BaseInterpreter::interpret() {
     EVMResource::setExecutionContext(Frame, &Context);                         \
     handler_expr;                                                              \
     sp = Frame->Sp;                                                            \
-    ++Pc;                                                                      \
     if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))                    \
       goto cgoto_error;                                                        \
+    ++Pc;                                                                      \
     DISPATCH_NEXT;                                                             \
   } while (0)
 
@@ -594,23 +596,24 @@ void BaseInterpreter::interpret() {
         HANDLER_CALL(IsZeroHandler::doExecute());
       TARGET_NOT:
         HANDLER_CALL(NotHandler::doExecute());
-      TARGET_CLZ : {
-        if (INTX_UNLIKELY(Revision < EVMC_OSAKA)) {
-          Context.setStatus(EVMC_UNDEFINED_INSTRUCTION);
-          goto cgoto_error;
-        }
+      TARGET_CLZ:
+        // Revision gating is already enforced by cgoto_table (opcodes
+        // missing from evmc_get_instruction_names_table() map to
+        // TARGET_UNDEFINED), so no extra runtime Revision check is needed.
         HANDLER_CALL(ClzHandler::doExecute());
-      }
 
       // ---- Stack ops (delegate to NoGas helpers) ----
+      // Pc is only advanced on success so that on error the recorded
+      // Frame->Pc points at the faulting opcode, consistent with the
+      // non-computed-goto interpreter loops.
       TARGET_POP : {
         Frame->Sp = sp;
         Frame->Pc = Pc;
         executePopOpcodeNoGas(Frame, Context);
         sp = Frame->Sp;
-        ++Pc;
         if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
           goto cgoto_error;
+        ++Pc;
         DISPATCH_NEXT;
       }
       TARGET_PUSH0 : {
@@ -622,9 +625,9 @@ void BaseInterpreter::interpret() {
         Frame->Pc = Pc;
         executePush0OpcodeNoGas(Frame, Context);
         sp = Frame->Sp;
-        ++Pc;
         if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
           goto cgoto_error;
+        ++Pc;
         DISPATCH_NEXT;
       }
       TARGET_PUSHX : {
@@ -633,9 +636,9 @@ void BaseInterpreter::interpret() {
         const uint8_t OpcodeU8 = static_cast<uint8_t>(Code[Pc]);
         executePushNOpcodeNoGas(Frame, Context, OpcodeU8, PushValueMap);
         sp = Frame->Sp;
-        Pc = Frame->Pc + 1;
         if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
           goto cgoto_error;
+        Pc = Frame->Pc + 1;
         DISPATCH_NEXT;
       }
       TARGET_DUPX : {
@@ -644,9 +647,9 @@ void BaseInterpreter::interpret() {
         const uint8_t OpcodeU8 = static_cast<uint8_t>(Code[Pc]);
         executeDupOpcodeNoGas(Frame, Context, OpcodeU8);
         sp = Frame->Sp;
-        ++Pc;
         if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
           goto cgoto_error;
+        ++Pc;
         DISPATCH_NEXT;
       }
       TARGET_SWAPX : {
@@ -655,12 +658,11 @@ void BaseInterpreter::interpret() {
         const uint8_t OpcodeU8 = static_cast<uint8_t>(Code[Pc]);
         executeSwapOpcodeNoGas(Frame, Context, OpcodeU8);
         sp = Frame->Sp;
-        ++Pc;
         if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
           goto cgoto_error;
+        ++Pc;
         DISPATCH_NEXT;
       }
-
       // ---- Inline control flow ops ----
       TARGET_JUMP : {
         if (INTX_UNLIKELY(sp < 1)) {
