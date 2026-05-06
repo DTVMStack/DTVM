@@ -608,6 +608,17 @@ void ExtCodeCopyHandler::doExecute() {
   intx::uint256 SizeVal = Frame->pop();
   const auto Addr = intx::be::trunc<evmc::address>(X);
 
+  // EIP-2929: charge cold account access cost before memory/copy costs
+  const auto Rev = currentRevision();
+  if (Rev >= EVMC_BERLIN &&
+      Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
+    if (Frame->Msg.gas < ADDITIONAL_COLD_ACCOUNT_ACCESS_COST) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
+    Frame->Msg.gas -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
+  }
+
   // Ensure memory is large enough
   if (!checkMemoryExpandAndChargeGas(Frame, DestOffsetVal, SizeVal)) {
     Context->setStatus(EVMC_OUT_OF_GAS);
@@ -620,16 +631,6 @@ void ExtCodeCopyHandler::doExecute() {
   if (copyCodeAndChargeGas(Frame, Size) == false) {
     Context->setStatus(EVMC_OUT_OF_GAS);
     return;
-  }
-
-  const auto Rev = currentRevision();
-  if (Rev >= EVMC_BERLIN &&
-      Frame->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    if (Frame->Msg.gas < ADDITIONAL_COLD_ACCOUNT_ACCESS_COST) {
-      Context->setStatus(EVMC_OUT_OF_GAS);
-      return;
-    }
-    Frame->Msg.gas -= ADDITIONAL_COLD_ACCOUNT_ACCESS_COST;
   }
 
   if (Size > 0) {

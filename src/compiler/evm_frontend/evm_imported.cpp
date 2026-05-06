@@ -632,18 +632,20 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
   ZEN_ASSERT(Module && Module->Host);
   evmc::address Addr = loadAddressFromLE(Address);
 
+  // EIP-2929: account access cost should be charged on first access before
+  // copy/memory costs are applied to keep access accounting order explicit.
+  evmc_revision Rev = Instance->getRevision();
+  if (Rev >= EVMC_BERLIN &&
+      Module->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
+    Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
+  }
+
   if (!Instance->expandMemoryChecked(DestOffset, Size)) {
     return;
   }
 
   if (uint64_t CopyGas = calculateWordCopyGas(Size)) {
     Instance->chargeGas(CopyGas);
-  }
-
-  evmc_revision Rev = Instance->getRevision();
-  if (Rev >= EVMC_BERLIN &&
-      Module->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST);
   }
 
   // When Size is 0, no memory operations are needed
@@ -1111,6 +1113,9 @@ uint64_t evmHandleDelegateCall(zen::runtime::EVMInstance *Instance,
                                RetOffset, RetSize, false);
 }
 
+// EVMC spec: STATICCALL uses kind=EVMC_CALL + flags=EVMC_STATIC
+// (there is no EVMC_STATICCALL kind). The ForceStatic=true parameter
+// causes evmHandleCallInternal to set EVMC_STATIC flag on the message.
 uint64_t evmHandleStaticCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
                              const uint8_t *ToAddr, uint64_t ArgsOffset,
                              uint64_t ArgsSize, uint64_t RetOffset,
