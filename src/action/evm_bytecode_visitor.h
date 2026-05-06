@@ -1240,7 +1240,10 @@ private:
     Table[OP_SDIV] = {2, 1};
     Table[OP_MOD] = {2, 1};
     Table[OP_SMOD] = {2, 1};
-    Table[OP_EXP] = {2, 1};
+    // OP_EXP is intentionally LEFT at the bail sentinel: its dynamic gas cost
+    // depends on the exponent byte length and is sensitive to the same gas
+    // accounting issue described below for storage opcodes
+    // (stEIP150singleCodeGasPrices.gasCostExp).
     Table[OP_SIGNEXTEND] = {2, 1};
     // Ternary modular arithmetic.
     Table[OP_ADDMOD] = {3, 1};
@@ -1284,26 +1287,33 @@ private:
     Table[OP_BASEFEE] = {0, 1};
     Table[OP_BLOBBASEFEE] = {0, 1};
     Table[OP_PC] = {0, 1};
-    Table[OP_GAS] = {0, 1};
+    // OP_GAS reads the precise remaining-gas balance. Hoisting expandMemoryIR
+    // to the BB entry charges memory-expansion gas ahead of OP_GAS, polluting
+    // its observed value (state root mismatch in stEIP150singleCodeGasPrices.
+    // gasCostExp). Left at bail sentinel.
 
-    // Environment reads that consume one stack input.
-    Table[OP_BALANCE] = {1, 1};
+    // Environment reads that consume one stack input and have STATIC gas.
+    // EIP-2929-affected opcodes (BALANCE / EXTCODESIZE / EXTCODEHASH) are
+    // intentionally NOT listed here: their cold/warm gas accounting depends
+    // on the exact remaining-gas balance at execution time, which hoisted
+    // memory-expansion gas would perturb.
     Table[OP_CALLDATALOAD] = {1, 1};
-    Table[OP_EXTCODESIZE] = {1, 1};
-    Table[OP_EXTCODEHASH] = {1, 1};
     Table[OP_BLOCKHASH] = {1, 1};
     Table[OP_BLOBHASH] = {1, 1};
 
-    // Storage / transient storage. SLOAD/TLOAD push an opaque value;
-    // SSTORE/TSTORE only mutate non-memory state, so leaving the abstract
-    // memory model intact is safe.
-    Table[OP_SLOAD] = {1, 1};
-    Table[OP_TLOAD] = {1, 1};
-    Table[OP_SSTORE] = {2, 0};
-    Table[OP_TSTORE] = {2, 0};
-
-    // MCOPY mutates linear memory with non-tracked semantics; left at the
-    // bail sentinel above so the plan is rejected on encounter.
+    // Storage / transient storage are LEFT at the bail sentinel:
+    //   * SLOAD / SSTORE / TLOAD / TSTORE charge dynamic gas whose cold/warm
+    //     classification (EIP-2929) and SSTORE refund logic depend on the
+    //     exact remaining-gas balance at execution time. Hoisting memory-
+    //     expansion gas ahead of these opcodes shifts the balance and
+    //     produces wrong state roots (stEIP2930.variedContext failures).
+    //   * SSTORE additionally invokes a host helper that may observe gas.
+    //
+    // OP_EXP is also LEFT at the bail sentinel: its dynamic gas depends on
+    // the exponent byte length and is sensitive to the same accounting issue
+    // (stEIP150singleCodeGasPrices.gasCostExp).
+    //
+    // MCOPY mutates linear memory with non-tracked semantics; also bails.
 
     return Table;
   }
@@ -1717,8 +1727,11 @@ private:
         break;
       }
       case OP_MSIZE:
-        SimStack.push_back(makeUnknownConstU64());
-        break;
+        // MSIZE observes the precise memory size at the moment it executes.
+        // Hoisting expandMemoryIR to the BB entry would expand memory ahead
+        // of MSIZE and pollute its observed value, breaking EVM semantics
+        // (state root mismatch in vmIOandFlowOperations.msize). Hard-bail.
+        return {};
       default: {
         if (isBlockTerminatorOpcode(Opcode)) {
           ScanPC = BytecodeSize;
