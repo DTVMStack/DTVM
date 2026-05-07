@@ -16,4 +16,12 @@ Please answer these questions before submitting your issue. Thanks!
 
 ### 3. What did you see instead (Required)
 
-### 4. What is the version of this project you are using? (Required)
+### 4. Error logs / Stack trace
+
+<!-- Paste any relevant error messages, logs, or stack traces here. -->
+
+### 5. What is the version of this project you are using? (Required)
+
+### 6. Environment (Required)
+
+<!-- OS, compiler version, LLVM version, etc. Please include the build command and the execution command you used. -->

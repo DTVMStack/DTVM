@@ -5,3 +5,7 @@ labels: type/enhancement
 ---
 
 ## Enhancement
+
+### Current Behavior
+
+<!-- Describe the current behavior and explain the pain point. -->
