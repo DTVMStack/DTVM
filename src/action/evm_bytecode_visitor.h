@@ -1142,8 +1142,9 @@ private:
     EvalStack ReverseStack;
     // Refine each popped Operand's ValueRange from analyzer-computed entry
     // ranges so u64-narrow fast paths fire on values flowing through CFG
-    // joins (see EVMRangeAnalyzer / docs/changes/2026-05-07-value-range-cfg-join).
-    // EntryStackRanges[0] is the bottom of entry stack; pop order is top-first.
+    // joins (see EVMRangeAnalyzer /
+    // docs/changes/2026-05-07-value-range-cfg-join). EntryStackRanges[0] is the
+    // bottom of entry stack; pop order is top-first.
     const auto &EntryRanges = BlockInfo.EntryStackRanges;
     const int32_t EntryTopIdx = static_cast<int32_t>(EntryRanges.size()) - 1;
     int32_t PopIter = 0;
