@@ -87,22 +87,42 @@ separate array instead of overwriting the interpreter's table).
 
 ### Metrics
 
-Measured via `evmone-bench` against `upstream/main@a14a9de` on the
-`external/total/(main|micro)/*` benchmark set (3 repetitions, median).
+Numbers are from the CI Performance Regression Check (baseline
+`perf-baseline-*-a14a9de...`, 5 repetitions, 25% threshold) — the
+gate-of-record for this PR. The full 194-bench multipass table lives in
+the github-actions perf-check comment on the PR; this section
+summarizes the design-relevant subset.
 
-- **Geometric mean: −10.13%** across 27 benchmarks.
-- Large wins on memory-growth and signextend chunks:
-  - `micro/memory_grow_mload/*`: −19% to −24%
-  - `micro/memory_grow_mstore/*`: −19% to −20%
-  - `micro/signextend/{one,zero}`: −19% to −20%
-- Headline contract: `main/snailtracer/benchmark`: −7.53%
-- A handful of small regressions remain (≤ +6%) on
-  `sha1_shifts/5311`, `structarray_alloc/nfts_rank`, `weierstrudel/1`,
-  `blake2b_shifts/8415nulls` — these are jump-heavy Solidity patterns where
-  the added CFG edges perturb chunk layout slightly.
+**Wins (jump-light / cost-shift opportunities):**
+
+- `micro/signextend/{one,zero}`: 0.13 → 0.07 μs (≈ −42.7%)
+- `micro/memory_grow_mstore/nogrow`: −6.8%
+- `main/structarray_alloc/nfts_rank`: −6.2%
+- `main/blake2b_huff/8415nulls`: −5.3%
+
+**Regressions (jump-heavy contracts — predicted cost of mixed-CFG
+over-approximation):**
+
+- `micro/jump_around/empty`: 0.04 → 0.05 μs (+22.8%)
+- `main/weierstrudel/1`: 0.20 → 0.24 μs (+19.5%)
+- `main/weierstrudel/15`: 2.22 → 2.60 μs (+17.5%)
+- `main/snailtracer/benchmark`: 28.49 → 31.58 μs (+10.9%)
+
+The +17–23% regressions on jump-heavy contracts are the design tradeoff
+of over-approximating dynamic-jump edges to all `JUMPDEST` blocks in
+order to keep the SPP shift sound (narrowing those edges with partial
+call-site resolution would under-approximate the CFG and break per-path
+total invariants — see Phase 5 / `buildCFGEdges` in
+`src/evm/evm_cache.cpp:389-429`). All 194 benches stay within the 25%
+gate, but `jump_around` has tight headroom.
+
+Earlier drafts of this section cited a 27-bench local `evmone-bench`
+run (3 reps) that drifted from the CI baseline; the CI bot table is the
+authoritative source.
 
 Correctness: 223/223 multipass evmone-unittests, 215/215 interpreter
-evmone-unittests, 2723/2723 evmone-statetests on `fork_Cancun`.
+evmone-unittests, 2723/2723 evmone-statetests on `fork_Cancun` for both
+multipass and interpreter modes.
 
 ## Implementation Plan
 

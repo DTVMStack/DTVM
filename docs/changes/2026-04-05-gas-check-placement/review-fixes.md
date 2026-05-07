@@ -1,9 +1,27 @@
 # PR #446 Review Response Plan
 
-- **Status**: Planned
+- **Status**: Implemented (F1, F4, F5); F2/F3 applied to PR body; F6 dropped
 - **Date**: 2026-05-07
 - **Parent change**: `README.md` (gas check placement w/ mixed CFG, SPP JIT output, interpreter-mode gating)
 - **Branch**: `feat/gas-check-placement`
+
+## Status update (2026-05-07)
+
+- **F1 implemented** in commit `81efba3` — `Prev2Pc/Prev2Opcode` removed,
+  whole-repo grep clean, `GasBlock` shrinks ~9 bytes.
+- **F4 implemented** in commit `81efba3` (squashed with F1) — added the
+  soundness-pairing comment to `buildCFGEdges`.
+- **F5 implemented** in commit `691069a` — `CacheNeedsSPP` lifecycle
+  invariant comment added.
+- **F2 / F3 applied** to the PR body via `gh pr edit` — Copilot threads
+  noted as already-resolved + content-stale (live GraphQL confirmed
+  `isResolved: true` for all three before the edit), perf table
+  rewritten with honest +17 to +22.8% jump-heavy regressions from the
+  latest CI bot output.
+- **F6 dropped** — opening an upstream issue for an `addEdge` O(deg²)
+  concern that was theoretical, unmeasured, and not touched by any
+  commit on this branch would have been noise. The concern remains
+  documented below for future reference but no issue is filed.
 
 This plan addresses the findings of the 2026-05-07 self-review of PR #446.
 Items are grouped by whether they block merge.
@@ -142,24 +160,25 @@ Append to the field's existing comment:
 
 Documentation only.
 
-### F6 — `addEdge` O(deg²) compile-time guardrail
+### F6 — `addEdge` O(deg²) compile-time guardrail [DROPPED 2026-05-07]
 
-`addEdge` (`src/evm/evm_cache.cpp:204` area) uses `std::find` for dedup,
-giving O(current_deg) per insertion. Combined with over-approximated
+**Status**: dropped. Opening an upstream issue about a code path none
+of the F1/F4/F5 commits touch, with no measured evidence of compile-
+time pain on the existing CI matrix, would have been noise.
+
+**Original concern (kept for future reference)**: `addEdge`
+(`src/evm/evm_cache.cpp:204` area) uses `std::find` for dedup, giving
+O(current_deg) per insertion. Combined with over-approximated
 dynamic-jump edges (`|JUMPDEST| × |dynamic jumps|`), pathological
-contracts may inflate compile time. Phase 4 gating limits exposure to
-JIT-consumer modules, but no guardrail exists.
+contracts could inflate compile time. Phase 4 gating limits exposure
+to JIT-consumer modules.
 
-**Action**: file a follow-up issue, do **not** include in this PR. Two
-options for the follow-up:
-
-1. Switch `Succs` / `Preds` to a hybrid representation: `vector<uint32_t>`
-   plus a side `unordered_set<uint32_t>` for dedup-only on hot insertions.
-2. Add a `LOG_INFO` warning when `JumpDestBlocks.size() *
-   dynamic_jump_count > THRESHOLD` so we have telemetry before tuning.
-
-**Verification of follow-up issue**: open before merge, link from the PR
-body.
+**If a future contract trips this**: capture the offending bytecode
++ JIT compile-time profile first, then either (a) switch `Succs` /
+`Preds` to a `vector<uint32_t>` + `unordered_set<uint32_t>` hybrid for
+O(1) dedup, or (b) add a `LOG_INFO` warning when
+`JumpDestBlocks.size() * dynamic_jump_count` exceeds a threshold so
+the next tuning cycle has telemetry. Don't act preemptively.
 
 ## Sequencing
 
@@ -168,10 +187,10 @@ body.
 | 1 | F1: remove `Prev2Pc/Prev2Opcode` (1 commit) | `src/evm/evm_cache.cpp` |
 | 2 | F4 + F5: documentation tweaks (1 commit, squashable) | `src/evm/evm_cache.cpp`, `src/runtime/evm_module.h` |
 | 3 | Build + format + local test gate (see below) | `tools/format.sh` + `evmone-unittests` + `evmone-statetest` + `ctest` |
-| 4 | F6: open follow-up GitHub issue for `addEdge` O(deg²) — capture title/number now so step 6 can link to it | GitHub issue tracker |
-| 5 | Push to `feat/gas-check-placement`; await CI green (~35 min for the multipass perf job) | — |
-| 6 | F2: edit PR body to point at `c26bf7c` and the F6 issue (no thread mutation — Round-2 live query confirmed all 4 threads already resolved) | GitHub web/CLI |
-| 7 | F3: rewrite Risks/Evaluation section in PR body using numbers regenerated from the latest CI bot table (per "PR perf table integrity" rule, never paste from memory) | GitHub web/CLI |
+| 4 | Push to `feat/gas-check-placement`; await CI green (~35 min for the multipass perf job) | — |
+| 5 | F2: edit PR body to point at `c26bf7c` (no thread mutation — Round-2 live query confirmed all 4 threads already resolved) | GitHub web/CLI |
+| 6 | F3: rewrite Evaluation section in PR body using numbers from the latest CI bot table (per "PR perf table integrity" rule, never paste from memory) | GitHub web/CLI |
+| 7 | (F6 dropped) | — |
 
 ## Out-of-scope
 
