@@ -192,10 +192,8 @@ struct GasBlock {
   uint32_t End = 0;
   uint32_t LastPc = 0;
   uint32_t PrevPc = UINT32_MAX;
-  uint32_t Prev2Pc = UINT32_MAX;
   uint8_t LastOpcode = 0;
   uint8_t PrevOpcode = 0;
-  uint8_t Prev2Opcode = 0;
   uint64_t Cost = 0;
   std::vector<uint32_t> Succs;
   std::vector<uint32_t> Preds;
@@ -320,8 +318,6 @@ static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
       }
 
       const uint8_t CurOpcodeU8 = static_cast<uint8_t>(Code[CurPc]);
-      Block.Prev2Pc = Block.PrevPc;
-      Block.Prev2Opcode = Block.PrevOpcode;
       Block.PrevPc = Block.LastPc;
       Block.PrevOpcode = Block.LastOpcode;
       Block.LastPc = static_cast<uint32_t>(CurPc);
@@ -386,6 +382,11 @@ static bool resolveConstantJumpTarget(const std::vector<uint8_t> &JumpDestMap,
 // Build CFG edges for all blocks. Static jumps (PUSH → JUMP) get precise
 // single-target edges; all other dynamic jumps get over-approximated edges
 // to every JUMPDEST to keep the CFG sound for SPP metering.
+//
+// After this pass, JUMPDEST blocks may have many predecessors. That is the
+// intentional partner to lemma614Update's effectivePredCount > 1 guard,
+// which refuses to shift gas across edges with multiple predecessors and
+// so absorbs the over-approximation soundly.
 static void buildCFGEdges(std::vector<GasBlock> &Blocks,
                           const std::vector<uint32_t> &BlockAtPc,
                           const std::vector<uint8_t> &JumpDestMap,
