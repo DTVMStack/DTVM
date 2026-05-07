@@ -5,6 +5,7 @@
 #define EVM_FRONTEND_EVM_ANALYZER_H
 
 #include "common/defines.h"
+#include "compiler/evm_frontend/evm_value_range.h"
 #include "evm/evm.h"
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
@@ -164,6 +165,11 @@ public:
     uint32_t RAExpensiveCount = 0;
     std::vector<uint64_t> Successors;
     std::vector<uint64_t> Predecessors;
+
+    // Per-stack-slot value-range at block entry, populated by
+    // EVMRangeAnalyzer.  Index 0 is the bottom of the entry stack, last is the
+    // top.  Empty when no Range info is available (treat as ValueRange::U256).
+    std::vector<EVMValueRange> EntryStackRanges;
 
     BlockInfo() = default;
     BlockInfo(uint64_t PC, uint64_t StartPC = 0, bool JumpDest = false)

@@ -6,6 +6,7 @@
 
 #include "action/vm_eval_stack.h"
 #include "compiler/context.h"
+#include "compiler/evm_frontend/evm_value_range.h"
 #include "compiler/mir/function.h"
 #include "compiler/mir/instructions.h"
 #include "compiler/mir/pointer.h"
@@ -124,11 +125,7 @@ public:
 
   // Range classification for u256 operands.  Narrower ranges enable
   // single-instruction fast paths instead of expensive multi-limb arithmetic.
-  enum class ValueRange : uint8_t {
-    U64,  // Fits in 64 bits  (limbs [1..3] == 0)
-    U128, // Fits in 128 bits (limbs [2..3] == 0)
-    U256, // Full 256 bits — conservative default
-  };
+  using ValueRange = EVMValueRange;
 
   EVMMirBuilder(CompilerContext &Context, MFunction &MFunc);
 
@@ -257,6 +254,7 @@ public:
 
     // Provable value range — narrower ranges enable fast arithmetic paths
     ValueRange getRange() const { return Range; }
+    void setRange(ValueRange NewRange) { Range = NewRange; }
 
     // Check whether both operands provably fit in u64
     static bool bothFitU64(const Operand &A, const Operand &B) {
