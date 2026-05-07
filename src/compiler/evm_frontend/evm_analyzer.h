@@ -416,6 +416,7 @@ public:
     resolveDynamicJumpTargetEntryDepths();
     finalizeEntryShapeMetadata();
     finalizeLiftability();
+    runRangeAnalysis(Bytecode, BytecodeSize);
     return true;
   }
 
@@ -1328,6 +1329,500 @@ private:
         ++NextShapeClassId;
       }
       RegionInfo.ShapeClassId = It->second;
+    }
+  }
+
+  // ============== EVMRangeAnalyzer ==========================================
+  //
+  // Forward dataflow analysis over the lattice { U64, U128, U256 } for each
+  // EVM stack slot at every block entry.  Bottom is U64, top is U256, and the
+  // meet operator is `max` (widen to the more pessimistic value).  At fixed
+  // point, each block's `EntryStackRanges` is sized to its
+  // `ResolvedEntryStackDepth`, with index 0 the bottom of the entry stack and
+  // the last index the top.  Empty when entry depth is unresolved.
+
+  static EVMValueRange meetRange(EVMValueRange A, EVMValueRange B) {
+    return A > B ? A : B;
+  }
+
+  static EVMValueRange widenRange(EVMValueRange R) {
+    switch (R) {
+    case EVMValueRange::U64:
+      return EVMValueRange::U128;
+    case EVMValueRange::U128:
+    case EVMValueRange::U256:
+    default:
+      return EVMValueRange::U256;
+    }
+  }
+
+  // Classify a PUSH literal of `Size` bytes starting at byte `Start` in
+  // `Bytecode`.  Defensive against truncated tail.
+  static EVMValueRange rangeFromPushLiteral(const uint8_t *Bytecode,
+                                            size_t BytecodeSize, size_t Start,
+                                            size_t Size) {
+    if (Size == 0) {
+      return EVMValueRange::U64;
+    }
+    const size_t Available = Start < BytecodeSize ? (BytecodeSize - Start) : 0;
+    const size_t ReadCount = std::min(Size, Available);
+    auto readPushByte = [&](size_t Index) -> uint8_t {
+      if (Index >= ReadCount) {
+        return 0;
+      }
+      return Bytecode[Start + Index];
+    };
+
+    // Bytes are big-endian.  Inspect prefix to bound magnitude.
+    if (Size > 16) {
+      for (size_t I = 0; I < Size - 16; ++I) {
+        if (readPushByte(I) != 0) {
+          return EVMValueRange::U256;
+        }
+      }
+    }
+    if (Size > 8) {
+      const size_t U128PrefixEnd = Size > 16 ? Size - 16 : 0;
+      const size_t U64PrefixEnd = Size - 8;
+      for (size_t I = U128PrefixEnd; I < U64PrefixEnd; ++I) {
+        if (readPushByte(I) != 0) {
+          return EVMValueRange::U128;
+        }
+      }
+    }
+    return EVMValueRange::U64;
+  }
+
+  // Pop `Count` entries from `Stack`, padding with U256 if the stack is
+  // shallower than expected (under-approximated entry stack should never
+  // happen after `resolveEntryDepths` succeeded, but guard defensively).
+  static void popStackRanges(std::vector<EVMValueRange> &Stack, size_t Count) {
+    while (Count > 0 && !Stack.empty()) {
+      Stack.pop_back();
+      --Count;
+    }
+  }
+
+  // Compute the exit-stack Range vector for a block by linearly scanning its
+  // body bytes and applying per-opcode transfer rules.  `Stack` starts as the
+  // block's entry-stack vector and is mutated in place.
+  void applyRangeTransferForBlock(const BlockInfo &Info,
+                                  const uint8_t *Bytecode, size_t BytecodeSize,
+                                  std::vector<EVMValueRange> &Stack) const {
+    const auto *InstructionMetrics =
+        evmc_get_instruction_metrics_table(Revision);
+    const auto *InstructionNames = evmc_get_instruction_names_table(Revision);
+    if (!InstructionMetrics) {
+      InstructionMetrics =
+          evmc_get_instruction_metrics_table(zen::evm::DEFAULT_REVISION);
+    }
+    if (!InstructionNames) {
+      InstructionNames =
+          evmc_get_instruction_names_table(zen::evm::DEFAULT_REVISION);
+    }
+
+    size_t PC = Info.BodyStartPC;
+    const size_t EndPC = std::min<size_t>(Info.BodyEndPC, BytecodeSize);
+
+    auto pushTop = [&]() { Stack.push_back(EVMValueRange::U256); };
+    auto pushU64 = [&]() { Stack.push_back(EVMValueRange::U64); };
+    auto top = [&](size_t IndexFromTop) -> EVMValueRange {
+      if (Stack.size() <= IndexFromTop) {
+        return EVMValueRange::U256;
+      }
+      return Stack[Stack.size() - 1 - IndexFromTop];
+    };
+
+    while (PC < EndPC) {
+      const uint8_t OpcodeU8 = Bytecode[PC];
+      const evmc_opcode Opcode = static_cast<evmc_opcode>(OpcodeU8);
+
+      // Undefined opcodes terminate range analysis for this block; the
+      // analyzer already marked HasUndefinedInstr and stopped scanning here.
+      if (InstructionNames[Opcode] == nullptr) {
+        return;
+      }
+
+      // PUSH N: parse literal magnitude.
+      if (Opcode >= OP_PUSH0 && Opcode <= OP_PUSH32) {
+        const size_t Size =
+            static_cast<size_t>(Opcode) - static_cast<size_t>(OP_PUSH0);
+        Stack.push_back(
+            rangeFromPushLiteral(Bytecode, BytecodeSize, PC + 1, Size));
+        PC += 1 + Size;
+        continue;
+      }
+
+      // DUP_N: duplicate slot N from the top.
+      if (Opcode >= OP_DUP1 && Opcode <= OP_DUP16) {
+        const size_t N = static_cast<size_t>(Opcode - OP_DUP1 + 1);
+        Stack.push_back(top(N - 1));
+        ++PC;
+        continue;
+      }
+
+      // SWAP_N: swap top with slot N below the top.
+      if (Opcode >= OP_SWAP1 && Opcode <= OP_SWAP16) {
+        const size_t N = static_cast<size_t>(Opcode - OP_SWAP1 + 1);
+        if (Stack.size() > N) {
+          std::swap(Stack.back(), Stack[Stack.size() - 1 - N]);
+        }
+        ++PC;
+        continue;
+      }
+
+      // LOG_N: pops 2 + N, pushes nothing.
+      if (Opcode >= OP_LOG0 && Opcode <= OP_LOG4) {
+        const size_t N = static_cast<size_t>(Opcode - OP_LOG0);
+        popStackRanges(Stack, 2 + N);
+        ++PC;
+        continue;
+      }
+
+      switch (Opcode) {
+      // No-effect on Range: pure pops or block-terminators handled below.
+      case OP_POP:
+        popStackRanges(Stack, 1);
+        break;
+
+      // Bitwise.
+      case OP_AND: {
+        EVMValueRange A = top(0);
+        EVMValueRange B = top(1);
+        popStackRanges(Stack, 2);
+        EVMValueRange R = (A == EVMValueRange::U64 || B == EVMValueRange::U64)
+                              ? EVMValueRange::U64
+                              : (A < B ? A : B);
+        Stack.push_back(R);
+        break;
+      }
+      case OP_OR:
+      case OP_XOR: {
+        EVMValueRange A = top(0);
+        EVMValueRange B = top(1);
+        popStackRanges(Stack, 2);
+        Stack.push_back(meetRange(A, B));
+        break;
+      }
+      case OP_NOT:
+        popStackRanges(Stack, 1);
+        pushTop();
+        break;
+
+      // Arithmetic.
+      case OP_ADD: {
+        EVMValueRange A = top(0);
+        EVMValueRange B = top(1);
+        popStackRanges(Stack, 2);
+        Stack.push_back(widenRange(meetRange(A, B)));
+        break;
+      }
+      case OP_MUL: {
+        EVMValueRange A = top(0);
+        EVMValueRange B = top(1);
+        popStackRanges(Stack, 2);
+        Stack.push_back(widenRange(meetRange(A, B)));
+        break;
+      }
+      case OP_SUB:
+        popStackRanges(Stack, 2);
+        pushTop();
+        break;
+      case OP_DIV:
+      case OP_SDIV:
+      case OP_MOD:
+      case OP_SMOD: {
+        // Result is bounded by the dividend's range (top of stack before pop).
+        EVMValueRange Dividend = top(0);
+        popStackRanges(Stack, 2);
+        Stack.push_back(Dividend);
+        break;
+      }
+      case OP_ADDMOD:
+      case OP_MULMOD: {
+        // Result < modulus (third operand).  Ranges over the modulus.
+        EVMValueRange Modulus = top(2);
+        popStackRanges(Stack, 3);
+        Stack.push_back(Modulus);
+        break;
+      }
+      case OP_EXP:
+      case OP_SIGNEXTEND:
+        popStackRanges(Stack, 2);
+        pushTop();
+        break;
+
+      // Comparison / boolean — always 0 or 1.
+      case OP_LT:
+      case OP_GT:
+      case OP_SLT:
+      case OP_SGT:
+      case OP_EQ:
+        popStackRanges(Stack, 2);
+        pushU64();
+        break;
+      case OP_ISZERO:
+        popStackRanges(Stack, 1);
+        pushU64();
+        break;
+
+      // Byte / shift / clz.
+      case OP_BYTE:
+        popStackRanges(Stack, 2);
+        pushU64();
+        break;
+      case OP_SHL:
+        popStackRanges(Stack, 2);
+        pushTop();
+        break;
+      case OP_SHR:
+      case OP_SAR: {
+        // Pops shift count (top), then value; result <= value's range.
+        EVMValueRange Value = top(1);
+        popStackRanges(Stack, 2);
+        Stack.push_back(Value);
+        break;
+      }
+      case OP_CLZ:
+        popStackRanges(Stack, 1);
+        pushU64();
+        break;
+
+      // Hash and loads.
+      case OP_KECCAK256:
+        popStackRanges(Stack, 2);
+        pushTop();
+        break;
+      case OP_MLOAD:
+      case OP_SLOAD:
+      case OP_TLOAD:
+      case OP_CALLDATALOAD:
+        popStackRanges(Stack, 1);
+        pushTop();
+        break;
+
+      // Account / context — U256 (addresses are 160-bit but treat as U256).
+      case OP_ADDRESS:
+      case OP_ORIGIN:
+      case OP_CALLER:
+      case OP_COINBASE:
+      case OP_SELFBALANCE:
+      case OP_CALLVALUE:
+      case OP_GASPRICE:
+      case OP_BASEFEE:
+      case OP_BLOBBASEFEE:
+      case OP_PREVRANDAO:
+        pushTop();
+        break;
+      case OP_BALANCE:
+      case OP_EXTCODEHASH:
+        popStackRanges(Stack, 1);
+        pushTop();
+        break;
+      case OP_BLOCKHASH:
+      case OP_BLOBHASH:
+        popStackRanges(Stack, 1);
+        pushTop();
+        break;
+
+      // Bounded context — U64.
+      case OP_CALLDATASIZE:
+      case OP_CODESIZE:
+      case OP_RETURNDATASIZE:
+      case OP_PC:
+      case OP_MSIZE:
+      case OP_GAS:
+      case OP_TIMESTAMP:
+      case OP_NUMBER:
+      case OP_GASLIMIT:
+      case OP_CHAINID:
+        pushU64();
+        break;
+      case OP_EXTCODESIZE:
+        popStackRanges(Stack, 1);
+        pushU64();
+        break;
+
+      // Memory / storage stores: pop only.
+      case OP_MSTORE:
+      case OP_MSTORE8:
+      case OP_SSTORE:
+      case OP_TSTORE:
+        popStackRanges(Stack, 2);
+        break;
+      case OP_CALLDATACOPY:
+      case OP_CODECOPY:
+      case OP_RETURNDATACOPY:
+      case OP_MCOPY:
+        popStackRanges(Stack, 3);
+        break;
+      case OP_EXTCODECOPY:
+        popStackRanges(Stack, 4);
+        break;
+
+      // Calls / creates: result is success boolean (0 or 1) → U64.
+      case OP_CALL:
+      case OP_CALLCODE:
+        popStackRanges(Stack, 7);
+        pushU64();
+        break;
+      case OP_DELEGATECALL:
+      case OP_STATICCALL:
+        popStackRanges(Stack, 6);
+        pushU64();
+        break;
+      case OP_CREATE:
+        popStackRanges(Stack, 3);
+        pushU64();
+        break;
+      case OP_CREATE2:
+        popStackRanges(Stack, 4);
+        pushU64();
+        break;
+
+      // Block-boundary / terminators.
+      case OP_JUMP:
+        popStackRanges(Stack, 1);
+        return;
+      case OP_JUMPI:
+        popStackRanges(Stack, 2);
+        // Fallthrough block continues; exit state is current Stack.
+        return;
+      case OP_STOP:
+      case OP_RETURN:
+      case OP_REVERT:
+      case OP_SELFDESTRUCT:
+      case OP_INVALID:
+        return;
+      case OP_JUMPDEST:
+        // Should never be encountered inside a body — block scan stops
+        // before the next JUMPDEST.  Treat as no-op.
+        break;
+
+      default:
+        // Fallback for any opcode without an explicit rule above: use
+        // metrics-table to determine pop/push count and push U256 results.
+        if (InstructionMetrics) {
+          const auto &Metrics = InstructionMetrics[Opcode];
+          int PopCount = Metrics.stack_height_required;
+          int PushCount = PopCount + Metrics.stack_height_change;
+          if (PopCount > 0) {
+            popStackRanges(Stack, static_cast<size_t>(PopCount));
+          }
+          for (int I = 0; I < PushCount; ++I) {
+            pushTop();
+          }
+        }
+        break;
+      }
+
+      ++PC;
+    }
+  }
+
+  // Initialize per-block entry vectors.  Function-entry block starts empty,
+  // dynamic-jump-target candidates start at top (U256) for soundness, and
+  // every other block starts at bottom (U64).
+  void seedRangeEntryVectors() {
+    for (auto &[EntryPC, Info] : BlockInfos) {
+      (void)EntryPC;
+      Info.EntryStackRanges.clear();
+      if (Info.ResolvedEntryStackDepth < 0 || Info.HasInconsistentEntryDepth) {
+        continue;
+      }
+      const size_t Depth = static_cast<size_t>(Info.ResolvedEntryStackDepth);
+      if (EntryPC == EntryBlockPC) {
+        // Function entry: stack is empty.  Depth is 0 unless live-in prefix
+        // analysis raised it; in that case treat unknowns as U256.
+        Info.EntryStackRanges.assign(Depth, EVMValueRange::U256);
+        continue;
+      }
+      const EVMValueRange Init =
+          Info.IsDynamicJumpTargetCandidate
+              ? EVMValueRange::U256 // top — sound for unenumerated dyn-jump
+              : EVMValueRange::U64; // bottom — will widen via meet
+      Info.EntryStackRanges.assign(Depth, Init);
+    }
+  }
+
+  // CFG worklist propagation. Compute each block's exit state from its entry
+  // state via the per-opcode transfer function, then meet into every static
+  // successor's entry state.  A successor whose entry vector changed is
+  // requeued.  Convergence: lattice height is 3, so each slot can change at
+  // most twice.
+  void runRangeAnalysis(const uint8_t *Bytecode, size_t BytecodeSize) {
+    seedRangeEntryVectors();
+
+    std::queue<uint64_t> WorkList;
+    std::map<uint64_t, bool> InQueue;
+    for (const auto &[EntryPC, Info] : BlockInfos) {
+      (void)Info;
+      WorkList.push(EntryPC);
+      InQueue[EntryPC] = true;
+    }
+
+    while (!WorkList.empty()) {
+      uint64_t BlockPC = WorkList.front();
+      WorkList.pop();
+      InQueue[BlockPC] = false;
+
+      auto It = BlockInfos.find(BlockPC);
+      if (It == BlockInfos.end()) {
+        continue;
+      }
+      BlockInfo &Info = It->second;
+      if (Info.ResolvedEntryStackDepth < 0 || Info.HasInconsistentEntryDepth ||
+          Info.HasUndefinedInstr) {
+        continue;
+      }
+
+      std::vector<EVMValueRange> ExitStack = Info.EntryStackRanges;
+      applyRangeTransferForBlock(Info, Bytecode, BytecodeSize, ExitStack);
+
+      for (uint64_t Succ : Info.Successors) {
+        auto SuccIt = BlockInfos.find(Succ);
+        if (SuccIt == BlockInfos.end()) {
+          continue;
+        }
+        BlockInfo &SuccInfo = SuccIt->second;
+        if (SuccInfo.ResolvedEntryStackDepth < 0 ||
+            SuccInfo.HasInconsistentEntryDepth) {
+          continue;
+        }
+
+        const size_t SuccDepth =
+            static_cast<size_t>(SuccInfo.ResolvedEntryStackDepth);
+        if (SuccInfo.EntryStackRanges.size() != SuccDepth) {
+          // Defensive: keep the vector sized to ResolvedEntryStackDepth.
+          SuccInfo.EntryStackRanges.assign(SuccDepth, EVMValueRange::U256);
+        }
+
+        // Meet the producer's exit stack into the successor's entry stack.
+        // The producer's exit vector covers the absolute stack from the
+        // bottom; the successor reads its bottom-most `SuccDepth` slots.
+        const size_t Common = std::min(SuccDepth, ExitStack.size());
+        bool Changed = false;
+        for (size_t I = 0; I < Common; ++I) {
+          EVMValueRange Old = SuccInfo.EntryStackRanges[I];
+          EVMValueRange New = meetRange(Old, ExitStack[I]);
+          if (New != Old) {
+            SuccInfo.EntryStackRanges[I] = New;
+            Changed = true;
+          }
+        }
+        // If the producer's stack is shorter than the successor expects,
+        // unknown prefix slots widen to U256 (top).
+        for (size_t I = Common; I < SuccDepth; ++I) {
+          if (SuccInfo.EntryStackRanges[I] != EVMValueRange::U256) {
+            SuccInfo.EntryStackRanges[I] = EVMValueRange::U256;
+            Changed = true;
+          }
+        }
+        if (Changed && !InQueue[Succ]) {
+          WorkList.push(Succ);
+          InQueue[Succ] = true;
+        }
+      }
     }
   }
 
