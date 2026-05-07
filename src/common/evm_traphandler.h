@@ -77,7 +77,7 @@ public:
 
   void restartHandler() { Handling = true; }
 
-  void jmpToMarked(int Signum) { siglongjmp(*JmpBuf, Signum); }
+  void jmpToMarked(int Signum) { longjmp(*JmpBuf, Signum); }
 
   void setTrapFrameAddr(void *Addr, void *PC, void *FaultingAddress,
                         uint32_t NumIgnoredFrames) {
@@ -148,9 +148,12 @@ bool initEVMPlatformTrapHandler();
 // may not used
 // so need set it when unwind backtrace after ud2
 #define SAVE_EVM_HOSTAPI_FRAME_POINTER_TO_TLS                                  \
-  void *FrameAddr = __builtin_frame_address(0);                                \
-  auto TLS = common::evm_traphandler::EVMCallThreadState::current();           \
-  TLS->setTrapFrameAddr(FrameAddr, nullptr, nullptr, 0);
+  do {                                                                         \
+    void *FrameAddr = __builtin_frame_address(0);                              \
+    auto *TLS_ = common::evm_traphandler::EVMCallThreadState::current();       \
+    ZEN_ASSERT(TLS_ != nullptr);                                               \
+    TLS_->setTrapFrameAddr(FrameAddr, nullptr, nullptr, 0);                    \
+  } while (0)
 
 #endif // ZEN_ENABLE_CPU_EXCEPTION
 

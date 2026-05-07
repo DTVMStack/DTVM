@@ -189,7 +189,7 @@ void EVMInstance::setInstanceExceptionOnJIT(EVMInstance *Inst,
 
 void EVMInstance::throwInstanceExceptionOnJIT(EVMInstance *Inst) {
 #ifdef ZEN_ENABLE_CPU_EXCEPTION
-  SAVE_EVM_HOSTAPI_FRAME_POINTER_TO_TLS
+  SAVE_EVM_HOSTAPI_FRAME_POINTER_TO_TLS;
 
   utils::throwCpuIllegalInstructionTrap();
 #endif // ZEN_ENABLE_CPU_EXCEPTION

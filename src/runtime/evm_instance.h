@@ -11,8 +11,8 @@
 #include "runtime/evm_module.h"
 #include "runtime/instance.h"
 #include <array>
-#include <deque>
 #include <limits>
+#include <list>
 #include <memory>
 
 // Forward declaration for evmc_message
@@ -158,8 +158,12 @@ public:
     std::unordered_map<std::pair<const evmc_message *, uint64_t>, evmc::bytes32,
                        PairHash>
         CalldataLoads;
-    std::deque<evmc::bytes32> ExtcodeHashes;
-    std::deque<evmc::bytes32> Keccak256Results;
+    // Use std::list (not std::deque) for values whose .bytes pointers are
+    // returned to JIT and may outlive further push_back calls; deque can
+    // reallocate and invalidate earlier element addresses.
+    std::list<evmc::bytes32> ExtcodeHashes;
+    std::list<evmc::bytes32> Keccak256Results;
+    std::list<evmc::bytes32> CreateAddresses;
     bool TxContextCached = false;
 
     void clear() {
@@ -170,6 +174,7 @@ public:
       CalldataLoads.clear();
       ExtcodeHashes.clear();
       Keccak256Results.clear();
+      CreateAddresses.clear();
     }
   };
 
