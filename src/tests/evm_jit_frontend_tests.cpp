@@ -79,6 +79,8 @@ struct MockOperand {
     *Slot = Other.resolvedValue();
   }
 
+  void setRange(COMPILER::EVMValueRange) {}
+
 private:
   U256Value Value = {0, 0, 0, 0};
   bool Constant = false;
