@@ -4985,12 +4985,10 @@ EVMMirBuilder::convertSingleInstrToU256Operand(MInstruction *SingleInstr) {
   // Convert the single instruction result to I64 and place it in low component
   Result[0] = zeroExtendToI64(SingleInstr);
 
-  // Fill the remaining components with zeros
-  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+  // Each limb needs its own zero constant (dMIR tree IR: one parent per expr)
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
-    Result[I] = Zero;
+    Result[I] = createIntConstInstruction(I64Type, 0);
   }
-
   return Operand(Result, EVMType::UINT256);
 }
 
@@ -5653,11 +5651,11 @@ EVMMirBuilder::convertOperandToUNInstruction(const Operand &Param) {
 
   U256Inst Result = {};
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
-  MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+
 
   if (Param.isEmpty()) {
     for (size_t I = 0; I < N; ++I) {
-      Result[I] = Zero;
+      Result[I] = createIntConstInstruction(I64Type, 0);
     }
   } else if (Param.getType() == EVMType::BYTES32) {
     auto U256Op = convertBytes32ToU256Operand(Param);
@@ -5701,7 +5699,7 @@ EVMMirBuilder::convertOperandToUNInstruction(const Operand &Param) {
 
   // Initialize high components to zero for types smaller than U256
   for (size_t I = N; I < EVM_ELEMENTS_COUNT; ++I) {
-    Result[I] = Zero;
+    Result[I] = createIntConstInstruction(I64Type, 0);
   }
 
   return Result;
@@ -5748,6 +5746,14 @@ MInstruction *EVMMirBuilder::packU256Argument(const Operand &Param,
     MInstruction *Component = Components[Index];
     if (Component == nullptr) {
       Component = createIntConstInstruction(I64Type, 0);
+    } else if (auto *ConstInstr =
+                   llvm::dyn_cast<ConstantInstruction>(Component)) {
+      // Re-materialize constants near the store to avoid long live ranges that
+      // cause the register allocator to spill them. Stale stack slots produce
+      // garbage on reload (root cause of issue #487).
+      auto *IntConst = llvm::cast<MConstantInt>(&ConstInstr->getConstant());
+      Component = createIntConstInstruction(
+          I64Type, IntConst->getValue().getZExtValue());
     }
 
     const int32_t Offset =
