@@ -5652,7 +5652,6 @@ EVMMirBuilder::convertOperandToUNInstruction(const Operand &Param) {
   U256Inst Result = {};
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
-
   if (Param.isEmpty()) {
     for (size_t I = 0; I < N; ++I) {
       Result[I] = createIntConstInstruction(I64Type, 0);
