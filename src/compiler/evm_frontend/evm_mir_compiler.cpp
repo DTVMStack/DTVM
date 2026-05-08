@@ -3875,6 +3875,11 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handlePC(const uint64_t &PC) {
   MType *UInt64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MInstruction *PCInst = createIntConstInstruction(UInt64Type, PC);
+  // Spill the constant through a temporary so it can be safely re-read across
+  // basic blocks (e.g. when the value is later consumed in the slow path of
+  // ADDMOD/MULMOD). Without this, cross-BB reuse of the constant instruction
+  // can hit a stale vreg in the lowering expression cache.
+  PCInst = protectUnsafeValue(PCInst, UInt64Type);
 
   // Convert the 64-bit PC value to U256 format (EVM specification)
   return convertSingleInstrToU256Operand(PCInst);

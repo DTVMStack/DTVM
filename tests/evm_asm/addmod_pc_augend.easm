@@ -1,0 +1,32 @@
+// Regression test for issue #488.
+//
+// Reproduces the multipass JIT vs interpreter mismatch where the PC opcode
+// result was used as ADDMOD's augend. Before the fix, the constant created by
+// handlePC was reused across basic blocks (the slow-path of ADDMOD spills the
+// U256 operand through setInstanceElement) and the x86 lowering expression
+// cache returned a stale virtual register, so the runtime helper read a heap
+// pointer instead of the PC value.
+//
+// Sequence:
+//   ADDMOD ((PC = 5) , 0x10, 0x07)
+//   = (5 + 16) % 7 = 21 % 7 = 0
+//
+// Layout offsets (in hex):
+//   0x00  PUSH1 0x07
+//   0x02  PUSH1 0x10
+//   0x04  PC          // pushes 0x04 onto the stack as a U256
+//   0x05  ADDMOD      // (4 + 16) % 7 = 20 % 7 = 6
+//   0x06  PUSH1 0x00
+//   0x08  MSTORE
+//   0x09  PUSH1 0x20
+//   0x0B  PUSH1 0x00
+//   0x0D  RETURN
+PUSH1 0x07
+PUSH1 0x10
+PC
+ADDMOD
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN
