@@ -647,4 +647,45 @@ TEST(EVMMultipassSstoreTest, Issue487_U256HighLimbsNotCorrupted) {
   checkStorageValue(0x42000002, 0x68E6, "slot_0x42000002");
   checkStorageValue(0x42000003, 0xC4, "slot_0x42000003");
 }
+
+// Regression test for issue #488.
+//
+// Before the fix, EVMMirBuilder::handlePC produced a raw `const i64`
+// MInstruction whose result virtual register was reused across basic blocks
+// through the x86 lowering's expression cache (_expr_reg_map). When PC was
+// later consumed by the slow path of ADDMOD (which spills the U256 augend
+// through setInstanceElement in a different basic block), the cached vreg had
+// been clobbered in between, so the runtime helper evmGetAddMod read a stale
+// heap pointer instead of the PC value. The result was a divergence between
+// the interpreter (correct) and the multipass JIT (incorrect, often throwing
+// Unreachable).
+//
+// The fix spills the PC constant through a temporary variable in handlePC so
+// each consumer re-reads it via dread.
+TEST(EVMRegressionTest, Issue488_PCAsAddmodAugend_InterpMatchesMultipass) {
+  const auto FilePath =
+      (getEvmAsmDirPath() / "addmod_pc_augend.evm.hex").string();
+
+  auto InterpExec =
+      executeEvmBytecodeFile(FilePath, common::RunMode::InterpMode);
+  auto MultipassExec =
+      executeEvmBytecodeFile(FilePath, common::RunMode::MultipassMode);
+
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(MultipassExec.JITCompiled)
+      << "Multipass JIT should compile addmod_pc_augend";
+#endif
+
+  EXPECT_EQ(InterpExec.Status, EVMC_SUCCESS);
+  EXPECT_EQ(MultipassExec.Status, InterpExec.Status)
+      << "Multipass status diverged from interpreter for issue #488 "
+         "regression";
+  EXPECT_EQ(MultipassExec.OutputHex, InterpExec.OutputHex)
+      << "Multipass output diverged from interpreter for issue #488 "
+         "regression";
+
+  // (PC=4) + 0x10 = 20, 20 % 7 = 6, returned as a 32-byte big-endian word.
+  EXPECT_EQ(InterpExec.OutputHex,
+            "0000000000000000000000000000000000000000000000000000000000000006");
+}
 #endif
