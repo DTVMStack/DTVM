@@ -11,6 +11,7 @@
 #include "tests/evm_test_host.hpp"
 #include "utils/evm.h"
 #endif // ZEN_ENABLE_EVM
+#include <cstring>
 #include <unistd.h>
 
 #ifdef ZEN_ENABLE_BUILTIN_WASI
@@ -386,16 +387,21 @@ int main(int argc, char *argv[]) {
 
     // EIP-3607 (London+): Reject transactions from senders with deployed code.
     // A sender with non-empty code is a contract, not an EOA, unless the code
-    // is an EIP-7702 delegation designator (0xef0100...).
+    // is an EIP-7702 delegation designator (0xef0100...) on Prague+.
     if (EvmRevision >= EVMC_LONDON) {
       auto SenderIt = MockedHost.accounts.find(Msg.sender);
       if (SenderIt != MockedHost.accounts.end() &&
           !SenderIt->second.code.empty()) {
-        const auto &SenderCode = SenderIt->second.code;
-        constexpr uint8_t DELEGATION_MAGIC[] = {0xef, 0x01, 0x00};
-        bool IsDelegated = SenderCode.size() >= sizeof(DELEGATION_MAGIC) &&
-                           std::memcmp(SenderCode.data(), DELEGATION_MAGIC,
-                                       sizeof(DELEGATION_MAGIC)) == 0;
+        // EIP-7702 delegation designator exemption is only valid on Prague+,
+        // where delegation is actually supported.
+        bool IsDelegated = false;
+        if (EvmRevision >= EVMC_PRAGUE) {
+          const auto &SenderCode = SenderIt->second.code;
+          constexpr uint8_t DELEGATION_MAGIC[] = {0xef, 0x01, 0x00};
+          IsDelegated = SenderCode.size() >= sizeof(DELEGATION_MAGIC) &&
+                        std::memcmp(SenderCode.data(), DELEGATION_MAGIC,
+                                    sizeof(DELEGATION_MAGIC)) == 0;
+        }
         if (!IsDelegated) {
           ZEN_LOG_ERROR("sender not an EOA: sender account has deployed code "
                         "(EIP-3607)");
