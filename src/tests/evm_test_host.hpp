@@ -891,10 +891,9 @@ public:
         }
       }
 
-      evmc::Result CreateResult(
-          EVMC_SUCCESS, RemainingGas, GasRefund,
-          NewAccPost.code.empty() ? nullptr : NewAccPost.code.data(),
-          NewAccPost.code.size());
+      // evmone behavior: CREATE success returns empty output_data
+      evmc::Result CreateResult(EVMC_SUCCESS, RemainingGas, GasRefund, nullptr,
+                                0);
       CreateResult.create_address = NewAddr;
       return CreateResult;
     } catch (const std::exception &E) {
