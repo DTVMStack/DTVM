@@ -384,6 +384,26 @@ int main(int argc, char *argv[]) {
                                .ContractAddress = ContractAddress};
     evmc_message Msg = createEvmMessage(MockedHost, MsgConfig, Bytecode);
 
+    // EIP-3607 (London+): Reject transactions from senders with deployed code.
+    // A sender with non-empty code is a contract, not an EOA, unless the code
+    // is an EIP-7702 delegation designator (0xef0100...).
+    if (EvmRevision >= EVMC_LONDON) {
+      auto SenderIt = MockedHost.accounts.find(Msg.sender);
+      if (SenderIt != MockedHost.accounts.end() &&
+          !SenderIt->second.code.empty()) {
+        const auto &SenderCode = SenderIt->second.code;
+        constexpr uint8_t DELEGATION_MAGIC[] = {0xef, 0x01, 0x00};
+        bool IsDelegated = SenderCode.size() >= sizeof(DELEGATION_MAGIC) &&
+                           std::memcmp(SenderCode.data(), DELEGATION_MAGIC,
+                                       sizeof(DELEGATION_MAGIC)) == 0;
+        if (!IsDelegated) {
+          ZEN_LOG_ERROR("sender not an EOA: sender account has deployed code "
+                        "(EIP-3607)");
+          return exitMain(EXIT_FAILURE, RT.get());
+        }
+      }
+    }
+
     // Deduct intrinsic gas before EVM execution.
     const int64_t IntrinsicGas = zen::utils::computeIntrinsicGas(
         EvmRevision, MsgKind, Msg.input_data, Msg.input_size);
