@@ -1132,7 +1132,7 @@ private:
       CurrentBlockLifted = true;
       CurrentBlockHiddenLiveInPrefixDepth =
           static_cast<uint32_t>(std::max(BlockInfo.HiddenLiveInPrefixDepth, 0));
-      materializeLiftedBlockMergeRequests(PC);
+      materializeLiftedBlockMergeRequests(PC, BlockInfo);
       restoreLiftedBlockLogicalEntryState(PC);
       return;
     }
@@ -1164,7 +1164,9 @@ private:
     }
   }
 
-  void materializeLiftedBlockMergeRequests(uint64_t BlockPC) {
+  void
+  materializeLiftedBlockMergeRequests(uint64_t BlockPC,
+                                      const EVMAnalyzer::BlockInfo &BlockInfo) {
     for (const MergeMaterializationRequest &Request :
          StackLifter.getMergeMaterializationRequests(BlockPC)) {
       std::vector<std::pair<uint64_t, Operand>> IncomingValues;
@@ -1173,10 +1175,12 @@ private:
         IncomingValues.emplace_back(IncomingValue.PredBlockPC,
                                     IncomingValue.Value);
       }
-      StackLifter.assignMergeOperand(
-          BlockPC, Request.SlotIndex,
-          materializeStackMergeOperandCompat(Request.ExpectedPredBlockPCs,
-                                             IncomingValues));
+      Operand Merge = materializeStackMergeOperandCompat(
+          Request.ExpectedPredBlockPCs, IncomingValues);
+      if (Request.SlotIndex < BlockInfo.EntryStackRanges.size()) {
+        Merge.setRange(BlockInfo.EntryStackRanges[Request.SlotIndex]);
+      }
+      StackLifter.assignMergeOperand(BlockPC, Request.SlotIndex, Merge);
     }
   }
 

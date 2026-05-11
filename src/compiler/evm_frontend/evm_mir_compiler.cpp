@@ -1006,12 +1006,15 @@ void EVMMirBuilder::setTrackedStackDepth(uint32_t Depth) {
                                         StackTopVar->getVarIdx());
 }
 
-typename EVMMirBuilder::Operand EVMMirBuilder::createStackEntryOperand() {
+typename EVMMirBuilder::Operand
+EVMMirBuilder::createStackEntryOperand(ValueRange Range) {
   U256Var Vars = {};
   for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
     Vars[I] = CurFunc->createVariable(&Ctx.I64Type);
   }
-  return Operand(Vars, EVMType::UINT256);
+  Operand Op(Vars, EVMType::UINT256);
+  Op.setRange(Range);
+  return Op;
 }
 
 void EVMMirBuilder::assignStackEntryOperand(const Operand &Dest,

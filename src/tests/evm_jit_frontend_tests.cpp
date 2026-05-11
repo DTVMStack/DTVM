@@ -181,7 +181,8 @@ public:
     }
   }
 
-  Operand createStackEntryOperand() {
+  Operand createStackEntryOperand(
+      COMPILER::EVMValueRange = COMPILER::EVMValueRange::U256) {
     return Operand(std::make_shared<MockOperand::U256Value>(
         MockOperand::U256Value{0, 0, 0, 0}));
   }

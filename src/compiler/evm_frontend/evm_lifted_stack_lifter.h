@@ -114,7 +114,12 @@ public:
       EntryState.EntryOperands.reserve(
           static_cast<size_t>(BlockInfo.FullEntryStateDepth));
       for (int32_t Depth = 0; Depth < BlockInfo.FullEntryStateDepth; ++Depth) {
-        EntryState.EntryOperands.push_back(Builder.createStackEntryOperand());
+        EVMValueRange SlotRange =
+            (static_cast<size_t>(Depth) < BlockInfo.EntryStackRanges.size())
+                ? BlockInfo.EntryStackRanges[Depth]
+                : EVMValueRange::U256;
+        EntryState.EntryOperands.push_back(
+            Builder.createStackEntryOperand(SlotRange));
       }
       EntryState.ResolvedEntryState =
           makeVirtualStackState(EntryState.EntryOperands);

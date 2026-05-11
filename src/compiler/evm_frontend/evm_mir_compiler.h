@@ -308,7 +308,7 @@ public:
   void stackSet(int32_t IndexFromTop, Operand SetValue);
   Operand stackGet(int32_t IndexFromTop);
   void setTrackedStackDepth(uint32_t Depth);
-  Operand createStackEntryOperand();
+  Operand createStackEntryOperand(ValueRange Range = ValueRange::U256);
   void assignStackEntryOperand(const Operand &Dest, const Operand &Value);
   Operand prepareStackPhiIncoming(const Operand &Value);
   void registerCurrentBlockPC(uint64_t BlockPC);
