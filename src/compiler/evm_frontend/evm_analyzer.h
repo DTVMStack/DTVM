@@ -1356,6 +1356,23 @@ private:
     }
   }
 
+  // Magnitude-only signed div/mod range. If a sign-known sub-lattice is added
+  // later (see PR #493 docs/changes README "Non-Goals"), THIS is the helper
+  // to replace -- it isolates the "signed reasoning lives in a single place"
+  // property.
+  static EVMValueRange signedDivModRange(EVMValueRange Dividend,
+                                         EVMValueRange Divisor) {
+    // If either operand is U256, it may be negative (bit 255 set), so the
+    // signed result can be negative U256 (all high limbs set). Otherwise
+    // both are non-negative (bit 255 == 0), the operation degenerates to
+    // unsigned, and |result| <= |Dividend|, so the result fits in Dividend's
+    // range.
+    if (Dividend == EVMValueRange::U256 || Divisor == EVMValueRange::U256) {
+      return EVMValueRange::U256;
+    }
+    return Dividend;
+  }
+
   // Classify a PUSH literal of `Size` bytes starting at byte `Start` in
   // `Bytecode`.  Defensive against truncated tail.
   static EVMValueRange rangeFromPushLiteral(const uint8_t *Bytecode,
@@ -1529,13 +1546,20 @@ private:
         pushTop();
         break;
       case OP_DIV:
-      case OP_SDIV:
-      case OP_MOD:
-      case OP_SMOD: {
-        // Result is bounded by the dividend's range (top of stack before pop).
+      case OP_MOD: {
+        // Unsigned: result <= dividend (top of stack before pop).
         EVMValueRange Dividend = top(0);
         popStackRanges(Stack, 2);
         Stack.push_back(Dividend);
+        break;
+      }
+      case OP_SDIV:
+      case OP_SMOD: {
+        // Signed: see signedDivModRange comment for soundness.
+        EVMValueRange Dividend = top(0);
+        EVMValueRange Divisor = top(1);
+        popStackRanges(Stack, 2);
+        Stack.push_back(signedDivModRange(Dividend, Divisor));
         break;
       }
       case OP_ADDMOD:
