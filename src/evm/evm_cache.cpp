@@ -197,6 +197,11 @@ struct GasBlock {
   uint64_t Cost = 0;
   std::vector<uint32_t> Succs;
   std::vector<uint32_t> Preds;
+  // Count of dynamic-jump blocks in this contract that could land here at
+  // runtime. Only nonzero for JUMPDEST blocks when the contract has at
+  // least one unresolved dynamic jump. Carried separately so we avoid
+  // materialising D*J explicit over-approximation edges (see buildCFGEdges).
+  uint32_t ImplicitDynamicPredCount = 0;
 };
 
 static void addEdge(std::vector<GasBlock> &Blocks, uint32_t From, uint32_t To) {
@@ -380,19 +385,40 @@ static bool resolveConstantJumpTarget(const std::vector<uint8_t> &JumpDestMap,
 }
 
 // Build CFG edges for all blocks. Static jumps (PUSH → JUMP) get precise
-// single-target edges; all other dynamic jumps get over-approximated edges
-// to every JUMPDEST to keep the CFG sound for SPP metering.
-//
-// After this pass, JUMPDEST blocks may have many predecessors. That is the
-// intentional partner to lemma614Update's effectivePredCount > 1 guard,
-// which refuses to shift gas across edges with multiple predecessors and
-// so absorbs the over-approximation soundly.
+// single-target edges. For each unresolved dynamic jump we DO NOT add the
+// D*|JUMPDEST| explicit over-approximation edges (which previously made the
+// pass quadratic-to-cubic in pathological contracts). Instead we record on
+// every JUMPDEST how many dynamic-jump blocks could land there at runtime
+// via `ImplicitDynamicPredCount`, and `effectivePredCount` folds that count
+// into its multi-predecessor check. SPP decisions are identical: a JUMPDEST
+// that is a potential dynamic-jump target sees `effectivePredCount > 1` and
+// `lemma614Update` refuses to shift gas across that edge, exactly as it
+// would have done against an explicit over-approximated `Preds` set.
 static void buildCFGEdges(std::vector<GasBlock> &Blocks,
                           const std::vector<uint32_t> &BlockAtPc,
                           const std::vector<uint8_t> &JumpDestMap,
                           const std::vector<intx::uint256> &PushValueMap,
                           const std::vector<uint32_t> &JumpDestBlocks,
                           size_t CodeSize) {
+  // Count unresolved dynamic jumps once so we can stamp every JUMPDEST with
+  // the right implicit-predecessor count in O(N) instead of O(D*J).
+  uint32_t DynamicJumpCount = 0;
+  for (const auto &Block : Blocks) {
+    if (!isJumpOpcode(Block.LastOpcode)) {
+      continue;
+    }
+    uint32_t DestPc = 0;
+    if (!resolveConstantJumpTarget(JumpDestMap, PushValueMap, CodeSize, Block,
+                                   DestPc)) {
+      ++DynamicJumpCount;
+    }
+  }
+  if (DynamicJumpCount > 0) {
+    for (uint32_t JdId : JumpDestBlocks) {
+      Blocks[JdId].ImplicitDynamicPredCount = DynamicJumpCount;
+    }
+  }
+
   for (size_t BlockId = 0; BlockId < Blocks.size(); ++BlockId) {
     auto &Block = Blocks[BlockId];
     const bool IsTerminator = isControlFlowTerminator(Block.LastOpcode);
@@ -416,15 +442,9 @@ static void buildCFGEdges(std::vector<GasBlock> &Blocks,
         if (SuccId != UINT32_MAX) {
           addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
         }
-      } else {
-        // Dynamic jump: over-approximate to all jump destinations.
-        // This keeps the CFG sound — under-approximation would let
-        // lemma614Update shift gas along edges that don't exist at
-        // runtime, causing unsafe metering on missed paths.
-        for (uint32_t SuccId : JumpDestBlocks) {
-          addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
-        }
       }
+      // Dynamic jump: handled by the implicit-predecessor count stamped onto
+      // every JUMPDEST above. No explicit Succs/Preds edges added.
     }
   }
 }
@@ -909,11 +929,18 @@ static bool buildLoopsUsingDominance(
 
 // Effective predecessor count: the entry block (Start == 0) is always reachable
 // from the program start, adding an implicit path not represented in the CFG.
+//
+// Blocks with `ImplicitDynamicPredCount > 0` (every JUMPDEST in a contract
+// that has at least one dynamic jump) carry the over-approximated dynamic
+// predecessors as a count instead of explicit edges; folding them in here
+// keeps `lemma614Update`'s "shift only into single-pred successors" check
+// equivalent to the explicit over-approximation.
 static size_t effectivePredCount(const GasBlock &Block) {
   size_t Count = Block.Preds.size();
   if (Block.Start == 0) {
     ++Count;
   }
+  Count += Block.ImplicitDynamicPredCount;
   return Count;
 }
 
@@ -1036,7 +1063,33 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   // Split critical edges (required for safe SPP optimization)
   splitCriticalEdges(Blocks, CodeSize);
 
-  const std::vector<uint8_t> Reachable = computeReachable(Blocks, 0);
+  std::vector<uint8_t> Reachable = computeReachable(Blocks, 0);
+  // In the implicit-dyn-pred representation, JUMPDESTs reached only via a
+  // dynamic JUMP have no explicit predecessor edge from any block reachable
+  // via static control flow, so the static-only walk above misses them.
+  // Seed them as roots and propagate forward via Succs so the dominator
+  // and loop analyses still treat them (and their static successors) as
+  // live nodes — without this, SPP would skip cost shifting through every
+  // dyn-only function-return / dispatcher-target chunk.
+  {
+    std::vector<uint32_t> Stack;
+    for (uint32_t JdId : JumpDestBlocks) {
+      if (Reachable[JdId] == 0) {
+        Reachable[JdId] = 1;
+        Stack.push_back(JdId);
+      }
+    }
+    while (!Stack.empty()) {
+      const uint32_t Node = Stack.back();
+      Stack.pop_back();
+      for (uint32_t Succ : Blocks[Node].Succs) {
+        if (Reachable[Succ] == 0) {
+          Reachable[Succ] = 1;
+          Stack.push_back(Succ);
+        }
+      }
+    }
+  }
   const std::vector<std::vector<uint64_t>> Dom =
       computeDominators(Blocks, Reachable);
 
