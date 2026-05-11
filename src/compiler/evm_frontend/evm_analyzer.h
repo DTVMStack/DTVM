@@ -1656,11 +1656,17 @@ private:
       case OP_PC:
       case OP_MSIZE:
       case OP_GAS:
+        pushU64();
+        break;
+      // Host-context opcodes returning full U256 values (EVMC declares
+      // GetTimestamp/GetNumber/GetGasLimit as `U256Fn`; GetChainId as
+      // `Bytes32Fn`).  Classify conservatively as U256 to keep the u64
+      // fast-path admission invariant sound.
       case OP_TIMESTAMP:
       case OP_NUMBER:
       case OP_GASLIMIT:
       case OP_CHAINID:
-        pushU64();
+        pushTop();
         break;
       case OP_EXTCODESIZE:
         popStackRanges(Stack, 1);

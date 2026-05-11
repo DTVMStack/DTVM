@@ -113,3 +113,55 @@ TEST(EVMRangeAnalyzer, SDivU256DividendIsU256) {
   ASSERT_EQ(JumpDest->EntryStackRanges.size(), 1u);
   EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U256);
 }
+
+namespace {
+
+// Build "<HostOp> PUSH1 5 JUMP <pad> JUMPDEST" so the JUMPDEST inherits the
+// host-opcode result as its single entry slot.
+CrossJoinBytecode buildHostOpCrossJoin(uint8_t HostOp) {
+  return CrossJoinBytecode{
+      {HostOp,     // 0: TIMESTAMP / NUMBER / GASLIMIT / CHAINID
+       0x60, 0x05, // 1: PUSH1 5
+       0x56,       // 3: JUMP
+       0xfe,       // 4: INVALID pad
+       0x5b},      // 5: JUMPDEST
+      5};
+}
+
+} // namespace
+
+TEST(EVMRangeAnalyzer, TimestampIsU256) {
+  CrossJoinBytecode Setup = buildHostOpCrossJoin(0x42 /* TIMESTAMP */);
+  EVMAnalyzer Analyzer = analyzeBytecode(Setup.Bytecode);
+  const auto *JumpDest = findBlock(Analyzer, Setup.JumpDestPC);
+  ASSERT_NE(JumpDest, nullptr);
+  ASSERT_EQ(JumpDest->EntryStackRanges.size(), 1u);
+  EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U256);
+}
+
+TEST(EVMRangeAnalyzer, NumberIsU256) {
+  CrossJoinBytecode Setup = buildHostOpCrossJoin(0x43 /* NUMBER */);
+  EVMAnalyzer Analyzer = analyzeBytecode(Setup.Bytecode);
+  const auto *JumpDest = findBlock(Analyzer, Setup.JumpDestPC);
+  ASSERT_NE(JumpDest, nullptr);
+  ASSERT_EQ(JumpDest->EntryStackRanges.size(), 1u);
+  EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U256);
+}
+
+TEST(EVMRangeAnalyzer, GasLimitIsU256) {
+  CrossJoinBytecode Setup = buildHostOpCrossJoin(0x45 /* GASLIMIT */);
+  EVMAnalyzer Analyzer = analyzeBytecode(Setup.Bytecode);
+  const auto *JumpDest = findBlock(Analyzer, Setup.JumpDestPC);
+  ASSERT_NE(JumpDest, nullptr);
+  ASSERT_EQ(JumpDest->EntryStackRanges.size(), 1u);
+  EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U256);
+}
+
+TEST(EVMRangeAnalyzer, ChainIdIsU256) {
+  CrossJoinBytecode Setup = buildHostOpCrossJoin(0x46 /* CHAINID */);
+  EVMAnalyzer Analyzer = analyzeBytecode(Setup.Bytecode);
+  const auto *JumpDest = findBlock(Analyzer, Setup.JumpDestPC);
+  ASSERT_NE(JumpDest, nullptr);
+  ASSERT_EQ(JumpDest->EntryStackRanges.size(), 1u);
+  EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U256);
+}
