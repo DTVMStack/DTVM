@@ -610,6 +610,9 @@ TEST(EVMMultipassSstoreTest, Issue487_U256HighLimbsNotCorrupted) {
 
   evmc::Result RawResult;
   EXPECT_NO_THROW({ RT->callEVMMain(*Inst, Msg, RawResult); });
+  ASSERT_EQ(RawResult.status_code, EVMC_SUCCESS)
+      << "EVM execution failed with status code "
+      << static_cast<int>(RawResult.status_code);
 
   // Verify SSTORE wrote correct U256 values with clean high limbs.
   auto makeKey = [](uint64_t low) {
