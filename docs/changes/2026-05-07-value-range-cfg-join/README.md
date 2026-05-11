@@ -4,7 +4,7 @@
 - **Date**: 2026-05-07
 - **Tier**: Full
 - **Branch**: `perf/value-range-cfg-join`
-- **Related**: `docs/_archive/2026-05/value-range-cfg-join-investigation.md`
+- **Related**: [`./investigation.md`](./investigation.md)
 
 ## Overview
 
@@ -80,13 +80,12 @@ Per-opcode transfer functions (initial set, can be expanded):
 | `SHR` / `SAR` | result ≤ value's Range |
 | `CLZ` | U64 (≤ 256) |
 | `CALLDATALOAD`, `SLOAD`, `TLOAD`, `KECCAK256`, `BALANCE`, `SELFBALANCE` | U256 |
-| `MSIZE`, `GAS`, `TIMESTAMP`, `NUMBER`, `CHAINID`, `BASEFEE`, `BLOBBASEFEE` | U64 (these are bounded) |
+| `PC`, `MSIZE`, `GAS` | U64 (truly bounded; PC ≤ code size, MSIZE/GAS bounded by EVM limits) |
+| `CALLDATASIZE`, `CODESIZE`, `RETURNDATASIZE`, `EXTCODESIZE` | U64 (bounded by call-frame sizes) |
+| `TIMESTAMP`, `NUMBER`, `GASLIMIT`, `CHAINID`, `BASEFEE`, `BLOBBASEFEE`, `PREVRANDAO` | U256 (EVMC host returns full uint256 or 32-byte buffer; classify conservatively) |
 | `ADDRESS`, `CALLER`, `ORIGIN`, `COINBASE` | U256 (20-byte addresses fit in 160 bits, but treating as U256 is safe and avoids risk) |
-| `CALLVALUE`, `BLOCKHASH`, `BLOBHASH`, `PREVRANDAO` | U256 |
+| `CALLVALUE`, `GASPRICE`, `BLOCKHASH`, `BLOBHASH` | U256 |
 | `MLOAD`, `RETURNDATALOAD` | U256 |
-| `CALLDATASIZE`, `CODESIZE`, `RETURNDATASIZE`, `EXTCODESIZE` | U64 |
-| `GASPRICE` | U256 |
-| `PC` | U64 |
 | `CALL` / `STATICCALL` / `DELEGATECALL` / `CALLCODE` / `CREATE` / `CREATE2` | U64 (0/1 success) |
 | `SSTORE`, `MSTORE`, `MSTORE8`, `LOG_N`, `STOP`, `RETURN`, `REVERT`, `INVALID`, `SELFDESTRUCT`, `JUMPDEST` | no stack effect on Range domain (consumes/no push) |
 | `JUMP`, `JUMPI` | consume target (and cond), terminator |
@@ -132,3 +131,33 @@ No backwards-incompatible changes. Disabling the analyzer (e.g. by leaving `Entr
 - [ ] `tools/format.sh check` clean
 - [ ] paper §4.2 27-bench: geomean improvement, no per-bench regression > 2pp
 - [ ] PR body lists targeted wins (per #458 convention)
+
+## Findings during implementation (2026-05-11)
+
+### §2b execution-level differential harness — DROPPED
+
+The original v4 design proposed 5 evmone-statetest fixtures running under
+DTVM `mode=multipass`, asserting that bytecode patterns triggering the
+SDIV/SMOD/host-opcode bug would diverge from the evmone reference under
+the buggy classifier and converge under the fix.
+
+Task 4 implementation discovered this is architecturally infeasible.
+`evm_bytecode_visitor.h:1131-1138` short-circuits lifted JUMPDESTs (the
+default for well-formed bytecode) before the `setRange` refinement at
+L1155 fires. The `bothFitU64` u64 fast path therefore cannot truncate
+high limbs of values flowing through lifted blocks, and minimal bytecode
+that disables lifting (via `HasUndefinedInstr`, `HasInconsistentEntryDepth`,
+or dynamic-jump conflict) cannot simultaneously reach state-affecting
+opcodes that surface the bug.
+
+**Implication**: the analyzer's classifier fix is defense-in-depth.
+The white-box tests in `src/tests/evm_range_analyzer_tests.cpp` (Groups
+A/B/C/D, 39 tests) verify the classifier. The existing `evmone-statetest
+-k fork_Cancun` corpus (2723 tests × 2 modes) covers end-to-end
+multipass correctness on real bytecode. Together they bound the fix's
+scope; no additional fixtures are needed.
+
+**Future work**: extending the analyzer to feed the lifter's
+`materializeStackMergeOperand` / `prepareStackPhiIncoming` path (noted
+as a Non-Goal in the design spec) would make execution-level
+differential testing meaningful — out of scope for this PR.

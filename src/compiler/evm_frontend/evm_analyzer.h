@@ -1633,9 +1633,6 @@ private:
       case OP_SELFBALANCE:
       case OP_CALLVALUE:
       case OP_GASPRICE:
-      case OP_BASEFEE:
-      case OP_BLOBBASEFEE:
-      case OP_PREVRANDAO:
         pushTop();
         break;
       case OP_BALANCE:
@@ -1659,13 +1656,17 @@ private:
         pushU64();
         break;
       // Host-context opcodes returning full U256 values (EVMC declares
-      // GetTimestamp/GetNumber/GetGasLimit as `U256Fn`; GetChainId as
-      // `Bytes32Fn`).  Classify conservatively as U256 to keep the u64
-      // fast-path admission invariant sound.
+      // GetTimestamp/GetNumber/GetGasLimit as `U256Fn`, GetChainId as
+      // `Bytes32Fn`, BaseFee/BlobBaseFee/PrevRandao as `U256Fn`).  Classify
+      // conservatively as U256 to keep the u64 fast-path admission invariant
+      // sound.
       case OP_TIMESTAMP:
       case OP_NUMBER:
       case OP_GASLIMIT:
       case OP_CHAINID:
+      case OP_BASEFEE:
+      case OP_BLOBBASEFEE:
+      case OP_PREVRANDAO:
         pushTop();
         break;
       case OP_EXTCODESIZE:
@@ -1822,10 +1823,9 @@ private:
 
         const size_t SuccDepth =
             static_cast<size_t>(SuccInfo.ResolvedEntryStackDepth);
-        if (SuccInfo.EntryStackRanges.size() != SuccDepth) {
-          // Defensive: keep the vector sized to ResolvedEntryStackDepth.
-          SuccInfo.EntryStackRanges.assign(SuccDepth, EVMValueRange::U256);
-        }
+        // seedRangeEntryVectors already sizes every block with
+        // ResolvedEntryStackDepth >= 0 correctly; this branch is unreachable.
+        ZEN_ASSERT(SuccInfo.EntryStackRanges.size() == SuccDepth);
 
         // Meet the producer's exit stack into the successor's entry stack.
         // The producer's exit vector covers the absolute stack from the
