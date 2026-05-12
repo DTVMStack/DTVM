@@ -85,8 +85,9 @@ Per-opcode transfer functions (initial set, can be expanded):
 | `TIMESTAMP`, `NUMBER`, `GASLIMIT`, `CHAINID`, `BASEFEE`, `BLOBBASEFEE`, `PREVRANDAO` | U256 (EVMC host returns full uint256 or 32-byte buffer; classify conservatively) |
 | `ADDRESS`, `CALLER`, `ORIGIN`, `COINBASE` | U256 (20-byte addresses fit in 160 bits, but treating as U256 is safe and avoids risk) |
 | `CALLVALUE`, `GASPRICE`, `BLOCKHASH`, `BLOBHASH` | U256 |
-| `MLOAD`, `RETURNDATALOAD` | U256 |
-| `CALL` / `STATICCALL` / `DELEGATECALL` / `CALLCODE` / `CREATE` / `CREATE2` | U64 (0/1 success) |
+| `MLOAD` | U256 |
+| `CALL` / `STATICCALL` / `DELEGATECALL` / `CALLCODE` | U64 (0/1 success bool) |
+| `CREATE` / `CREATE2` | U256 (returns contract address — 20 bytes — or 0 on failure, not a bool) |
 | `SSTORE`, `MSTORE`, `MSTORE8`, `LOG_N`, `STOP`, `RETURN`, `REVERT`, `INVALID`, `SELFDESTRUCT`, `JUMPDEST` | no stack effect on Range domain (consumes/no push) |
 | `JUMP`, `JUMPI` | consume target (and cond), terminator |
 
@@ -130,7 +131,7 @@ No backwards-incompatible changes. Disabling the analyzer (e.g. by leaving `Entr
 - [x] `evmone-statetest` `-k fork_Cancun` multipass (2723) all green
 - [x] `tools/format.sh check` clean
 - [x] 27-bench paired A-B-A on current `upstream/main` (`c644fbe`): geomean +0.34% (CI [−0.07%, +0.78%]); 5 per-bench regressions, largest `snailtracer/benchmark −2.29%` appears to be an interaction with rebase-pickup upstream commits (not bisected)
-- [x] PR body discloses CI lower bound below +0.8% acceptance gate and reframes from `perf:` to `feat:` (analyzer infrastructure + soundness fixes + 40 white-box tests)
+- [x] PR body discloses CI lower bound below +0.8% acceptance gate and reframes from `perf:` to `feat:` (analyzer infrastructure + soundness fixes + 42 white-box tests)
 
 ## What shipped (2026-05-12)
 
@@ -140,7 +141,7 @@ No backwards-incompatible changes. Disabling the analyzer (e.g. by leaving `Entr
 
 **Soundness fixes uncovered during test development** (2 commits): SDIV/SMOD sign-mismatch (`5d46f7e`), host-context opcode widening for TIMESTAMP/NUMBER/GASLIMIT/CHAINID (`a73f782`).
 
-**Tests + cleanup + lifted-block wiring** (7 commits): MockOperand stub (`72c5e0b`), 40 white-box tests across per-opcode/CFG-join/dynamic-jump/cross-bb groups (`e27ac3c` + `da4f4cc`), defensive-path cleanup (`f203bd5`), **lifted-block factory plumbing** (`2ebfd29` — closes the gap noted in the original Findings section), analyzer-table caching + ZEN_ASSERT invariant (`da5571c`), clang-format wrap (`1dca9d5`).
+**Tests + cleanup + lifted-block wiring** (7 commits): MockOperand stub (`72c5e0b`), 42 white-box tests across per-opcode/CFG-join/dynamic-jump/cross-bb groups (`e27ac3c` + `da4f4cc`), defensive-path cleanup (`f203bd5`), **lifted-block factory plumbing** (`2ebfd29` — closes the gap noted in the original Findings section), analyzer-table caching + ZEN_ASSERT invariant (`da5571c`), clang-format wrap (`1dca9d5`).
 
 **Perf rounds** measured on this machine across the rebase decision cycle:
 
@@ -172,7 +173,7 @@ or dynamic-jump conflict) cannot simultaneously reach state-affecting
 opcodes that surface the bug.
 
 **Implication**: the analyzer's classifier fix is defense-in-depth.
-The white-box tests in `src/tests/evm_range_analyzer_tests.cpp` (Groups A/B/C/D, 40 tests) verify the classifier. The existing `evmone-statetest
+The white-box tests in `src/tests/evm_range_analyzer_tests.cpp` (Groups A/B/C/D, 42 tests) verify the classifier. The existing `evmone-statetest
 -k fork_Cancun` corpus (2723 tests × 2 modes) covers end-to-end
 multipass correctness on real bytecode. Together they bound the fix's
 scope; no additional fixtures are needed.

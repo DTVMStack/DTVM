@@ -45,7 +45,7 @@ evmone-bench, multipass mode, A-B-A protocol (baseline → branch → baseline_p
 | **95% bootstrap CI** | **[−0.07%, +0.78%]** |
 | Per-bench regressions ≥ 0.5pp | 5 / 27 |
 
-**Caveat on the perf claim**: the 95% lower CI is −0.07%, so the suite-level geomean improvement is **not statistically distinguishable from zero at the 95% level**. The original PR description claimed +1.30% (CI [+1.15%, +1.47%]) against a prior upstream/main; subsequent upstream optimizations (notably PR #483's inline arithmetic dispatch rework) have changed the interaction landscape. The lifted-block wiring fix in commit `2ebfd29` recovered the analyzer-target wins on `swap_math`, `sha1_shifts/5311`, `jump_around`, and similar patterns (see top-wins table).  `snailtracer/benchmark` regresses 2.29% on this branch vs current upstream/main and is the largest single regression.  The analyzer's per-opcode classifications are verified sound by 40 white-box tests and 2723/2723 multipass statetests, so the cause is how the analyzer's outputs interact with downstream codegen on the rebase-picked-up upstream commits (not yet bisected to a specific commit); deferred to a follow-up PR.
+**Caveat on the perf claim**: the 95% lower CI is −0.07%, so the suite-level geomean improvement is **not statistically distinguishable from zero at the 95% level**. The original PR description claimed +1.30% (CI [+1.15%, +1.47%]) against a prior upstream/main; subsequent upstream optimizations (notably PR #483's inline arithmetic dispatch rework) have changed the interaction landscape. The lifted-block wiring fix in commit `2ebfd29` recovered the analyzer-target wins on `swap_math`, `sha1_shifts/5311`, `jump_around`, and similar patterns (see top-wins table).  `snailtracer/benchmark` regresses 2.29% on this branch vs current upstream/main and is the largest single regression.  The analyzer's per-opcode classifications are verified sound by 42 white-box tests and 2723/2723 multipass statetests, so the cause is how the analyzer's outputs interact with downstream codegen on the rebase-picked-up upstream commits (not yet bisected to a specific commit); deferred to a follow-up PR.
 
 ### Top wins
 
@@ -80,7 +80,7 @@ These are the per-bench patterns where the analyzer's intended fast-path activat
 - [x] `evmone-unittests` multipass: 223/223
 - [x] `evmone-unittests` interpreter: 215/215
 - [x] `evmone-statetest -k fork_Cancun` multipass: 2723/2723
-- [x] EVMRangeAnalyzer white-box suite: 40/40
+- [x] EVMRangeAnalyzer white-box suite: 42/42
 - [x] `tools/format.sh check` clean
 - [ ] CI green (pending push)
 
@@ -88,7 +88,7 @@ Multipass statetest is our strongest soundness check: if any transfer function o
 
 ## Soundness regression evidence (pre-fix vs post-fix)
 
-The 40 white-box analyzer tests and 2723 multipass statetests above pass under the current code.  Both fixes are also verified to be load-bearing by running with them temporarily reverted:
+The 42 white-box analyzer tests and 2723 multipass statetests above pass under the current code.  Both fixes are also verified to be load-bearing by running with them temporarily reverted:
 
 ### Analyzer-level (white-box) — revert `5d46f7e` + `a73f782`, rebuild, rerun the 40-test suite
 
@@ -100,9 +100,11 @@ The 40 white-box analyzer tests and 2723 multipass statetests above pass under t
 | `NumberIsU256` | FAIL | same — NUMBER |
 | `GasLimitIsU256` | FAIL | same — GASLIMIT |
 | `ChainIdIsU256` | FAIL | same — CHAINID |
+| `CreateAddressIsU256` | FAIL | pre-fix rule classified `CREATE` result as U64 (treated as success bool); it actually returns a 20-byte contract address |
+| `Create2AddressIsU256` | FAIL | same pattern for `CREATE2` |
 | `SDivU256DividendIsU256` | PASS | coincidence — `result = Dividend = U256` happens to match the post-fix answer when dividend is U256 |
 
-Six of seven directly-relevant tests fail under the pre-fix code, one passes by coincidence.  The white-box net is effective at the analyzer layer.
+Eight of nine directly-relevant tests fail under the pre-fix code, one passes by coincidence.  The white-box net is effective at the analyzer layer.
 
 ### Execution-level (black-box) — `docs/changes/2026-05-07-value-range-cfg-join/regression/`
 
@@ -124,7 +126,7 @@ Reproduce: `bash docs/changes/2026-05-07-value-range-cfg-join/regression/repro_s
 
 - Extending the analyzer to track sub-byte width refinement on shift/comparison opcodes — current lattice height 3 is enough for the u64 fast paths but does not enable further admission gates.
 - Indirect-jump target enumeration — analyzer treats dynamic-jump regions conservatively (entry slots seeded at U256). No assumption of precise indirect-jump target tracking.
-- `snailtracer/benchmark` regression bisection — analyzer per-opcode soundness verified by 40 tests + 2723/2723 statetests, but the −2.29% interaction with rebase-pickup upstream commits is not isolated to a specific commit yet; deferred to a follow-up PR.
+- `snailtracer/benchmark` regression bisection — analyzer per-opcode soundness verified by 42 tests + 2723/2723 statetests, but the −2.29% interaction with rebase-pickup upstream commits is not isolated to a specific commit yet; deferred to a follow-up PR.
 
 ## Notes
 

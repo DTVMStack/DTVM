@@ -1691,12 +1691,15 @@ private:
         pushU64();
         break;
       case OP_CREATE:
+        // Pushes the created contract address (20 bytes / 160 bits) or 0
+        // on failure -- not a 0/1 success bool.  An address can hold any
+        // 20-byte pattern; classify conservatively as U256.
         popStackRanges(Stack, 3);
-        pushU64();
+        pushTop();
         break;
       case OP_CREATE2:
         popStackRanges(Stack, 4);
-        pushU64();
+        pushTop();
         break;
 
       // Block-boundary / terminators.

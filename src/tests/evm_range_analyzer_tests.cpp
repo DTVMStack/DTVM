@@ -187,6 +187,51 @@ TEST(EVMRangeAnalyzer, ChainIdIsU256) {
   EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U256);
 }
 
+TEST(EVMRangeAnalyzer, CreateAddressIsU256) {
+  // CREATE pushes the created contract address (20 bytes / 160 bits) or 0
+  // on failure -- not a 0/1 success bool.  Verify analyzer widens to U256
+  // so the result cannot reach a bothFitU64 fast path on the lifted path.
+  //
+  // PUSH1 0 (length, bottom) PUSH1 0 (offset) PUSH1 0 (value, top) CREATE
+  // PUSH1 11 JUMP <pad> JUMPDEST
+  std::vector<uint8_t> Bytecode = {
+      0x60, 0x00, // PC 0-1:  PUSH1 0  (length, bottom of stack)
+      0x60, 0x00, // PC 2-3:  PUSH1 0  (offset)
+      0x60, 0x00, // PC 4-5:  PUSH1 0  (value, top before CREATE pops)
+      0xf0,       // PC 6:    CREATE
+      0x60, 0x0b, // PC 7-8:  PUSH1 11
+      0x56,       // PC 9:    JUMP
+      0xfe,       // PC 10:   INVALID padding
+      0x5b};      // PC 11:   JUMPDEST
+  EVMAnalyzer Analyzer = analyzeBytecode(Bytecode);
+  const auto *JumpDest = findBlock(Analyzer, 11);
+  ASSERT_NE(JumpDest, nullptr);
+  ASSERT_EQ(JumpDest->EntryStackRanges.size(), 1u);
+  EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U256);
+}
+
+TEST(EVMRangeAnalyzer, Create2AddressIsU256) {
+  // Same as CreateAddressIsU256 but with CREATE2 (pops 4 args incl. salt).
+  //
+  // PUSH1 0 x4 (salt, length, offset, value-top) CREATE2 PUSH1 13 JUMP
+  // <pad> JUMPDEST
+  std::vector<uint8_t> Bytecode = {
+      0x60, 0x00, // PC 0-1:   PUSH1 0  (salt, bottom)
+      0x60, 0x00, // PC 2-3:   PUSH1 0  (length)
+      0x60, 0x00, // PC 4-5:   PUSH1 0  (offset)
+      0x60, 0x00, // PC 6-7:   PUSH1 0  (value, top before CREATE2 pops)
+      0xf5,       // PC 8:     CREATE2
+      0x60, 0x0d, // PC 9-10:  PUSH1 13
+      0x56,       // PC 11:    JUMP
+      0xfe,       // PC 12:    INVALID padding
+      0x5b};      // PC 13:    JUMPDEST
+  EVMAnalyzer Analyzer = analyzeBytecode(Bytecode);
+  const auto *JumpDest = findBlock(Analyzer, 13);
+  ASSERT_NE(JumpDest, nullptr);
+  ASSERT_EQ(JumpDest->EntryStackRanges.size(), 1u);
+  EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U256);
+}
+
 namespace {
 
 // Build "PUSH<N> <Literal> PUSH1 <JumpDestPC> JUMP <pad> JUMPDEST" so the

@@ -77,7 +77,7 @@ a rebuild which the script flags as a manual follow-up.
 
 ## Companion: white-box regression net (Option A)
 
-The 40 white-box tests in `src/tests/evm_range_analyzer_tests.cpp` already
+The 42 white-box tests in `src/tests/evm_range_analyzer_tests.cpp` already
 catch every soundness mis-classification at the analyzer layer.  Empirical
 verification on 2026-05-12 (HEAD `aee0e88`, both fixes reverted in place,
 analyzer rebuilt):
@@ -90,9 +90,11 @@ analyzer rebuilt):
 | `NumberIsU256` | FAIL | same — NUMBER |
 | `GasLimitIsU256` | FAIL | same — GASLIMIT |
 | `ChainIdIsU256` | FAIL | same — CHAINID |
+| `CreateAddressIsU256` | FAIL | pre-fix rule classified `CREATE` result as U64; it actually returns a 20-byte address |
+| `Create2AddressIsU256` | FAIL | same pattern for `CREATE2` |
 | `SDivU256DividendIsU256` | PASS | coincidence — `result = Dividend = U256` happens to match the post-fix answer when dividend is U256 |
 
-Six tests fail under the pre-fix code, one passes by coincidence.  The
+Eight tests fail under the pre-fix code, one passes by coincidence.  The
 regression net is effective at the analyzer level, but does not by itself
 prove that mis-classification has user-visible execution consequences —
 that is what the `sdiv_sign_mismatch_repro.hex` experiment supplies.
