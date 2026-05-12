@@ -274,6 +274,11 @@ public:
       return A.getRange() == ValueRange::U64 && B.getRange() == ValueRange::U64;
     }
 
+    // Pick the wider range between two operands (monotone join for OR/XOR).
+    static ValueRange maxRange(const Operand &A, const Operand &B) {
+      return A.getRange() > B.getRange() ? A.getRange() : B.getRange();
+    }
+
     constexpr bool isReg() { return false; }
     constexpr bool isTempReg() { return true; }
 
@@ -686,7 +691,10 @@ public:
         for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
           Result[I] = Other[I];
         }
-        return Operand(Result, EVMType::UINT256);
+        // OR/XOR with a u64 constant: limbs[1..3] pass through as the same
+        // MInstruction pointers from OtherOp, so the value range of those
+        // limbs is preserved exactly. max(U64, OtherOp.range) = OtherOp.range.
+        return Operand(Result, EVMType::UINT256, OtherOp.getRange());
       }
     }
 
@@ -699,6 +707,13 @@ public:
       MInstruction *LocalResult = createInstruction<BinaryInstruction>(
           false, getMirOpcode(Operator), MirI64Type, LHS[I], RHS[I]);
       Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
+    }
+    // OR/XOR are monotone on range: bits set in either operand are set in the
+    // result, so result range = max(LHS, RHS). AND already returns earlier with
+    // its own narrowed range, so this branch only fires for OR/XOR.
+    if constexpr (Operator == BinaryOperator::BO_OR ||
+                  Operator == BinaryOperator::BO_XOR) {
+      return Operand(Result, EVMType::UINT256, Operand::maxRange(LHSOp, RHSOp));
     }
     return Operand(Result, EVMType::UINT256);
   }
@@ -763,6 +778,12 @@ public:
       Result = handleArithmeticRightShift(Value, ShiftAmount, IsLargeShift);
     }
 
+    // Unsigned right shift cannot widen: an N-bit value shifted right yields an
+    // at-most-N-bit value. SHL widens by construction; SAR sign-fills upper
+    // limbs; both keep the conservative U256 default.
+    if constexpr (Operator == BinaryOperator::BO_SHR_U) {
+      return Operand(Result, EVMType::UINT256, ValueOp.getRange());
+    }
     return Operand(Result, EVMType::UINT256);
   }
 

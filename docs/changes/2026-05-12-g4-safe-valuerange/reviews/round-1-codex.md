@@ -1,0 +1,22 @@
+# Round 1 — Codex Review of G4-safe Spec
+
+## Verdict
+REVISE
+
+## Verified
+- Claim 1: ✅ confirmed. `ValueRange` is `enum class ... : uint8_t` with implicit enumerator order `U64`, `U128`, `U256`; current code also relies on ordering via `<=` and `std::min` in AND narrowing. Sources: `src/compiler/evm_frontend/evm_mir_compiler.h:127-131`, `src/compiler/evm_frontend/evm_mir_compiler.h:633-636`.
+- Claim 2: ❌ refuted as written. OR/XOR Phase 1 does pass through upper limbs with `Result[I] = Other[I]`, but returns `Operand(Result, EVMType::UINT256)` without a range, so the result defaults to `U256`, not `OtherOp`'s range. Sources: `src/compiler/evm_frontend/evm_mir_compiler.h:659-679`, `src/compiler/evm_frontend/evm_mir_compiler.h:273`.
+- Claim 3: ✅ confirmed. General bitwise return has no `ValueRange` argument and therefore defaults to `U256`. Sources: `src/compiler/evm_frontend/evm_mir_compiler.h:682-692`, `src/compiler/evm_frontend/evm_mir_compiler.h:273`.
+- Claim 4: ✅ confirmed. `BO_SHR_U` dispatches to `handleLogicalRightShift(Value, ShiftAmount, IsLargeShift)`. Source: `src/compiler/evm_frontend/evm_mir_compiler.h:747-750`.
+- Claim 5: ❌ refuted as phrased. The helpers emit a 3-upper-limb OR fold (`LHS[1] | LHS[2] | LHS[3]`), not a 4-limb fold. Sources: `src/compiler/evm_frontend/evm_mir_compiler.cpp:2990-2996`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:3020-3026`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:3056-3062`.
+- Claim 5b: ✅ no unsafe U64 producer found in reviewed sites. U64 constants require limbs 1..3 zero; AND U64 paths write `Zero` to eliminated limbs; DIV/MOD U64 fast paths build `{result, Zero, Zero, Zero}`; BYTE writes `Zero` to limbs 1..3; compare results write `Zero` to limbs 1..3. ADD/MUL range fast paths are actually `U128`, not `U64`, and materialize limbs 2..3 as `Zero`. Sources: `src/compiler/evm_frontend/evm_mir_compiler.h:167-175`, `src/compiler/evm_frontend/evm_mir_compiler.h:621-629`, `src/compiler/evm_frontend/evm_mir_compiler.h:642-655`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:2024-2025`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:2194-2195`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:3689-3695`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:2769-2775`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:2800-2806`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:2873-2879`, `src/compiler/evm_frontend/evm_mir_compiler.h:381-392`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:1883-1887`.
+- Claim 6: ✅ confirmed by running the requested `git diff`. The diff only touched the enum/include/setRange/createStackEntryOperand plumbing, not `handleBitwiseOp`, `handleShift`, or compare-RHS-U64 helpers. Sources: `src/compiler/evm_frontend/evm_mir_compiler.h:7-13`, `src/compiler/evm_frontend/evm_mir_compiler.h:127-131`, `src/compiler/evm_frontend/evm_mir_compiler.h:258-259`, `src/compiler/evm_frontend/evm_mir_compiler.h:313`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:1009-1014`.
+- Claim 7: ✅ mostly confirmed. SUB can wrap because upper limbs use `SbbInstruction`; SHL can move low-limb bits into higher limbs; SAR can fill limbs with `AllOnes`; ADDMOD/MULMOD range depends on modulus and/or runtime helper; EXP repeatedly calls `handleMul` and returns full `U256`. Sources: `src/compiler/evm_frontend/evm_mir_compiler.h:461-475`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:3191-3284`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:3491-3508`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:3593-3660`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:2265-2277`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:2454-2471`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:2633-2640`, `src/compiler/evm_frontend/evm_mir_compiler.cpp:2739-2741`.
+
+## Unverified / hedged
+- Claim 7 signed-compare exclusion: source confirms signed LT/GT uses a signed predicate only on the top limb and unsigned predicates on lower limbs, but this alone does not prove that any signed-compare optimization would break monotone narrowing. Source: `src/compiler/evm_frontend/evm_mir_compiler.cpp:2822-2854`.
+
+## Recommendations
+- Fix Claim 2: say current OR/XOR fast path preserves upper limb instructions but does not preserve `ValueRange`.
+- Fix Claim 5 wording from "4-limb OR-fold over upper limbs" to "3-upper-limb OR-fold".
+- Keep the consumer shortcut only conditional on the established invariant: `ValueRange::U64` operands must have materialized zero limbs 1..3.

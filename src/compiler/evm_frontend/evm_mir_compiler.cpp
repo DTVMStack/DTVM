@@ -2999,17 +2999,24 @@ EVMMirBuilder::handleCompareEqU64(const Operand &FullOp, uint64_t U64Val) {
   MInstruction *LowEq = createInstruction<CmpInstruction>(
       false, EqPred, &Ctx.I64Type, LHS[0], CmpVal);
 
-  // Check that upper limbs are all zero via OR-fold
-  MInstruction *Upper = createInstruction<BinaryInstruction>(
-      false, OP_or, MirI64Type, LHS[1], LHS[2]);
-  Upper = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type, Upper,
-                                               LHS[3]);
-  MInstruction *UpperZero = createInstruction<CmpInstruction>(
-      false, EqPred, &Ctx.I64Type, Upper, Zero);
+  MInstruction *FinalResult;
+  if (FullOp.getRange() == ValueRange::U64) {
+    // Upper limbs are provably zero (every existing U64 producer materializes
+    // literal MIR Zero in limbs[1..3]). Skip the OR-fold and the zero-test.
+    FinalResult = LowEq;
+  } else {
+    // Check that upper limbs are all zero via OR-fold
+    MInstruction *Upper = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, LHS[1], LHS[2]);
+    Upper = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                 Upper, LHS[3]);
+    MInstruction *UpperZero = createInstruction<CmpInstruction>(
+        false, EqPred, &Ctx.I64Type, Upper, Zero);
 
-  // Final: low matches AND upper is zero
-  MInstruction *FinalResult = createInstruction<BinaryInstruction>(
-      false, OP_and, &Ctx.I64Type, LowEq, UpperZero);
+    // Final: low matches AND upper is zero
+    FinalResult = createInstruction<BinaryInstruction>(
+        false, OP_and, &Ctx.I64Type, LowEq, UpperZero);
+  }
 
   U256Inst Result = {};
   Result[0] = protectUnsafeValue(FinalResult, MirI64Type);
@@ -3029,22 +3036,29 @@ EVMMirBuilder::handleCompareLtRhsU64(const Operand &LHSOp, uint64_t RhsU64) {
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
 
-  MInstruction *Upper = createInstruction<BinaryInstruction>(
-      false, OP_or, MirI64Type, LHS[1], LHS[2]);
-  Upper = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type, Upper,
-                                               LHS[3]);
-  auto NePred = CmpInstruction::Predicate::ICMP_NE;
-  MInstruction *HasUpper = createInstruction<CmpInstruction>(
-      false, NePred, &Ctx.I64Type, Upper, Zero);
-
   MInstruction *RhsVal = createIntConstInstruction(MirI64Type, RhsU64);
   auto LtPred = CmpInstruction::Predicate::ICMP_ULT;
   MInstruction *LowLt = createInstruction<CmpInstruction>(
       false, LtPred, &Ctx.I64Type, LHS[0], RhsVal);
 
-  // result = hasUpper ? 0 : lowLt
-  MInstruction *FinalResult = createInstruction<SelectInstruction>(
-      false, &Ctx.I64Type, HasUpper, Zero, LowLt);
+  MInstruction *FinalResult;
+  if (LHSOp.getRange() == ValueRange::U64) {
+    // Upper limbs are provably zero — HasUpper would always be false, so the
+    // select collapses to LowLt.
+    FinalResult = LowLt;
+  } else {
+    MInstruction *Upper = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, LHS[1], LHS[2]);
+    Upper = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                 Upper, LHS[3]);
+    auto NePred = CmpInstruction::Predicate::ICMP_NE;
+    MInstruction *HasUpper = createInstruction<CmpInstruction>(
+        false, NePred, &Ctx.I64Type, Upper, Zero);
+
+    // result = hasUpper ? 0 : lowLt
+    FinalResult = createInstruction<SelectInstruction>(false, &Ctx.I64Type,
+                                                       HasUpper, Zero, LowLt);
+  }
 
   U256Inst Result = {};
   Result[0] = protectUnsafeValue(FinalResult, MirI64Type);
@@ -3063,24 +3077,32 @@ EVMMirBuilder::handleCompareGtRhsU64(const Operand &LHSOp, uint64_t RhsU64) {
   MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
-  MInstruction *One = createIntConstInstruction(MirI64Type, 1);
-
-  MInstruction *Upper = createInstruction<BinaryInstruction>(
-      false, OP_or, MirI64Type, LHS[1], LHS[2]);
-  Upper = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type, Upper,
-                                               LHS[3]);
-  auto NePred = CmpInstruction::Predicate::ICMP_NE;
-  MInstruction *HasUpper = createInstruction<CmpInstruction>(
-      false, NePred, &Ctx.I64Type, Upper, Zero);
 
   MInstruction *RhsVal = createIntConstInstruction(MirI64Type, RhsU64);
   auto GtPred = CmpInstruction::Predicate::ICMP_UGT;
   MInstruction *LowGt = createInstruction<CmpInstruction>(
       false, GtPred, &Ctx.I64Type, LHS[0], RhsVal);
 
-  // result = hasUpper ? 1 : lowGt
-  MInstruction *FinalResult = createInstruction<SelectInstruction>(
-      false, &Ctx.I64Type, HasUpper, One, LowGt);
+  MInstruction *FinalResult;
+  if (LHSOp.getRange() == ValueRange::U64) {
+    // Upper limbs are provably zero — HasUpper would always be false, so the
+    // select collapses to LowGt.
+    FinalResult = LowGt;
+  } else {
+    MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+
+    MInstruction *Upper = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, LHS[1], LHS[2]);
+    Upper = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                 Upper, LHS[3]);
+    auto NePred = CmpInstruction::Predicate::ICMP_NE;
+    MInstruction *HasUpper = createInstruction<CmpInstruction>(
+        false, NePred, &Ctx.I64Type, Upper, Zero);
+
+    // result = hasUpper ? 1 : lowGt
+    FinalResult = createInstruction<SelectInstruction>(false, &Ctx.I64Type,
+                                                       HasUpper, One, LowGt);
+  }
 
   U256Inst Result = {};
   Result[0] = protectUnsafeValue(FinalResult, MirI64Type);
