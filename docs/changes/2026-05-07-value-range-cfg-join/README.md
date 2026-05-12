@@ -139,7 +139,7 @@ No backwards-incompatible changes. Disabling the analyzer (e.g. by leaving `Entr
 
 **Analyzer infrastructure** (3 commits): enum extract (`3846a1e`), dataflow pass (`061c500`), non-lifted consumer wiring (`c6de6eb`).
 
-**Soundness fixes uncovered during test development** (2 commits): SDIV/SMOD sign-mismatch (`5d46f7e`), host-context opcode widening for TIMESTAMP/NUMBER/GASLIMIT/CHAINID (`a73f782`).
+**Soundness fixes** (3 commits, uncovered during white-box test development or PR review): SDIV/SMOD sign-mismatch (`5d46f7e`), host-context opcode widening for TIMESTAMP/NUMBER/GASLIMIT/CHAINID (`a73f782`), CREATE/CREATE2 address widening (`3f32828`, caught by Copilot reviewer).
 
 **Tests + cleanup + lifted-block wiring** (7 commits): MockOperand stub (`72c5e0b`), 42 white-box tests across per-opcode/CFG-join/dynamic-jump/cross-bb groups (`e27ac3c` + `da4f4cc`), defensive-path cleanup (`f203bd5`), **lifted-block factory plumbing** (`2ebfd29` — closes the gap noted in the original Findings section), analyzer-table caching + ZEN_ASSERT invariant (`da5571c`), clang-format wrap (`1dca9d5`).
 

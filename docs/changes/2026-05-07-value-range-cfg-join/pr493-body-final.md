@@ -19,9 +19,10 @@ Grouped by logical role:
 - `061c500 feat(compiler): EVMRangeAnalyzer dataflow pass for stack-slot value ranges` — worklist-based fixed-point analyzer in `EVMAnalyzer`, with per-opcode transfer functions across the full opcode set.
 - `c6de6eb feat(evm): plumb EVMRangeAnalyzer entry ranges into stackPop consumer` — non-lifted JUMPDEST consumer reads `EntryStackRanges` after `stackPop()`.
 
-**Soundness fixes** (2 commits, both motivated by white-box test development)
+**Soundness fixes** (3 commits, all uncovered during white-box test development or PR review)
 - `5d46f7e fix(compiler): correct EVMRangeAnalyzer SDIV/SMOD range transfer for signed sign mismatch` — analyzer was claiming U64 for SDIV/SMOD outputs whose sign-mismatch case can exceed u64 representable range.
 - `a73f782 fix(compiler): widen host-context opcode range classifications (TIMESTAMP/NUMBER/GASLIMIT/CHAINID)` — these host opcodes return values whose range depends on chain state; conservative U256 widening preserves correctness on chains with non-u64 timestamps/numbers.
+- `3f32828 fix(compiler): widen CREATE/CREATE2 range to U256 in EVMRangeAnalyzer` — CREATE/CREATE2 push a 20-byte contract address (or 0 on failure), not a 0/1 success bool; the original grouping with the CALL family wrongly classified the result as U64.  Caught by GitHub Copilot reviewer.
 
 **Tests, cleanup, lifted-block wiring** (7 commits)
 - `72c5e0b fix(test): add setRange stub to MockOperand for visitor template`
@@ -90,7 +91,7 @@ Multipass statetest is our strongest soundness check: if any transfer function o
 
 The 42 white-box analyzer tests and 2723 multipass statetests above pass under the current code.  Both fixes are also verified to be load-bearing by running with them temporarily reverted:
 
-### Analyzer-level (white-box) — revert `5d46f7e` + `a73f782`, rebuild, rerun the 40-test suite
+### Analyzer-level (white-box) — revert `5d46f7e` + `a73f782` + `3f32828`, rebuild, rerun the 42-test suite
 
 | Test | Pre-fix outcome | Reason |
 |---|---|---|
@@ -130,7 +131,7 @@ Reproduce: `bash docs/changes/2026-05-07-value-range-cfg-join/regression/repro_s
 
 ## Notes
 
-- This PR establishes a soundness invariant: any consumer that later relies on `Operand::ValueRange` can trust the analyzer's classifications. The two soundness commits (`5d46f7e`, `a73f782`) close gaps where the original PR #493 transfer functions would have over-claimed.
+- This PR establishes a soundness invariant: any consumer that later relies on `Operand::ValueRange` can trust the analyzer's classifications. The three soundness commits (`5d46f7e`, `a73f782`, `3f32828`) close gaps in the analyzer's transfer functions for SDIV/SMOD sign mismatch, host-context opcodes that return U256, and CREATE/CREATE2 that return contract addresses — all surfaced during this PR's white-box test development and Copilot review pass.
 - An architectural gap discovered during the rebase cycle: the original PR wired the analyzer only into the non-lifted codegen path, while lifted-block factories defaulted Range = U256 and short-circuited refinement. Commit `2ebfd29` resolves this and is the empirically-driven completion of the analyzer's intended consumer wiring.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

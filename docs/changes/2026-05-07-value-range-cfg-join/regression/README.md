@@ -1,6 +1,6 @@
 # PR #493 Soundness Regression Reproducers
 
-End-to-end execution-level evidence that the two soundness fixes in PR #493
+End-to-end execution-level evidence that the three soundness fixes in PR #493
 are not theoretical: with the fix reverted, DTVM's multipass JIT produces
 output that disagrees with the `evmone` reference VM on bytecode that
 crosses a CFG join through a lifted JUMPDEST and feeds a `bothFitU64`-gated
@@ -79,7 +79,7 @@ a rebuild which the script flags as a manual follow-up.
 
 The 42 white-box tests in `src/tests/evm_range_analyzer_tests.cpp` already
 catch every soundness mis-classification at the analyzer layer.  Empirical
-verification on 2026-05-12 (HEAD `aee0e88`, both fixes reverted in place,
+verification on 2026-05-12 (current HEAD, all three fixes reverted in place,
 analyzer rebuilt):
 
 | Test | Pre-fix outcome | Reason |
