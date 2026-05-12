@@ -86,6 +86,40 @@ These are the per-bench patterns where the analyzer's intended fast-path activat
 
 Multipass statetest is our strongest soundness check: if any transfer function over-claims `U64` on a value with non-zero upper limbs, the #458 fast paths would silently truncate and produce divergent state roots. None observed across 2723 fixtures.
 
+## Soundness regression evidence (pre-fix vs post-fix)
+
+The 40 white-box analyzer tests and 2723 multipass statetests above pass under the current code.  Both fixes are also verified to be load-bearing by running with them temporarily reverted:
+
+### Analyzer-level (white-box) — revert `5d46f7e` + `a73f782`, rebuild, rerun the 40-test suite
+
+| Test | Pre-fix outcome | Reason |
+|---|---|---|
+| `SDivByU256IsU256` | FAIL | divisor U256, dividend U64; pre-fix rule says `result = Dividend = U64` (wrong) |
+| `SModByU256IsU256` | FAIL | same pattern for SMOD |
+| `TimestampIsU256` | FAIL | pre-fix host-context rule put TIMESTAMP in `pushU64` block |
+| `NumberIsU256` | FAIL | same — NUMBER |
+| `GasLimitIsU256` | FAIL | same — GASLIMIT |
+| `ChainIdIsU256` | FAIL | same — CHAINID |
+| `SDivU256DividendIsU256` | PASS | coincidence — `result = Dividend = U256` happens to match the post-fix answer when dividend is U256 |
+
+Six of seven directly-relevant tests fail under the pre-fix code, one passes by coincidence.  The white-box net is effective at the analyzer layer.
+
+### Execution-level (black-box) — `docs/changes/2026-05-07-value-range-cfg-join/regression/`
+
+A 52-byte bytecode that crosses a lifted JUMPDEST and feeds a `bothFitU64`-gated ADD with the SDIV(U64-dividend, U256-divisor) result:
+
+| Build | 32-byte RETURN output | Verdict |
+|---|---|---|
+| `evmone` (spec reference) | `0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc` | −4 in signed 256-bit, spec-correct |
+| DTVM `mode=multipass` with fix applied | `0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc` | matches reference ✓ |
+| DTVM `mode=multipass` with `5d46f7e` reverted | `0x000000000000000000000000000000000000000000000000fffffffffffffffc` | upper 192 bits truncated to 0 — visible state divergence |
+
+The buggy output preserves only the low 64 bits of the real ADD result and zeroes the upper three limbs — exactly the "limbs[2..3] silent truncation" failure mode the fix commit message describes.
+
+This experiment is only producible after commit `2ebfd29` plumbed the analyzer's per-slot range into the lifted-block codegen path; before that commit, the analyzer's `setRange` refinement only reached non-lifted JUMPDESTs, so no mis-classified value could reach a fast-path consumer through the dominant codegen path.
+
+Reproduce: `bash docs/changes/2026-05-07-value-range-cfg-join/regression/repro_sdiv_fast_path_truncate.sh`
+
 ## Out of scope
 
 - Extending the analyzer to track sub-byte width refinement on shift/comparison opcodes — current lattice height 3 is enough for the u64 fast paths but does not enable further admission gates.
