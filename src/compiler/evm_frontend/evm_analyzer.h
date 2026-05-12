@@ -131,7 +131,18 @@ class EVMAnalyzer {
   using Byte = zen::common::Byte;
 
 public:
-  EVMAnalyzer(evmc_revision Rev = zen::evm::DEFAULT_REVISION) : Revision(Rev) {}
+  EVMAnalyzer(evmc_revision Rev = zen::evm::DEFAULT_REVISION) : Revision(Rev) {
+    InstructionMetrics = evmc_get_instruction_metrics_table(Revision);
+    if (!InstructionMetrics) {
+      InstructionMetrics =
+          evmc_get_instruction_metrics_table(zen::evm::DEFAULT_REVISION);
+    }
+    InstructionNames = evmc_get_instruction_names_table(Revision);
+    if (!InstructionNames) {
+      InstructionNames =
+          evmc_get_instruction_names_table(zen::evm::DEFAULT_REVISION);
+    }
+  }
 
   struct BlockInfo {
     uint64_t EntryPC = 0;
@@ -592,17 +603,6 @@ private:
                         size_t BytecodeSize, size_t &ScanPC,
                         uint64_t &NextEntryPC, size_t &NextBodyStartPC,
                         bool &HasNextBlock) {
-    const auto *InstructionMetrics =
-        evmc_get_instruction_metrics_table(Revision);
-    const auto *InstructionNames = evmc_get_instruction_names_table(Revision);
-    if (!InstructionMetrics) {
-      InstructionMetrics =
-          evmc_get_instruction_metrics_table(zen::evm::DEFAULT_REVISION);
-    }
-    if (!InstructionNames) {
-      InstructionNames =
-          evmc_get_instruction_names_table(zen::evm::DEFAULT_REVISION);
-    }
 
     std::vector<AbstractValue> Stack;
     size_t EntryDepth = 0;
@@ -1426,18 +1426,6 @@ private:
   void applyRangeTransferForBlock(const BlockInfo &Info,
                                   const uint8_t *Bytecode, size_t BytecodeSize,
                                   std::vector<EVMValueRange> &Stack) const {
-    const auto *InstructionMetrics =
-        evmc_get_instruction_metrics_table(Revision);
-    const auto *InstructionNames = evmc_get_instruction_names_table(Revision);
-    if (!InstructionMetrics) {
-      InstructionMetrics =
-          evmc_get_instruction_metrics_table(zen::evm::DEFAULT_REVISION);
-    }
-    if (!InstructionNames) {
-      InstructionNames =
-          evmc_get_instruction_names_table(zen::evm::DEFAULT_REVISION);
-    }
-
     size_t PC = Info.BodyStartPC;
     const size_t EndPC = std::min<size_t>(Info.BodyEndPC, BytecodeSize);
 
@@ -1827,24 +1815,17 @@ private:
         // ResolvedEntryStackDepth >= 0 correctly; this branch is unreachable.
         ZEN_ASSERT(SuccInfo.EntryStackRanges.size() == SuccDepth);
 
+        // Producer's exit depth and successor's entry depth are linked by
+        // resolveEntryDepths and must match for every block pair reaching this
+        // point (both have ResolvedEntryStackDepth >= 0 and consistent depth).
+        ZEN_ASSERT(ExitStack.size() == SuccDepth);
         // Meet the producer's exit stack into the successor's entry stack.
-        // The producer's exit vector covers the absolute stack from the
-        // bottom; the successor reads its bottom-most `SuccDepth` slots.
-        const size_t Common = std::min(SuccDepth, ExitStack.size());
         bool Changed = false;
-        for (size_t I = 0; I < Common; ++I) {
+        for (size_t I = 0; I < SuccDepth; ++I) {
           EVMValueRange Old = SuccInfo.EntryStackRanges[I];
           EVMValueRange New = meetRange(Old, ExitStack[I]);
           if (New != Old) {
             SuccInfo.EntryStackRanges[I] = New;
-            Changed = true;
-          }
-        }
-        // If the producer's stack is shorter than the successor expects,
-        // unknown prefix slots widen to U256 (top).
-        for (size_t I = Common; I < SuccDepth; ++I) {
-          if (SuccInfo.EntryStackRanges[I] != EVMValueRange::U256) {
-            SuccInfo.EntryStackRanges[I] = EVMValueRange::U256;
             Changed = true;
           }
         }
@@ -1862,6 +1843,8 @@ private:
   uint64_t EntryBlockPC = 0;
   bool HasUnknownDynamicJump = false;
   evmc_revision Revision = zen::evm::DEFAULT_REVISION;
+  const evmc_instruction_metrics *InstructionMetrics = nullptr;
+  const char *const *InstructionNames = nullptr;
   JITSuitabilityResult JITResult;
 };
 
