@@ -45,7 +45,7 @@ evmone-bench, multipass mode, A-B-A protocol (baseline → branch → baseline_p
 | **95% bootstrap CI** | **[−0.07%, +0.78%]** |
 | Per-bench regressions ≥ 0.5pp | 5 / 27 |
 
-**Caveat on the perf claim**: the 95% lower CI is −0.07%, so the suite-level geomean improvement is **not statistically distinguishable from zero at the 95% level**. The original PR description claimed +1.30% (CI [+1.15%, +1.47%]) against a prior upstream/main; subsequent upstream optimizations (notably PR #483's inline arithmetic dispatch rework) have changed the interaction landscape. The lifted-block wiring fix in commit `2ebfd29` recovered the analyzer-target wins on `swap_math`, `sha1_shifts/5311`, `jump_around`, and similar patterns (see top-wins table); a residual `snailtracer/benchmark` regression (−2.29%) appears to predate this branch on current upstream and is not addressed by this PR.
+**Caveat on the perf claim**: the 95% lower CI is −0.07%, so the suite-level geomean improvement is **not statistically distinguishable from zero at the 95% level**. The original PR description claimed +1.30% (CI [+1.15%, +1.47%]) against a prior upstream/main; subsequent upstream optimizations (notably PR #483's inline arithmetic dispatch rework) have changed the interaction landscape. The lifted-block wiring fix in commit `2ebfd29` recovered the analyzer-target wins on `swap_math`, `sha1_shifts/5311`, `jump_around`, and similar patterns (see top-wins table).  `snailtracer/benchmark` regresses 2.29% on this branch vs current upstream/main and is the largest single regression.  The analyzer's per-opcode classifications are verified sound by 40 white-box tests and 2723/2723 multipass statetests, so the cause is how the analyzer's outputs interact with downstream codegen on the rebase-picked-up upstream commits (not yet bisected to a specific commit); deferred to a follow-up PR.
 
 ### Top wins
 
@@ -68,7 +68,7 @@ These are the per-bench patterns where the analyzer's intended fast-path activat
 
 | Bench | Speedup | Note |
 |---|---|---|
-| `main/snailtracer/benchmark` | −2.29% | appears to predate this branch on current upstream |
+| `main/snailtracer/benchmark` | −2.29% | interaction with rebase-pickup upstream commits; not bisected |
 | `micro/memory_grow_mstore/by1` | −1.60% | partial-grow path |
 | `micro/memory_grow_mload/by1` | −1.58% | partial-grow path |
 | `main/sha1_shifts/empty` | −1.29% | tiny-bench noise floor (3.8 ns/op) |
@@ -91,7 +91,7 @@ Multipass statetest is our strongest soundness check: if any transfer function o
 
 - Extending the analyzer to track sub-byte width refinement on shift/comparison opcodes — current lattice height 3 is enough for the u64 fast paths but does not enable further admission gates.
 - Indirect-jump target enumeration — analyzer treats dynamic-jump regions conservatively (entry slots seeded at U256). No assumption of precise indirect-jump target tracking.
-- Snailtracer regression investigation — appears to predate this branch on current upstream; deferred to a follow-up PR.
+- `snailtracer/benchmark` regression bisection — analyzer per-opcode soundness verified by 40 tests + 2723/2723 statetests, but the −2.29% interaction with rebase-pickup upstream commits is not isolated to a specific commit yet; deferred to a follow-up PR.
 
 ## Notes
 
