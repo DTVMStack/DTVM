@@ -92,3 +92,40 @@ Bytecode generators and the bench JSONs were under `/tmp/range-cfg-investigation
 - Straight-line variant: same loads, then 16 × `[DUP2 DUP2 ADD POP]` (no JUMPDEST in the hot region).
 
 The smoking-gun signal is the `ADC64rr` count in `ZEN_ENABLE_JIT_LOGGING=ON` output — 0 in straight-line, 3 in loop body. After the proper fix, both should be 0.
+
+## Soundness regression evidence (2026-05-12)
+
+After commit `2ebfd29` plumbed the analyzer's per-slot range into both
+codegen paths, end-to-end execution-level evidence for the two soundness
+fixes (`5d46f7e`, `a73f782`) became producible.  Two regression artifacts
+landed under `regression/`:
+
+1. **Analyzer-level regression net** (white-box).  Empirical check on
+   2026-05-12 with both `5d46f7e` and `a73f782` reverted in place: 6 of
+   the 7 directly-relevant tests fail (`SDivByU256IsU256`,
+   `SModByU256IsU256`, `TimestampIsU256`, `NumberIsU256`,
+   `GasLimitIsU256`, `ChainIdIsU256`).  One passes by coincidence
+   (`SDivU256DividendIsU256` — pre-fix and post-fix rules happen to
+   agree when dividend is already U256).  See `regression/README.md`.
+
+2. **Execution-level reproducer** (black-box).
+   `regression/sdiv_sign_mismatch_repro.hex` plus
+   `regression/repro_sdiv_fast_path_truncate.sh`.  Bytecode crosses a
+   CFG join through a lifted JUMPDEST and feeds the bothFitU64-gated
+   ADD with the SDIV(U64-dividend, U256-divisor) result.  Outputs:
+
+   | Build | Output |
+   |---|---|
+   | evmone reference | `0xFF...FC` (−4 in signed 256-bit, spec-correct) |
+   | DTVM multipass (fix applied) | `0xFF...FC` — matches reference |
+   | DTVM multipass (fix reverted) | `0x000...000FC` — upper 192 bits truncated to 0 |
+
+   This is exactly the "limbs[2..3] silent truncation" failure mode the
+   `5d46f7e` fix commit message described, surfaced as a state divergence
+   visible in 32-byte RETURN data.
+
+The host-context-opcode bug is harder to reproduce as a black-box test
+because `evmc run`'s default host returns small values that don't surface
+the truncation; the four `Timestamp/Number/GasLimit/ChainIdIsU256` tests
+in the white-box net are the operative regression evidence for that
+class.
