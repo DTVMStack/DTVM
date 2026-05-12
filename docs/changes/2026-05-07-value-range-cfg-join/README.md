@@ -129,12 +129,12 @@ No backwards-incompatible changes. Disabling the analyzer (e.g. by leaving `Entr
 - [x] `evmone-unittests` multipass (223) + interpreter (215) all green
 - [x] `evmone-statetest` `-k fork_Cancun` multipass (2723) all green
 - [x] `tools/format.sh check` clean
-- [x] 27-bench paired A-B-A on current `upstream/main` (`c644fbe`): geomean +0.34% (CI [−0.07%, +0.78%]); 5 per-bench regressions, largest `snailtracer/benchmark −2.29%` predates this branch on current upstream
+- [x] 27-bench paired A-B-A on current `upstream/main` (`c644fbe`): geomean +0.34% (CI [−0.07%, +0.78%]); 5 per-bench regressions, largest `snailtracer/benchmark −2.29%` appears to be an interaction with rebase-pickup upstream commits (not bisected)
 - [x] PR body discloses CI lower bound below +0.8% acceptance gate and reframes from `perf:` to `feat:` (analyzer infrastructure + soundness fixes + 40 white-box tests)
 
 ## What shipped (2026-05-12)
 
-12 commits on `perf/value-range-cfg-join`, HEAD `da4f4cc`, rebased onto `upstream/main` at `c644fbe`.
+12 source commits on `perf/value-range-cfg-join` (last source HEAD `da4f4cc`; plus subsequent docs-only commits), rebased onto `upstream/main` at `c644fbe`.
 
 **Analyzer infrastructure** (3 commits): enum extract (`3846a1e`), dataflow pass (`061c500`), non-lifted consumer wiring (`c6de6eb`).
 

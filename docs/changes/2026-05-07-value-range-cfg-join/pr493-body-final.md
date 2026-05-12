@@ -10,7 +10,7 @@ This PR fixes that across both codegen paths:
 2. **Non-lifted consumer** (`evm_bytecode_visitor.h handleBeginBlock` non-lifted path): after each `stackPop()`, look up `BlockInfo::EntryStackRanges[slot]` and refine the Operand's Range via `setRange`.
 3. **Lifted consumer**: `createStackEntryOperand` and `materializeStackMergeOperand` factories take an explicit `ValueRange` parameter; lifted blocks thread `BlockInfo.EntryStackRanges[Depth]` through `EVMLiftedStackLifter` and `materializeLiftedBlockMergeRequests`. The lifted path is the default for well-formed bytecode and was unaddressed in earlier drafts of this work.
 
-## Commits (12 total)
+## Source commits (12)
 
 Grouped by logical role:
 

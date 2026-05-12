@@ -1,8 +1,8 @@
 # Investigation: ValueRange Survival Across CFG Joins
 
 - **Date**: 2026-05-07
-- **Status**: **Investigation only — fix attempted and rolled back; deeper refactor required.**
-- **Branch (deleted)**: `perf/value-range-cfg-join`
+- **Status**: **Investigation only — original Light-tier fix attempt rolled back here; the deeper refactor it called for landed in PR #493 (lifted-block plumbing in commit `2ebfd29`).  See `README.md` and the §Soundness regression evidence addendum below.**
+- **Branch**: `perf/value-range-cfg-join` (live; PR #493)
 - **Related**: `u256-batch2-null-result.md` (the prior investigation that surfaced this question)
 
 ## What we set out to fix
