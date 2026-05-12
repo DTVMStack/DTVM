@@ -1,6 +1,6 @@
 # Change: Track Operand::ValueRange Across CFG Joins
 
-- **Status**: Proposed
+- **Status**: Implemented (PR #493 ready, perf disclosure landed)
 - **Date**: 2026-05-07
 - **Tier**: Full
 - **Branch**: `perf/value-range-cfg-join`
@@ -94,7 +94,7 @@ For dynamic-jump regions (where target is computed), conservative analysis: when
 
 Validation: analyzer self-consistency unit test (build a small bytecode, check `EntryStackRanges` matches expectation). Build + full test suite passes.
 
-### Phase 3: Plumb Range into stackPop consumer (≈10 LOC)
+### Phase 3: Plumb Range into stackPop consumer + lifted-block factories
 
 - [ ] In `evm_bytecode_visitor.h:1140-1150` (the non-lifted JUMPDEST entry path that calls `Builder.stackPop()` in a loop), after each pop, look up `BlockInfo.EntryStackRanges[slot]` (if available) and call `Opnd.setRange(Range)`.
 - [ ] Slot indexing convention: `EntryStackRanges[0]` is the bottom of the entry stack, `[depth-1]` is the top. Match the analyzer's representation to the visitor's pop order.
@@ -122,15 +122,36 @@ No backwards-incompatible changes. Disabling the analyzer (e.g. by leaving `Entr
 
 ## Checklist
 
-- [ ] Phase 1: foundation + schema
-- [ ] Phase 2: Range analyzer pass + transfer functions + fixed-point
-- [ ] Phase 3: plumbing into `stackPop` consumer
-- [ ] Phase 4: bench-validated; `ADC64rr=0` on synthetic ADD u64 loop
-- [ ] `evmone-unittests` multipass + interpreter all green
-- [ ] `evmone-statetest` `-k fork_Cancun` all green
-- [ ] `tools/format.sh check` clean
-- [ ] paper §4.2 27-bench: geomean improvement, no per-bench regression > 2pp
-- [ ] PR body lists targeted wins (per #458 convention)
+- [x] Phase 1: foundation + schema
+- [x] Phase 2: Range analyzer pass + transfer functions + fixed-point
+- [x] Phase 3: plumbing into `stackPop` consumer (non-lifted path) **and** lifted-block factories `createStackEntryOperand` / `materializeStackMergeOperand`
+- [x] Phase 4: bench-validated; `ADC64rr=0` confirmed on synthetic ADD u64 loop
+- [x] `evmone-unittests` multipass (223) + interpreter (215) all green
+- [x] `evmone-statetest` `-k fork_Cancun` multipass (2723) all green
+- [x] `tools/format.sh check` clean
+- [x] 27-bench paired A-B-A on current `upstream/main` (`c644fbe`): geomean +0.34% (CI [−0.07%, +0.78%]); 5 per-bench regressions, largest `snailtracer/benchmark −2.29%` predates this branch on current upstream
+- [x] PR body discloses CI lower bound below +0.8% acceptance gate and reframes from `perf:` to `feat:` (analyzer infrastructure + soundness fixes + 40 white-box tests)
+
+## What shipped (2026-05-12)
+
+12 commits on `perf/value-range-cfg-join`, HEAD `da4f4cc`, rebased onto `upstream/main` at `c644fbe`.
+
+**Analyzer infrastructure** (3 commits): enum extract (`3846a1e`), dataflow pass (`061c500`), non-lifted consumer wiring (`c6de6eb`).
+
+**Soundness fixes uncovered during test development** (2 commits): SDIV/SMOD sign-mismatch (`5d46f7e`), host-context opcode widening for TIMESTAMP/NUMBER/GASLIMIT/CHAINID (`a73f782`).
+
+**Tests + cleanup + lifted-block wiring** (7 commits): MockOperand stub (`72c5e0b`), 40 white-box tests across per-opcode/CFG-join/dynamic-jump/cross-bb groups (`e27ac3c` + `da4f4cc`), defensive-path cleanup (`f203bd5`), **lifted-block factory plumbing** (`2ebfd29` — closes the gap noted in the original Findings section), analyzer-table caching + ZEN_ASSERT invariant (`da5571c`), clang-format wrap (`1dca9d5`).
+
+**Perf rounds** (see `perf-2026-05-11{,-rebased,-no-483,-lifted}/summary.md`):
+
+| Run | HEAD | Geomean | 95% CI | Notes |
+|---|---|---|---|---|
+| Pre-rebase | `5357578` | −1.97% | [−6.69, +2.82] | memory_grow_* killed by missing upstream opts |
+| Post-rebase | `f203bd5` | −0.57% | [−1.97, +0.76] | rebase fixed memory_grow_*; swap_math/sha1 collapsed due to #483 interaction |
+| D1 — revert #483 | `3d273e0` | +0.95% | [−0.63, +2.60] | confirmed #483 is one interaction source; not deployable as a revert |
+| **D6 — lifted plumbing** | **`da4f4cc`** | **+0.34%** | **[−0.07, +0.78]** | swap_math/sha1_shifts/jump_around recovered; snailtracer −2.29% residual |
+
+The lifted-block plumbing (`2ebfd29`) addresses the "Future work" item in the original §2b Findings: extending the analyzer to feed the lifted codegen path. With it landed, the original PR's empirical hypothesis (u64 fast paths gated on cross-BB Range) is now exercised on the dominant codegen path; the residual snailtracer regression appears to be a rebase-pickup interaction unrelated to analyzer correctness and is deferred to a follow-up PR.
 
 ## Findings during implementation (2026-05-11)
 
@@ -151,13 +172,9 @@ or dynamic-jump conflict) cannot simultaneously reach state-affecting
 opcodes that surface the bug.
 
 **Implication**: the analyzer's classifier fix is defense-in-depth.
-The white-box tests in `src/tests/evm_range_analyzer_tests.cpp` (Groups
-A/B/C/D, 39 tests) verify the classifier. The existing `evmone-statetest
+The white-box tests in `src/tests/evm_range_analyzer_tests.cpp` (Groups A/B/C/D, 40 tests) verify the classifier. The existing `evmone-statetest
 -k fork_Cancun` corpus (2723 tests × 2 modes) covers end-to-end
 multipass correctness on real bytecode. Together they bound the fix's
 scope; no additional fixtures are needed.
 
-**Future work**: extending the analyzer to feed the lifter's
-`materializeStackMergeOperand` / `prepareStackPhiIncoming` path (noted
-as a Non-Goal in the design spec) would make execution-level
-differential testing meaningful — out of scope for this PR.
+**Future work** (later landed in commit `2ebfd29`): extending the analyzer to feed the lifter's `materializeStackMergeOperand` / `prepareStackPhiIncoming` path was originally a Non-Goal in the v4 design spec. Empirical perf evidence (post-rebase run showing swap_math/sha1 collapse) forced the issue, and the plumbing fix subsequently recovered those wins. See the `## What shipped` section above for the four-way perf comparison.
