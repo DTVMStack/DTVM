@@ -104,12 +104,14 @@ A virtual `DynDispatch` block routing all dynamic jumps into one hub,
 then fanning out to all JUMPDESTs. `O(D + J)` edges, preserves
 reachability without a stitch, every standard pass sees a "real" CFG.
 
-Implemented and benchmarked side-by-side. Result on
-`evmone-unittests` for the `loop_full_of_jumpdests` test (single test,
-multipass mode):
+Implemented and benchmarked side-by-side. Wall times are local
+single-machine measurements (`evmone-unittests` for the
+`loop_full_of_jumpdests` test, single test, multipass mode). They are
+**not currently tracked in CI** — a dedicated compile-time-dense
+benchmark lane is out of scope for this PR.
 
-| Implementation | Wall time |
-|----------------|-----------|
+| Implementation | Wall time (local) |
+|----------------|-------------------|
 | `feat/gas-check-placement` (over-approx)  | 7.3 s |
 | **A** (implicit count, this PR)           | 3.3 s |
 | **B** (super-node)                        | 275 s |
