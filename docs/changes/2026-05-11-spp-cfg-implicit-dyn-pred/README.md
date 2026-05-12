@@ -134,18 +134,28 @@ bash docs/changes/2026-05-11-spp-cfg-implicit-dyn-pred/scaling_demo.sh
 ```
 
 The demo generates a synthetic contract (`CALLDATALOAD JUMP <N x JUMPDEST>
-STOP`) and times the full `buildBytecodeCache` call. Sample output on
-this machine:
+STOP`) and times the full `buildBytecodeCache` call.
 
-| N JUMPDESTs | cache build (ms) |
-|------------:|-----------------:|
-|         100 | 0.04 |
-|         500 | 0.13 |
-|       1,000 | 0.29 |
-|       2,000 | 0.66 |
-|       5,000 | 2.59 |
-|      10,000 | 10.02 |
-|      20,000 | 40.01 |
+**Intra-PR comparison** (the same demo cherry-picked onto commit
+`99f23a3`, which is the PR's head one commit BEFORE Phase 7 — both
+states run the SPP pipeline; the only difference is the
+over-approximation representation):
+
+| N JUMPDESTs | Pre-Phase-7 (D×J explicit edges) | Phase 7 (O(N) implicit count) | Speedup |
+|------------:|---------------------------------:|------------------------------:|--------:|
+|         100 |   0.07 ms |  0.05 ms | 1.4× |
+|         500 |   0.39 ms |  0.13 ms | 3.0× |
+|       1,000 |   1.01 ms |  0.29 ms | 3.4× |
+|       2,000 |   3.04 ms |  0.67 ms | 4.5× |
+|       5,000 |  19.66 ms |  2.71 ms | 7.2× |
+|      10,000 |  84.76 ms | 10.38 ms | 8.2× |
+|      20,000 | 345.94 ms | 43.68 ms | **7.9×** |
+
+Pre-Phase-7 wall clock grows ~4× per doubling of `N` (quadratic — the
+expected O(D × J²) shape of explicit-edge add + critical-edge split).
+Phase 7 grows 2–4× per doubling — sub-quadratic, with the residual
+super-linearity sourced from `computeDominators` and
+`buildLoopsUsingDominance` running on the now-larger reachable set.
 
 **Scope of the O(N) claim**: Phase 7 makes the CFG over-approximation
 step itself O(N) (one count stamp per JUMPDEST). The wall clock above
