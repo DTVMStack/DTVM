@@ -124,6 +124,39 @@ over every block transitively reachable from it. Patching the loop
 passes to special-case the hub re-introduces the structural
 asymmetry that motivated A in the first place. **B is unusable.**
 
+### Reproducing the scaling claim
+
+Build the manual demo and run the wrapper script:
+
+```bash
+cmake --build build --target evmCacheComplexityDemo
+bash docs/changes/2026-05-11-spp-cfg-implicit-dyn-pred/scaling_demo.sh
+```
+
+The demo generates a synthetic contract (`CALLDATALOAD JUMP <N x JUMPDEST>
+STOP`) and times the full `buildBytecodeCache` call. Sample output on
+this machine:
+
+| N JUMPDESTs | cache build (ms) |
+|------------:|-----------------:|
+|         100 | 0.04 |
+|         500 | 0.13 |
+|       1,000 | 0.29 |
+|       2,000 | 0.66 |
+|       5,000 | 2.59 |
+|      10,000 | 10.02 |
+|      20,000 | 40.01 |
+
+**Scope of the O(N) claim**: Phase 7 makes the CFG over-approximation
+step itself O(N) (one count stamp per JUMPDEST). The wall clock above
+includes the rest of the SPP pipeline — `computeDominators` and
+`buildLoopsUsingDominance` are iterative dataflow with super-linear
+worst-case behaviour and dominate the time at large N. The 4-second
+saving on `loop_full_of_jumpdests` (7.3 s → 3.3 s above) is the Phase 7
+contribution; the remaining 3.3 s is dom / loop analysis plus JIT
+compile, untouched by this PR. Cutting that further would require a
+separate dom-analysis change.
+
 ### Edge-budget fallback — rejected
 
 Keep the explicit over-approx but skip SPP when

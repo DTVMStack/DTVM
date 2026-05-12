@@ -61,6 +61,10 @@ if(ZEN_ENABLE_SPEC_TEST)
     add_subdirectory(mpt)
     add_executable(evmInterpTests evm_interp_tests.cpp)
     add_executable(evmCacheTests evm_cache_tests.cpp)
+    # Manual demo binary — not registered with ctest. Run from build/ at any
+    # time to see cache-build wall-clock at a chosen JUMPDEST count; see
+    # docs/changes/2026-05-11-spp-cfg-implicit-dyn-pred/.
+    add_executable(evmCacheComplexityDemo evm_cache_complexity_demo.cpp)
     if(ZEN_ENABLE_MULTIPASS_JIT)
       add_executable(evmJitFrontendTests evm_jit_frontend_tests.cpp)
     endif()
@@ -101,6 +105,7 @@ if(ZEN_ENABLE_SPEC_TEST)
     if(ZEN_ENABLE_EVM)
       target_compile_options(evmInterpTests PRIVATE -fsanitize=address)
       target_compile_options(evmCacheTests PRIVATE -fsanitize=address)
+      target_compile_options(evmCacheComplexityDemo PRIVATE -fsanitize=address)
       if(ZEN_ENABLE_MULTIPASS_JIT)
         target_compile_options(evmJitFrontendTests PRIVATE -fsanitize=address)
       endif()
@@ -130,6 +135,9 @@ if(ZEN_ENABLE_SPEC_TEST)
           evmCacheTests
           PRIVATE dtvmcore gtest_main -fsanitize=address
           PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          evmCacheComplexityDemo PRIVATE dtvmcore -fsanitize=address
         )
         if(ZEN_ENABLE_MULTIPASS_JIT)
           target_link_libraries(
@@ -191,6 +199,10 @@ if(ZEN_ENABLE_SPEC_TEST)
           evmCacheTests
           PRIVATE dtvmcore gtest_main -fsanitize=address -static-libasan
           PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          evmCacheComplexityDemo PRIVATE dtvmcore -fsanitize=address
+                                         -static-libasan
         )
         if(ZEN_ENABLE_MULTIPASS_JIT)
           target_link_libraries(
@@ -262,6 +274,7 @@ if(ZEN_ENABLE_SPEC_TEST)
         PRIVATE dtvmcore gtest_main
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
+      target_link_libraries(evmCacheComplexityDemo PRIVATE dtvmcore)
       if(ZEN_ENABLE_MULTIPASS_JIT)
         target_link_libraries(
           evmJitFrontendTests
