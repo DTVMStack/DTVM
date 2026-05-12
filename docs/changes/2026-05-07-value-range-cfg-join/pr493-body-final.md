@@ -74,7 +74,6 @@ These are the per-bench patterns where the analyzer's intended fast-path activat
 | `main/sha1_shifts/empty` | −1.29% | tiny-bench noise floor (3.8 ns/op) |
 | `main/blake2b_huff/empty` | −0.56% | tiny-bench noise floor (8.7 ns/op) |
 
-Raw JSON + analysis in `docs/changes/2026-05-07-value-range-cfg-join/perf-2026-05-11-lifted/`.
 
 ## Test plan
 

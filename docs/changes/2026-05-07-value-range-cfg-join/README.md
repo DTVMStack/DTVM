@@ -142,7 +142,7 @@ No backwards-incompatible changes. Disabling the analyzer (e.g. by leaving `Entr
 
 **Tests + cleanup + lifted-block wiring** (7 commits): MockOperand stub (`72c5e0b`), 40 white-box tests across per-opcode/CFG-join/dynamic-jump/cross-bb groups (`e27ac3c` + `da4f4cc`), defensive-path cleanup (`f203bd5`), **lifted-block factory plumbing** (`2ebfd29` — closes the gap noted in the original Findings section), analyzer-table caching + ZEN_ASSERT invariant (`da5571c`), clang-format wrap (`1dca9d5`).
 
-**Perf rounds** (see `perf-2026-05-11{,-rebased,-no-483,-lifted}/summary.md`):
+**Perf rounds** measured on this machine across the rebase decision cycle:
 
 | Run | HEAD | Geomean | 95% CI | Notes |
 |---|---|---|---|---|
