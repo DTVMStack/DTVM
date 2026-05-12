@@ -176,6 +176,29 @@ of 5; the median is +2.7%.
   stitch in `buildGasChunksSPP` seeds every JUMPDEST as a root after
   `computeReachable`.
 
+### Performance — full PR #446 (with this optimization) vs `upstream/main`
+
+After rebasing `feat/gas-check-placement` onto current `upstream/main`
+(which now includes #458/#460/#482/#483 upstream perf work), the
+end-to-end picture on the same 27-bench paper filter changes:
+
+- **Geomean (10 reps): +1.15%** — basically flat
+- One bench (`main/blake2b_shifts/8415nulls`) appeared as +20.34% with
+  treatment CV 21.93%. A focused 20-rep re-measurement gave +0.25%
+  (CV 2.09%), confirming the 10-rep result was driven by a single
+  outlier iteration.
+- 0 benches above the ±25% CI gate.
+- Top wins: `blake2b_huff/8415nulls` −6.30%, `sha1_divs/5311` −5.22%,
+  `sha1_shifts/empty` −5.07%, `loop_with_many_jumpdests/empty` −4.84%.
+- Top regressions (within ±5% noise): `memory_grow_mstore/nogrow`
+  +3.91%, `signextend/one` +3.71% (down from +15.55% at 5 reps),
+  `memory_grow_mload/nogrow` +3.62%.
+
+The earlier −2.73% A-vs-PR-base geomean still holds — this change does
+improve over PR #446's pre-rebase head. But the cumulative PR #446
+benefit over current upstream/main has shrunk to noise because the
+intervening upstream perf commits closed most of the gap.
+
 ## Out of scope
 
 - The peripheral diagnostics about `GasChunkCostSPP` in clangd are
