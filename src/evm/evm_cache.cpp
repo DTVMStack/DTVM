@@ -4,6 +4,7 @@
 #include "evm/evm_cache.h"
 
 #include "evm/evm.h"
+#include "evm/evm_cache_for_testing.h"
 #include "evmc/instructions.h"
 
 #include <algorithm>
@@ -451,14 +452,6 @@ static void buildCFGEdges(std::vector<GasBlock> &Blocks,
 
 static size_t bitsetWordCount(size_t NumBits) { return (NumBits + 63) / 64; }
 
-static void bitsetSetAll(std::vector<uint64_t> &Bits, size_t NumBits) {
-  std::fill(Bits.begin(), Bits.end(), ~uint64_t{0});
-  const size_t Remainder = NumBits % 64;
-  if (Remainder != 0) {
-    Bits.back() = (uint64_t{1} << Remainder) - 1;
-  }
-}
-
 static void bitsetSet(std::vector<uint64_t> &Bits, size_t Index) {
   Bits[Index / 64] |= (uint64_t{1} << (Index % 64));
 }
@@ -558,11 +551,6 @@ computeInCycle(const std::vector<GasBlock> &Blocks) {
   return InCycle;
 }
 
-static bool bitsetEqual(const std::vector<uint64_t> &A,
-                        const std::vector<uint64_t> &B) {
-  return A == B;
-}
-
 static bool bitsetIsSubset(const std::vector<uint64_t> &Small,
                            const std::vector<uint64_t> &Large) {
   for (size_t I = 0; I < Small.size(); ++I) {
@@ -615,73 +603,235 @@ computeReachable(const std::vector<GasBlock> &Blocks, uint32_t EntryId) {
   return Reachable;
 }
 
-static std::vector<std::vector<uint64_t>>
-computeDominators(const std::vector<GasBlock> &Blocks,
-                  const std::vector<uint8_t> &Reachable) {
-  const size_t NumBlocks = Blocks.size();
-  const size_t Words = bitsetWordCount(NumBlocks);
-  std::vector<std::vector<uint64_t>> Dom(NumBlocks,
-                                         std::vector<uint64_t>(Words, 0));
-  std::vector<uint64_t> All(Words, 0);
-  if (NumBlocks > 0) {
-    bitsetSetAll(All, NumBlocks);
-  }
+// Cooper-Harvey-Kennedy 2001 plus Tarjan DFS pre/post times for O(1)
+// dominance queries. Root classes (seeded at init so descendants can
+// intersect against a settled idom): (A) Reachable==0, (B) Preds.empty,
+// (C) reachable but all preds unreachable. Multi-root divergence in the
+// fixpoint collapses to self-root via the intersect UINT32_MAX sentinel.
+struct DomInfo {
+  std::vector<uint32_t> IDom;
+  std::vector<uint32_t> Enter;
+  std::vector<uint32_t> Exit;
 
-  for (size_t Node = 0; Node < NumBlocks; ++Node) {
-    if (Reachable[Node] == 0 || Blocks[Node].Preds.empty()) {
-      Dom[Node].assign(Words, 0);
-      bitsetSet(Dom[Node], Node);
-    } else {
-      Dom[Node] = All;
+  bool dominates(uint32_t A, uint32_t B) const {
+    if (A == B) {
+      return true;
+    }
+    if (A >= IDom.size() || B >= IDom.size()) {
+      return false;
+    }
+    return Enter[A] <= Enter[B] && Exit[B] <= Exit[A];
+  }
+};
+
+static DomInfo computeDomInfo(const std::vector<GasBlock> &Blocks,
+                              const std::vector<uint8_t> &Reachable) {
+  const size_t N = Blocks.size();
+  DomInfo Info;
+  Info.IDom.assign(N, UINT32_MAX);
+  Info.Enter.assign(N, 0);
+  Info.Exit.assign(N, 0);
+  if (N == 0) {
+    return Info;
+  }
+  std::vector<uint32_t> &IDom = Info.IDom;
+
+  // Class A (Reachable==0) and B (Preds.empty) seed at init. Class C
+  // (reachable node whose entire reachable-pred set is empty) must also
+  // seed here so its descendants can intersect against a settled root
+  // in step 4; otherwise the descendant chain stays UINT32_MAX through
+  // the fixpoint and gets collapsed to self by the post-fixpoint sweep,
+  // diverging from the old bitset semantics that gave Dom[descendant]
+  // ⊇ {ancestor}.
+  for (size_t I = 0; I < N; ++I) {
+    if (Reachable[I] == 0 || Blocks[I].Preds.empty()) {
+      IDom[I] = static_cast<uint32_t>(I);
+      continue;
+    }
+    bool HasReachablePred = false;
+    for (uint32_t Pred : Blocks[I].Preds) {
+      if (Reachable[Pred] != 0) {
+        HasReachablePred = true;
+        break;
+      }
+    }
+    if (!HasReachablePred) {
+      IDom[I] = static_cast<uint32_t>(I);
     }
   }
 
+  // Iterative DFS for postorder. Reserve up front so back() refs are
+  // not invalidated by push_back reallocations.
+  std::vector<uint32_t> PostOrderId(N, UINT32_MAX);
+  std::vector<uint32_t> RPO;
+  RPO.reserve(N);
+  std::vector<uint8_t> Visited(N, 0);
+  struct DfsFrame {
+    uint32_t Node;
+    uint32_t SuccIdx;
+  };
+  std::vector<DfsFrame> Stack;
+  Stack.reserve(N);
+  uint32_t PoCounter = 0;
+
+  auto runDfs = [&](uint32_t Start, bool RestrictReachable) {
+    if (Visited[Start] != 0) {
+      return;
+    }
+    Visited[Start] = 1;
+    Stack.push_back({Start, 0});
+    while (!Stack.empty()) {
+      DfsFrame &Top = Stack.back();
+      const auto &Succs = Blocks[Top.Node].Succs;
+      if (Top.SuccIdx < Succs.size()) {
+        const uint32_t Succ = Succs[Top.SuccIdx++];
+        if (Succ < N && Visited[Succ] == 0 &&
+            (!RestrictReachable || Reachable[Succ] != 0)) {
+          Visited[Succ] = 1;
+          Stack.push_back({Succ, 0});
+        }
+      } else {
+        PostOrderId[Top.Node] = PoCounter++;
+        RPO.push_back(Top.Node);
+        Stack.pop_back();
+      }
+    }
+  };
+
+  for (size_t I = 0; I < N; ++I) {
+    if (IDom[I] == I && Reachable[I] != 0) {
+      runDfs(static_cast<uint32_t>(I), /*RestrictReachable=*/true);
+    }
+  }
+  // Defensive: also visit any unreachable or orphan node so PostOrderId
+  // is defined everywhere. Unreachable nodes already have IDom == self
+  // from the init pass.
+  for (size_t I = 0; I < N; ++I) {
+    if (Visited[I] == 0) {
+      runDfs(static_cast<uint32_t>(I), /*RestrictReachable=*/false);
+    }
+  }
+  std::reverse(RPO.begin(), RPO.end());
+
+  // Intersect walks the lower-postorder finger up the partially-built
+  // IDom tree. Returns UINT32_MAX iff the chains diverge (one finger
+  // reaches its own root before meeting the other).
+  auto intersect = [&](uint32_t B1, uint32_t B2) -> uint32_t {
+    while (B1 != B2) {
+      while (PostOrderId[B1] < PostOrderId[B2]) {
+        const uint32_t P = IDom[B1];
+        if (P == B1 || P == UINT32_MAX) {
+          return UINT32_MAX;
+        }
+        B1 = P;
+      }
+      while (PostOrderId[B2] < PostOrderId[B1]) {
+        const uint32_t P = IDom[B2];
+        if (P == B2 || P == UINT32_MAX) {
+          return UINT32_MAX;
+        }
+        B2 = P;
+      }
+    }
+    return B1;
+  };
+
   bool Changed = true;
-  std::vector<uint64_t> NewDom(Words, 0);
   while (Changed) {
     Changed = false;
-    for (size_t Node = 0; Node < NumBlocks; ++Node) {
-      if (Reachable[Node] == 0 || Blocks[Node].Preds.empty()) {
-        continue;
+    for (uint32_t Node : RPO) {
+      if (IDom[Node] == Node) {
+        continue; // root
       }
-
-      NewDom = All;
-      bool HasPred = false;
+      uint32_t NewIDom = UINT32_MAX;
+      bool Diverged = false;
       for (uint32_t Pred : Blocks[Node].Preds) {
         if (Reachable[Pred] == 0) {
           continue;
         }
-        HasPred = true;
-        for (size_t W = 0; W < Words; ++W) {
-          NewDom[W] &= Dom[Pred][W];
+        if (IDom[Pred] == UINT32_MAX) {
+          continue; // not yet processed in this round
+        }
+        if (NewIDom == UINT32_MAX) {
+          NewIDom = Pred;
+        } else {
+          NewIDom = intersect(NewIDom, Pred);
+          if (NewIDom == UINT32_MAX) {
+            Diverged = true;
+            break;
+          }
         }
       }
-
-      if (!HasPred) {
-        std::fill(NewDom.begin(), NewDom.end(), 0);
+      if (Diverged) {
+        NewIDom = Node; // multi-root divergence: self-root fallback
       }
-
-      bitsetSet(NewDom, Node);
-      if (!bitsetEqual(NewDom, Dom[Node])) {
-        Dom[Node] = NewDom;
+      if (NewIDom != UINT32_MAX && IDom[Node] != NewIDom) {
+        IDom[Node] = NewIDom;
         Changed = true;
       }
     }
   }
 
-  return Dom;
+  // Defensive backstop: classes A/B/C are seeded at init above, so any
+  // UINT32_MAX here is an orphan reachable component not reached by RPO
+  // from any seeded root. Collapse to self per the bitset-pass fallback.
+  for (size_t Node = 0; Node < N; ++Node) {
+    if (IDom[Node] == UINT32_MAX) {
+      IDom[Node] = static_cast<uint32_t>(Node);
+    }
+  }
+
+  // Tarjan DFS pre/post times over the dom tree give O(1) dominance
+  // queries via interval containment. Each root contributes a disjoint
+  // [Enter, Exit] interval on a single global timeline, so cross-root
+  // pairs answer non-dominating by non-containment.
+  std::vector<std::vector<uint32_t>> Children(N);
+  for (uint32_t I = 0; I < N; ++I) {
+    if (IDom[I] != I) {
+      Children[IDom[I]].push_back(I);
+    }
+  }
+  struct EtFrame {
+    uint32_t Node;
+    uint32_t ChildIdx;
+  };
+  std::vector<EtFrame> EtStack;
+  EtStack.reserve(N);
+  uint32_t Time = 0;
+  for (uint32_t Root = 0; Root < N; ++Root) {
+    if (IDom[Root] != Root) {
+      continue;
+    }
+    Info.Enter[Root] = Time++;
+    EtStack.push_back({Root, 0});
+    while (!EtStack.empty()) {
+      EtFrame &Top = EtStack.back();
+      const auto &Kids = Children[Top.Node];
+      if (Top.ChildIdx < Kids.size()) {
+        const uint32_t C = Kids[Top.ChildIdx++];
+        Info.Enter[C] = Time++;
+        EtStack.push_back({C, 0});
+      } else {
+        Info.Exit[Top.Node] = Time++;
+        EtStack.pop_back();
+      }
+    }
+  }
+
+  return Info;
 }
 
 static void
 findBackEdgesUsingDominators(const std::vector<GasBlock> &Blocks,
-                             const std::vector<std::vector<uint64_t>> &Dom,
+                             const DomInfo &Dom,
                              std::vector<std::vector<uint32_t>> &BackEdges) {
   const size_t NumBlocks = Blocks.size();
   BackEdges.assign(NumBlocks, {});
 
   for (size_t From = 0; From < NumBlocks; ++From) {
     for (uint32_t To : Blocks[From].Succs) {
-      if (bitsetTest(Dom[From], To)) {
+      // Classic back-edge: target dominates source.
+      if (Dom.dominates(To, static_cast<uint32_t>(From))) {
         BackEdges[From].push_back(To);
       }
     }
@@ -770,8 +920,7 @@ collectNaturalLoop(uint32_t From, uint32_t Header,
 }
 
 static bool buildLoopsUsingDominance(
-    const std::vector<GasBlock> &Blocks,
-    const std::vector<std::vector<uint64_t>> &Dom,
+    const std::vector<GasBlock> &Blocks, const DomInfo &Dom,
     const std::vector<uint8_t> &Reachable, std::vector<LoopInfo> &Loops,
     std::vector<int32_t> &LoopOf, std::vector<std::vector<uint32_t>> &ExitLoops,
     std::vector<std::vector<uint8_t>> &ExitFlags) {
@@ -790,7 +939,8 @@ static bool buildLoopsUsingDominance(
       continue;
     }
     for (uint32_t To : Blocks[From].Succs) {
-      if (!bitsetTest(Dom[From], To)) {
+      // Header discovery: a back-edge From -> To exists iff To dominates From.
+      if (!Dom.dominates(To, static_cast<uint32_t>(From))) {
         continue;
       }
       auto It = HeaderIndex.find(To);
@@ -835,7 +985,9 @@ static bool buildLoopsUsingDominance(
 
   for (const auto &Loop : Loops) {
     for (uint32_t Node : Loop.Nodes) {
-      if (!bitsetTest(Dom[Node], Loop.Header)) {
+      // Loop-body sanity: every node in the loop must be dominated by
+      // the loop header.
+      if (!Dom.dominates(Loop.Header, Node)) {
         return false;
       }
     }
@@ -1089,8 +1241,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
       }
     }
   }
-  const std::vector<std::vector<uint64_t>> Dom =
-      computeDominators(Blocks, Reachable);
+  const DomInfo Dom = computeDomInfo(Blocks, Reachable);
 
   // Find back edges and compute reverse topological order
   std::vector<std::vector<uint32_t>> BackEdges;
@@ -1246,5 +1397,30 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
                     Cache.PushValueMap, Cache.GasChunkEnd, Cache.GasChunkCost,
                     Cache.GasChunkCostSPP, EnableSPP);
 }
+
+namespace for_testing {
+
+std::vector<uint32_t>
+computeIDomForTesting(const std::vector<std::vector<uint32_t>> &Succs,
+                      const std::vector<uint8_t> &Reachable) {
+  const size_t N = Succs.size();
+  if (Reachable.size() != N) {
+    return std::vector<uint32_t>(N, UINT32_MAX);
+  }
+  std::vector<GasBlock> Blocks(N);
+  for (size_t I = 0; I < N; ++I) {
+    Blocks[I].Succs = Succs[I];
+  }
+  for (size_t I = 0; I < N; ++I) {
+    for (uint32_t S : Succs[I]) {
+      if (S < N) {
+        Blocks[S].Preds.push_back(static_cast<uint32_t>(I));
+      }
+    }
+  }
+  return computeDomInfo(Blocks, Reachable).IDom;
+}
+
+} // namespace for_testing
 
 } // namespace zen::evm

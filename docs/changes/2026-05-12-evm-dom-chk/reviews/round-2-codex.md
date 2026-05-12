@@ -1,0 +1,16 @@
+Verdict: REVISE — README.md:223-225 falsely says `src/evm/CMakeLists.txt` lists only `evm_cache.cpp`.
+- ✓ R1-#1 resolved: `computeDominators` is still `src/evm/evm_cache.cpp:618-620`; rewrite targets that body and callers at `docs/changes/2026-05-12-evm-dom-chk/README.md:210-214`.
+- ✓ R1-#2 resolved: rewrite lists 10k/20k with Phase-7 source, 50k as "not measured in #446"/"extrapolation only", and 100k as "user-provided pre-PR" at `docs/changes/2026-05-12-evm-dom-chk/README.md:35-40`; Phase-7 source has 10,000=10.38 and 20,000=43.68 at `docs/changes/2026-05-11-spp-cfg-implicit-dyn-pred/README.md:151-152`.
+- ✓ R1-#3 no regression: rewrite says 4.2× at `docs/changes/2026-05-12-evm-dom-chk/README.md:42-43`; command output `awk 'BEGIN { print 43.68/10.38 }'` -> `4.20809`.
+- ✓ R1-#4 resolved: `rg "70|250|several hundred|GenericDomTreeConstruction"` now finds no 70/250 claim; rewrite only says LLVM's file runs to "several hundred lines" at `docs/changes/2026-05-12-evm-dom-chk/README.md:196-200`.
+- ✓ R1-#5 resolved: CHK is `O(N)` typical / `O(N²)` worst and explicitly not `O(N · α(N))` at `docs/changes/2026-05-12-evm-dom-chk/README.md:21-24`; SemiNCA attribution is at `:191-199`, matching LLVM SemiNCA/eval comments at `/opt/llvm15/include/llvm/Support/GenericDomTreeConstruction.h:231-236` and `:270-316`.
+- ✓ R1-#6 no regression: source line anchors still match: `src/evm/evm_cache.cpp:618-620`, `:676-678`, `:772-777`, `:1110`, `:1114`, `:1127-1128`.
+- ✓ R1-#7 resolved: gates now say multipass 223/223 and interpreter 226/226 at `docs/changes/2026-05-12-evm-dom-chk/README.md:239-244`; command outputs: `wc -l ...Multipass...` -> `223 ...`, `wc -l ...Interpreter...` -> `226 ...`; statetest is reframed as zero-new-failures with fresh-run count at `README.md:245-248`.
+- ✗ R1-#8 regressed: header export remains unsupported by `rg "evm_cache_for_testing|install\\(|PUBLIC_HEADER"`, but the rewrite's CMake source-list proof at `docs/changes/2026-05-12-evm-dom-chk/README.md:223-225` is false; actual `src/evm/CMakeLists.txt:1-5` lists four sources via `EVM_SRCS`.
+- ✓ R1-#9 no regression: `bitsetTest` membership is `src/evm/evm_cache.cpp:466-467`; rewrite's three dominance-query mappings are `docs/changes/2026-05-12-evm-dom-chk/README.md:164-172`.
+- ✓ R1-#10 no regression: `rg "computeDominators\\(|findBackEdgesUsingDominators\\(|buildLoopsUsingDominance\\(|bitsetTest\\(Dom|dominatesIDom" src tests docs/changes/2026-05-12-evm-dom-chk/README.md` shows source consumers only at `src/evm/evm_cache.cpp:684`, `:793`, `:838`, with call sites `:1110`, `:1114`, `:1127`.
+
+1. ✗ New factual error: `docs/changes/2026-05-12-evm-dom-chk/README.md:223-225` says the `evm` object library lists only `evm_cache.cpp`; command output `nl -ba src/evm/CMakeLists.txt | sed -n '1,6p'` shows line 1 `interpreter.cpp opcode_handlers.cpp gas_storage_cost.cpp`, line 2 `evm_cache.cpp`, line 5 `add_library(evm OBJECT ${EVM_SRCS})`.
+2. ✓ New check passed: command output `grep -n "bitsetTest(Dom" src/evm/evm_cache.cpp` -> `684: ...Dom[From], To`, `793: ...Dom[From], To`, `838: ...Dom[Node], Loop.Header`.
+3. ✓ New check passed: command output `wc -l tests/evmone_unittests/EVMOneMultipassUnitTestsRunList.txt` -> `223 tests/evmone_unittests/EVMOneMultipassUnitTestsRunList.txt`.
+Reviewed by: codex (R2, --fresh)
