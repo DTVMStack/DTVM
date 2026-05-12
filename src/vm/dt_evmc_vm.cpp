@@ -257,7 +257,8 @@ struct DTVM : evmc_vm {
   std::vector<std::unique_ptr<zen::evm::InterpreterExecContext>> NestedCtxPool;
   // Instance pool for depth > 0
   std::vector<EVMInstance *> CacheInsts;
-  // Serialize execute() for nested host calls (re-entrancy-safe via recursive_mutex).
+  // Serialize execute() for nested host calls (re-entrancy-safe via
+  // recursive_mutex).
   std::recursive_mutex ExecuteMutex;
 
   bool isModuleInUse(const EVMModule *Mod) const {
@@ -644,7 +645,8 @@ evmc_result executeMultipassFastPath(DTVM *VM, const evmc_host_interface *Host,
     return NoCodeResult.release_raw();
   }
 
-  // Nested empty-code CALLs: use interpreter path (precompiles may have no code).
+  // Nested empty-code CALLs: use interpreter path (precompiles may have no
+  // code).
   if (Msg && Msg->depth > 0 && CodeSize == 0 && Msg->kind == EVMC_CALL) {
     return executeInterpreterFastPath(VM, Host, Context, Rev, Msg, Code,
                                       CodeSize);
@@ -777,7 +779,8 @@ DTVM::DTVM()
   }
 
   // Greedy RA has been observed to crash in long-running EVM multipass JIT
-  // compilation. Disabled by default; override with DTVM_EVM_DISABLE_MULTIPASS_GREEDYRA.
+  // compilation. Disabled by default; override with
+  // DTVM_EVM_DISABLE_MULTIPASS_GREEDYRA.
   Config.DisableMultipassGreedyRA = true;
   if (const char *DisableGreedyRA =
           std::getenv("DTVM_EVM_DISABLE_MULTIPASS_GREEDYRA");
