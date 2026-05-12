@@ -595,6 +595,71 @@ TEST(EVMRangeAnalyzer, DiamondMeetWidens) {
   EXPECT_EQ(Merge->EntryStackRanges.back(), EVMValueRange::U256);
 }
 
+TEST(EVMRangeAnalyzer, DiamondMultiSlotMeet) {
+  // 3-deep diamond merge: each predecessor pushes 3 values with distinct
+  // per-slot ranges, verifying per-slot meet=max independence.
+  //
+  // B1 (fallthrough) exits with [U64,  U128, U256]
+  // B2 (taken)       exits with [U128, U64,  U64 ]
+  // Merge entry meet [U128, U128, U256]  (per-slot max)
+  std::vector<uint8_t> C;
+  // B0 PC=0: PUSH1 1 PUSH1 <taken> JUMPI
+  C.push_back(0x60);
+  C.push_back(0x01); // PC 0-1
+  C.push_back(0x60);
+  C.push_back(0x00); // PC 2-3 placeholder taken target
+  C.push_back(0x57); // PC 4 JUMPI
+  // B1 fallthrough PC=5: PUSH8 PUSH16 PUSH32 PUSH1 <merge> JUMP
+  C.push_back(0x67); // PC 5 PUSH8
+  for (int I = 0; I < 8; ++I)
+    C.push_back(0xff); // PC 6-13
+  C.push_back(0x6f);   // PC 14 PUSH16
+  for (int I = 0; I < 16; ++I)
+    C.push_back(0xff); // PC 15-30
+  C.push_back(0x7f);   // PC 31 PUSH32
+  C.push_back(0x01);   // PC 32
+  for (int I = 0; I < 31; ++I)
+    C.push_back(0x00); // PC 33-63
+  C.push_back(0x60);
+  C.push_back(0x00); // PC 64-65 placeholder merge target
+  C.push_back(0x56); // PC 66 JUMP
+  C.push_back(0xfe); // PC 67 pad
+  // B2 taken PC=68: JUMPDEST PUSH16 PUSH8 PUSH8 PUSH1 <merge> JUMP
+  const uint8_t TakenPC = static_cast<uint8_t>(C.size()); // 68
+  C.push_back(0x5b);                                      // PC 68 JUMPDEST
+  C.push_back(0x6f);                                      // PC 69 PUSH16
+  for (int I = 0; I < 16; ++I)
+    C.push_back(0xff); // PC 70-85
+  C.push_back(0x67);   // PC 86 PUSH8
+  for (int I = 0; I < 8; ++I)
+    C.push_back(0xff); // PC 87-94
+  C.push_back(0x67);   // PC 95 PUSH8
+  for (int I = 0; I < 8; ++I)
+    C.push_back(0xff); // PC 96-103
+  C.push_back(0x60);
+  C.push_back(0x00); // PC 104-105 placeholder merge target
+  C.push_back(0x56); // PC 106 JUMP
+  // B3 merge PC=107: JUMPDEST STOP
+  const uint8_t MergePC = static_cast<uint8_t>(C.size()); // 107
+  C.push_back(0x5b);                                      // JUMPDEST
+  C.push_back(0x00);                                      // STOP
+  // Patch placeholders.
+  C[3] = TakenPC;
+  C[65] = MergePC;
+  C[105] = MergePC;
+
+  EVMAnalyzer Analyzer = analyzeBytecode(C);
+  const auto *Merge = findBlock(Analyzer, MergePC);
+  ASSERT_NE(Merge, nullptr);
+  ASSERT_EQ(Merge->EntryStackRanges.size(), 3u);
+  // Slot 0 (bottom): meet(U64,  U128) = U128.
+  EXPECT_EQ(Merge->EntryStackRanges[0], EVMValueRange::U128);
+  // Slot 1:           meet(U128, U64 ) = U128.
+  EXPECT_EQ(Merge->EntryStackRanges[1], EVMValueRange::U128);
+  // Slot 2 (top):     meet(U256, U64 ) = U256.
+  EXPECT_EQ(Merge->EntryStackRanges[2], EVMValueRange::U256);
+}
+
 TEST(EVMRangeAnalyzer, SelfLoopBackEdge) {
   // Loop header with a body that preserves the entry slot's range (no
   // widening): the back-edge meet converges in one round to a steady state.
