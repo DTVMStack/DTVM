@@ -182,24 +182,50 @@ of 5; the median is +2.7%.
 
 After rebasing `feat/gas-check-placement` onto current `upstream/main`
 (which now includes #458/#460/#482/#483 upstream perf work), the
-end-to-end picture on the same 27-bench paper filter changes:
+end-to-end picture on the same 27-bench paper filter is essentially
+flat:
 
-- **Geomean (10 reps): +1.15%** — basically flat
-- One bench (`main/blake2b_shifts/8415nulls`) appeared as +20.34% with
-  treatment CV 21.93%. A focused 20-rep re-measurement gave +0.25%
-  (CV 2.09%), confirming the 10-rep result was driven by a single
-  outlier iteration.
+- **27-bench 10-rep geomean: +1.15%** (treatment slower).
 - 0 benches above the ±25% CI gate.
-- Top wins: `blake2b_huff/8415nulls` −6.30%, `sha1_divs/5311` −5.22%,
-  `sha1_shifts/empty` −5.07%, `loop_with_many_jumpdests/empty` −4.84%.
-- Top regressions (within ±5% noise): `memory_grow_mstore/nogrow`
-  +3.91%, `signextend/one` +3.71% (down from +15.55% at 5 reps),
-  `memory_grow_mload/nogrow` +3.62%.
+- **Caveat — single-session sequential 10-rep is noisy**: a focused 20-rep
+  re-measurement on the four largest 10-rep movers showed they collapse
+  to evmone-bench's inter-binary drift band:
+
+  | Bench | 10-rep Δ | 20-rep Δ (focused) |
+  |---|---|---|
+  | `main/weierstrudel/1` | +3.51% | +0.55% (treat CV 2.19%) |
+  | `main/blake2b_huff/8415nulls` | −6.30% | +1.55% (flipped) |
+  | `micro/loop_with_many_jumpdests/empty` | −4.84% | −0.55% |
+  | `main/blake2b_shifts/8415nulls` | +20.34% (CV 21.93%) | +0.25% (CV 2.09%) |
+
+- Three of the four 10-rep "regression" benches above the noise band —
+  `micro/memory_grow_mstore/{nogrow,by1}`, `micro/memory_grow_mload/nogrow`
+  — contain **zero JUMP / JUMPI / JUMPDEST opcodes**, so PR #446's CFG
+  changes cannot affect them by construction. Those deltas are pure
+  drift artifacts.
 
 The earlier −2.73% A-vs-PR-base geomean still holds — this change does
 improve over PR #446's pre-rebase head. But the cumulative PR #446
-benefit over current upstream/main has shrunk to noise because the
-intervening upstream perf commits closed most of the gap.
+benefit over current upstream/main has shrunk to within drift band on
+this 27-bench corpus: the intervening upstream perf commits absorbed
+the absolute speedup, and the residual per-bench deltas are not
+statistically distinguishable from inter-binary system drift.
+
+### A note on the SPP→JIT cost-flow mechanism
+
+PR #446 is the first time SPP-shifted gas costs reach the JIT in any
+version of DTVM. SPP redistributes cost between blocks but preserves
+total gas across any path. For contracts with many JUMPDESTs targeted
+by dynamic jumps, the lemma 6.14 multi-pred guard prevents shifts
+INTO those JUMPDESTs but allows shifts OUT, which can mildly inflate
+the chunk-start metering immediate at each JUMPDEST. This theoretical
+effect would not be visible on the runtime side of the 27-bench
+corpus at current measurement precision (20-rep focused on
+`main/weierstrudel/1` — the most dyn-dispatch-heavy bench — shows
++0.55% delta, within CV). A future PR could gate `GasChunkCostSPP`
+to `nullptr` for JUMPDEST-density-heavy contracts if a measurable
+regression surfaces; nothing in the current corpus justifies the
+added gating logic.
 
 ## Out of scope
 
