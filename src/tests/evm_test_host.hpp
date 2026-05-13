@@ -552,33 +552,12 @@ public:
       evmc_message CallMsg = Msg;
       evmc::Result ExecResult{};
 
-      int64_t InterpGasLeft = -1;
       try {
         if (!applyCallValueTransfer(CallMsg)) {
           restoreHostState(StateSnapshot);
           return ParentResult;
         }
-        const bool UseInterp =
-            (RT->getConfig().Mode == common::RunMode::MultipassMode) &&
-            (Msg.depth > 0);
-        if (UseInterp) {
-          Inst->clearMessageCache();
-          evmc_message MsgWithCode = CallMsg;
-          MsgWithCode.code =
-              reinterpret_cast<uint8_t *>(Inst->getModule()->Code);
-          MsgWithCode.code_size = Inst->getModule()->CodeSize;
-          Inst->setExeResult(evmc::Result{EVMC_SUCCESS, 0, 0});
-          evm::InterpreterExecContext Ctx(Inst);
-          evm::BaseInterpreter Interpreter(Ctx);
-          Ctx.allocTopFrame(&MsgWithCode);
-          Interpreter.interpret();
-          ExecResult =
-              std::move(const_cast<evmc::Result &>(Ctx.getExeResult()));
-          InterpGasLeft = static_cast<int64_t>(Inst->getGas());
-          Inst->popMessage();
-        } else {
-          RT->callEVMMain(*Inst, CallMsg, ExecResult);
-        }
+        RT->callEVMMain(*Inst, CallMsg, ExecResult);
       } catch (const std::exception &E) {
         ZEN_LOG_ERROR("Error in recursive call: %s", E.what());
         restoreHostState(StateSnapshot);
@@ -591,8 +570,7 @@ public:
       } else {
         ReturnData.clear();
       }
-      int64_t RemainingGas =
-          (InterpGasLeft >= 0) ? InterpGasLeft : ExecResult.gas_left;
+      int64_t RemainingGas = ExecResult.gas_left;
       if (RemainingGas < 0) {
         RemainingGas = static_cast<int64_t>(Inst->getGas());
       }
@@ -783,29 +761,8 @@ public:
 
       evmc_message CallMsg = Msg;
       evmc::Result ExecResult{};
-      int64_t InterpGasLeft = -1;
       try {
-        const bool UseInterp =
-            (RT->getConfig().Mode == common::RunMode::MultipassMode) &&
-            (Msg.depth > 0);
-        if (UseInterp) {
-          Inst->clearMessageCache();
-          evmc_message MsgWithCode = CallMsg;
-          MsgWithCode.code =
-              reinterpret_cast<uint8_t *>(Inst->getModule()->Code);
-          MsgWithCode.code_size = Inst->getModule()->CodeSize;
-          Inst->setExeResult(evmc::Result{EVMC_SUCCESS, 0, 0});
-          evm::InterpreterExecContext Ctx(Inst);
-          evm::BaseInterpreter Interpreter(Ctx);
-          Ctx.allocTopFrame(&MsgWithCode);
-          Interpreter.interpret();
-          ExecResult =
-              std::move(const_cast<evmc::Result &>(Ctx.getExeResult()));
-          InterpGasLeft = static_cast<int64_t>(Inst->getGas());
-          Inst->popMessage();
-        } else {
-          RT->callEVMMain(*Inst, CallMsg, ExecResult);
-        }
+        RT->callEVMMain(*Inst, CallMsg, ExecResult);
       } catch (const std::exception &E) {
         restoreHostState(StateSnapshot);
         ZEN_LOG_ERROR("Error in handleCreate execution: %s", E.what());
@@ -819,8 +776,7 @@ public:
         ReturnData.clear();
       }
 
-      int64_t RemainingGas =
-          (InterpGasLeft >= 0) ? InterpGasLeft : ExecResult.gas_left;
+      int64_t RemainingGas = ExecResult.gas_left;
       if (RemainingGas < 0) {
         RemainingGas = static_cast<int64_t>(Inst->getGas());
       }
