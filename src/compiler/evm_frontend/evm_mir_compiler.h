@@ -274,11 +274,6 @@ public:
       return A.getRange() == ValueRange::U64 && B.getRange() == ValueRange::U64;
     }
 
-    // Pick the wider range between two operands (monotone join for OR/XOR).
-    static ValueRange maxRange(const Operand &A, const Operand &B) {
-      return A.getRange() > B.getRange() ? A.getRange() : B.getRange();
-    }
-
     constexpr bool isReg() { return false; }
     constexpr bool isTempReg() { return true; }
 
@@ -708,12 +703,11 @@ public:
           false, getMirOpcode(Operator), MirI64Type, LHS[I], RHS[I]);
       Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
     }
-    // OR/XOR are monotone on range: bits set in either operand are set in the
-    // result, so result range = max(LHS, RHS). AND already returns earlier with
-    // its own narrowed range, so this branch only fires for OR/XOR.
+    // OR/XOR are monotone on range: result range = max(LHS, RHS).
     if constexpr (Operator == BinaryOperator::BO_OR ||
                   Operator == BinaryOperator::BO_XOR) {
-      return Operand(Result, EVMType::UINT256, Operand::maxRange(LHSOp, RHSOp));
+      return Operand(Result, EVMType::UINT256,
+                     std::max(LHSOp.getRange(), RHSOp.getRange()));
     }
     return Operand(Result, EVMType::UINT256);
   }
