@@ -1051,39 +1051,22 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     }
   }
 
-  // Build CFG. Static jumps (PUSH -> JUMP) get precise single-target
-  // edges. For unresolved dynamic jumps, the CFG is kept sound by
-  // stamping each JUMPDEST with ImplicitDynamicPredCount instead of
-  // materialising the D * |JUMPDEST| explicit edges - that count is
-  // folded into `effectivePredCount`, so `lemma614Update`'s "shift only
-  // into single-effective-pred successors" check behaves identically
-  // to the old explicit-edge representation. Narrowing dynamic jumps
-  // with partial call-site resolution would under-approximate the CFG
-  // and let SPP shift gas along non-existent edges, producing unsafe
-  // metering, so the over-approximation is intentional.
+  // Static jumps get precise single-target edges. For unresolved dynamic
+  // jumps, the CFG over-approximation is encoded as
+  // ImplicitDynamicPredCount on each JUMPDEST (folded into
+  // effectivePredCount). Narrowing to partial call-site resolution would
+  // under-approximate the CFG and let SPP shift gas along non-existent
+  // edges, producing unsafe metering.
   buildCFGEdges(Blocks, BlockAtPc, JumpDestMap, PushValueMap, JumpDestBlocks,
                 CodeSize);
 
-  // Split critical edges (required for safe SPP optimization). This pass
-  // operates on explicit Succs/Preds and therefore never sees dyn-jump ->
-  // JUMPDEST edges - that is intentional: the multi-predecessor guard in
-  // `lemma614Update` (with ImplicitDynamicPredCount folded into
-  // `effectivePredCount`) blocks shifts whenever effective preds > 1, so
-  // splitting the implicit edges would be a no-op for soundness.
   splitCriticalEdges(Blocks, CodeSize);
 
   std::vector<uint8_t> Reachable = computeReachable(Blocks, 0);
-  // In the implicit-dyn-pred representation, JUMPDESTs reached only via a
-  // dynamic JUMP have no explicit predecessor edge from any block reachable
-  // via static control flow, so the static-only walk above misses them.
-  // Seed each *dyn-target* JUMPDEST as a root and propagate forward via
-  // Succs so the dominator and loop analyses still treat them (and their
-  // static successors) as live nodes - without this, SPP would skip cost
-  // shifting through every dyn-only function-return / dispatcher-target
-  // chunk. The `ImplicitDynamicPredCount > 0` gate restricts the seed to
-  // JUMPDESTs the dynamic-jump count actually targets; statically-dead
-  // JUMPDESTs (no static pred and no dyn-jump in the contract) are NOT
-  // revived, preserving pre-Phase-7 behavior on that class.
+  // Seed dyn-target JUMPDESTs as reachability roots so dom/loop analyses
+  // include them and their static successors. Statically-dead JUMPDESTs
+  // (no static pred, no dyn-jump in the contract) are intentionally left
+  // unreachable.
   {
     std::vector<uint32_t> Stack;
     for (uint32_t JdId : JumpDestBlocks) {
