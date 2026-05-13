@@ -1,20 +1,15 @@
 // Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Standalone demo: time `buildBytecodeCache` on a synthetic contract with
-// N JUMPDESTs reached via one dynamic JUMP. Exercises the Phase 7
-// `ImplicitDynamicPredCount` path end-to-end and lets a caller observe
-// the O(N) cache-build wall-clock empirically.
-//
-// Usage: evmCacheComplexityDemo <n_jumpdests>
-// Output: one CSV row "<n_jumpdests>,<build_ms>" to stdout.
-//
-// See docs/changes/2026-05-11-spp-cfg-implicit-dyn-pred/scaling_demo.sh
-// for a wrapper that tabulates multiple sizes.
+// Time buildBytecodeCache on a CALLDATALOAD JUMP <N x JUMPDEST> STOP
+// contract. Usage: evmCacheComplexityDemo <n_jumpdests>
+// Output: "<n_jumpdests>,<build_ms>" on stdout.
 
 #include "evm/evm_cache.h"
+#include "platform/platform.h"
 
 #include <evmc/evmc.h>
+#include <evmc/instructions.h>
 
 #include <chrono>
 #include <cstddef>
@@ -26,29 +21,26 @@
 
 namespace {
 
-// Build a contract with exactly N JUMPDESTs reachable only via one
-// dynamic JUMP, so every JUMPDEST gets stamped with
-// ImplicitDynamicPredCount = 1 (Phase 7 path).
-//
-// Layout:
-//   PC 0  CALLDATALOAD          (cost 3, unresolvable push -> dyn jump)
-//   PC 1  JUMP                  (block terminator; dyn jump)
-//   PC 2..(N+1)  JUMPDEST       (N JUMPDESTs in sequence)
-//   PC N+2  STOP
+constexpr uint8_t OP_STOP = static_cast<uint8_t>(evmc_opcode::OP_STOP);
+constexpr uint8_t OP_CALLDATALOAD =
+    static_cast<uint8_t>(evmc_opcode::OP_CALLDATALOAD);
+constexpr uint8_t OP_JUMP = static_cast<uint8_t>(evmc_opcode::OP_JUMP);
+constexpr uint8_t OP_JUMPDEST = static_cast<uint8_t>(evmc_opcode::OP_JUMPDEST);
+
 std::vector<uint8_t> makeDynDispatchContract(size_t NumJumpDests) {
   std::vector<uint8_t> Code;
   Code.reserve(NumJumpDests + 3);
-  Code.push_back(0x35); // CALLDATALOAD
-  Code.push_back(0x56); // JUMP (dyn)
+  Code.push_back(OP_CALLDATALOAD);
+  Code.push_back(OP_JUMP);
   for (size_t I = 0; I < NumJumpDests; ++I) {
-    Code.push_back(0x5b); // JUMPDEST
+    Code.push_back(OP_JUMPDEST);
   }
-  Code.push_back(0x00); // STOP
+  Code.push_back(OP_STOP);
   return Code;
 }
 
 double timeCacheBuildMs(const std::vector<uint8_t> &Code) {
-  using Clock = std::chrono::steady_clock;
+  using Clock = zen::common::SteadyClock;
   const auto Start = Clock::now();
   zen::evm::EVMBytecodeCache Cache;
   zen::evm::buildBytecodeCache(Cache,
