@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <map>
 #include <queue>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -1721,21 +1722,22 @@ private:
         // before the next JUMPDEST.  Treat as no-op.
         break;
 
-      default:
-        // Fallback for any opcode without an explicit rule above: use
-        // metrics-table to determine pop/push count and push U256 results.
-        if (InstructionMetrics) {
-          const auto &Metrics = InstructionMetrics[Opcode];
-          int PopCount = Metrics.stack_height_required;
-          int PushCount = PopCount + Metrics.stack_height_change;
-          if (PopCount > 0) {
-            popStackRanges(Stack, static_cast<size_t>(PopCount));
-          }
-          for (int I = 0; I < PushCount; ++I) {
-            pushTop();
-          }
+      default: {
+        // Fallback for any opcode without an explicit rule above: use the
+        // metrics table to determine pop/push count and push U256 results.
+        // Constructor guarantees InstructionMetrics is non-null (falls back
+        // to DEFAULT_REVISION on lookup failure).
+        const auto &Metrics = InstructionMetrics[Opcode];
+        int PopCount = Metrics.stack_height_required;
+        int PushCount = PopCount + Metrics.stack_height_change;
+        if (PopCount > 0) {
+          popStackRanges(Stack, static_cast<size_t>(PopCount));
+        }
+        for (int I = 0; I < PushCount; ++I) {
+          pushTop();
         }
         break;
+      }
       }
 
       ++PC;
@@ -1783,6 +1785,9 @@ private:
       InQueue[EntryPC] = true;
     }
 
+    // Reuse a single ExitStack buffer across worklist iterations to avoid
+    // malloc/free per block visit on pathological CFGs.
+    std::vector<EVMValueRange> ExitStack;
     while (!WorkList.empty()) {
       uint64_t BlockPC = WorkList.front();
       WorkList.pop();
@@ -1798,7 +1803,7 @@ private:
         continue;
       }
 
-      std::vector<EVMValueRange> ExitStack = Info.EntryStackRanges;
+      ExitStack = Info.EntryStackRanges;
       applyRangeTransferForBlock(Info, Bytecode, BytecodeSize, ExitStack);
 
       for (uint64_t Succ : Info.Successors) {
