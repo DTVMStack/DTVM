@@ -3922,7 +3922,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleBalance(Operand Address) {
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
-  auto Result = callRuntimeFor<const intx::uint256 *, const uint8_t *>(
+  auto Result = callRuntimeForMayFail<const intx::uint256 *, const uint8_t *>(
       RuntimeFunctions.GetBalance, Address);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
@@ -3989,7 +3989,7 @@ void EVMMirBuilder::handleCodeCopy(Operand DestOffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
-  callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
+  callRuntimeForMayFail<void, uint64_t, uint64_t, uint64_t>(
       RuntimeFunctions.SetCodeCopy, DestOffsetComponents, OffsetComponents,
       SizeComponents);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
@@ -4004,7 +4004,7 @@ EVMMirBuilder::handleExtCodeSize(Operand Address) {
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
-  auto Result = callRuntimeFor<uint64_t, const uint8_t *>(
+  auto Result = callRuntimeForMayFail<uint64_t, const uint8_t *>(
       RuntimeFunctions.GetExtCodeSize, Address);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
@@ -4018,7 +4018,7 @@ EVMMirBuilder::handleExtCodeHash(Operand Address) {
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
-  auto Result = callRuntimeFor<const intx::uint256 *, const uint8_t *>(
+  auto Result = callRuntimeForMayFail<const intx::uint256 *, const uint8_t *>(
       RuntimeFunctions.GetExtCodeHash, Address);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
@@ -4554,21 +4554,22 @@ void EVMMirBuilder::handleLogWithTopics(Operand OffsetOp, Operand SizeOp,
   syncGasToMemory();
 #endif
   if constexpr (NumTopics == 0) {
-    callRuntimeFor<void, uint64_t, uint64_t>(RuntimeFunctions.EmitLog0,
-                                             OffsetOp, SizeOp);
+    callRuntimeForMayFail<void, uint64_t, uint64_t>(RuntimeFunctions.EmitLog0,
+                                                    OffsetOp, SizeOp);
   } else if constexpr (NumTopics == 1) {
-    callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *>(
+    callRuntimeForMayFail<void, uint64_t, uint64_t, const uint8_t *>(
         RuntimeFunctions.EmitLog1, OffsetOp, SizeOp, Topics...);
   } else if constexpr (NumTopics == 2) {
-    callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *, const uint8_t *>(
-        RuntimeFunctions.EmitLog2, OffsetOp, SizeOp, Topics...);
+    callRuntimeForMayFail<void, uint64_t, uint64_t, const uint8_t *,
+                          const uint8_t *>(RuntimeFunctions.EmitLog2, OffsetOp,
+                                           SizeOp, Topics...);
   } else if constexpr (NumTopics == 3) {
-    callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *, const uint8_t *,
-                   const uint8_t *>(RuntimeFunctions.EmitLog3, OffsetOp, SizeOp,
-                                    Topics...);
+    callRuntimeForMayFail<void, uint64_t, uint64_t, const uint8_t *,
+                          const uint8_t *, const uint8_t *>(
+        RuntimeFunctions.EmitLog3, OffsetOp, SizeOp, Topics...);
   } else { // NumTopics == 4
-    callRuntimeFor<void, uint64_t, uint64_t, const uint8_t *, const uint8_t *,
-                   const uint8_t *, const uint8_t *>(
+    callRuntimeForMayFail<void, uint64_t, uint64_t, const uint8_t *,
+                          const uint8_t *, const uint8_t *, const uint8_t *>(
         RuntimeFunctions.EmitLog4, OffsetOp, SizeOp, Topics...);
   }
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
@@ -4584,9 +4585,9 @@ EVMMirBuilder::handleCreate(Operand ValueOp, Operand OffsetOp, Operand SizeOp) {
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
 #endif
-  auto Result = callRuntimeFor<const uint8_t *, const intx::uint256 &, uint64_t,
-                               uint64_t>(RuntimeFunctions.HandleCreate, ValueOp,
-                                         OffsetOp, SizeOp);
+  auto Result = callRuntimeForMayFail<const uint8_t *, const intx::uint256 &,
+                                      uint64_t, uint64_t>(
+      RuntimeFunctions.HandleCreate, ValueOp, OffsetOp, SizeOp);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
@@ -4603,8 +4604,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCreate2(Operand ValueOp,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
 #endif
-  auto Result = callRuntimeFor<const uint8_t *, const intx::uint256 &, uint64_t,
-                               uint64_t, const uint8_t *>(
+  auto Result = callRuntimeForMayFail<const uint8_t *, const intx::uint256 &,
+                                      uint64_t, uint64_t, const uint8_t *>(
       RuntimeFunctions.HandleCreate2, ValueOp, OffsetOp, SizeOp, SaltOp);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
@@ -4628,11 +4629,11 @@ EVMMirBuilder::handleCall(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
 #endif
-  auto Result =
-      callRuntimeFor<uint64_t, uint64_t, const uint8_t *, const intx::uint256 &,
-                     uint64_t, uint64_t, uint64_t, uint64_t>(
-          RuntimeFunctions.HandleCall, GasOp, ToAddrOp, ValueOp, ArgsOffsetOp,
-          ArgsSizeOp, RetOffsetOp, RetSizeOp);
+  auto Result = callRuntimeForMayFail<uint64_t, uint64_t, const uint8_t *,
+                                      const intx::uint256 &, uint64_t, uint64_t,
+                                      uint64_t, uint64_t>(
+      RuntimeFunctions.HandleCall, GasOp, ToAddrOp, ValueOp, ArgsOffsetOp,
+      ArgsSizeOp, RetOffsetOp, RetSizeOp);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
@@ -4655,11 +4656,11 @@ EVMMirBuilder::handleCallCode(Operand GasOp, Operand ToAddrOp, Operand ValueOp,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
 #endif
-  auto Result =
-      callRuntimeFor<uint64_t, uint64_t, const uint8_t *, const intx::uint256 &,
-                     uint64_t, uint64_t, uint64_t, uint64_t>(
-          RuntimeFunctions.HandleCallCode, GasOp, ToAddrOp, ValueOp,
-          ArgsOffsetOp, ArgsSizeOp, RetOffsetOp, RetSizeOp);
+  auto Result = callRuntimeForMayFail<uint64_t, uint64_t, const uint8_t *,
+                                      const intx::uint256 &, uint64_t, uint64_t,
+                                      uint64_t, uint64_t>(
+      RuntimeFunctions.HandleCallCode, GasOp, ToAddrOp, ValueOp, ArgsOffsetOp,
+      ArgsSizeOp, RetOffsetOp, RetSizeOp);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
@@ -4676,7 +4677,7 @@ void EVMMirBuilder::handleReturn(Operand MemOffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
 #endif
-  callRuntimeFor<void, uint64_t, uint64_t>(
+  callRuntimeForMayFail<void, uint64_t, uint64_t>(
       RuntimeFunctions.SetReturn, MemOffsetComponents, LengthComponents);
 
   // The runtime SetReturn may charge memory expansion gas via chargeGas(),
@@ -4708,8 +4709,8 @@ EVMMirBuilder::handleDelegateCall(Operand GasOp, Operand ToAddrOp,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
 #endif
-  auto Result = callRuntimeFor<uint64_t, uint64_t, const uint8_t *, uint64_t,
-                               uint64_t, uint64_t, uint64_t>(
+  auto Result = callRuntimeForMayFail<uint64_t, uint64_t, const uint8_t *,
+                                      uint64_t, uint64_t, uint64_t, uint64_t>(
       RuntimeFunctions.HandleDelegateCall, GasOp, ToAddrOp, ArgsOffsetOp,
       ArgsSizeOp, RetOffsetOp, RetSizeOp);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
@@ -4734,8 +4735,8 @@ EVMMirBuilder::handleStaticCall(Operand GasOp, Operand ToAddrOp,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
 #endif
-  auto Result = callRuntimeFor<uint64_t, uint64_t, const uint8_t *, uint64_t,
-                               uint64_t, uint64_t, uint64_t>(
+  auto Result = callRuntimeForMayFail<uint64_t, uint64_t, const uint8_t *,
+                                      uint64_t, uint64_t, uint64_t, uint64_t>(
       RuntimeFunctions.HandleStaticCall, GasOp, ToAddrOp, ArgsOffsetOp,
       ArgsSizeOp, RetOffsetOp, RetSizeOp);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
@@ -4753,8 +4754,8 @@ void EVMMirBuilder::handleRevert(Operand OffsetOp, Operand SizeOp) {
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemoryFull();
 #endif
-  callRuntimeFor<void, uint64_t, uint64_t>(RuntimeFunctions.SetRevert, OffsetOp,
-                                           SizeOp);
+  callRuntimeForMayFail<void, uint64_t, uint64_t>(RuntimeFunctions.SetRevert,
+                                                  OffsetOp, SizeOp);
 
   // The runtime SetRevert may charge memory expansion gas via chargeGas(),
   // which updates Instance->Gas directly. We must NOT branch to the shared
@@ -4809,8 +4810,9 @@ EVMMirBuilder::handleSLoad(Operand KeyComponents) {
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
-  auto Result = callRuntimeFor<const intx::uint256 *, const intx::uint256 &>(
-      RuntimeFunctions.GetSLoad, KeyComponents);
+  auto Result =
+      callRuntimeForMayFail<const intx::uint256 *, const intx::uint256 &>(
+          RuntimeFunctions.GetSLoad, KeyComponents);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
@@ -4822,7 +4824,7 @@ void EVMMirBuilder::handleSStore(Operand KeyComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
-  callRuntimeFor<void, const intx::uint256 &, const intx::uint256 &>(
+  callRuntimeForMayFail<void, const intx::uint256 &, const intx::uint256 &>(
       RuntimeFunctions.SetSStore, KeyComponents, ValueComponents);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
@@ -4846,8 +4848,8 @@ void EVMMirBuilder::handleSelfDestruct(Operand Beneficiary) {
   // leftover amount to the caller.
   syncGasToMemoryFull();
 #endif
-  callRuntimeFor<void, const uint8_t *>(RuntimeFunctions.HandleSelfDestruct,
-                                        Beneficiary);
+  callRuntimeForMayFail<void, const uint8_t *>(
+      RuntimeFunctions.HandleSelfDestruct, Beneficiary);
 
   // The runtime function (evmHandleSelfDestruct) calls popMessage() which may
   // set CurrentMessage to nullptr when there is no parent frame. The shared
@@ -4872,7 +4874,7 @@ EVMMirBuilder::handleKeccak256(Operand OffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
-  auto Result = callRuntimeFor<const uint8_t *, uint64_t, uint64_t>(
+  auto Result = callRuntimeForMayFail<const uint8_t *, uint64_t, uint64_t>(
       RuntimeFunctions.GetKeccak256, OffsetComponents, LengthComponents);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
@@ -5650,49 +5652,23 @@ EVMMirBuilder::callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *)) {
       IsStmt, ReturnType, FuncAddrInst,
       llvm::ArrayRef<MInstruction *>(InstancePtr));
 
-#if !defined(ZEN_ENABLE_CPU_EXCEPTION)
-  // In check mode, hostapi reports soft errors by writing instance error code.
-  // Convert it into explicit control flow immediately after each hostapi call.
-  MInstruction *GetErrAddr = createIntConstInstruction(
-      &Ctx.I64Type, getFunctionAddress(evmGetErrorCode));
-  MInstruction *ErrCodeInstr = createInstruction<ICallInstruction>(
-      false, EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64),
-      GetErrAddr, llvm::ArrayRef<MInstruction *>(InstancePtr));
-  Variable *ErrCodeVar =
-      storeInstructionInTemp(ErrCodeInstr, ErrCodeInstr->getType());
-  MInstruction *ErrCodeValue = loadVariable(ErrCodeVar);
-  MInstruction *StaticViolationCode = createIntConstInstruction(
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64),
-      common::to_underlying(ErrorCode::EVMStaticModeViolation));
-  MInstruction *GasExceededCode = createIntConstInstruction(
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64),
-      common::to_underlying(ErrorCode::GasLimitExceeded));
-  MInstruction *HasGasExceeded = createInstruction<CmpInstruction>(
-      false, CmpInstruction::Predicate::ICMP_EQ,
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64), ErrCodeValue,
-      GasExceededCode);
-  MBasicBlock *CheckStaticBB = createBasicBlock();
-  MBasicBlock *ContinueBB = createBasicBlock();
-  MBasicBlock *GasTrapBB =
-      getOrCreateExceptionSetBB(ErrorCode::GasLimitExceeded);
-  createInstruction<BrIfInstruction>(true, Ctx, HasGasExceeded, GasTrapBB,
-                                     CheckStaticBB);
-  addUniqueSuccessor(GasTrapBB);
-  addSuccessor(CheckStaticBB);
-  setInsertBlock(CheckStaticBB);
-  MInstruction *HasStaticViolation = createInstruction<CmpInstruction>(
-      false, CmpInstruction::Predicate::ICMP_EQ,
-      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64), ErrCodeValue,
-      StaticViolationCode);
-  MBasicBlock *StaticTrapBB =
-      getOrCreateExceptionSetBB(ErrorCode::EVMStaticModeViolation);
-  createInstruction<BrIfInstruction>(true, Ctx, HasStaticViolation,
-                                     StaticTrapBB, ContinueBB);
-  addUniqueSuccessor(StaticTrapBB);
-  addSuccessor(ContinueBB);
-  setInsertBlock(ContinueBB);
-#endif
+  return convertCallResult<RetType>(CallInstr);
+}
 
+template <typename RetType>
+typename EVMMirBuilder::Operand EVMMirBuilder::callRuntimeForMayFail(
+    RetType (*RuntimeFunc)(runtime::EVMInstance *)) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  MType *ReturnType = getMIRReturnType<RetType>();
+  const bool IsStmt = std::is_same_v<RetType, void>;
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      IsStmt, ReturnType, FuncAddrInst,
+      llvm::ArrayRef<MInstruction *>(InstancePtr));
+  emitRuntimeSoftErrorCheck(InstancePtr);
   return convertCallResult<RetType>(CallInstr);
 }
 
@@ -5916,9 +5892,45 @@ EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
   MInstruction *CallInstr = createInstruction<ICallInstruction>(
       IsStmt, ReturnType, FuncAddrInst, llvm::ArrayRef<MInstruction *>{Args});
 
+  return convertCallResult<RetType>(CallInstr);
+}
+
+template <typename RetType, typename... ArgTypes, typename... ParamTypes>
+EVMMirBuilder::Operand EVMMirBuilder::callRuntimeForMayFail(
+    RetType (*RuntimeFunc)(runtime::EVMInstance *, ArgTypes...),
+    const ParamTypes &...Params) {
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  uint64_t FuncAddr = getFunctionAddress(RuntimeFunc);
+  MInstruction *FuncAddrInst = createIntConstInstruction(I64Type, FuncAddr);
+  MInstruction *InstancePtr = getCurrentInstancePointer();
+
+  std::vector<MInstruction *> Args = {InstancePtr};
+  auto ParamsTuple = std::forward_as_tuple(Params...);
+  std::size_t ScratchCursor = 0;
+  auto PushOne = [this, &Args, &ParamsTuple, &ScratchCursor](auto IndexTag) {
+    constexpr std::size_t I = decltype(IndexTag)::value;
+    using ArgT = typename std::tuple_element<I, std::tuple<ArgTypes...>>::type;
+    this->appendRuntimeArg<ArgT>(Args, std::get<I>(ParamsTuple), ScratchCursor);
+  };
+  auto PushAll = [&](auto Self, auto IndexTag) -> void {
+    constexpr std::size_t I = decltype(IndexTag)::value;
+    if constexpr (I < sizeof...(ArgTypes)) {
+      PushOne(IndexTag);
+      Self(Self, std::integral_constant<std::size_t, I + 1>{});
+    }
+  };
+  PushAll(PushAll, std::integral_constant<std::size_t, 0>{});
+
+  MType *ReturnType = getMIRReturnType<RetType>();
+  const bool IsStmt = std::is_same_v<RetType, void>;
+  MInstruction *CallInstr = createInstruction<ICallInstruction>(
+      IsStmt, ReturnType, FuncAddrInst, llvm::ArrayRef<MInstruction *>{Args});
+  emitRuntimeSoftErrorCheck(InstancePtr);
+  return convertCallResult<RetType>(CallInstr);
+}
+
+void EVMMirBuilder::emitRuntimeSoftErrorCheck(MInstruction *InstancePtr) {
 #if !defined(ZEN_ENABLE_CPU_EXCEPTION)
-  // Keep check mode deterministic by converting hostapi soft errors into
-  // explicit exception control flow.
   MInstruction *GetErrAddr = createIntConstInstruction(
       &Ctx.I64Type, getFunctionAddress(evmGetErrorCode));
   MInstruction *ErrCodeInstr = createInstruction<ICallInstruction>(
@@ -5957,9 +5969,9 @@ EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
   addUniqueSuccessor(StaticTrapBB);
   addSuccessor(ContinueBB);
   setInsertBlock(ContinueBB);
+#else
+  (void)InstancePtr;
 #endif
-
-  return convertCallResult<RetType>(CallInstr);
 }
 
 MInstruction *EVMMirBuilder::getCurrentInstancePointer() {
@@ -5980,7 +5992,7 @@ void EVMMirBuilder::handleCallDataCopy(Operand DestOffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
-  callRuntimeFor<void, uint64_t, uint64_t, uint64_t>(
+  callRuntimeForMayFail<void, uint64_t, uint64_t, uint64_t>(
       RuntimeFunctions.SetCallDataCopy, DestOffsetComponents, OffsetComponents,
       SizeComponents);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
@@ -6004,7 +6016,7 @@ void EVMMirBuilder::handleExtCodeCopy(Operand AddressComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
-  callRuntimeFor<void, const uint8_t *, uint64_t, uint64_t, uint64_t>(
+  callRuntimeForMayFail<void, const uint8_t *, uint64_t, uint64_t, uint64_t>(
       RuntimeFunctions.SetExtCodeCopy, AddressComponents, DestOffsetComponents,
       OffsetComponents, SizeComponents);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
@@ -6027,9 +6039,10 @@ void EVMMirBuilder::handleReturnDataCopy(Operand DestOffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   syncGasToMemory();
 #endif
-  Operand StatusOp = callRuntimeFor<uint64_t, uint64_t, uint64_t, uint64_t>(
-      RuntimeFunctions.SetReturnDataCopy, DestOffsetComponents,
-      OffsetComponents, SizeComponents);
+  Operand StatusOp =
+      callRuntimeForMayFail<uint64_t, uint64_t, uint64_t, uint64_t>(
+          RuntimeFunctions.SetReturnDataCopy, DestOffsetComponents,
+          OffsetComponents, SizeComponents);
 
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   U256Inst StatusParts = extractU256Operand(StatusOp);

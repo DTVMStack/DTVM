@@ -62,13 +62,13 @@ public:
   static uint64_t calculateMemoryExpansionCost(uint64_t CurrentSize,
                                                uint64_t NewSize);
   void consumeMemoryExpansionGas(uint64_t RequiredSize);
-  void expandMemory(uint64_t RequiredSize);
+  bool expandMemory(uint64_t RequiredSize);
   void expandMemoryNoGas(uint64_t RequiredSize);
   bool expandMemoryChecked(uint64_t Offset, uint64_t Size);
   bool expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA, uint64_t OffsetB,
                            uint64_t SizeB);
-  void chargeGas(uint64_t GasCost);
-  void addGas(uint64_t GasAmount);
+  bool chargeGas(uint64_t GasCost);
+  bool addGas(uint64_t GasAmount);
 
   void addGasRefund(int64_t Amount) { GasRefund += Amount; }
   void setGasRefund(int64_t Amount) { GasRefund = Amount; }

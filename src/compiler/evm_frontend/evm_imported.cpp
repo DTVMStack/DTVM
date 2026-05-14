@@ -103,30 +103,6 @@ inline void triggerStaticModeViolation(zen::runtime::EVMInstance *Instance) {
       Instance, zen::common::ErrorCode::EVMStaticModeViolation);
 }
 
-inline bool chargeGasHostApi(zen::runtime::EVMInstance *Instance,
-                             uint64_t GasCost) {
-  if (GasCost == 0) {
-    return true;
-  }
-#if defined(ZEN_ENABLE_JIT) && !defined(ZEN_ENABLE_CPU_EXCEPTION)
-  const uint64_t GasLeft = Instance->getGas();
-  if (GasLeft < GasCost) {
-    zen::runtime::EVMInstance::setInstanceExceptionOnJIT(
-        Instance, zen::common::ErrorCode::GasLimitExceeded);
-    return false;
-  }
-  const uint64_t NewGas = GasLeft - GasCost;
-  Instance->setGas(NewGas);
-  if (evmc_message *Msg = Instance->getCurrentMessage()) {
-    Msg->gas = static_cast<int64_t>(NewGas);
-  }
-  return true;
-#else
-  Instance->chargeGas(GasCost);
-  return true;
-#endif
-}
-
 constexpr uint8_t DelegationMagicBytes[] = {0xef, 0x01, 0x00};
 
 bool resolveDelegatedCallCodeAddress(zen::runtime::EVMInstance *Instance,
@@ -159,7 +135,7 @@ bool resolveDelegatedCallCodeAddress(zen::runtime::EVMInstance *Instance,
       Module->Host->access_account(CodeAddr) == EVMC_ACCESS_COLD
           ? zen::evm::COLD_ACCOUNT_ACCESS_COST
           : zen::evm::WARM_STORAGE_READ_COST;
-  return chargeGasHostApi(Instance, DelegateAccessCost);
+  return Instance->chargeGas(DelegateAccessCost);
 }
 } // namespace
 
@@ -329,7 +305,7 @@ const intx::uint256 *evmGetExp(zen::runtime::EVMInstance *Instance,
   const uint64_t GasPerByte = Rev < EVMC_SPURIOUS_DRAGON
                                   ? zen::evm::EXP_BYTE_GAS_PRE_SPURIOUS_DRAGON
                                   : zen::evm::EXP_BYTE_GAS;
-  if (!chargeGasHostApi(Instance, ExponentByteSize * GasPerByte)) {
+  if (!Instance->chargeGas(ExponentByteSize * GasPerByte)) {
     return storeUint256Result(intx::uint256{0});
   }
 
@@ -356,8 +332,7 @@ const intx::uint256 *evmGetBalance(zen::runtime::EVMInstance *Instance,
   evmc_revision Rev = Instance->getRevision();
   if (Rev >= EVMC_BERLIN &&
       Module->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    if (!chargeGasHostApi(Instance,
-                          zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
+    if (!Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
       return storeUint256Result(intx::uint256{0});
     }
   }
@@ -435,8 +410,7 @@ uint64_t evmGetExtCodeSize(zen::runtime::EVMInstance *Instance,
   evmc_revision Rev = Instance->getRevision();
   if (Rev >= EVMC_BERLIN &&
       Module->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    if (!chargeGasHostApi(Instance,
-                          zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
+    if (!Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
       return 0;
     }
   }
@@ -455,8 +429,7 @@ const intx::uint256 *evmGetExtCodeHash(zen::runtime::EVMInstance *Instance,
   evmc_revision Rev = Instance->getRevision();
   if (Rev >= EVMC_BERLIN &&
       Module->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    if (!chargeGasHostApi(Instance,
-                          zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
+    if (!Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
       return storeUint256Result(intx::uint256{0});
     }
   }
@@ -632,7 +605,7 @@ void evmSetCallDataCopy(zen::runtime::EVMInstance *Instance,
     return;
   }
   if (uint64_t CopyGas = calculateWordCopyGas(Size)) {
-    if (!chargeGasHostApi(Instance, CopyGas)) {
+    if (!Instance->chargeGas(CopyGas)) {
       return;
     }
   }
@@ -674,8 +647,7 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
   evmc_revision Rev = Instance->getRevision();
   if (Rev >= EVMC_BERLIN &&
       Module->Host->access_account(Addr) == EVMC_ACCESS_COLD) {
-    if (!chargeGasHostApi(Instance,
-                          zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
+    if (!Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
       return;
     }
   }
@@ -685,7 +657,7 @@ void evmSetExtCodeCopy(zen::runtime::EVMInstance *Instance,
   }
 
   if (uint64_t CopyGas = calculateWordCopyGas(Size)) {
-    if (!chargeGasHostApi(Instance, CopyGas)) {
+    if (!Instance->chargeGas(CopyGas)) {
       return;
     }
   }
@@ -736,7 +708,7 @@ uint64_t evmSetReturnDataCopy(zen::runtime::EVMInstance *Instance,
     return 0;
   }
   if (uint64_t CopyGas = calculateWordCopyGas(Size)) {
-    if (!chargeGasHostApi(Instance, CopyGas)) {
+    if (!Instance->chargeGas(CopyGas)) {
       return 0;
     }
   }
@@ -780,7 +752,7 @@ static void evmEmitLogGeneric(zen::runtime::EVMInstance *Instance,
     }
     const uint64_t LogDataCost = 8 * Size;
     if (LogDataCost != 0) {
-      if (!chargeGasHostApi(Instance, LogDataCost)) {
+      if (!Instance->chargeGas(LogDataCost)) {
         return;
       }
     }
@@ -868,7 +840,7 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
 
   evmc_revision Rev = Instance->getRevision();
   if (Rev >= EVMC_SHANGHAI && Size > zen::evm::MAX_SIZE_OF_INITCODE) {
-    if (!chargeGasHostApi(Instance, Instance->getGas() + 1)) {
+    if (!Instance->chargeGas(Instance->getGas() + 1)) {
       Instance->setReturnData({});
       return ZeroAddress;
     }
@@ -884,7 +856,7 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
     uint64_t InitCodeWords = (Size + 31) / 32;
     uint64_t InitCodeCost = InitCodeWordCost * InitCodeWords;
     if (InitCodeCost != 0) {
-      if (!chargeGasHostApi(Instance, InitCodeCost)) {
+      if (!Instance->chargeGas(InitCodeCost)) {
         Instance->setReturnData({});
         return ZeroAddress;
       }
@@ -932,7 +904,7 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
       Result.gas_left > 0 ? static_cast<uint64_t>(Result.gas_left) : 0;
   uint64_t GasUsed = ProvidedGas > GasLeft ? ProvidedGas - GasLeft : 0;
   if (GasUsed != 0) {
-    if (!chargeGasHostApi(Instance, GasUsed)) {
+    if (!Instance->chargeGas(GasUsed)) {
       Instance->setReturnData({});
       return ZeroAddress;
     }
@@ -980,8 +952,7 @@ static uint64_t evmHandleCallInternal(
   evmc_revision Rev = Instance->getRevision();
   if (Rev >= EVMC_BERLIN &&
       Module->Host->access_account(TargetAddr) == EVMC_ACCESS_COLD) {
-    if (!chargeGasHostApi(Instance,
-                          zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
+    if (!Instance->chargeGas(zen::evm::ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
       Instance->setReturnData({});
       return 0;
     }
@@ -1038,7 +1009,7 @@ static uint64_t evmHandleCallInternal(
       }
     }
 
-    if (!chargeGasHostApi(Instance, GasCost)) {
+    if (!Instance->chargeGas(GasCost)) {
       Instance->setReturnData({});
       return 0;
     }
@@ -1056,15 +1027,11 @@ static uint64_t evmHandleCallInternal(
   }
 
   if (HasValueArgs && HasValue) {
-    if (Instance->getGas() >
-        std::numeric_limits<uint64_t>::max() - zen::evm::CALL_GAS_STIPEND) {
-      zen::runtime::EVMInstance::setInstanceExceptionOnJIT(
-          Instance, zen::common::ErrorCode::GasLimitExceeded);
+    CallGas += zen::evm::CALL_GAS_STIPEND;
+    if (!Instance->addGas(zen::evm::CALL_GAS_STIPEND)) {
       Instance->setReturnData({});
       return 0;
     }
-    CallGas += zen::evm::CALL_GAS_STIPEND;
-    Instance->addGas(zen::evm::CALL_GAS_STIPEND);
     const auto CallerBalance = Module->Host->get_balance(CurrentMsg->recipient);
     const intx::uint256 CallerValue =
         intx::be::load<intx::uint256>(CallerBalance);
@@ -1121,7 +1088,7 @@ static uint64_t evmHandleCallInternal(
   GasLeft = Result.gas_left > 0 ? static_cast<uint64_t>(Result.gas_left) : 0;
   uint64_t GasUsed = CallGas > GasLeft ? CallGas - GasLeft : 0;
   if (GasUsed > 0) {
-    if (!chargeGasHostApi(Instance, GasUsed)) {
+    if (!Instance->chargeGas(GasUsed)) {
       Instance->setReturnData({});
       return 0;
     }
@@ -1243,7 +1210,7 @@ void evmSetCodeCopy(zen::runtime::EVMInstance *Instance, uint64_t DestOffset,
     return;
   }
   if (uint64_t CopyGas = calculateWordCopyGas(Size)) {
-    if (!chargeGasHostApi(Instance, CopyGas)) {
+    if (!Instance->chargeGas(CopyGas)) {
       return;
     }
   }
@@ -1277,7 +1244,7 @@ const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,
     }
     const uint64_t ExtraGas =
         static_cast<uint64_t>(numWords(static_cast<uint64_t>(Length))) * 6;
-    if (!chargeGasHostApi(Instance, ExtraGas)) {
+    if (!Instance->chargeGas(ExtraGas)) {
       return nullptr;
     }
     uint8_t *MemoryBase = Instance->getMemoryBase();
@@ -1357,7 +1324,7 @@ const intx::uint256 *evmGetSLoad(zen::runtime::EVMInstance *Instance,
   const auto Key = intx::be::store<evmc::bytes32>(Index);
   if (Rev >= EVMC_BERLIN &&
       Module->Host->access_storage(Msg->recipient, Key) == EVMC_ACCESS_COLD) {
-    if (!chargeGasHostApi(Instance, zen::evm::ADDITIONAL_COLD_SLOAD_COST)) {
+    if (!Instance->chargeGas(zen::evm::ADDITIONAL_COLD_SLOAD_COST)) {
       return storeUint256Result(intx::uint256{0});
     }
   }
@@ -1399,7 +1366,7 @@ void evmSetSStore(zen::runtime::EVMInstance *Instance,
   const auto [GasCostWarm, GasReFund] = zen::evm::SSTORE_COSTS[Rev][Status];
 
   const auto GasCost = GasCostCold + GasCostWarm;
-  if (!chargeGasHostApi(Instance, GasCost)) {
+  if (!Instance->chargeGas(GasCost)) {
     return;
   }
   Instance->addGasRefund(GasReFund);
@@ -1449,7 +1416,7 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
     const bool IsCold =
         Module->Host->access_account(BenefAddr) == EVMC_ACCESS_COLD;
     if (IsCold) {
-      if (!chargeGasHostApi(Instance, zen::evm::COLD_ACCOUNT_ACCESS_COST)) {
+      if (!Instance->chargeGas(zen::evm::COLD_ACCOUNT_ACCESS_COST)) {
         return;
       }
     }
@@ -1460,7 +1427,7 @@ void evmHandleSelfDestruct(zen::runtime::EVMInstance *Instance,
     if (Rev == EVMC_TANGERINE_WHISTLE ||
         Module->Host->get_balance(Msg->recipient)) {
       if (!Module->Host->account_exists(BenefAddr)) {
-        if (!chargeGasHostApi(Instance, zen::evm::ACCOUNT_CREATION_COST)) {
+        if (!Instance->chargeGas(zen::evm::ACCOUNT_CREATION_COST)) {
           return;
         }
       }
