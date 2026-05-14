@@ -42,6 +42,7 @@ using Bytes32WithUInt64UInt64Fn =
 using VoidFn = void (*)(zen::runtime::EVMInstance *);
 using U256WithU256Fn = const intx::uint256 *(*)(zen::runtime::EVMInstance *,
                                                 const intx::uint256 &);
+using ErrorCodeFn = uint64_t (*)(zen::runtime::EVMInstance *);
 using VoidWithU256U256Fn = void (*)(zen::runtime::EVMInstance *,
                                     const intx::uint256 &,
                                     const intx::uint256 &);
@@ -111,6 +112,7 @@ struct RuntimeFunctions {
   Bytes32WithUint64Fn GetBlobHash;
   U256Fn GetBlobBaseFee;
   U256WithU256Fn GetSLoad;
+  ErrorCodeFn GetErrorCode;
   VoidWithU256U256Fn SetSStore;
   SizeFn GetGas;
   U256WithU256Fn GetTLoad;
@@ -259,6 +261,7 @@ const uint8_t *evmGetKeccak256(zen::runtime::EVMInstance *Instance,
 void evmHandleFallback(zen::runtime::EVMInstance *Instance, uint64_t PC);
 const intx::uint256 *evmGetSLoad(zen::runtime::EVMInstance *Instance,
                                  const intx::uint256 &Index);
+uint64_t evmGetErrorCode(zen::runtime::EVMInstance *Instance);
 void evmSetSStore(zen::runtime::EVMInstance *Instance,
                   const intx::uint256 &Index, const intx::uint256 &Value);
 uint64_t evmGetGas(zen::runtime::EVMInstance *Instance);

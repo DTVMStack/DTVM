@@ -5650,6 +5650,49 @@ EVMMirBuilder::callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *)) {
       IsStmt, ReturnType, FuncAddrInst,
       llvm::ArrayRef<MInstruction *>(InstancePtr));
 
+#if !defined(ZEN_ENABLE_CPU_EXCEPTION)
+  // In check mode, hostapi reports soft errors by writing instance error code.
+  // Convert it into explicit control flow immediately after each hostapi call.
+  MInstruction *GetErrAddr = createIntConstInstruction(
+      &Ctx.I64Type, getFunctionAddress(evmGetErrorCode));
+  MInstruction *ErrCodeInstr = createInstruction<ICallInstruction>(
+      false, EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64),
+      GetErrAddr, llvm::ArrayRef<MInstruction *>(InstancePtr));
+  Variable *ErrCodeVar =
+      storeInstructionInTemp(ErrCodeInstr, ErrCodeInstr->getType());
+  MInstruction *ErrCodeValue = loadVariable(ErrCodeVar);
+  MInstruction *StaticViolationCode = createIntConstInstruction(
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64),
+      common::to_underlying(ErrorCode::EVMStaticModeViolation));
+  MInstruction *GasExceededCode = createIntConstInstruction(
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64),
+      common::to_underlying(ErrorCode::GasLimitExceeded));
+  MInstruction *HasGasExceeded = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ,
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64), ErrCodeValue,
+      GasExceededCode);
+  MBasicBlock *CheckStaticBB = createBasicBlock();
+  MBasicBlock *ContinueBB = createBasicBlock();
+  MBasicBlock *GasTrapBB =
+      getOrCreateExceptionSetBB(ErrorCode::GasLimitExceeded);
+  createInstruction<BrIfInstruction>(true, Ctx, HasGasExceeded, GasTrapBB,
+                                     CheckStaticBB);
+  addUniqueSuccessor(GasTrapBB);
+  addSuccessor(CheckStaticBB);
+  setInsertBlock(CheckStaticBB);
+  MInstruction *HasStaticViolation = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ,
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64), ErrCodeValue,
+      StaticViolationCode);
+  MBasicBlock *StaticTrapBB =
+      getOrCreateExceptionSetBB(ErrorCode::EVMStaticModeViolation);
+  createInstruction<BrIfInstruction>(true, Ctx, HasStaticViolation,
+                                     StaticTrapBB, ContinueBB);
+  addUniqueSuccessor(StaticTrapBB);
+  addSuccessor(ContinueBB);
+  setInsertBlock(ContinueBB);
+#endif
+
   return convertCallResult<RetType>(CallInstr);
 }
 
@@ -5872,6 +5915,49 @@ EVMMirBuilder::Operand EVMMirBuilder::callRuntimeFor(
   const bool IsStmt = std::is_same_v<RetType, void>;
   MInstruction *CallInstr = createInstruction<ICallInstruction>(
       IsStmt, ReturnType, FuncAddrInst, llvm::ArrayRef<MInstruction *>{Args});
+
+#if !defined(ZEN_ENABLE_CPU_EXCEPTION)
+  // Keep check mode deterministic by converting hostapi soft errors into
+  // explicit exception control flow.
+  MInstruction *GetErrAddr = createIntConstInstruction(
+      &Ctx.I64Type, getFunctionAddress(evmGetErrorCode));
+  MInstruction *ErrCodeInstr = createInstruction<ICallInstruction>(
+      false, EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64),
+      GetErrAddr, llvm::ArrayRef<MInstruction *>(InstancePtr));
+  Variable *ErrCodeVar =
+      storeInstructionInTemp(ErrCodeInstr, ErrCodeInstr->getType());
+  MInstruction *ErrCodeValue = loadVariable(ErrCodeVar);
+  MInstruction *StaticViolationCode = createIntConstInstruction(
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64),
+      common::to_underlying(ErrorCode::EVMStaticModeViolation));
+  MInstruction *GasExceededCode = createIntConstInstruction(
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64),
+      common::to_underlying(ErrorCode::GasLimitExceeded));
+  MInstruction *HasGasExceeded = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ,
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64), ErrCodeValue,
+      GasExceededCode);
+  MBasicBlock *CheckStaticBB = createBasicBlock();
+  MBasicBlock *ContinueBB = createBasicBlock();
+  MBasicBlock *GasTrapBB =
+      getOrCreateExceptionSetBB(ErrorCode::GasLimitExceeded);
+  createInstruction<BrIfInstruction>(true, Ctx, HasGasExceeded, GasTrapBB,
+                                     CheckStaticBB);
+  addUniqueSuccessor(GasTrapBB);
+  addSuccessor(CheckStaticBB);
+  setInsertBlock(CheckStaticBB);
+  MInstruction *HasStaticViolation = createInstruction<CmpInstruction>(
+      false, CmpInstruction::Predicate::ICMP_EQ,
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64), ErrCodeValue,
+      StaticViolationCode);
+  MBasicBlock *StaticTrapBB =
+      getOrCreateExceptionSetBB(ErrorCode::EVMStaticModeViolation);
+  createInstruction<BrIfInstruction>(true, Ctx, HasStaticViolation,
+                                     StaticTrapBB, ContinueBB);
+  addUniqueSuccessor(StaticTrapBB);
+  addSuccessor(ContinueBB);
+  setInsertBlock(ContinueBB);
+#endif
 
   return convertCallResult<RetType>(CallInstr);
 }

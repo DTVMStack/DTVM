@@ -209,7 +209,20 @@ void EVMInstance::triggerInstanceExceptionOnJIT(EVMInstance *Inst,
 void EVMInstance::expandMemory(uint64_t RequiredSize) {
   auto NewSize = (RequiredSize + 31) / 32 * 32;
   uint64_t ExpansionCost = calculateMemoryExpansionCost(MemorySize, NewSize);
+#if defined(ZEN_ENABLE_JIT) && !defined(ZEN_ENABLE_CPU_EXCEPTION)
+  const uint64_t GasLeft = getGas();
+  if (GasLeft < ExpansionCost) {
+    setInstanceExceptionOnJIT(this, common::ErrorCode::GasLimitExceeded);
+    return;
+  }
+  const uint64_t NewGas = GasLeft - ExpansionCost;
+  setGas(NewGas);
+  if (evmc_message *Msg = getCurrentMessage()) {
+    Msg->gas = static_cast<int64_t>(NewGas);
+  }
+#else
   chargeGas(ExpansionCost);
+#endif
   if (NewSize > MemorySize) {
     if (!MemoryBase) {
       ensureMemoryBuffer(Memory, MemoryBase);
@@ -237,24 +250,45 @@ void EVMInstance::expandMemoryNoGas(uint64_t RequiredSize) {
 }
 
 bool EVMInstance::expandMemoryChecked(uint64_t Offset, uint64_t Size) {
+  auto markOutOfGas = [&]() {
+#if defined(ZEN_ENABLE_JIT) && !defined(ZEN_ENABLE_CPU_EXCEPTION)
+    // Check mode: mark soft OOG and return to caller.
+    setInstanceExceptionOnJIT(this, common::ErrorCode::GasLimitExceeded);
+#else
+    // Interpreter/CPU-exception modes preserve existing throw/trap behavior.
+    chargeGas(getGas() + 1);
+#endif
+  };
   if (Size == 0) {
     return true;
   }
   uint64_t RequiredSize = 0;
   if (!calcRequiredMemorySize(Offset, Size, RequiredSize)) {
-    chargeGas(getGas() + 1);
+    markOutOfGas();
     return false;
   }
   if (RequiredSize > zen::evm::MAX_REQUIRED_MEMORY_SIZE) {
-    chargeGas(getGas() + 1);
+    markOutOfGas();
     return false;
   }
   expandMemory(RequiredSize);
+  if (getError().getCode() == common::ErrorCode::GasLimitExceeded) {
+    return false;
+  }
   return true;
 }
 
 bool EVMInstance::expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA,
                                       uint64_t OffsetB, uint64_t SizeB) {
+  auto markOutOfGas = [&]() {
+#if defined(ZEN_ENABLE_JIT) && !defined(ZEN_ENABLE_CPU_EXCEPTION)
+    // Check mode: mark soft OOG and return to caller.
+    setInstanceExceptionOnJIT(this, common::ErrorCode::GasLimitExceeded);
+#else
+    // Interpreter/CPU-exception modes preserve existing throw/trap behavior.
+    chargeGas(getGas() + 1);
+#endif
+  };
   const bool NeedA = SizeA > 0;
   const bool NeedB = SizeB > 0;
   if (!NeedA && !NeedB) {
@@ -270,15 +304,18 @@ bool EVMInstance::expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA,
   uint64_t RequiredSizeB = 0;
   if (!calcRequiredMemorySize(OffsetA, SizeA, RequiredSizeA) ||
       !calcRequiredMemorySize(OffsetB, SizeB, RequiredSizeB)) {
-    chargeGas(getGas() + 1);
+    markOutOfGas();
     return false;
   }
   const uint64_t RequiredSize = std::max(RequiredSizeA, RequiredSizeB);
   if (RequiredSize > zen::evm::MAX_REQUIRED_MEMORY_SIZE) {
-    chargeGas(getGas() + 1);
+    markOutOfGas();
     return false;
   }
   expandMemory(RequiredSize);
+  if (getError().getCode() == common::ErrorCode::GasLimitExceeded) {
+    return false;
+  }
   return true;
 }
 
@@ -303,7 +340,10 @@ void EVMInstance::addGas(uint64_t GasAmount) {
   ZEN_ASSERT(Msg && "Active message required for gas accounting");
   uint64_t GasLeft = getGas();
   if (GasLeft > UINT64_MAX - GasAmount) {
-#if defined(ZEN_ENABLE_JIT) && defined(ZEN_ENABLE_CPU_EXCEPTION)
+#if defined(ZEN_ENABLE_JIT) && !defined(ZEN_ENABLE_CPU_EXCEPTION)
+    setInstanceExceptionOnJIT(this, common::ErrorCode::GasLimitExceeded);
+    return;
+#elif defined(ZEN_ENABLE_JIT) && defined(ZEN_ENABLE_CPU_EXCEPTION)
     triggerInstanceExceptionOnJIT(this, common::ErrorCode::GasLimitExceeded);
 #else
     throw common::getError(common::ErrorCode::GasLimitExceeded);
