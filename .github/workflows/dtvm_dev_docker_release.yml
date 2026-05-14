@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       # Prerequisite
       - name: Prepare Dockerfile and docker build dependencies
         run: ./docker/docker_build_x64.sh prepare
