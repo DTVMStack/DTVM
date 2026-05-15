@@ -5,6 +5,18 @@ cmake_minimum_required(VERSION 3.16)
 
 project(ZetaEngine LANGUAGES C CXX ASM)
 
+# Honor FETCHCONTENT_BASE_DIR from environment when not set on cmd line. Enables
+# a shared FetchContent cache across worktrees, CI jobs, and the dev container
+# image (which sets FETCHCONTENT_BASE_DIR=/opt/cmake-fetchcontent).
+if(DEFINED ENV{FETCHCONTENT_BASE_DIR} AND NOT DEFINED
+                                          CACHE{FETCHCONTENT_BASE_DIR}
+)
+  set(FETCHCONTENT_BASE_DIR
+      "$ENV{FETCHCONTENT_BASE_DIR}"
+      CACHE PATH "Shared FetchContent cache (from env)"
+  )
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

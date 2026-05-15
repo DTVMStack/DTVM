@@ -1,6 +1,10 @@
 # Copyright (C) 2021-2025 the DTVM authors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+# NOTE: Set FETCHCONTENT_BASE_DIR (env var or cmake -D) to share populated
+# sources across clean builds — the top-level CMakeLists.txt honors the env
+# form. See docs/start.md "Build dependency cache" for details.
+
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
 include(FetchContent)
@@ -73,8 +77,7 @@ include_directories(${intx_SOURCE_DIR}/include)
 
 FetchContent_Declare(
   boost
-  URL https://sourceforge.net/projects/boost/files/boost/1.67.0/boost_1_67_0.tar.bz2/download
-  DOWNLOAD_NAME boost_1_67_0.tar.bz2
+  URL https://archives.boost.io/release/1.67.0/source/boost_1_67_0.tar.bz2
   URL_HASH
     SHA256=2684c972994ee57fc5632e03bf044746f6eb45d4920c343937a465fd67a5adba
 )
