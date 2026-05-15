@@ -16,6 +16,14 @@ on:
 permissions:
     contents: read
 
+# Shared FetchContent cache root for all container jobs. The hook in
+# CMakeLists.txt (commit 96707a2 lines 8-18) picks this up as the base
+# dir for FetchContent populations. Each container job adds an
+# `actions/cache` step keyed on `hashFiles('third_party/AddDeps.cmake')`
+# to persist this dir across CI runs.
+env:
+  FETCHCONTENT_BASE_DIR: /github/home/.fetchcontent
+
 jobs:
   build_test_interp_on_x86:
     name: Build and test DTVM interpreter on x86-64
@@ -27,6 +35,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: "true"
+      - name: Cache FetchContent deps
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.fetchcontent
+          key: ${{ runner.os }}-fc-${{ github.workflow }}-v1-${{ hashFiles('third_party/AddDeps.cmake') }}
       - name: Code Format Check
         run: |
           ./tools/format.sh check
@@ -69,6 +82,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: "true"
+      - name: Cache FetchContent deps
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.fetchcontent
+          key: ${{ runner.os }}-fc-${{ github.workflow }}-v1-${{ hashFiles('third_party/AddDeps.cmake') }}
       - name: Code Format Check
         run: |
           ./tools/format.sh check
@@ -111,6 +129,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: "true"
+      - name: Cache FetchContent deps
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.fetchcontent
+          key: ${{ runner.os }}-fc-${{ github.workflow }}-v1-${{ hashFiles('third_party/AddDeps.cmake') }}
       - name: Code Format Check
         run: |
           ./tools/format.sh check
@@ -153,6 +176,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: "true"
+      - name: Cache FetchContent deps
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.fetchcontent
+          key: ${{ runner.os }}-fc-${{ github.workflow }}-v1-${{ hashFiles('third_party/AddDeps.cmake') }}
       - name: Code Format Check
         run: |
           ./tools/format.sh check

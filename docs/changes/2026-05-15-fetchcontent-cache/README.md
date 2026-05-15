@@ -1,169 +1,206 @@
-# Change: Local FetchContent cache convention + boost mirror swap
+# Change: actions/cache for FetchContent on DTVM CI
 
 - **Status**: Proposed
 - **Date**: 2026-05-15
 - **Tier**: Light
-- **Branch**: ci/fetchcontent-cache
+- **Branch**: ci/fetchcontent-cache (continues commit `96707a2`)
 
 ## Overview
 
-Two narrow, locally-verifiable changes:
-
-1. Top-level `CMakeLists.txt` honors `FETCHCONTENT_BASE_DIR` from the
-   environment so developers can share a single populated cache
-   (`~/.cache/cmake-fetchcontent`) across worktrees and clean builds.
-2. Swap boost's sourceforge URL for the official `archives.boost.io`
-   mirror. URL_HASH unchanged.
-
-A complementary follow-up to pre-bake the deps into
-`dtvmdev1/dtvm-dev-x64:main` (image-side cache for CI) was scoped out of
-this PR because Docker is not available in the implementation
-environment for end-to-end verification. The image-bake design is
-preserved as a follow-up note (see "Deferred").
+Add `actions/cache@v4` step to the two DTVM CMake-building CI workflows
+(EVM + WASM) to cache the populated FetchContent sources across runs.
+First run pays full download; every subsequent run with unchanged
+`third_party/AddDeps.cmake` hits the cache and skips downloads
+entirely. This completes the work begun in commit `96707a2` (boost URL
+swap + CMakeLists env hook).
 
 ## Motivation
 
-`third_party/AddDeps.cmake` declares 8 FetchContent entries
-(spdlog/asmjit/CLI11/intx/boost/rapidjson + conditional googletest/yaml-cpp).
-Clean builds and CI jobs re-download all of them every time.
+Each DTVM CI run currently downloads 8 FetchContent deps from scratch
+(`spdlog`, `asmjit` (WASM only), `CLI11`, `intx`, `boost`, `rapidjson`,
++ conditional `googletest`/`yaml-cpp`). Any single 504 kills the
+pipeline (e.g., PR #499 run `25897803413` died on rapidjson).
 
-- CI flakiness example: PR #499 run `25897803413` died on a rapidjson
-  download.
-- boost is hosted on SourceForge — historically the most flaky of the
-  8 hosts.
-- Local clean builds (new worktrees, new contributors, fresh container
-  starts) pay the full download cost on every reset.
+`actions/cache@v4` is the canonical 2025 pattern for FetchContent
+caching (verified against `vowpal_wabbit` and `colmap` workflows —
+both cache around `FetchContent` paths keyed on dep manifest hashes).
 
-Boost URL swap fixes the single biggest cold-start failure mode in CI
-even without an image-side cache. The env-hook lets local developers
-opt into a shared cache trivially (one-line export in shell rc).
+The earlier image-bake approach was investigated but Docker is
+unavailable in the implementation environment for verification.
+`actions/cache` does not require Docker and is verifiable directly via
+PR CI runs.
 
 ## Impact
 
 ### Affected modules
 
-- `CMakeLists.txt` — env-var hook (between line 6 and line 8)
-- `third_party/AddDeps.cmake` — boost URL swap; drop `DOWNLOAD_NAME`;
-  light reference comment to `docs/start.md`
-- `docs/start.md` — "Build dependency cache" section
+- `.github/workflows/dtvm_evm_test_x86.yml` — add cache step + env to
+  ~10 container-image build jobs
+- `.github/workflows/dtvm_wasm_test_x86.yml` — same for ~4 container
+  jobs
+- `docs/changes/2026-05-15-fetchcontent-cache/README.md` — this doc;
+  drop image-bake content from prior iteration
 
 ### Affected contracts
 
-None. Build-system download semantics only.
+None. CI infrastructure only.
 
 ### Compatibility
 
-Fully backwards-compatible:
-- No env var set → identical to today.
-- New boost URL has same `URL_HASH`, so byte-identical content.
-- CI workflows unchanged.
+Fully backwards-compatible. Cache miss falls through to current
+behavior (live FetchContent download). No workflow logic changes
+beyond the new cache step and job-level env.
 
 ## Implementation
 
-### 1. CMakeLists.txt env hook
+### 1. Cache step per workflow
 
-Insert between line 6 (`project(...)`) and line 8
-(`set(CMAKE_CXX_STANDARD 17)`):
+**Coverage** (14 distinct jobs total):
+- **EVM (10 jobs)**: 8 `bash .ci/run_test_suite.sh` callers + 2 matrix
+  instances of `performance_regression_check` (which runs both a base
+  build via direct cmake AND a PR-HEAD build via `run_test_suite.sh`).
+- **WASM (4 jobs)**: 3 `bash .ci/run_test_suite.sh` callers +
+  `build_test_evmabi_mock_cli_on_x86` (uses inline `cmake -S . -B build`
+  directly, not via `run_test_suite.sh`).
 
-```cmake
-# Honor FETCHCONTENT_BASE_DIR from environment when not set on cmd line.
-if(DEFINED ENV{FETCHCONTENT_BASE_DIR} AND NOT DEFINED CACHE{FETCHCONTENT_BASE_DIR})
-  set(FETCHCONTENT_BASE_DIR "$ENV{FETCHCONTENT_BASE_DIR}" CACHE PATH
-      "Shared FetchContent cache (from env)")
-endif()
+All 14 need the cache step. The inline-cmake job in WASM and the
+direct-cmake baseline build in `performance_regression_check` also
+inherit `FETCHCONTENT_BASE_DIR` from the env block — no special
+handling required.
+
+Add to each container job, between `actions/checkout` and the
+build/test step:
+
+```yaml
+- name: Cache FetchContent deps
+  uses: actions/cache@v4
+  with:
+    path: /github/home/.fetchcontent
+    key: ${{ runner.os }}-fc-${{ github.workflow }}-v1-${{ hashFiles('third_party/AddDeps.cmake') }}
 ```
 
-Mirrors the pattern already present at
-`.worktrees/feat-gas-check-placement/CMakeLists.txt:8-15`. Active only
-when env is set AND `-D` not passed; otherwise no-op.
+**Key composition rationale:**
+- `runner.os` — standard practice (Ubuntu vs other).
+- `github.workflow` — **necessary**: EVM workflow runs with
+  `SINGLEPASS_JIT=OFF` (no asmjit), WASM workflow includes
+  `SINGLEPASS_JIT=ON` (needs asmjit). Sharing one key causes a
+  partial-hit churn: EVM saves 7 deps → WASM restores 7, populates 1,
+  but `actions/cache@v4` skips same-key save (logs a warning, does
+  not fail the job) → WASM re-downloads asmjit every run.
+  Workflow-prefixed key avoids this.
+- `v1` namespace — **manual escape hatch**. Bump to `v2` when
+  `dtvmdev1/dtvm-dev-x64:main` is rebuilt with materially different
+  CMake/compiler/Ninja/tar/zstd versions. The `:main` tag is mutable
+  and our key does not auto-invalidate on image bumps.
+- `hashFiles('third_party/AddDeps.cmake')` — auto-invalidates on any
+  dep change (URL/hash/tag/new dep).
+- **No `restore-keys`**. Partial cache hits across different dep
+  versions can yield silently-stale source (FetchContent stamps say
+  "populated", URL_HASH may not match the cached tarball if user
+  changed URL but kept hash). Cold start is the lesser evil.
 
-### 2. Boost URL swap
+### 2. Job env
 
-In `third_party/AddDeps.cmake`, replace:
-```cmake
-URL https://sourceforge.net/projects/boost/files/boost/1.67.0/boost_1_67_0.tar.bz2/download
-DOWNLOAD_NAME boost_1_67_0.tar.bz2
+Add to each container job's `env:` block (where the build runs):
+
+```yaml
+env:
+  FETCHCONTENT_BASE_DIR: /github/home/.fetchcontent
 ```
-with:
-```cmake
-URL https://archives.boost.io/release/1.67.0/source/boost_1_67_0.tar.bz2
-```
 
-- `URL_HASH SHA256=2684c97...adba` unchanged.
-- `DOWNLOAD_NAME` dropped because the new URL ends in the canonical
-  filename (per `cmake --help-module ExternalProject` `DOWNLOAD_NAME`
-  default).
-- `archives.boost.io` is the official Boost archive (cross-referenced
-  on `boost.org/users/history/version_1_67_0.html`).
+The CMakeLists env-hook from commit `96707a2` (lines 8-18; executable
+`if/set/endif` block at lines 11-18) picks up the env var when no `-D`
+is passed on the cmake command line. No changes needed to
+`.ci/run_test_suite.sh`.
 
-### 3. Documentation
+### 3. Drop image-bake content from this change doc
 
-`docs/start.md` adds a "Build dependency cache" section explaining the
-env-var convention and the SGX local-cache caveat (asmjit gets patched
-under SGX; mixing patched/unpatched in one cache breaks).
+Previous iteration's `docs/changes/.../README.md` had a "Deferred"
+section describing the image-bake design. Replace with this file
+focused on actions/cache.
 
-## Validation (local)
+## Validation
 
-Verified in implementation worktree:
+### Local
 
-- **boost URL reachable + correct bytes:**
-  `curl -sIL https://archives.boost.io/release/1.67.0/source/boost_1_67_0.tar.bz2`
-  → HTTP 200, content-length 87336566 (matches canonical 1.67.0 tarball),
-  last-modified 2018-04-11.
-- **env-hook fires when expected:** With `FETCHCONTENT_BASE_DIR=/tmp/fc`
-  exported and `command cmake -S . -B build-test`, FetchContent
-  populates at `/tmp/fc/<name>-src/` (note: directly under BASE_DIR,
-  not under `_deps/` — that's only the default segment).
-- **Boost content after URL swap:** populated `boost-src/boost/version.hpp`
-  contains `#define BOOST_VERSION 106700` (== 1.67.0). URL_HASH
-  validates so byte-identity is enforced.
-- **Format check pass.**
+- `tools/format.sh check` — pass.
+- YAML lint via `python -c "import yaml; yaml.safe_load(open('.github/workflows/dtvm_evm_test_x86.yml'))"` — pass.
+- Diff inspection: each modified job has cache step + env block.
 
-## Deferred (image-side cache; future PR)
+### CI (post-push)
 
-The original design also included a `docker/bake/CMakeLists.txt` driver
-plus a Dockerfile bake stage that would pre-populate
-`/opt/cmake-fetchcontent` inside `dtvmdev1/dtvm-dev-x64:main`. This
-would eliminate per-CI-run downloads entirely for the EVM and WASM
-container jobs.
-
-Reason for deferral: Docker is not available in this implementation
-environment, so the bake stage cannot be verified end-to-end (image
-build, COPY semantics, layer cache behavior). Shipping unverified
-Docker code carries an asymmetric cost — a broken image republish would
-affect every CI run.
-
-The design is preserved for a follow-up PR:
-- Standalone `docker/bake/CMakeLists.txt` driver with `LANGUAGES NONE`
-  and inlined `FetchContent_Declare` blocks (NO `include(AddDeps.cmake)`
-  to avoid re-loading FetchContent which would clobber the override).
-- Dockerfile bake stage placed after `foundryup` (line 47), sets
-  `ENV FETCHCONTENT_BASE_DIR=/opt/cmake-fetchcontent`.
-- Sync burden: bake CMakeLists must be updated when `AddDeps.cmake`
-  changes.
-
-## Risks
-
-- **Boost URL transition single-point-of-failure.** The PR's first CI
-  run is the first hit on `archives.boost.io` from DTVM CI. If 504,
-  PR fails. Mitigation: manually re-run; if persistent, revert URL
-  swap in a single-line hotfix.
-- **`archives.boost.io` outage.** Mitigation: official Boost archive
-  (verified). If down long-term, switch to a self-hosted GH release.
+The cache behavior is GH-runner-side; can only be observed in a real
+CI run.
 
 ## Acceptance Criteria
 
-1. PR CI passes every job that passes on `main` today.
-2. PR CI's first hit on `archives.boost.io` succeeds (no 504); boost
-   downloads correctly with unchanged `URL_HASH`.
-3. Local: `FETCHCONTENT_BASE_DIR=/tmp/fc cmake -S . -B build` produces
-   `/tmp/fc/<name>-src/` (env hook honored).
-4. `docs/start.md` has the cache section.
+1. **AC-A: PR CI first run is cache-miss.** Workflow log shows
+   "Cache not found for input keys: ..." followed at end-of-job by
+   "Cache saved with key: ...".
+2. **AC-B: PR CI re-run is cache-hit.** Re-running the same workflow
+   (no commit change) shows "Cache restored from key: ..." in cache
+   step output. Build log shows zero `^-- Downloading` lines from
+   FetchContent. (Note: explicit "restored from key" line is the
+   primary AC; absence of `-- Downloading` is corroborating.)
+3. **AC-C: No regression.** All jobs that pass on `main` today pass
+   with cache step active.
+4. **AC-D: Cache key invalidates on AddDeps change.** A no-op edit to
+   `third_party/AddDeps.cmake` (trailing newline) in a follow-up
+   commit produces a new key (visible in workflow log as different
+   key hash).
+5. **AC-E: EVM and WASM caches don't interfere.** EVM cache key
+   contains `DTVM-EVM` (workflow `name:` field value, with hyphen),
+   WASM contains `DTVM-WASM`. Verify via workflow log key string.
+
+## Risks
+
+- **R1: actions/cache@v4 itself unavailable / quota exhausted.**
+  Mitigation: cache miss is non-fatal; CI falls back to live
+  FetchContent download (current behavior). No regression.
+
+- **R2: 10GB repo cache cap proximity.**
+  Per-key size ~820MB. With 10 active feature branches × 2 workflows
+  = ~16GB of potential cache load — over the cap. GitHub LRU-evicts
+  caches not accessed in 7 days, so steady-state should hover around
+  3-5 active keys (~3-4GB). Not "well under" the cap; close but
+  acceptable. Monitor via `gh cache list` if eviction thrashing
+  becomes visible.
+
+- **R3: Image churn invalidation.**
+  `dtvmdev1/dtvm-dev-x64:main` is a mutable tag. If the image is
+  rebuilt with a materially different CMake / compiler / Ninja
+  version, the cached `<name>-build/` artifacts could mismatch.
+  Mitigation: manually bump the `v1` namespace in the cache key
+  (becomes `v2`, etc.) when the image is rebuilt with material
+  changes. Documented in this section.
+
+- **R4: Cache-key hash misses other dep-affecting files.**
+  Today only `third_party/AddDeps.cmake` controls FetchContent
+  declarations. If a future PR moves declares elsewhere or adds new
+  conditional logic in `CMakeLists.txt` flags, update the cache key.
+
+- **R5: Boost URL transition single-point-of-failure.**
+  (Carried from commit `96707a2`.) First CI run hits new boost URL
+  live; if 504, re-run. Cache then captures it for subsequent runs.
 
 ## Out of scope
 
-- Pre-bake into dev image (deferred — needs Docker verification).
-- `actions/cache` for CI (not needed without image-bake).
-- GIT_TAG → commit SHA pinning (separable).
-- Hunter / submodules / CPM migration (heavyweight).
-- CMake version bump (separable).
+- Image-baking deps into `dtvmdev1/dtvm-dev-x64:main` — deferred
+  (Docker unavailable for verification in current environment).
+- Pinning `:main` image by digest in cache key — would tighten R3
+  but adds maintenance cost; bump-`v1`-on-image-rebuild is simpler.
+- Migration to Hunter / submodules / CPM.
+- Pinning `GIT_TAG` to commit SHAs.
+
+## Provenance
+
+- Commit `96707a2` ("build(deps): swap boost mirror + honor
+  FETCHCONTENT_BASE_DIR env") already adds the env-hook + boost URL
+  prerequisites this change builds on.
+- Prior Phase 0.5 v2 round 1 reviews:
+  - `reviews/motivation-v2-1-opus.md` (cite: cache-key churn,
+    AC-B log line check)
+  - `reviews/motivation-v2-1-codex.md` (cite: image churn, 10GB cap
+    wording, canonical pattern confirmation)
+- All cited refinements absorbed into this spec; iter=2 skipped
+  because the refinements are spec-level fixes, not direction changes.
