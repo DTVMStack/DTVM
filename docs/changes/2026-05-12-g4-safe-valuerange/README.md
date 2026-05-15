@@ -22,7 +22,7 @@ This work is **orthogonal** to the `perf/value-range-cfg-join` branch, which per
 
 - `(narrow_mul a, b) | c` → range falls back to U256, blocking any downstream narrow-path lowering.
 - `(narrow_mul a, b) >> k` → same loss.
-- `(narrow_mul a, b) < C64` → constant fast path triggers, but the helper still emits a 4-limb OR-fold check on the wide operand's upper limbs that we *know* are zero.
+- `(narrow_mul a, b) < C64` → constant fast path triggers, but the helper still emits a 3-upper-limb OR-fold check (`LHS[1] | LHS[2] | LHS[3]`) that we *know* is zero.
 
 The 2026-05-12 verification doc isolated this as the smallest, lowest-risk subset of the G4 work: monotone propagation only, no wraparound or sign-fill semantics. The win is small per opcode but **load-bearing** for any future narrow consumer (compare-via-range, narrow lowering paths for additional opcodes).
 
