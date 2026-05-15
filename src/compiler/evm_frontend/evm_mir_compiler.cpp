@@ -2986,21 +2986,6 @@ EVMMirBuilder::handleSubU64Const(const Operand &LHSOp,
   return Operand(Result, EVMType::UINT256);
 }
 
-namespace {
-// True iff Inst is a materialized integer constant whose value is zero.
-// Used to assert the upper-limb invariant of ValueRange::{U64,U128} producers
-// in compare fast paths: skipping the OR-fold is only safe when those limbs
-// are literal MIR zero. See evm_mir_compiler.h ValueRange comment.
-bool isLiteralZero(MInstruction *Inst) {
-  if (auto *CI = llvm::dyn_cast<ConstantInstruction>(Inst)) {
-    if (auto *IntConst = llvm::dyn_cast<MConstantInt>(&CI->getConstant())) {
-      return IntConst->getValue().isZero();
-    }
-  }
-  return false;
-}
-} // namespace
-
 typename EVMMirBuilder::Operand
 EVMMirBuilder::handleCompareEqU64(const Operand &FullOp, uint64_t U64Val) {
   U256Inst LHS = extractU256Operand(FullOp);
@@ -3016,14 +3001,11 @@ EVMMirBuilder::handleCompareEqU64(const Operand &FullOp, uint64_t U64Val) {
 
   MInstruction *FinalResult;
   if (FullOp.getRange() == ValueRange::U64) {
-    // Upper limbs are provably zero (every existing U64 producer materializes
-    // literal MIR Zero in limbs[1..3]). Skip the OR-fold and the zero-test.
-    ZEN_ASSERT(isLiteralZero(LHS[1]) && isLiteralZero(LHS[2]) &&
-               isLiteralZero(LHS[3]));
+    // Upper limbs are value-zero by Range contract (producer materialization
+    // or EVMRangeAnalyzer narrowing). Skip the OR-fold and the zero-test.
     FinalResult = LowEq;
   } else if (FullOp.getRange() == ValueRange::U128) {
-    // Limbs[2..3] are provably zero — only LHS[1] needs to be checked.
-    ZEN_ASSERT(isLiteralZero(LHS[2]) && isLiteralZero(LHS[3]));
+    // Limbs[2..3] are value-zero by Range contract — only LHS[1] needs check.
     MInstruction *UpperZero = createInstruction<CmpInstruction>(
         false, EqPred, &Ctx.I64Type, LHS[1], Zero);
     FinalResult = createInstruction<BinaryInstruction>(
@@ -3064,14 +3046,12 @@ EVMMirBuilder::handleCompareLtRhsU64(const Operand &LHSOp, uint64_t RhsU64) {
 
   MInstruction *FinalResult;
   if (LHSOp.getRange() == ValueRange::U64) {
-    // Upper limbs are provably zero — HasUpper would always be false, so the
-    // select collapses to LowLt.
-    ZEN_ASSERT(isLiteralZero(LHS[1]) && isLiteralZero(LHS[2]) &&
-               isLiteralZero(LHS[3]));
+    // Upper limbs are value-zero by Range contract — HasUpper would always
+    // be false, so the select collapses to LowLt.
     FinalResult = LowLt;
   } else if (LHSOp.getRange() == ValueRange::U128) {
-    // Limbs[2..3] are provably zero — HasUpper reduces to LHS[1] != 0.
-    ZEN_ASSERT(isLiteralZero(LHS[2]) && isLiteralZero(LHS[3]));
+    // Limbs[2..3] are value-zero by Range contract — HasUpper reduces to
+    // LHS[1] != 0.
     auto NePred = CmpInstruction::Predicate::ICMP_NE;
     MInstruction *HasUpper = createInstruction<CmpInstruction>(
         false, NePred, &Ctx.I64Type, LHS[1], Zero);
@@ -3114,14 +3094,12 @@ EVMMirBuilder::handleCompareGtRhsU64(const Operand &LHSOp, uint64_t RhsU64) {
 
   MInstruction *FinalResult;
   if (LHSOp.getRange() == ValueRange::U64) {
-    // Upper limbs are provably zero — HasUpper would always be false, so the
-    // select collapses to LowGt.
-    ZEN_ASSERT(isLiteralZero(LHS[1]) && isLiteralZero(LHS[2]) &&
-               isLiteralZero(LHS[3]));
+    // Upper limbs are value-zero by Range contract — HasUpper would always
+    // be false, so the select collapses to LowGt.
     FinalResult = LowGt;
   } else if (LHSOp.getRange() == ValueRange::U128) {
-    // Limbs[2..3] are provably zero — HasUpper reduces to LHS[1] != 0.
-    ZEN_ASSERT(isLiteralZero(LHS[2]) && isLiteralZero(LHS[3]));
+    // Limbs[2..3] are value-zero by Range contract — HasUpper reduces to
+    // LHS[1] != 0.
     MInstruction *One = createIntConstInstruction(MirI64Type, 1);
     auto NePred = CmpInstruction::Predicate::ICMP_NE;
     MInstruction *HasUpper = createInstruction<CmpInstruction>(

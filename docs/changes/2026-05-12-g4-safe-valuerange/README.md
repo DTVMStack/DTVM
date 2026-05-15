@@ -46,30 +46,18 @@ The 2026-05-12 verification doc isolated this as the smallest, lowest-risk subse
 
 ### Invariant chain (correctness of the compare-side fast path)
 
-Today, every `ValueRange::U64` producer materializes **literal MIR zero constants** in limbs[1..3] — not just modeled-zero. Verified producer sites:
+The compare-side fast path trusts a **value-level** invariant: when an operand carries `ValueRange::U64`, its upper limbs evaluate to zero at runtime — even if the MIR for those limbs is not a literal `Zero` constant. This is the **Range contract**.
 
-- `evm_mir_compiler.h:565` (general compare result via `handleCompareImpl` → `handleCompareEQZ` / `handleCompareEQ` / `handleCompareGT_LT`; each writes `Result[1..3] = Zero` literally)
-- `evm_mir_compiler.h:629` (AND u64-const fast path: `Result[I] = Zero` for `I ≥ 1`)
-- `evm_mir_compiler.cpp:2024` (DIV u64÷u64: `{DivResult, Zero, Zero, Zero}`)
-- `evm_mir_compiler.cpp:2194` (MOD u64÷u64: `{ModResult, Zero, Zero, Zero}`)
-- `evm_mir_compiler.cpp:3002-3006` / `3037-3041` / `3073-3077` (the three existing `handleCompare*U64` helpers — `Result[I] = Zero`)
-- `evm_mir_compiler.cpp:3689-3693` (BYTE: `ResultComponents[I] = Zero`)
+Two independent producer paths uphold the contract:
 
-The new compare-side fast path **does not weaken** this invariant: it only reads the `Range` tag and *elides reading* `LHS[1..3]`. It never creates a U64-tagged operand with non-literal-zero upper limbs.
+1. **Direct materialization** (pre-existing, since PR #458). Every producer that explicitly assigns `Range = U64` also writes literal MIR `Zero` to `limbs[1..3]`. Verified producer sites: `evm_mir_compiler.h:565` (general compare result), `evm_mir_compiler.h:629` (AND u64-const fast path), `evm_mir_compiler.cpp:2024` (DIV u64÷u64), `evm_mir_compiler.cpp:2194` (MOD u64÷u64), the three existing `handleCompare*U64` helpers, and BYTE.
+2. **Analyzer-derived narrowing** (PR #493, `EVMRangeAnalyzer`). The dataflow analyzer retrofits `Range = U64` onto stack-popped operands whose backing variables hold any MIR that *evaluates to* a u64-fitting value. The analyzer guarantees value-level zero in `limbs[1..3]`, not literal-zero MIR.
 
-**SHR_U caveat (value-level, not MIR-level)**: `handleLogicalRightShift` emits `Select(IsLargeShift, Zero, <ushr-of-zero>)` for upper limbs when the input has `ValueRange::U64`. The *runtime value* is zero (correct), but the *MIR* is not necessarily a literal `Zero` constant. Future consumers must gate on `Range` rather than MIR-pattern-match upper limbs. The compare-side fast path proposed here is unaffected because it elides reading upper limbs entirely when `Range == U64`.
+The new compare-side fast path **does not weaken** the Range contract: it only reads `getRange()` and elides reading `LHS[1..3]`. It never creates a U64-tagged operand with non-zero upper-limb values.
 
-### Compose with `perf/value-range-cfg-join`
+**SHR_U caveat (value-level, not MIR-level)**: `handleLogicalRightShift` emits `Select(IsLargeShift, Zero, <ushr-of-zero>)` for upper limbs when the input has `ValueRange::U64`. The runtime value is zero, but the MIR is not necessarily a literal `Zero`. Consumers must gate on `Range` rather than MIR-pattern-match upper limbs — the compare-side fast path here does exactly that.
 
-Once `perf/value-range-cfg-join` lands, `setRange(...)` will retrofit `Range = U64` onto stack-popped operands whose backing variables may contain *anything* at the MIR level (the analyzer guarantees value-level zero, not MIR-level zero). This change extends the **trust chain** for compare-side correctness from:
-
-> compare correctness ⇐ Range == U64 ⇐ producer materializes literal-zero MIR
-
-to:
-
-> compare correctness ⇐ Range == U64 ⇐ (today) literal-zero MIR OR (with cfg-join) analyzer soundness
-
-The same trust model already applies to the AND `NarrowRange` path at `evm_mir_compiler.h:633-655`. The combination is consistent with current practice; the analyzer's correctness tests should exercise EQ/LT/GT with analyzer-narrowed U64 ranges once cfg-join lands.
+The same trust model already applies to the AND `NarrowRange` path at `evm_mir_compiler.h:633-655`.
 
 ## Implementation
 
