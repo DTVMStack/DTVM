@@ -240,16 +240,23 @@ void EVMInstance::expandMemoryNoGas(uint64_t RequiredSize) {
 }
 
 bool EVMInstance::expandMemoryChecked(uint64_t Offset, uint64_t Size) {
+  auto markOutOfGasForOversizedMemory = [this]() {
+    // Intentionally force an OOG path so all modes share one behavior:
+    // - check mode: chargeGas sets GasLimitExceeded (soft error, no throw)
+    // - CPU exception mode: trigger trap
+    // - interpreter mode: throw
+    (void)chargeGas(getGas() + 1);
+  };
   if (Size == 0) {
     return true;
   }
   uint64_t RequiredSize = 0;
   if (!calcRequiredMemorySize(Offset, Size, RequiredSize)) {
-    (void)chargeGas(getGas() + 1);
+    markOutOfGasForOversizedMemory();
     return false;
   }
   if (RequiredSize > zen::evm::MAX_REQUIRED_MEMORY_SIZE) {
-    (void)chargeGas(getGas() + 1);
+    markOutOfGasForOversizedMemory();
     return false;
   }
   return expandMemory(RequiredSize);
@@ -257,6 +264,10 @@ bool EVMInstance::expandMemoryChecked(uint64_t Offset, uint64_t Size) {
 
 bool EVMInstance::expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA,
                                       uint64_t OffsetB, uint64_t SizeB) {
+  auto markOutOfGasForOversizedMemory = [this]() {
+    // Keep oversize/overflow handling consistent with single-range overload.
+    (void)chargeGas(getGas() + 1);
+  };
   const bool NeedA = SizeA > 0;
   const bool NeedB = SizeB > 0;
   if (!NeedA && !NeedB) {
@@ -272,12 +283,12 @@ bool EVMInstance::expandMemoryChecked(uint64_t OffsetA, uint64_t SizeA,
   uint64_t RequiredSizeB = 0;
   if (!calcRequiredMemorySize(OffsetA, SizeA, RequiredSizeA) ||
       !calcRequiredMemorySize(OffsetB, SizeB, RequiredSizeB)) {
-    (void)chargeGas(getGas() + 1);
+    markOutOfGasForOversizedMemory();
     return false;
   }
   const uint64_t RequiredSize = std::max(RequiredSizeA, RequiredSizeB);
   if (RequiredSize > zen::evm::MAX_REQUIRED_MEMORY_SIZE) {
-    (void)chargeGas(getGas() + 1);
+    markOutOfGasForOversizedMemory();
     return false;
   }
   return expandMemory(RequiredSize);

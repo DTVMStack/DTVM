@@ -1035,8 +1035,10 @@ private:
   // Template versions of runtime calls
   template <typename RetType>
   Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *));
+  // Emits host soft-error checks in check mode after runtime call.
   template <typename RetType>
-  Operand callRuntimeForMayFail(RetType (*RuntimeFunc)(runtime::EVMInstance *));
+  Operand callRuntimeForWithErrorCheck(
+      RetType (*RuntimeFunc)(runtime::EVMInstance *));
 
   template <typename ArgType>
   U256Inst convertOperandToInstruction(const Operand &Param);
@@ -1051,10 +1053,11 @@ private:
   Operand callRuntimeFor(RetType (*RuntimeFunc)(runtime::EVMInstance *,
                                                 ArgTypes...),
                          const ParamTypes &...Params);
+  // Emits host soft-error checks in check mode after runtime call.
   template <typename RetType, typename... ArgTypes, typename... ParamTypes>
-  Operand callRuntimeForMayFail(RetType (*RuntimeFunc)(runtime::EVMInstance *,
-                                                       ArgTypes...),
-                                const ParamTypes &...Params);
+  Operand callRuntimeForWithErrorCheck(
+      RetType (*RuntimeFunc)(runtime::EVMInstance *, ArgTypes...),
+      const ParamTypes &...Params);
   void emitRuntimeSoftErrorCheck(MInstruction *InstancePtr);
 
   // Helper template functions for runtime call type mapping
