@@ -258,19 +258,23 @@ TEST(EVMCacheDominator, SelfLoop_Correct) {
   EXPECT_EQ(IDom[2], 1u);
 }
 
-// Irreducible improper region (Hecht-Ullman standard example): two
-// overlapping loops with no single header dominating both. CFG:
-//   0 -> 1 -> 2 -> 3 -> {1, 4}    (3->1 back-edge)
-//                       4 -> {2, 5} (4->2 cross-back-edge)
+// Two overlapping back-edges in a properly nested loop pair: CHK must
+// converge to the correct IDom on a CFG where multiple back-edges feed
+// the intersect finger-walk. CFG:
+//   0 -> 1 -> 2 -> 3 -> {1, 4}   (3->1 back-edge to outer header)
+//                       4 -> {2, 5} (4->2 back-edge to inner header)
 //                       5 (sink)
-// Loop A discovered from back-edge 3->1 has body {1,2,3};
-// loop B from back-edge 4->2 has body {2,3,4}. The two share {2,3} but
-// neither contains the other, so the natural-loop nest fails the
-// nest-or-disjoint check in buildLoopsUsingDominance and the SPP
-// pipeline falls back to its reducibility-failure path. The IDom output,
-// however, must still be correctly computed by CHK in linear time —
-// that is the property under test here.
-TEST(EVMCacheDominator, IrreducibleImproperRegion) {
+// Natural-loop bodies: outer = {1,2,3,4} (header=1), inner = {2,3,4}
+// (header=2); inner ⊂ outer, so this is a *reducible nested* loop nest
+// — the dominator-based detection at evm_cache.cpp:1029-1042 passes the
+// nest-or-disjoint check, the SPP reducibility fallback is NOT entered.
+// This test exercises only the IDom output of CHK on the irreducible-
+// shaped predecessor graph (node 2 has two preds 1 and 4 with mutually
+// non-dominating relationship), where the intersect finger-walk must
+// converge to NCA(1,4)=1. Exercising the SPP reducibility fallback
+// itself requires end-to-end buildBytecodeCache plumb and is deferred
+// to PR B / PR C (see §"Step 5 Scope Reduction" in the change doc).
+TEST(EVMCacheDominator, OverlappingBackEdgesIDom) {
   const std::vector<std::vector<uint32_t>> Succs = {
       {1},    // 0 entry
       {2},    // 1

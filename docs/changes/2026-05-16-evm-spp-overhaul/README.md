@@ -137,10 +137,16 @@ EIP-170 mainnet runtime code cap = 24576 bytes,因此 production contract **装�
 > 2723/2723 + the 4 existing `implicit-dyn-pred` GTests. The original prose
 > below is retained verbatim as the spec record of what was promised at
 > review time. `IrreducibleSCC_TwoEntryLoop` was renamed to
-> `IrreducibleImproperRegion` and replaced with a Hecht-Ullman improper-region
-> CFG that genuinely forces the dominator pass to compute IDom on an
-> irreducible loop nest; the older "two-entry single-cycle" CFG was found
-> not to exercise any back-edge under DTVM's dom-based loop detection.
+> `OverlappingBackEdgesIDom` and given a CFG with two back-edges 3→1 and
+> 4→2 producing a reducible nested loop pair {1,2,3,4} ⊃ {2,3,4}; the test
+> verifies that the CHK intersect finger-walk converges to the correct
+> IDom when node 2 has two mutually non-dominating predecessors (1 and 4).
+> The older "two-entry single-cycle" CFG produced zero dominator-based
+> back-edges, so neither it nor the new CFG exercises the SPP reducibility
+> fallback. Reaching the fallback path
+> (`evm_cache.cpp:1019-1042`) requires `buildBytecodeCache`-level plumb
+> because dominator-based loop discovery only produces a properly-nested
+> loop forest by construction; this is a note for PR B / PR C authors.
 
 - `src/tests/evm_cache_tests.cpp` 加:
   - `Dominators_SelfLoop_*` — 单节点 self-loop。CFG:`Succs={0:{1,2}, 1:{1,2}, 2:{}}`,`Reachable={1,1,1}`。Expected: `IDom[0]=0, IDom[1]=0, IDom[2]=0`;`InCycle[1]==1`(由 self-edge);`UseLinearSPP=true`(reducible);`buildLoopsUsingDominance` 返回 1 个 loop containing 节点 1。
@@ -378,10 +384,11 @@ O(N²/64) characterization; the treatment column grows ≈ linearly (2 k → 4 k
 small constant factor).
 
 **Measurement variance**: independent reruns observed N=100k speedup in
-the 20-30× range (e.g. an independent reviewer rerun produced 29.7×; the
-table above uses a 9-rep median). The gate is `≥ 10×`, well below the
-observed variance band, so the recalibrated gate is robust against
-measurement noise on the test machine.
+the ≈ 19-30× range (sampled: 19.26× / 21.83× / 22.84× / 29.7× across
+four independent 9-rep medians on the same machine over a few hours;
+process spawn / OS scheduler noise dominates the variance). The gate is
+`≥ 10×`, well below this band, so the recalibrated gate is robust
+against the observed noise.
 
 ### Gate Recalibration
 
