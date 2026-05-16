@@ -14,6 +14,29 @@
 #include <unordered_map>
 #include <utility>
 
+// Optional per-phase wall-clock instrumentation for the SPP cache build
+// pipeline. Enabled by `-DZEN_EVM_CACHE_PROFILE=ON` at configure time. OFF
+// (default) macro-elides all chrono calls so release builds carry zero
+// runtime overhead. Emits one stderr CSV row per timed phase:
+//   `EVM_CACHE_PROFILE,<phase>,<microseconds>`
+#ifdef ZEN_EVM_CACHE_PROFILE
+#include <chrono>
+#include <cstdio>
+#define EVM_PROFILE_BEGIN(name)                                                \
+  const auto _evm_profile_##name##_t0 = std::chrono::steady_clock::now()
+#define EVM_PROFILE_END(name)                                                  \
+  do {                                                                         \
+    const auto _us =                                                           \
+        std::chrono::duration_cast<std::chrono::microseconds>(                 \
+            std::chrono::steady_clock::now() - _evm_profile_##name##_t0)       \
+            .count();                                                          \
+    std::fprintf(stderr, "EVM_CACHE_PROFILE,%s,%ld\n", #name, (long)_us);      \
+  } while (0)
+#else
+#define EVM_PROFILE_BEGIN(name) ((void)0)
+#define EVM_PROFILE_END(name) ((void)0)
+#endif
+
 namespace zen::evm {
 
 // - Cache entries are indexed by EVM PC (byte offset into `Code`).
@@ -1172,7 +1195,9 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
                               bool EnableSPP) {
   std::vector<GasBlock> Blocks;
   std::vector<uint32_t> BlockAtPc;
+  EVM_PROFILE_BEGIN(buildGasBlocks);
   buildGasBlocks(Code, CodeSize, MetricsTable, Blocks, BlockAtPc);
+  EVM_PROFILE_END(buildGasBlocks);
 
   if (Blocks.empty()) {
     return true;
@@ -1195,6 +1220,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   // Always build CFG — no early exit for dynamic jumps.
   // Unresolved jumps get over-approximated edges to all JUMPDESTs.
 
+  EVM_PROFILE_BEGIN(collectJumpDests);
   std::vector<uint32_t> JumpDestBlocks;
   if (!JumpDestMap.empty()) {
     std::vector<uint8_t> SeenBlocks(Blocks.size(), 0);
@@ -1212,6 +1238,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
       }
     }
   }
+  EVM_PROFILE_END(collectJumpDests);
 
   // Static jumps get precise single-target edges. For unresolved dynamic
   // jumps, the CFG over-approximation is encoded as
@@ -1219,11 +1246,16 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   // effectivePredCount). Narrowing to partial call-site resolution would
   // under-approximate the CFG and let SPP shift gas along non-existent
   // edges, producing unsafe metering.
+  EVM_PROFILE_BEGIN(buildCFGEdges);
   buildCFGEdges(Blocks, BlockAtPc, JumpDestMap, PushValueMap, JumpDestBlocks,
                 CodeSize);
+  EVM_PROFILE_END(buildCFGEdges);
 
+  EVM_PROFILE_BEGIN(splitCriticalEdges);
   splitCriticalEdges(Blocks, CodeSize);
+  EVM_PROFILE_END(splitCriticalEdges);
 
+  EVM_PROFILE_BEGIN(computeReachable);
   std::vector<uint8_t> Reachable = computeReachable(Blocks, 0);
   // Seed dyn-target JUMPDESTs as reachability roots so dom/loop analyses
   // include them and their static successors. Statically-dead JUMPDESTs
@@ -1251,26 +1283,39 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
       }
     }
   }
-  const DomInfo Dom = computeDomInfo(Blocks, Reachable);
+  EVM_PROFILE_END(computeReachable);
 
-  // Find back edges and compute reverse topological order
+  EVM_PROFILE_BEGIN(computeDomInfo);
+  const DomInfo Dom = computeDomInfo(Blocks, Reachable);
+  EVM_PROFILE_END(computeDomInfo);
+
+  EVM_PROFILE_BEGIN(findBackEdges);
   std::vector<std::vector<uint32_t>> BackEdges;
   findBackEdgesUsingDominators(Blocks, Dom, BackEdges);
+  EVM_PROFILE_END(findBackEdges);
+
+  EVM_PROFILE_BEGIN(computeReverseTopo);
   const std::vector<uint32_t> RevTopo = computeReverseTopo(Blocks, BackEdges);
   std::vector<size_t> RevTopoIndex(Blocks.size(), 0);
   for (size_t Index = 0; Index < RevTopo.size(); ++Index) {
     RevTopoIndex[RevTopo[Index]] = Index;
   }
-  // BackEdges give topo order; SCCs mark cyclic regions to skip updates.
-  const std::vector<uint8_t> InCycle = computeInCycle(Blocks);
+  EVM_PROFILE_END(computeReverseTopo);
 
+  EVM_PROFILE_BEGIN(computeInCycle);
+  const std::vector<uint8_t> InCycle = computeInCycle(Blocks);
+  EVM_PROFILE_END(computeInCycle);
+
+  EVM_PROFILE_BEGIN(buildLoopsUsingDominance);
   std::vector<LoopInfo> Loops;
   std::vector<int32_t> LoopOf;
   std::vector<std::vector<uint32_t>> ExitLoops;
   std::vector<std::vector<uint8_t>> ExitFlags;
   bool UseLinearSPP = buildLoopsUsingDominance(Blocks, Dom, Reachable, Loops,
                                                LoopOf, ExitLoops, ExitFlags);
+  EVM_PROFILE_END(buildLoopsUsingDominance);
 
+  EVM_PROFILE_BEGIN(meteringInit);
   // Initialize m = c (metering function = cost function)
   std::vector<uint64_t> Metering(Blocks.size(), 0);
   for (size_t Id = 0; Id < Blocks.size(); ++Id) {
@@ -1283,7 +1328,9 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
       bitsetSet(NonCycleMask, Id);
     }
   }
+  EVM_PROFILE_END(meteringInit);
 
+  EVM_PROFILE_BEGIN(lemma614Schedule);
   if (!UseLinearSPP) {
     for (uint32_t NodeId : RevTopo) {
       if (InCycle[NodeId] != 0) {
@@ -1362,7 +1409,9 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
       }
     }
   }
+  EVM_PROFILE_END(lemma614Schedule);
 
+  EVM_PROFILE_BEGIN(writeback);
   // Write results to output arrays
   for (size_t Id = 0; Id < Blocks.size(); ++Id) {
     // Skip empty blocks created by splitCriticalEdges to avoid overwriting
@@ -1378,6 +1427,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     // the unshifted per-block cost above.
     GasChunkCostSPP[Blocks[Id].Start] = Metering[Id];
   }
+  EVM_PROFILE_END(writeback);
 
   return true;
 }

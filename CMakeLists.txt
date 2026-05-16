@@ -69,6 +69,11 @@ option(ZEN_ENABLE_DEBUG_GREEDY_RA "Enable debug greedy ra" OFF)
 # Profiling options
 option(ZEN_ENABLE_PROFILER "Enable profiler" OFF)
 option(ZEN_ENABLE_LINUX_PERF "Enable linux perf" OFF)
+option(
+  ZEN_EVM_CACHE_PROFILE
+  "Enable per-phase wall-clock instrumentation in EVM bytecode-cache build (stderr CSV)"
+  OFF
+)
 
 # Test options
 option(ZEN_ENABLE_SPEC_TEST "Enable spec test" OFF)
