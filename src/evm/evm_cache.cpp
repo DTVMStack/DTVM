@@ -637,11 +637,11 @@ struct DomInfo {
   std::vector<uint32_t> Exit;
 
   bool dominates(uint32_t A, uint32_t B) const {
-    if (A == B) {
-      return true;
-    }
     if (A >= IDom.size() || B >= IDom.size()) {
       return false;
+    }
+    if (A == B) {
+      return true;
     }
     return Enter[A] <= Enter[B] && Exit[B] <= Exit[A];
   }

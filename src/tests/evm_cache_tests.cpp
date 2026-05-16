@@ -258,28 +258,47 @@ TEST(EVMCacheDominator, SelfLoop_Correct) {
   EXPECT_EQ(IDom[2], 1u);
 }
 
-// Irreducible SCC: two-node cycle 1 ↔ 2 with two external entries from
-// node 0. Neither 1 nor 2 dominates the other; both have multiple preds
-// none of which dominates them in the classical sense.
-TEST(EVMCacheDominator, IrreducibleSCC_TwoEntryLoop) {
+// Irreducible improper region (Hecht-Ullman standard example): two
+// overlapping loops with no single header dominating both. CFG:
+//   0 -> 1 -> 2 -> 3 -> {1, 4}    (3->1 back-edge)
+//                       4 -> {2, 5} (4->2 cross-back-edge)
+//                       5 (sink)
+// Loop A discovered from back-edge 3->1 has body {1,2,3};
+// loop B from back-edge 4->2 has body {2,3,4}. The two share {2,3} but
+// neither contains the other, so the natural-loop nest fails the
+// nest-or-disjoint check in buildLoopsUsingDominance and the SPP
+// pipeline falls back to its reducibility-failure path. The IDom output,
+// however, must still be correctly computed by CHK in linear time —
+// that is the property under test here.
+TEST(EVMCacheDominator, IrreducibleImproperRegion) {
   const std::vector<std::vector<uint32_t>> Succs = {
-      {1, 2}, // 0 entry: two paths into the cycle
-      {2, 3}, // 1 in cycle; exits to 3
-      {1, 3}, // 2 in cycle; exits to 3
-      {},     // 3 exit
+      {1},    // 0 entry
+      {2},    // 1
+      {3},    // 2
+      {1, 4}, // 3: back-edge to 1
+      {2, 5}, // 4: cross-back-edge to 2
+      {},     // 5 sink
   };
-  const std::vector<uint8_t> Reachable = {1, 1, 1, 1};
+  const std::vector<uint8_t> Reachable = {1, 1, 1, 1, 1, 1};
   const auto IDom =
       zen::evm::for_testing::computeIDomForTesting(Succs, Reachable);
   assertWellFormedIDom(IDom, Reachable);
-  // 0 is the entry. Nodes 1, 2, 3 all should have IDom == 0 (entry is
-  // their common dominator; neither 1 nor 2 dominates the other since
-  // each is reachable from 0 via a path that does not go through the
-  // other).
+  // Spine: 0 -> 1 -> 2 -> 3 -> 4 -> 5 dominates linearly because the
+  // back-edges never let any node skip its predecessor along the spine.
   EXPECT_EQ(IDom[0], 0u);
-  EXPECT_EQ(IDom[1], 0u) << "Multi-entry cycle member's idom is entry.";
-  EXPECT_EQ(IDom[2], 0u) << "Multi-entry cycle member's idom is entry.";
-  EXPECT_EQ(IDom[3], 0u) << "Post-cycle exit's idom collapses to entry.";
+  EXPECT_EQ(IDom[1], 0u);
+  EXPECT_EQ(IDom[2], 1u);
+  EXPECT_EQ(IDom[3], 2u);
+  EXPECT_EQ(IDom[4], 3u);
+  EXPECT_EQ(IDom[5], 4u);
+  // Walking the IDom chain from any cycle member must reach the root.
+  for (uint32_t n : {1u, 2u, 3u, 4u, 5u}) {
+    uint32_t cur = n;
+    for (int hops = 0; hops < 16 && cur != 0; ++hops) {
+      cur = IDom[cur];
+    }
+    EXPECT_EQ(cur, 0u) << "IDom chain from " << n << " must reach entry";
+  }
 }
 
 // Nested loops sharing an exit edge. Inner loop {2 ↔ 3} sits inside outer

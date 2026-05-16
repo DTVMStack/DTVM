@@ -15,7 +15,10 @@ namespace zen::evm::for_testing {
 //   Succs[i]   — adjacency list: nodes that block i jumps to.
 //   Reachable  — parallel array (1 = visited by computeReachable from
 //                some entry). The caller is responsible for matching
-//                the production invariant.
+//                the production invariant — this helper does NOT run
+//                computeReachable, splitCriticalEdges, or the dyn-target
+//                reachability stitch, so callers wanting to exercise those
+//                passes must do so through buildBytecodeCache instead.
 //
 // Returns the immediate-dominator array `idom`, where `idom[i] == i`
 // marks a dominator-forest root and `idom[i] != i` marks the immediate

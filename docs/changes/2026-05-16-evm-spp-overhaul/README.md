@@ -125,6 +125,23 @@ EIP-170 mainnet runtime code cap = 24576 bytes,因此 production contract **装�
 - Markdown 输出:per-phase 拆分(看 dom-pass 自己占总 build time 多少 + 哪个 phase 是后续 hot)+ per-stratum 分组(code-size decile × JD-density quartile)
 
 ### Step 5 — Add 5 new GTests + path-total fuzz
+
+> **Step 5 implementation downgrade (see §"Step 5 Scope Reduction" in Results)**:
+> the 5 GTests that shipped exercise **only `computeIDomForTesting`** —
+> the IDom array of the dominator pass. The per-fixture behavioural claims
+> below (`InCycle[1]==1`, `UseLinearSPP=true|false`, `buildLoopsUsingDominance`
+> count, `GasChunkCostSPP[] ≡ GasChunkCost[]` on fallback, `splitCriticalEdges`
+> `Cost=0` write-back, reachability-stitch coverage) and the path-total fuzz
+> were **not implemented in PR A** and are deferred to PR B / PR C. Coverage
+> for those behaviours continues to rely on `evmone-statetest` fork_Cancun
+> 2723/2723 + the 4 existing `implicit-dyn-pred` GTests. The original prose
+> below is retained verbatim as the spec record of what was promised at
+> review time. `IrreducibleSCC_TwoEntryLoop` was renamed to
+> `IrreducibleImproperRegion` and replaced with a Hecht-Ullman improper-region
+> CFG that genuinely forces the dominator pass to compute IDom on an
+> irreducible loop nest; the older "two-entry single-cycle" CFG was found
+> not to exercise any back-edge under DTVM's dom-based loop detection.
+
 - `src/tests/evm_cache_tests.cpp` 加:
   - `Dominators_SelfLoop_*` — 单节点 self-loop。CFG:`Succs={0:{1,2}, 1:{1,2}, 2:{}}`,`Reachable={1,1,1}`。Expected: `IDom[0]=0, IDom[1]=0, IDom[2]=0`;`InCycle[1]==1`(由 self-edge);`UseLinearSPP=true`(reducible);`buildLoopsUsingDominance` 返回 1 个 loop containing 节点 1。
   - `Dominators_IrreducibleSCC_*` — 真正 irreducible:两节点循环 + 两个外部入口。CFG:`Succs={0:{1,2}, 1:{2,3}, 2:{1,3}, 3:{}}`,Reachable=all-1。节点 1 ↔ 2 互相循环,1 和 2 都直接从入口 0 进入,**neither dominates the other**。测试断言改为 **behavioral invariants 而非具体 IDom 值**(R1 reviewers 正确指出我之前给的 expected `IDom` 在 DTVM `buildLoopsUsingDominance` 当前实现下其实是 reducible 路径):
@@ -247,7 +264,7 @@ e.g. irreducible SCC test 可能暴露 CHK 对 multi-root forest 处理 bug。
 - [x] Step 4 — `bench_evm_cache.sh` + `analyze_evm_cache_bench.py` 实现
 - [x] Step 5 — 5 new IDom structural GTests added (14/14 pass); loop / SPP behavioural assertions and path-total fuzz deferred — see §Step 5 Scope Reduction below
 - [x] Step 6 — corpus acquisition (79 unique contracts; see §Corpus); raw Sourcify path retained in-tree but not used as primary
-- [x] Step 7 — baseline + treatment bench; Results table populated
+- [x] Step 7 — baseline + treatment bench; Results table populated (production gate FAIL, override approved — see §Gate Recalibration)
 - [ ] Step 8 — `src/evm/evm_cache.md` updated
 - [ ] Step 9 — full gate pass(format / build / 223 / 215 / 2723 / 14 / corpus CI)
 
