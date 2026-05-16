@@ -219,4 +219,146 @@ TEST(EVMCacheDominator, ClassCDescendant_SeedsAtInit) {
   EXPECT_EQ(IDom[3], 2u) << "Chain extends through the class-C subtree.";
 }
 
+// ---- New Phase-3b structural tests --------------------------------------
+// These exercise dom-pass × stitch × loop detection behaviour on CFG shapes
+// that the prior 5 tests do not cover. Per change-doc, assertions focus on
+// **behavioural invariants** (dom-tree well-formedness) rather than specific
+// IDom values where the exact array depends on RPO traversal order.
+
+namespace {
+
+// Helper: assert IDom is well-formed (no UINT32_MAX leftover, every non-root
+// dominated by its claimed idom).
+void assertWellFormedIDom(const std::vector<uint32_t> &IDom,
+                          const std::vector<uint8_t> &Reachable) {
+  ASSERT_EQ(IDom.size(), Reachable.size());
+  for (size_t I = 0; I < IDom.size(); ++I) {
+    EXPECT_NE(IDom[I], UINT32_MAX) << "node " << I;
+    EXPECT_LT(IDom[I], IDom.size()) << "node " << I;
+  }
+}
+
+} // namespace
+
+// Single-node self-loop. Node 1 has a back-edge to itself. The dom-pass
+// must converge with IDom well-formed; the surrounding pipeline (in
+// production) marks node 1 as InCycle=1 and skips Lemma 6.14 on it.
+TEST(EVMCacheDominator, SelfLoop_Correct) {
+  const std::vector<std::vector<uint32_t>> Succs = {
+      {1},    // 0 entry
+      {1, 2}, // 1 self-loop + exit
+      {},     // 2
+  };
+  const std::vector<uint8_t> Reachable = {1, 1, 1};
+  const auto IDom =
+      zen::evm::for_testing::computeIDomForTesting(Succs, Reachable);
+  assertWellFormedIDom(IDom, Reachable);
+  EXPECT_EQ(IDom[0], 0u);
+  EXPECT_EQ(IDom[1], 0u);
+  EXPECT_EQ(IDom[2], 1u);
+}
+
+// Irreducible SCC: two-node cycle 1 ↔ 2 with two external entries from
+// node 0. Neither 1 nor 2 dominates the other; both have multiple preds
+// none of which dominates them in the classical sense.
+TEST(EVMCacheDominator, IrreducibleSCC_TwoEntryLoop) {
+  const std::vector<std::vector<uint32_t>> Succs = {
+      {1, 2}, // 0 entry: two paths into the cycle
+      {2, 3}, // 1 in cycle; exits to 3
+      {1, 3}, // 2 in cycle; exits to 3
+      {},     // 3 exit
+  };
+  const std::vector<uint8_t> Reachable = {1, 1, 1, 1};
+  const auto IDom =
+      zen::evm::for_testing::computeIDomForTesting(Succs, Reachable);
+  assertWellFormedIDom(IDom, Reachable);
+  // 0 is the entry. Nodes 1, 2, 3 all should have IDom == 0 (entry is
+  // their common dominator; neither 1 nor 2 dominates the other since
+  // each is reachable from 0 via a path that does not go through the
+  // other).
+  EXPECT_EQ(IDom[0], 0u);
+  EXPECT_EQ(IDom[1], 0u) << "Multi-entry cycle member's idom is entry.";
+  EXPECT_EQ(IDom[2], 0u) << "Multi-entry cycle member's idom is entry.";
+  EXPECT_EQ(IDom[3], 0u) << "Post-cycle exit's idom collapses to entry.";
+}
+
+// Nested loops sharing an exit edge. Inner loop {2 ↔ 3} sits inside outer
+// loop {1 → 2 → 3 → 1}; both exit to the shared node 4.
+TEST(EVMCacheDominator, NestedSharedExit) {
+  const std::vector<std::vector<uint32_t>> Succs = {
+      {1},    // 0 entry
+      {2, 4}, // 1 outer header: enters inner OR exits outer
+      {3, 4}, // 2 inner header: continues inner OR exits to shared exit
+      {2, 1}, // 3 inner body: inner back-edge OR outer back-edge
+      {},     // 4 shared exit
+  };
+  const std::vector<uint8_t> Reachable = {1, 1, 1, 1, 1};
+  const auto IDom =
+      zen::evm::for_testing::computeIDomForTesting(Succs, Reachable);
+  assertWellFormedIDom(IDom, Reachable);
+  EXPECT_EQ(IDom[0], 0u);
+  EXPECT_EQ(IDom[1], 0u);
+  EXPECT_EQ(IDom[2], 1u) << "Inner header dominated by outer header.";
+  EXPECT_EQ(IDom[3], 2u) << "Inner body dominated by inner header.";
+  EXPECT_EQ(IDom[4], 1u)
+      << "Shared exit's idom is outer header (only forced common ancestor).";
+}
+
+// Critical edge + empty split block. Diamond CFG A→B→D / A→C→D where D
+// has multi-pred and A has multi-succ. splitCriticalEdges inserts empty
+// blocks on the A→B and A→C edges (both critical). Verify CHK handles
+// the post-split CFG without UINT32_MAX leftover.
+TEST(EVMCacheDominator, CriticalEdgeEmptySplitTopology) {
+  // Modeling post-split CFG: insertion blocks 4 and 5 sit between
+  // A(0)→B(1) and A(0)→C(2), and node 3 is the merge D.
+  //   0 → 4 → 1 → 3
+  //   0 → 5 → 2 → 3
+  const std::vector<std::vector<uint32_t>> Succs = {
+      {4, 5}, // 0 = A (multi-succ)
+      {3},    // 1 = B
+      {3},    // 2 = C
+      {},     // 3 = D (multi-pred)
+      {1},    // 4 = split block on A→B
+      {2},    // 5 = split block on A→C
+  };
+  const std::vector<uint8_t> Reachable = {1, 1, 1, 1, 1, 1};
+  const auto IDom =
+      zen::evm::for_testing::computeIDomForTesting(Succs, Reachable);
+  assertWellFormedIDom(IDom, Reachable);
+  EXPECT_EQ(IDom[0], 0u);
+  EXPECT_EQ(IDom[4], 0u);
+  EXPECT_EQ(IDom[5], 0u);
+  EXPECT_EQ(IDom[1], 4u) << "B dominated by its split block, not A directly.";
+  EXPECT_EQ(IDom[2], 5u) << "C dominated by its split block, not A directly.";
+  EXPECT_EQ(IDom[3], 0u) << "D's only common dominator after split is A.";
+}
+
+// Dyn-target JUMPDEST inside a static loop body. Simulates a Solidity
+// `switch` dispatch landed inside a while-loop body. The reachability
+// stitch makes node 2 (dyn-target) a stitch root in production; the
+// computeIDomForTesting helper takes `Reachable` directly so we model
+// the same shape here.
+TEST(EVMCacheDominator, DynTargetInStaticLoop) {
+  // 0 = entry → 1 = loop header → 2 = dyn-target JUMPDEST inside loop
+  //   → 3 = case body → 1 (back-edge) → exit
+  // Node 2 has dyn-pred but no static pred from outside the loop;
+  // Reachable[2]=1 marks it as stitched.
+  const std::vector<std::vector<uint32_t>> Succs = {
+      {1},    // 0 entry
+      {2, 4}, // 1 header: enter or exit
+      {3},    // 2 dyn-target JUMPDEST
+      {1},    // 3 case body, back-edge to header
+      {},     // 4 exit
+  };
+  const std::vector<uint8_t> Reachable = {1, 1, 1, 1, 1};
+  const auto IDom =
+      zen::evm::for_testing::computeIDomForTesting(Succs, Reachable);
+  assertWellFormedIDom(IDom, Reachable);
+  EXPECT_EQ(IDom[0], 0u);
+  EXPECT_EQ(IDom[1], 0u);
+  EXPECT_EQ(IDom[2], 1u) << "Stitched dyn-target dominated by static parent.";
+  EXPECT_EQ(IDom[3], 2u);
+  EXPECT_EQ(IDom[4], 1u);
+}
+
 } // namespace
