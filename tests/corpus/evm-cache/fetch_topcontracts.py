@@ -7,15 +7,15 @@ contracts via a public JSON-RPC endpoint, dedupe by codehash, and write hex +
 manifest. No archive node is required because deployed runtime bytecode is
 immutable after deployment (for contracts that have not SELFDESTRUCT'd).
 
-Output layout (out_dir):
+Output layout (under --out):
   raw/<address>.hex          # runtime bytecode (0x-prefixed hex)
-  raw/<address>.meta.json    # per-contract metadata row
+  meta/<address>.meta.json   # per-contract metadata row
 
 Manifest rows: address, name, codehash, code_size, n_jumpdests, n_jumps,
 n_jumpis, dyn_jump_ratio.
 
 Usage:
-  fetch_topcontracts.py --out tests/corpus/evm-cache/raw \\
+  fetch_topcontracts.py --out tests/corpus/evm-cache \\
     --manifest tests/corpus/evm-cache/manifest_top.json \\
     [--rpc https://ethereum.publicnode.com] [--workers 8] [--min-size 200]
 """
@@ -104,8 +104,6 @@ TOP_CONTRACTS: List[Tuple[str, str]] = [
     # 1inch
     ("0x111111125421cA6dc452d289314280a0f8842A65", "1inchAggregationV6"),
     ("0x1111111254EEB25477B68fb85Ed929f73A960582", "1inchAggregationV5"),
-    # Tornado Cash (sanctions reasons aside, popular fixtures historically)
-    ("0x47CE0C6eD5B0Ce3d3A51fdb1C52DC66a7c3c2936", "TornadoCash01"),
     # Yearn
     ("0xa258C4606Ca8206D8aA700cE2143D7db854D168c", "YearnVaultsRegistry"),
     # Convex
@@ -243,7 +241,9 @@ def strip_hex(s: str) -> bytes:
     return bytes.fromhex(s)
 
 
-def fetch_one(rpc: str, addr: str, name: str, min_size: int, out_dir: str) -> Optional[dict]:
+def fetch_one(rpc: str, addr: str, name: str, min_size: int) -> Optional[Tuple[dict, str]]:
+    """Fetch + parse; return (row, raw_hex) or None. Caller decides where to
+    write so we can dedupe before touching the filesystem."""
     raw = fetch_code(rpc, addr)
     if not raw or raw in ("0x", "0x0"):
         return None
@@ -260,11 +260,7 @@ def fetch_one(rpc: str, addr: str, name: str, min_size: int, out_dir: str) -> Op
         "code_size": len(code), "n_jumpdests": n_jd,
         "n_jumps": n_jump, "n_jumpis": n_jumpi, "dyn_jump_ratio": dyn_ratio,
     }
-    with open(os.path.join(out_dir, f"{addr}.hex"), "w") as f:
-        f.write(raw)
-    with open(os.path.join(out_dir, f"{addr}.meta.json"), "w") as f:
-        json.dump(row, f, indent=2)
-    return row
+    return (row, raw)
 
 
 def main() -> None:
@@ -277,31 +273,44 @@ def main() -> None:
                     help="skip contracts with runtime bytecode < this many bytes")
     args = ap.parse_args()
 
-    os.makedirs(args.out, exist_ok=True)
+    raw_dir = os.path.join(args.out, "raw")
+    meta_dir = os.path.join(args.out, "meta")
+    os.makedirs(raw_dir, exist_ok=True)
+    os.makedirs(meta_dir, exist_ok=True)
 
     seen: Dict[str, dict] = {}
+    raw_payloads: Dict[str, str] = {}
     print(f"fetching {len(TOP_CONTRACTS)} contracts via {args.rpc}", file=sys.stderr)
     with cf.ThreadPoolExecutor(max_workers=args.workers) as ex:
         fut_to = {
-            ex.submit(fetch_one, args.rpc, addr, name, args.min_size, args.out): (addr, name)
+            ex.submit(fetch_one, args.rpc, addr, name, args.min_size): (addr, name)
             for addr, name in TOP_CONTRACTS
         }
         for fut in cf.as_completed(fut_to):
             addr, name = fut_to[fut]
-            row = fut.result()
-            if row is None:
+            result = fut.result()
+            if result is None:
                 print(f"  miss: {name} ({addr})", file=sys.stderr)
                 continue
+            row, raw = result
             h = row["codehash"]
             if h in seen:
                 print(f"  dup-codehash: {name} == {seen[h]['name']}", file=sys.stderr)
                 continue
             seen[h] = row
+            raw_payloads[addr] = raw
+
+    for row in seen.values():
+        addr = row["address"]
+        with open(os.path.join(raw_dir, f"{addr}.hex"), "w") as f:
+            f.write(raw_payloads[addr])
+        with open(os.path.join(meta_dir, f"{addr}.meta.json"), "w") as f:
+            json.dump(row, f, indent=2)
 
     manifest = list(seen.values())
     with open(args.manifest, "w") as f:
         json.dump(manifest, f, indent=2)
-    print(f"wrote {len(manifest)} unique contracts to {args.out}", file=sys.stderr)
+    print(f"wrote {len(manifest)} unique contracts to {raw_dir}", file=sys.stderr)
 
 
 if __name__ == "__main__":

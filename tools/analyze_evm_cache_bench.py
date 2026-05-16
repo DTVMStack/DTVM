@@ -10,8 +10,10 @@ Inputs: baseline + treatment CSV produced by bench_evm_cache.sh. CSV columns:
 
 Pairing: per (label, phase) take the median over runs, then ratio = T/B.
 Resample: cluster bootstrap on contracts (per-contract unit) WITH replacement,
-N=1000 by default. BCa: jackknife acceleration `a` (leave-one-contract-out,
-Efron 1987) and standard z_0 (median-bias correction).
+N=1000 by default. BCa: jackknife acceleration `a` (leave-one-contract-out)
+and standard z_0 (median-bias correction). The canonical reference for the
+BCa interval and its acceleration estimator is Efron & Tibshirani 1993,
+An Introduction to the Bootstrap, §14.3.
 
 Gate inversion: since improvement = 1 - r, the spec gate "improvement_lo >=
 0.15" is equivalent to "r_upper_CI <= 0.85" on the `total` phase.

@@ -245,24 +245,35 @@ e.g. irreducible SCC test 可能暴露 CHK 对 multi-root forest 处理 bug。
 - [x] Step 2 — `ZEN_EVM_CACHE_PROFILE` flag;OFF-vs-baseline `objdump` + `nm` diff 仅 chrono;"no new warnings" gate against `upstream/main @ ef062ae` baseline log
 - [x] Step 3 — `evmCacheComplexityDemo --bytecode` 支持
 - [x] Step 4 — `bench_evm_cache.sh` + `analyze_evm_cache_bench.py` 实现
-- [x] Step 5 — 5 new GTests added (14/14 pass);path-total fuzz deferred — see §Step 5 Scope Reduction below
+- [x] Step 5 — 5 new IDom structural GTests added (14/14 pass); loop / SPP behavioural assertions and path-total fuzz deferred — see §Step 5 Scope Reduction below
 - [x] Step 6 — corpus acquisition (79 unique contracts; see §Corpus); raw Sourcify path retained in-tree but not used as primary
 - [x] Step 7 — baseline + treatment bench; Results table populated
 - [ ] Step 8 — `src/evm/evm_cache.md` updated
 - [ ] Step 9 — full gate pass(format / build / 223 / 215 / 2723 / 14 / corpus CI)
 
-### Step 5 Scope Reduction (path-total fuzz)
+### Step 5 Scope Reduction (loop / SPP behavioural assertions + path-total fuzz)
 
-Spec called for K=1000 random-walk path-total invariant
-`sum_path(GasChunkCost) == sum_path(GasChunkCostSPP) + tracked_shifts_for_path`
-where `tracked_shifts_for_path` comes from a new `ZEN_EVM_CACHE_FUZZ_TRACE`
-instrumentation in `lemma614Update`. The 5 structural dominator GTests (Self
-Loop, Irreducible SCC, Nested Shared Exit, Critical Edge Empty Split,
-DynTarget in Static Loop) **were** added and **all pass** (see commit
-`ac1f522`). They cover dominator-tree correctness — the original motivation
-of PR A.
+The spec promised, per fixture, behavioural assertions on:
 
-The fuzz invariant covers SPP's `lemma614Update` gas-shifting (a PR B / PR C
+- `buildLoopsUsingDominance` output (loop count, header membership)
+- `UseLinearSPP` gate value
+- post-`splitCriticalEdges` synthetic-block `Cost == 0` and `GasChunkCost`
+  at split-block start
+- `InCycle[]` content for self-loop members
+- `Dominators_DynTargetInStaticLoop_*` end-to-end `GasChunkCostSPP[]` validity
+- K=1000 random-walk path-total invariant
+  `sum_path(GasChunkCost) == sum_path(GasChunkCostSPP) + tracked_shifts_for_path`
+  via new `ZEN_EVM_CACHE_FUZZ_TRACE` instrumentation in `lemma614Update`
+
+The 5 GTests that ship in commit `ac1f522` cover **only the `computeIDomForTesting`
+output** (IDom array shape + entry self-root + per-test specific IDom values
+where uniquely determined; behavioural invariants for irreducible cases). They
+are IDom-only structural tests, not loop / SPP behavioural tests. End-to-end
+loop / SPP / metering coverage continues to rely on `evmone-statetest`
+fork_Cancun 2723/2723 and the existing 4 `implicit-dyn-pred` GTests on
+`buildLoopsUsingDominance` semantics.
+
+The path-total fuzz covers SPP's `lemma614Update` gas-shifting (a PR B / PR C
 concern, not dom-CHK), and depends on instrumentation that would expand the
 diff and (per Risk 5) require careful invariant validation. Deferring to a
 follow-up keeps PR A focused on the dominator algorithm change + bench
@@ -298,14 +309,18 @@ methodology. This is a spec amendment, surfaced explicitly here.
 ### Production corpus paired-ratio (cluster-bootstrap BCa, n=79, 20 fresh-process
 reps per contract, 1000 resamples)
 
-| phase | n | r_median | r_lo | r_hi | improvement_lo | improvement_hi | gate (`r_hi ≤ 1.0`) |
+| phase | n | r_median | r_lo | r_hi | improvement_lo | improvement_hi | strict gate (`r_hi ≤ 1.0`) |
 |---|---:|---:|---:|---:|---:|---:|:--:|
-| `total` (whole build) | 79 | 0.9892 | 0.9670 | 1.0146 | -1.5 % | +3.3 % | borderline |
+| `total` (whole build) | 79 | 0.9892 | 0.9670 | 1.0146 | -1.5 % | +3.3 % | **FAIL** |
 
-The 95 % CI just crosses 1.0 → **no detectable wall-clock regression on the
-median production contract, but no large-scale improvement either**. dom-pass
-is not the build-time bottleneck on mainnet-typical workloads (median 185
-JUMPDESTs).
+The 95 % CI just crosses 1.0 → **the recalibrated production gate
+`improvement_lo > 0` FAILS pointwise** on the corpus median, because the
+lower edge of the 95 % CI is -1.5 %. The median is statistically
+indistinguishable from no-change, but reviewers (and Phase 4) should
+read this as FAIL, not "borderline". The override rationale lives in
+§Gate Recalibration below — stratification reveals the regression sits
+in the small-contract noise floor and the algorithmic gain is concentrated
+in the top decile.
 
 ### Stratified by size / JD-count (where the algorithmic gain lives)
 
@@ -327,23 +342,29 @@ floor-limits the total-phase signal at ~50-100 µs and washes out sub-µs
 algorithmic gains.
 
 ### Algorithmic-stress (synthetic dynamic-dispatch contract, demo binary
-positional `<n_jumpdests>` mode, 5 reps, median)
+positional `<n_jumpdests>` mode, 9 reps, median)
 
 | N (JUMPDESTs) | baseline (µs) | treatment (µs) | speedup |
 |---:|---:|---:|---:|
-|     1 000 |        286 |        225 |   1.27× |
-|     2 000 |        728 |        464 |   1.57× |
-|     5 000 |      2 746 |      1 319 |   2.08× |
-|    10 000 |     13 258 |      2 521 |   5.26× |
-|    20 000 |     42 327 |      5 553 |   7.62× |
-|    50 000 |    243 654 |     17 873 |  13.63× |
-| **100 000** | **1 066 292** | **46 676** | **22.84×** |
+|     1 000 |        283 |        224 |   1.27× |
+|     2 000 |        725 |        468 |   1.55× |
+|     5 000 |      2 603 |      1 312 |   1.98× |
+|    10 000 |     11 433 |      2 632 |   4.34× |
+|    20 000 |     44 727 |      5 924 |   7.55× |
+|    50 000 |    247 408 |     19 100 |  12.95× |
+| **100 000** | **951 842** | **43 598** | **21.83×** |
 
 The N → 2N → 4× growth in the baseline column (5 k → 10 k → 20 k:
-2.75 ms → 13.26 ms → 42.33 ms ≈ ratio 4.82× and 3.19×) confirms the spec's
-O(N²/64) characterization; the treatment column grows ≈ linearly
-(2 k → 4 k → 8 k speedup on doubling N becomes ≈ 1.7-2.0× — small constant
-factor growth).
+2.60 ms → 11.43 ms → 44.73 ms, ratios 4.39× and 3.91×) confirms the spec's
+O(N²/64) characterization; the treatment column grows ≈ linearly (2 k → 4 k:
+1.31 ms → 2.63 ms → 5.92 ms, ratios 2.01× and 2.25× — close to linear with a
+small constant factor).
+
+**Measurement variance**: independent reruns observed N=100k speedup in
+the 20-30× range (e.g. an independent reviewer rerun produced 29.7×; the
+table above uses a 9-rep median). The gate is `≥ 10×`, well below the
+observed variance band, so the recalibrated gate is robust against
+measurement noise on the test machine.
 
 ### Gate Recalibration
 
@@ -353,22 +374,27 @@ paired-ratio. The measured value `+1.8 %–+5.3 %` (and after corpus cleanup
 ("p99 mainnet contract JUMPDEST count 远低于 N=100k stress 上限"). Per
 Mitigation 1.1, the gate is recalibrated, with the user's explicit approval:
 
-- **Production**: `improvement_lo > 0` on the `total` phase (no regression
-  on a meaningful effect size). **Status**: borderline — the lower edge of
-  the 95 % CI is -1.5 %, so the strict `improvement_lo > 0` clause does not
-  hold pointwise, but the median (-0.5 %) is statistically indistinguishable
-  from no-change, and stratification reveals the regression is concentrated
-  on contracts whose `total` time is below the process-spawn noise floor
-  (< 200 µs), where the measurement instrument cannot resolve the signal.
-  Large-contract stratum (size > 15 KB, n=17) shows +10.2 % improvement.
+- **Production gate** (`improvement_lo > 0` on the `total` phase): **FAIL**.
+  The 95 % CI lower edge is -1.5 %, so the strict clause does not hold
+  pointwise. The median ratio 0.989 is statistically indistinguishable from
+  no-change, and stratification (size deciles + JD-count quartiles) shows
+  the FAIL is concentrated on contracts whose `total` build time is below
+  the process-spawn noise floor (< 200 µs), where the measurement instrument
+  cannot resolve the algorithmic signal. The top-decile stratum (size > 15 KB,
+  n=17) shows +10.2 % improvement and the JD>500 stratum (n=13) shows +11.2 %.
 
-- **Algorithmic-stress** (N=100k synthetic): `treatment/baseline ≤ 1/10`
-  (≥ 10× speedup). **Status**: PASS at 22.84×.
+- **Algorithmic-stress gate** (`treatment / baseline ≤ 1/10` at N=100k
+  synthetic): **PASS** at 21.83× (9-rep median; independent reviewer reruns
+  20-30×).
 
-Decision (user, see brainstorming transcript): **ship PR A** with both gates
-reported transparently. The recalibration is documented here so that
-Phase 4 reviewers and any post-merge readers see the empirical justification
-for the gate change, not silent drift.
+**Status flag**: the production gate FAILS the recalibrated `improvement_lo >
+0` clause. The user explicitly approved overriding this production gate on
+the basis of (i) the stratified +10 % improvement on top-decile contracts,
+(ii) the algorithmic gate PASS, and (iii) the measurement floor explanation
+above. This decision is documented here so Phase 4 reviewers and post-merge
+readers see the empirical justification rather than silent goalpost
+movement. Phase 4 reviewers may still REVISE / REJECT if they consider the
+override insufficient; user remains the final approver.
 
 ## Known Nits Accepted (Phase 2 R2)
 
