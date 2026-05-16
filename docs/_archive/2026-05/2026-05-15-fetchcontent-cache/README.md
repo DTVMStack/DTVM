@@ -1,6 +1,6 @@
 # Change: actions/cache for FetchContent on DTVM CI
 
-- **Status**: Proposed
+- **Status**: Implemented
 - **Date**: 2026-05-15
 - **Tier**: Light
 - **Branch**: ci/fetchcontent-cache (continues commit `96707a2`)

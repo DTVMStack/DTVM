@@ -25,6 +25,7 @@ All entries follow the `YYYY-MM/short-name/` convention, grouped by the month th
 | 2026-02 | add-jit-suitability-checker| JIT suitability checker for EVM      |
 | 2026-03 | add-evm-jit-fallback       | EVM JIT fallback mechanism           |
 | 2026-04 | update-evm-memory-block-precheck | EVM block-local memory precheck optimization |
+| 2026-05 | 2026-05-15-fetchcontent-cache | actions/cache for FetchContent + boost mirror swap |
 
 ## Notes
 
