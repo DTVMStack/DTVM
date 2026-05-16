@@ -55,12 +55,38 @@ using a linear-time SPP pass:
   edges (validated by `JumpDestMap`). Dynamic jumps are conservatively
   over-approximated to all `JUMPDEST` blocks.
 - Critical edges are split before SPP to preserve the local update rules.
-- Dominators and natural loops are computed from the CFG. The pass scans nodes
-  in reverse topological order:
+- Dominators are computed by the Cooper-Harvey-Kennedy (CHK) algorithm
+  (`computeDomInfo` in `evm_cache.cpp`): iterate `IDom[b] = NCA(p, IDom[b])`
+  over the reverse-postorder predecessor set until convergence. The reaching
+  fixpoint typically settles in 2-3 passes for reducible CFGs and degrades
+  gracefully on irreducible cycles. Output is a packed `IDom[]` array plus
+  Tarjan DFS Enter/Exit intervals (`DomEnter[]` / `DomExit[]`) so that
+  `dominates(a, b)` queries answer in `O(1)` via interval containment. Time
+  complexity is `O((N + E) · α(N))` and memory is `O(N)` — both linear, vs
+  the prior iterative-bitset dataflow's `O(N²/64)` time and `O(N²)` memory.
+  Natural loops are then computed from `IDom[]` via the standard back-edge
+  walk (`buildLoopsUsingDominance`). The pass scans nodes in reverse
+  topological order:
   - Non-loop nodes get a single Lemma 6.14 update.
   - Loop nodes are recorded; once all loop members are recorded and all exits
     have been seen, the loop is "fast-forwarded" by applying Lemma 6.14 updates
     to the loop nodes in local reverse-topological order.
+
+#### Optional per-phase wall-clock instrumentation
+
+When the project is configured with `-DZEN_EVM_CACHE_PROFILE=ON`, the build
+emits a CSV row per named phase to stderr:
+
+    EVM_CACHE_PROFILE,<phase>,<microseconds>
+
+Named phases: `buildGasBlocks`, `collectJumpDests`, `buildCFGEdges`,
+`splitCriticalEdges`, `computeReachable`, `computeDomInfo`, `findBackEdges`,
+`computeReverseTopo`, `computeInCycle`, `buildLoopsUsingDominance`,
+`meteringInit`, `lemma614Schedule`, `writeback`. When `OFF` (default), the
+macros expand to `((void)0)` and the release build is bytecode-identical to
+the un-instrumented variant — used to drive `tools/bench_evm_cache.sh` and
+`tools/analyze_evm_cache_bench.py` for paired-ratio cluster-bootstrap BCa
+analysis (see `tests/corpus/evm-cache/`).
 
 This moves common costs earlier, reducing the number of non-zero charge points.
 The resulting shifted value `m(s)` is stored in `GasChunkCostSPP[s]` at each
