@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from collections import Counter
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -149,6 +150,43 @@ def parse_benchmark_json_file(json_out_path: str) -> List[BenchmarkResult]:
     with open(json_out_path, "r") as f:
         json_data = f.read()
     return parse_benchmark_json(json_data)
+
+
+def stop_processes(processes: List[subprocess.Popen], timeout: float = 5.0) -> None:
+    running = [process for process in processes if process.poll() is None]
+    if not running:
+        return
+
+    for process in running:
+        try:
+            process.terminate()
+        except OSError:
+            pass
+
+    deadline = time.monotonic() + timeout
+    for process in running:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            process.wait(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            pass
+
+    still_running = [process for process in running if process.poll() is None]
+    for process in still_running:
+        try:
+            process.kill()
+        except OSError:
+            pass
+
+    for process in still_running:
+        try:
+            process.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            print(
+                f"::warning::Benchmark shard process {process.pid} did not exit after kill"
+            )
 
 
 def run_benchmark_shard(
@@ -286,9 +324,7 @@ def run_benchmark_parallel(
 
         return sorted(results, key=lambda result: result.name)
     finally:
-        for process in processes:
-            if process.poll() is None:
-                process.terminate()
+        stop_processes(processes)
         for json_out_path in temp_paths:
             try:
                 os.unlink(json_out_path)

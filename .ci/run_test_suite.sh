@@ -322,10 +322,21 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 rm -rf "$EVMONE_DIR"
                 git clone --depth 1 --recurse-submodules -b "$EVMONE_REF" "$EVMONE_REPO" "$EVMONE_DIR"
             fi
-            git -C "$EVMONE_DIR" remote set-url origin "$EVMONE_REPO"
-            git -C "$EVMONE_DIR" fetch --depth 1 origin "$EVMONE_REF"
-            git -C "$EVMONE_DIR" checkout --detach "$EVMONE_COMMIT"
-            git -C "$EVMONE_DIR" submodule update --init --recursive
+
+            EVMONE_HEAD=$(git -C "$EVMONE_DIR" rev-parse HEAD 2>/dev/null || true)
+            EVMONE_SUBMODULES_READY=1
+            if git -C "$EVMONE_DIR" submodule status --recursive | grep -q '^-'; then
+                EVMONE_SUBMODULES_READY=0
+            fi
+
+            if [ "$EVMONE_HEAD" = "$EVMONE_COMMIT" ] && [ "$EVMONE_SUBMODULES_READY" = 1 ]; then
+                echo "Using cached evmone at $EVMONE_COMMIT"
+            else
+                git -C "$EVMONE_DIR" remote set-url origin "$EVMONE_REPO"
+                git -C "$EVMONE_DIR" fetch --depth 1 origin "$EVMONE_REF"
+                git -C "$EVMONE_DIR" checkout --detach "$EVMONE_COMMIT"
+                git -C "$EVMONE_DIR" submodule update --init --recursive
+            fi
 
             BENCHMARK_THRESHOLD=${BENCHMARK_THRESHOLD:-0.15}
             BENCHMARK_MODE=${BENCHMARK_MODE:-multipass}
