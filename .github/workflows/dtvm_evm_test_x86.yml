@@ -16,6 +16,10 @@ on:
 permissions:
     contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Shared FetchContent cache root for all container jobs. The hook in
 # CMakeLists.txt (commit 96707a2 lines 8-18) picks this up as the base
 # dir for FetchContent populations. The cache key includes the generator
@@ -28,6 +32,9 @@ env:
   SCCACHE_IDLE_TIMEOUT: "0"
   DTVM_CI_USE_NINJA: "1"
   DTVM_CI_USE_SCCACHE: "1"
+  EVMONE_REPO: https://github.com/DTVMStack/evmone.git
+  EVMONE_REF: for_test
+  EVMONE_BENCH_CACHE_VERSION: v1
 
 jobs:
   build_test_evm_interpreter_x86_ctest:
@@ -500,6 +507,23 @@ jobs:
           git checkout ${{ github.sha }}
           git stash pop || true
 
+      - name: Resolve evmone benchmark commit
+        id: evmone
+        run: |
+          EVMONE_COMMIT=$(git ls-remote "$EVMONE_REPO" "refs/heads/$EVMONE_REF" | awk '{print $1}')
+          if [ -z "$EVMONE_COMMIT" ]; then
+            echo "Unable to resolve $EVMONE_REPO refs/heads/$EVMONE_REF" >&2
+            exit 1
+          fi
+          echo "commit=$EVMONE_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "Resolved evmone $EVMONE_REF to $EVMONE_COMMIT"
+
+      - name: Cache evmone-bench
+        uses: actions/cache@v4
+        with:
+          path: evmone
+          key: ${{ runner.os }}-evmone-bench-${{ env.EVMONE_BENCH_CACHE_VERSION }}-${{ steps.evmone.outputs.commit }}-${{ hashFiles('.ci/run_test_suite.sh', '.github/workflows/dtvm_evm_test_x86.yml') }}
+
       - name: Build current PR and check regression
         id: perf-check
         run: |
@@ -509,7 +533,7 @@ jobs:
           export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
           export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
 
-          rm -rf build evmone
+          rm -rf build
 
           export CMAKE_BUILD_TARGET=Release
           export ENABLE_ASAN=false
@@ -523,9 +547,16 @@ jobs:
           export BENCHMARK_BASELINE_LIB=/tmp/baseline_lib
           export BENCHMARK_SUMMARY_FILE=/tmp/perf_summary_${{ matrix.mode }}.md
           export BENCHMARK_REPETITIONS=5
+          export BENCHMARK_JOBS=3
+          export EVMONE_COMMIT=${{ steps.evmone.outputs.commit }}
 
           bash .ci/run_test_suite.sh
         continue-on-error: true
+
+      - name: Clean evmone cache inputs
+        if: always()
+        run: |
+          rm -f evmone/libdtvmapi.so evmone/libdtvmapi.so.* evmone/check_performance_regression.py
 
       - name: Write Performance Summary
         if: always()

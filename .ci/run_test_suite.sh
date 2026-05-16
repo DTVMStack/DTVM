@@ -305,16 +305,34 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             ;;
         "benchmarksuite")
             # Clone evmone and run performance regression check
-            EVMONE_DIR="evmone"
-            if [ ! -d "$EVMONE_DIR" ]; then
-                git clone --depth 1 --recurse-submodules -b for_test https://github.com/DTVMStack/evmone.git $EVMONE_DIR
+            EVMONE_DIR=${EVMONE_DIR:-evmone}
+            EVMONE_REPO=${EVMONE_REPO:-https://github.com/DTVMStack/evmone.git}
+            EVMONE_REF=${EVMONE_REF:-for_test}
+            EVMONE_COMMIT=${EVMONE_COMMIT:-}
+
+            if [ -z "$EVMONE_COMMIT" ]; then
+                EVMONE_COMMIT=$(git ls-remote "$EVMONE_REPO" "refs/heads/$EVMONE_REF" | awk '{print $1}')
             fi
+            if [ -z "$EVMONE_COMMIT" ]; then
+                echo "Unable to resolve $EVMONE_REPO refs/heads/$EVMONE_REF"
+                exit 1
+            fi
+
+            if [ ! -d "$EVMONE_DIR/.git" ]; then
+                rm -rf "$EVMONE_DIR"
+                git clone --depth 1 --recurse-submodules -b "$EVMONE_REF" "$EVMONE_REPO" "$EVMONE_DIR"
+            fi
+            git -C "$EVMONE_DIR" remote set-url origin "$EVMONE_REPO"
+            git -C "$EVMONE_DIR" fetch --depth 1 origin "$EVMONE_REF"
+            git -C "$EVMONE_DIR" checkout --detach "$EVMONE_COMMIT"
+            git -C "$EVMONE_DIR" submodule update --init --recursive
 
             BENCHMARK_THRESHOLD=${BENCHMARK_THRESHOLD:-0.15}
             BENCHMARK_MODE=${BENCHMARK_MODE:-multipass}
             BENCHMARK_SUMMARY_FILE=${BENCHMARK_SUMMARY_FILE:-/tmp/perf_summary.md}
             BENCHMARK_REPETITIONS=${BENCHMARK_REPETITIONS:-3}
             BENCHMARK_MIN_TIME=${BENCHMARK_MIN_TIME:-""}
+            BENCHMARK_JOBS=${BENCHMARK_JOBS:-1}
 
             PERF_ARGS=""
             if [ -n "$BENCHMARK_REPETITIONS" ]; then
@@ -322,6 +340,9 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             fi
             if [ -n "$BENCHMARK_MIN_TIME" ]; then
                 PERF_ARGS="$PERF_ARGS --benchmark-min-time $BENCHMARK_MIN_TIME"
+            fi
+            if [ -n "$BENCHMARK_JOBS" ]; then
+                PERF_ARGS="$PERF_ARGS --benchmark-jobs $BENCHMARK_JOBS"
             fi
 
             cp build/lib/* $EVMONE_DIR/
@@ -331,7 +352,18 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             cp ../tools/check_performance_regression.py ./
 
             if [ ! -f "build/bin/evmone-bench" ]; then
-                "$SCRIPT_DIR/cmake_ci_build.sh" build -- -DEVMONE_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+                EVMONE_CMAKE_ARGS=(-DEVMONE_TESTING=ON -DCMAKE_BUILD_TYPE=Release)
+                if [ "${DTVM_CI_USE_NINJA:-0}" = "1" ]; then
+                    EVMONE_CMAKE_ARGS=(-G Ninja "${EVMONE_CMAKE_ARGS[@]}")
+                fi
+                if [ "${DTVM_CI_USE_SCCACHE:-0}" = "1" ]; then
+                    EVMONE_CMAKE_ARGS+=(
+                        -DCMAKE_C_COMPILER_LAUNCHER=sccache
+                        -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+                    )
+                fi
+                cmake -S . -B build "${EVMONE_CMAKE_ARGS[@]}"
+                cmake --build build --target evmone-bench --parallel "${DTVM_CI_BUILD_JOBS:-16}"
             fi
             print_sccache_stats "before benchmarks"
 

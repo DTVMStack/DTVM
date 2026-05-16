@@ -21,10 +21,12 @@ Exit codes:
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -37,33 +39,43 @@ class BenchmarkResult:
     iterations: int
 
 
-def run_benchmark(
-    lib_path: str,
-    mode: str,
+def benchmark_env(lib_path: str, mode: str) -> Dict[str, str]:
+    return {**os.environ, "EVMONE_EXTERNAL_OPTIONS": f"{lib_path},mode={mode}"}
+
+
+def available_cpus() -> List[int]:
+    if hasattr(os, "sched_getaffinity"):
+        return sorted(os.sched_getaffinity(0))
+    cpu_count = os.cpu_count() or 1
+    return list(range(cpu_count))
+
+
+def split_benchmark_args(extra_args: Optional[List[str]]) -> Tuple[str, List[str]]:
+    benchmark_filter = "external/total/*"
+    remaining_args: List[str] = []
+
+    for arg in extra_args or []:
+        if arg.startswith("--benchmark_filter="):
+            benchmark_filter = arg.split("=", 1)[1]
+        else:
+            remaining_args.append(arg)
+
+    return benchmark_filter, remaining_args
+
+
+def build_benchmark_cmd(
     benchmark_dir: str,
-    extra_args: Optional[List[str]] = None,
-    repetitions: int = 3,
-    benchmark_min_time: Optional[str] = None,
-) -> List[BenchmarkResult]:
-    """Run benchmark and parse JSON output.
-
-    Uses --benchmark_out to write JSON results to a temporary file so that
-    the human-readable benchmark progress streams to stdout/stderr in real
-    time (important for CI visibility).
-
-    When *repetitions* > 1, each benchmark runs N times and only the
-    median aggregate is kept, significantly reducing noise from ASLR and
-    shared-runner contention.
-    """
-    env = {"EVMONE_EXTERNAL_OPTIONS": f"{lib_path},mode={mode}"}
-
-    fd, json_out_path = tempfile.mkstemp(suffix=".json")
-    os.close(fd)
-
+    json_out_path: str,
+    benchmark_filter: str,
+    repetitions: int,
+    benchmark_min_time: Optional[str],
+    extra_args: List[str],
+    cpu: Optional[int],
+) -> List[str]:
     cmd: List[str] = []
 
-    if shutil.which("taskset"):
-        cmd.extend(["taskset", "-c", "0"])
+    if cpu is not None and shutil.which("taskset"):
+        cmd.extend(["taskset", "-c", str(cpu)])
 
     cmd.extend([
         "./build/bin/evmone-bench",
@@ -80,39 +92,242 @@ def run_benchmark(
     if benchmark_min_time:
         cmd.append(f"--benchmark_min_time={benchmark_min_time}")
 
-    if extra_args:
-        cmd.extend(extra_args)
+    cmd.extend(extra_args)
+    cmd.append(f"--benchmark_filter={benchmark_filter}")
+    return cmd
 
-    if not any(arg.startswith("--benchmark_filter") for arg in cmd):
-        cmd.append("--benchmark_filter=external/total/*")
 
-    print(f"Running: {' '.join(cmd)}")
-    print(f"Environment: EVMONE_EXTERNAL_OPTIONS={env['EVMONE_EXTERNAL_OPTIONS']}")
+def list_benchmark_names(
+    lib_path: str,
+    mode: str,
+    benchmark_dir: str,
+    benchmark_filter: str,
+    extra_args: List[str],
+) -> List[str]:
+    cmd = [
+        "./build/bin/evmone-bench",
+        benchmark_dir,
+        "--benchmark_list_tests",
+        f"--benchmark_filter={benchmark_filter}",
+    ]
+    cmd.extend(extra_args)
+
+    print(f"Listing benchmarks: {' '.join(cmd)}")
     sys.stdout.flush()
 
     result = subprocess.run(
         cmd,
-        env={**subprocess.os.environ, **env},
+        env=benchmark_env(lib_path, mode),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
     )
-
     if result.returncode != 0:
-        print(f"Benchmark execution failed with code {result.returncode}")
-        try:
-            os.unlink(json_out_path)
-        except OSError:
-            pass
+        print(result.stdout, end="")
+        print(f"Benchmark listing failed with code {result.returncode}")
         sys.exit(2)
 
+    names: List[str] = []
+    for line in result.stdout.splitlines():
+        name = line.strip()
+        if not name or any(ch.isspace() for ch in name):
+            continue
+        names.append(name)
+
+    if not names:
+        print(f"::error::No benchmarks matched filter: {benchmark_filter}")
+        sys.exit(2)
+
+    return names
+
+
+def exact_filter(names: List[str]) -> str:
+    return "^(" + "|".join(re.escape(name) for name in names) + ")$"
+
+
+def parse_benchmark_json_file(json_out_path: str) -> List[BenchmarkResult]:
+    with open(json_out_path, "r") as f:
+        json_data = f.read()
+    return parse_benchmark_json(json_data)
+
+
+def run_benchmark_shard(
+    lib_path: str,
+    mode: str,
+    benchmark_dir: str,
+    benchmark_filter: str,
+    extra_args: List[str],
+    repetitions: int,
+    benchmark_min_time: Optional[str],
+    cpu: Optional[int],
+) -> List[BenchmarkResult]:
+    fd, json_out_path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+
     try:
-        with open(json_out_path, "r") as f:
-            json_data = f.read()
+        cmd = build_benchmark_cmd(
+            benchmark_dir,
+            json_out_path,
+            benchmark_filter,
+            repetitions,
+            benchmark_min_time,
+            extra_args,
+            cpu,
+        )
+
+        print(f"Running: {' '.join(cmd)}")
+        print(f"Environment: EVMONE_EXTERNAL_OPTIONS={lib_path},mode={mode}")
+        sys.stdout.flush()
+
+        result = subprocess.run(cmd, env=benchmark_env(lib_path, mode))
+
+        if result.returncode != 0:
+            print(f"Benchmark execution failed with code {result.returncode}")
+            sys.exit(2)
+
+        return parse_benchmark_json_file(json_out_path)
     finally:
         try:
             os.unlink(json_out_path)
         except OSError:
             pass
 
-    return parse_benchmark_json(json_data)
+
+def run_benchmark_parallel(
+    lib_path: str,
+    mode: str,
+    benchmark_dir: str,
+    extra_args: Optional[List[str]],
+    repetitions: int,
+    benchmark_min_time: Optional[str],
+    benchmark_jobs: int,
+) -> List[BenchmarkResult]:
+    benchmark_filter, remaining_args = split_benchmark_args(extra_args)
+
+    if benchmark_jobs <= 1:
+        cpus = available_cpus()
+        cpu = cpus[0] if cpus else None
+        return run_benchmark_shard(
+            lib_path,
+            mode,
+            benchmark_dir,
+            benchmark_filter,
+            remaining_args,
+            repetitions,
+            benchmark_min_time,
+            cpu,
+        )
+
+    names = list_benchmark_names(
+        lib_path, mode, benchmark_dir, benchmark_filter, remaining_args
+    )
+    cpus = available_cpus()
+    jobs = min(benchmark_jobs, len(names), len(cpus) if cpus else benchmark_jobs)
+
+    if jobs < benchmark_jobs:
+        print(f"::notice::Reduced benchmark jobs from {benchmark_jobs} to {jobs}")
+
+    shards = [names[i::jobs] for i in range(jobs)]
+    temp_paths: List[str] = []
+    processes: List[subprocess.Popen] = []
+
+    try:
+        for index, shard_names in enumerate(shards):
+            fd, json_out_path = tempfile.mkstemp(suffix=".json")
+            os.close(fd)
+            temp_paths.append(json_out_path)
+
+            cpu = cpus[index % len(cpus)] if cpus else None
+            cmd = build_benchmark_cmd(
+                benchmark_dir,
+                json_out_path,
+                exact_filter(shard_names),
+                repetitions,
+                benchmark_min_time,
+                remaining_args,
+                cpu,
+            )
+
+            cpu_msg = f" on CPU {cpu}" if cpu is not None else ""
+            print(
+                f"Starting benchmark shard {index + 1}/{jobs}"
+                f" ({len(shard_names)} benchmarks){cpu_msg}: {' '.join(cmd)}"
+            )
+            sys.stdout.flush()
+
+            processes.append(
+                subprocess.Popen(cmd, env=benchmark_env(lib_path, mode))
+            )
+
+        failures = []
+        for index, process in enumerate(processes):
+            return_code = process.wait()
+            if return_code != 0:
+                failures.append((index + 1, return_code))
+
+        if failures:
+            for shard, return_code in failures:
+                print(
+                    f"Benchmark shard {shard} failed with code {return_code}"
+                )
+            sys.exit(2)
+
+        results: List[BenchmarkResult] = []
+        for json_out_path in temp_paths:
+            results.extend(parse_benchmark_json_file(json_out_path))
+
+        name_counts = Counter(result.name for result in results)
+        duplicate_names = sorted(
+            name for name, count in name_counts.items() if count > 1
+        )
+        if duplicate_names:
+            print(f"::error::Duplicate benchmark results: {duplicate_names}")
+            sys.exit(2)
+
+        return sorted(results, key=lambda result: result.name)
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.terminate()
+        for json_out_path in temp_paths:
+            try:
+                os.unlink(json_out_path)
+            except OSError:
+                pass
+
+
+def run_benchmark(
+    lib_path: str,
+    mode: str,
+    benchmark_dir: str,
+    extra_args: Optional[List[str]] = None,
+    repetitions: int = 3,
+    benchmark_min_time: Optional[str] = None,
+    benchmark_jobs: int = 1,
+) -> List[BenchmarkResult]:
+    """Run benchmark and parse JSON output.
+
+    Uses --benchmark_out to write JSON results to a temporary file so that
+    the human-readable benchmark progress streams to stdout/stderr in real
+    time (important for CI visibility).
+
+    When *repetitions* > 1, each benchmark runs N times and only the
+    median aggregate is kept, significantly reducing noise from ASLR and
+    shared-runner contention.
+    """
+    if benchmark_jobs < 1:
+        print("::error::--benchmark-jobs must be >= 1")
+        sys.exit(2)
+
+    return run_benchmark_parallel(
+        lib_path,
+        mode,
+        benchmark_dir,
+        extra_args,
+        repetitions,
+        benchmark_min_time,
+        benchmark_jobs,
+    )
 
 
 def parse_benchmark_json(json_output: str) -> List[BenchmarkResult]:
@@ -483,6 +698,12 @@ Examples:
         default=None,
         help="Minimum execution time per benchmark (e.g., '1s' or '2.0'). Forwarded to evmone-bench.",
     )
+    parser.add_argument(
+        "--benchmark-jobs",
+        type=int,
+        default=1,
+        help="Run benchmark shards in parallel across CPUs (default: 1).",
+    )
 
     args = parser.parse_args()
 
@@ -502,6 +723,7 @@ Examples:
             extra_args=bench_extra,
             repetitions=args.benchmark_repetitions,
             benchmark_min_time=args.benchmark_min_time,
+            benchmark_jobs=args.benchmark_jobs,
         )
     except Exception as e:
         print(f"::error::Failed to run benchmarks: {e}")
