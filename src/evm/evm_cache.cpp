@@ -636,16 +636,13 @@ static DomInfo computeDomInfo(const std::vector<GasBlock> &Blocks,
   }
   std::vector<uint32_t> &IDom = Info.IDom;
 
-  // Class A (Reachable==0) and B (Preds.empty) seed at init. Class C
-  // (reachable node whose entire reachable-pred set is empty) must also
-  // seed here so its descendants can intersect against a settled root
-  // in step 4; otherwise the descendant chain stays UINT32_MAX through
-  // the fixpoint and gets collapsed to self by the post-fixpoint sweep,
-  // diverging from the old bitset semantics that gave Dom[descendant]
-  // ⊇ {ancestor}.
+  // Class C (reachable but all preds unreachable) is seeded here, not
+  // post-fixpoint, so its descendants can intersect against a settled
+  // root in step 4 — matching the old bitset semantics that gave every
+  // descendant M of class-C node N the property N ∈ Dom[M].
   for (size_t I = 0; I < N; ++I) {
-    if (Reachable[I] == 0 || Blocks[I].Preds.empty()) {
-      IDom[I] = static_cast<uint32_t>(I);
+    if (Reachable[I] == 0) {
+      IDom[I] = static_cast<uint32_t>(I); // class A
       continue;
     }
     bool HasReachablePred = false;
@@ -656,7 +653,7 @@ static DomInfo computeDomInfo(const std::vector<GasBlock> &Blocks,
       }
     }
     if (!HasReachablePred) {
-      IDom[I] = static_cast<uint32_t>(I);
+      IDom[I] = static_cast<uint32_t>(I); // class B (Preds.empty) or C
     }
   }
 
@@ -781,19 +778,32 @@ static DomInfo computeDomInfo(const std::vector<GasBlock> &Blocks,
     }
   }
 
+  // Build the dom-tree children adjacency in CSR form (two flat vectors)
+  // to avoid N small heap allocations for vector<vector<uint32_t>>.
+  std::vector<uint32_t> ChildStart(N + 1, 0);
+  for (uint32_t I = 0; I < N; ++I) {
+    if (IDom[I] != I) {
+      ++ChildStart[IDom[I] + 1];
+    }
+  }
+  for (size_t I = 1; I <= N; ++I) {
+    ChildStart[I] += ChildStart[I - 1];
+  }
+  std::vector<uint32_t> ChildIdx(ChildStart[N]);
+  std::vector<uint32_t> CursorTmp = ChildStart;
+  for (uint32_t I = 0; I < N; ++I) {
+    if (IDom[I] != I) {
+      ChildIdx[CursorTmp[IDom[I]]++] = I;
+    }
+  }
+
   // Tarjan DFS pre/post times over the dom tree give O(1) dominance
   // queries via interval containment. Each root contributes a disjoint
   // [Enter, Exit] interval on a single global timeline, so cross-root
   // pairs answer non-dominating by non-containment.
-  std::vector<std::vector<uint32_t>> Children(N);
-  for (uint32_t I = 0; I < N; ++I) {
-    if (IDom[I] != I) {
-      Children[IDom[I]].push_back(I);
-    }
-  }
   struct EtFrame {
     uint32_t Node;
-    uint32_t ChildIdx;
+    uint32_t Cursor; // index into ChildIdx
   };
   std::vector<EtFrame> EtStack;
   EtStack.reserve(N);
@@ -803,14 +813,14 @@ static DomInfo computeDomInfo(const std::vector<GasBlock> &Blocks,
       continue;
     }
     Info.Enter[Root] = Time++;
-    EtStack.push_back({Root, 0});
+    EtStack.push_back({Root, ChildStart[Root]});
     while (!EtStack.empty()) {
       EtFrame &Top = EtStack.back();
-      const auto &Kids = Children[Top.Node];
-      if (Top.ChildIdx < Kids.size()) {
-        const uint32_t C = Kids[Top.ChildIdx++];
+      const uint32_t End = ChildStart[Top.Node + 1];
+      if (Top.Cursor < End) {
+        const uint32_t C = ChildIdx[Top.Cursor++];
         Info.Enter[C] = Time++;
-        EtStack.push_back({C, 0});
+        EtStack.push_back({C, ChildStart[C]});
       } else {
         Info.Exit[Top.Node] = Time++;
         EtStack.pop_back();
