@@ -219,6 +219,10 @@ struct GasBlock {
   uint8_t LastOpcode = 0;
   uint8_t PrevOpcode = 0;
   uint64_t Cost = 0;
+  // Mutable adjacency used during CFG build (buildCFGEdges) and edge split
+  // (splitCriticalEdges). After freezing, downstream passes read from the
+  // CSR-flattened SuccsCSR / PredsCSR instead, and these per-block vectors
+  // are cleared to release the per-block heap chunks.
   std::vector<uint32_t> Succs;
   std::vector<uint32_t> Preds;
   // Count of dynamic-jump blocks in this contract that could land here at
@@ -227,6 +231,59 @@ struct GasBlock {
   // materialising D*J explicit over-approximation edges (see buildCFGEdges).
   uint32_t ImplicitDynamicPredCount = 0;
 };
+
+// Compressed-sparse-row adjacency: one big contiguous edge-data array shared
+// across all nodes plus an offset table indexed by node id. Built once after
+// CFG mutation finishes (post-splitCriticalEdges); read by every downstream
+// pass (reachability, dominator, back-edge, loop, SCC, lemma614, writeback).
+// Compared to vector<vector<uint32_t>> this removes N small heap allocations
+// (one per non-empty Preds/Succs) and lays out neighbour lists sequentially
+// for prefetchers.
+struct CSRGraph {
+  std::vector<uint32_t> Off;  // size = NumNodes + 1
+  std::vector<uint32_t> Data; // size = total edges
+
+  struct Range {
+    const uint32_t *B;
+    const uint32_t *E;
+    const uint32_t *begin() const { return B; }
+    const uint32_t *end() const { return E; }
+    size_t size() const { return static_cast<size_t>(E - B); }
+    bool empty() const { return B == E; }
+    uint32_t operator[](size_t I) const { return B[I]; }
+  };
+
+  Range operator[](uint32_t Node) const {
+    const uint32_t *Base = Data.data();
+    return {Base + Off[Node], Base + Off[Node + 1]};
+  }
+
+  uint32_t degree(uint32_t Node) const { return Off[Node + 1] - Off[Node]; }
+};
+
+// Project Blocks[].Succs (or .Preds) into CSR form by copying. We leave the
+// per-block vectors intact rather than swap()ing them out: N back-to-back
+// std::vector dealloc()s cost more than the readers reclaim downstream, and
+// keeping the per-block storage lets later code still inspect the original
+// edge data (e.g. for debug). Memory peaks ~50% higher during the lifetime
+// of buildGasChunksSPP but the per-call cache build is short-lived.
+template <bool SelectSuccs>
+static CSRGraph buildAdjacencyCSR(const std::vector<GasBlock> &Blocks) {
+  CSRGraph G;
+  const size_t N = Blocks.size();
+  G.Off.resize(N + 1);
+  G.Off[0] = 0;
+  for (size_t I = 0; I < N; ++I) {
+    const auto &Vec = SelectSuccs ? Blocks[I].Succs : Blocks[I].Preds;
+    G.Off[I + 1] = G.Off[I] + static_cast<uint32_t>(Vec.size());
+  }
+  G.Data.resize(G.Off[N]);
+  for (size_t I = 0; I < N; ++I) {
+    const auto &Vec = SelectSuccs ? Blocks[I].Succs : Blocks[I].Preds;
+    std::copy(Vec.begin(), Vec.end(), G.Data.begin() + G.Off[I]);
+  }
+  return G;
+}
 
 static void addEdge(std::vector<GasBlock> &Blocks, uint32_t From, uint32_t To) {
   auto &FromSuccs = Blocks[From].Succs;
@@ -470,8 +527,9 @@ static bool bitsetTest(const std::vector<uint64_t> &Bits, size_t Index) {
 }
 
 static std::vector<uint8_t>
-computeInCycle(const std::vector<GasBlock> &Blocks) {
-  const size_t NumBlocks = Blocks.size();
+computeInCycle(const CSRGraph &SuccsCSR, const CSRGraph &PredsCSR) {
+  const size_t NumBlocks =
+      SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
   std::vector<uint8_t> Visited(NumBlocks, 0);
   std::vector<uint32_t> Order;
   Order.reserve(NumBlocks);
@@ -491,7 +549,7 @@ computeInCycle(const std::vector<GasBlock> &Blocks) {
     while (!DfsStack.empty()) {
       DfsFrame &Frame = DfsStack.back();
       const uint32_t Node = Frame.Node;
-      const auto &Succs = Blocks[Node].Succs;
+      const auto Succs = SuccsCSR[Node];
       bool Descended = false;
       while (Frame.SuccIndex < Succs.size()) {
         const uint32_t Succ = Succs[Frame.SuccIndex++];
@@ -530,7 +588,7 @@ computeInCycle(const std::vector<GasBlock> &Blocks) {
       const uint32_t Node = Stack.back();
       Stack.pop_back();
       Component.push_back(Node);
-      for (uint32_t Pred : Blocks[Node].Preds) {
+      for (uint32_t Pred : PredsCSR[Node]) {
         if (Pred >= NumBlocks) {
           continue;
         }
@@ -549,7 +607,7 @@ computeInCycle(const std::vector<GasBlock> &Blocks) {
     }
 
     const uint32_t Only = Component.front();
-    for (uint32_t Succ : Blocks[Only].Succs) {
+    for (uint32_t Succ : SuccsCSR[Only]) {
       if (Succ == Only) {
         InCycle[Only] = 1;
         break;
@@ -588,9 +646,10 @@ static size_t bitsetCount(const std::vector<uint64_t> &Bits) {
   return Count;
 }
 
-static std::vector<uint8_t>
-computeReachable(const std::vector<GasBlock> &Blocks, uint32_t EntryId) {
-  const size_t NumBlocks = Blocks.size();
+static std::vector<uint8_t> computeReachable(const CSRGraph &SuccsCSR,
+                                             uint32_t EntryId) {
+  const size_t NumBlocks =
+      SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
   std::vector<uint8_t> Reachable(NumBlocks, 0);
   if (NumBlocks == 0 || EntryId >= NumBlocks) {
     return Reachable;
@@ -602,7 +661,7 @@ computeReachable(const std::vector<GasBlock> &Blocks, uint32_t EntryId) {
   while (!Stack.empty()) {
     const uint32_t Node = Stack.back();
     Stack.pop_back();
-    for (uint32_t Succ : Blocks[Node].Succs) {
+    for (uint32_t Succ : SuccsCSR[Node]) {
       if (Reachable[Succ] == 0) {
         Reachable[Succ] = 1;
         Stack.push_back(Succ);
@@ -633,9 +692,10 @@ struct DomInfo {
   }
 };
 
-static DomInfo computeDomInfo(const std::vector<GasBlock> &Blocks,
+static DomInfo computeDomInfo(const CSRGraph &SuccsCSR,
+                              const CSRGraph &PredsCSR,
                               const std::vector<uint8_t> &Reachable) {
-  const size_t N = Blocks.size();
+  const size_t N = SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
   DomInfo Info;
   Info.IDom.assign(N, UINT32_MAX);
   Info.Enter.assign(N, 0);
@@ -655,7 +715,7 @@ static DomInfo computeDomInfo(const std::vector<GasBlock> &Blocks,
       continue;
     }
     bool HasReachablePred = false;
-    for (uint32_t Pred : Blocks[I].Preds) {
+    for (uint32_t Pred : PredsCSR[static_cast<uint32_t>(I)]) {
       if (Reachable[Pred] != 0) {
         HasReachablePred = true;
         break;
@@ -688,7 +748,7 @@ static DomInfo computeDomInfo(const std::vector<GasBlock> &Blocks,
     Stack.push_back({Start, 0});
     while (!Stack.empty()) {
       DfsFrame &Top = Stack.back();
-      const auto &Succs = Blocks[Top.Node].Succs;
+      const auto Succs = SuccsCSR[Top.Node];
       if (Top.SuccIdx < Succs.size()) {
         const uint32_t Succ = Succs[Top.SuccIdx++];
         if (Succ < N && Visited[Succ] == 0 &&
@@ -751,7 +811,7 @@ static DomInfo computeDomInfo(const std::vector<GasBlock> &Blocks,
       }
       uint32_t NewIDom = UINT32_MAX;
       bool Diverged = false;
-      for (uint32_t Pred : Blocks[Node].Preds) {
+      for (uint32_t Pred : PredsCSR[Node]) {
         if (Reachable[Pred] == 0) {
           continue;
         }
@@ -841,14 +901,14 @@ static DomInfo computeDomInfo(const std::vector<GasBlock> &Blocks,
 }
 
 static void
-findBackEdgesUsingDominators(const std::vector<GasBlock> &Blocks,
-                             const DomInfo &Dom,
+findBackEdgesUsingDominators(const CSRGraph &SuccsCSR, const DomInfo &Dom,
                              std::vector<std::vector<uint32_t>> &BackEdges) {
-  const size_t NumBlocks = Blocks.size();
+  const size_t NumBlocks =
+      SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
   BackEdges.assign(NumBlocks, {});
 
   for (size_t From = 0; From < NumBlocks; ++From) {
-    for (uint32_t To : Blocks[From].Succs) {
+    for (uint32_t To : SuccsCSR[static_cast<uint32_t>(From)]) {
       // Classic back-edge: target dominates source.
       if (Dom.dominates(To, static_cast<uint32_t>(From))) {
         BackEdges[From].push_back(To);
@@ -864,9 +924,10 @@ static bool isBackEdge(const std::vector<std::vector<uint32_t>> &BackEdges,
 }
 
 static std::vector<uint32_t>
-computeReverseTopo(const std::vector<GasBlock> &Blocks,
+computeReverseTopo(const CSRGraph &SuccsCSR,
                    const std::vector<std::vector<uint32_t>> &BackEdges) {
-  const size_t NumBlocks = Blocks.size();
+  const size_t NumBlocks =
+      SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
   std::vector<uint8_t> Visited(NumBlocks, 0);
   std::vector<uint32_t> Order;
   Order.reserve(NumBlocks);
@@ -890,9 +951,10 @@ computeReverseTopo(const std::vector<GasBlock> &Blocks,
       }
       Visited[Current] = 1;
       Stack.push_back(Current);
-      const auto &Succs = Blocks[Current].Succs;
-      for (auto It = Succs.rbegin(); It != Succs.rend(); ++It) {
-        uint32_t Succ = *It;
+      const auto Succs = SuccsCSR[Current];
+      // Reverse iteration so DFS pops successors in original order.
+      for (size_t I = Succs.size(); I-- > 0;) {
+        uint32_t Succ = Succs[I];
         if (!isBackEdge(BackEdges, Current, Succ) && Visited[Succ] == 0) {
           Visited[Succ] = 1;
           Stack.push_back(Succ);
@@ -914,8 +976,8 @@ struct LoopInfo {
 };
 
 static std::vector<uint64_t>
-collectNaturalLoop(uint32_t From, uint32_t Header,
-                   const std::vector<GasBlock> &Blocks, size_t NumBlocks,
+collectNaturalLoop(uint32_t From, uint32_t Header, const CSRGraph &PredsCSR,
+                   size_t NumBlocks,
                    const std::vector<uint8_t> &Reachable) {
   std::vector<uint64_t> LoopBits(bitsetWordCount(NumBlocks), 0);
   bitsetSet(LoopBits, Header);
@@ -925,7 +987,7 @@ collectNaturalLoop(uint32_t From, uint32_t Header,
   while (!Stack.empty()) {
     const uint32_t Node = Stack.back();
     Stack.pop_back();
-    for (uint32_t Pred : Blocks[Node].Preds) {
+    for (uint32_t Pred : PredsCSR[Node]) {
       if (Reachable[Pred] == 0) {
         continue;
       }
@@ -939,11 +1001,12 @@ collectNaturalLoop(uint32_t From, uint32_t Header,
 }
 
 static bool buildLoopsUsingDominance(
-    const std::vector<GasBlock> &Blocks, const DomInfo &Dom,
+    const CSRGraph &SuccsCSR, const CSRGraph &PredsCSR, const DomInfo &Dom,
     const std::vector<uint8_t> &Reachable, std::vector<LoopInfo> &Loops,
     std::vector<int32_t> &LoopOf, std::vector<std::vector<uint32_t>> &ExitLoops,
     std::vector<std::vector<uint8_t>> &ExitFlags) {
-  const size_t NumBlocks = Blocks.size();
+  const size_t NumBlocks =
+      SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
   const size_t Words = bitsetWordCount(NumBlocks);
 
   struct LoopBuild {
@@ -957,7 +1020,7 @@ static bool buildLoopsUsingDominance(
     if (Reachable[From] == 0) {
       continue;
     }
-    for (uint32_t To : Blocks[From].Succs) {
+    for (uint32_t To : SuccsCSR[static_cast<uint32_t>(From)]) {
       // Header discovery: a back-edge From -> To exists iff To dominates From.
       if (!Dom.dominates(To, static_cast<uint32_t>(From))) {
         continue;
@@ -969,7 +1032,7 @@ static bool buildLoopsUsingDominance(
       }
 
       std::vector<uint64_t> LoopBits = collectNaturalLoop(
-          static_cast<uint32_t>(From), To, Blocks, NumBlocks, Reachable);
+          static_cast<uint32_t>(From), To, PredsCSR, NumBlocks, Reachable);
       auto &TargetBits = LoopBuilds[It->second].Bits;
       for (size_t W = 0; W < Words; ++W) {
         TargetBits[W] |= LoopBits[W];
@@ -1081,7 +1144,7 @@ static bool buildLoopsUsingDominance(
     auto &Loop = Loops[LoopId];
     for (uint32_t Node : Loop.Nodes) {
       bool IsExit = false;
-      for (uint32_t Succ : Blocks[Node].Succs) {
+      for (uint32_t Succ : SuccsCSR[Node]) {
         if (!bitsetTest(Loop.NodeMask, Succ)) {
           IsExit = true;
           break;
@@ -1106,17 +1169,20 @@ static bool buildLoopsUsingDominance(
 // predecessors as a count instead of explicit edges; folding them in here
 // keeps `lemma614Update`'s "shift only into single-pred successors" check
 // equivalent to the explicit over-approximation.
-static size_t effectivePredCount(const GasBlock &Block) {
-  size_t Count = Block.Preds.size();
-  if (Block.Start == 0) {
+static size_t effectivePredCount(uint32_t NodeId,
+                                 const std::vector<GasBlock> &Blocks,
+                                 const CSRGraph &PredsCSR) {
+  size_t Count = PredsCSR.degree(NodeId);
+  if (Blocks[NodeId].Start == 0) {
     ++Count;
   }
-  Count += Block.ImplicitDynamicPredCount;
+  Count += Blocks[NodeId].ImplicitDynamicPredCount;
   return Count;
 }
 
 // Lemma 6.14 Update: move minimum successor cost to current node
 static bool lemma614Update(uint32_t NodeId, const std::vector<GasBlock> &Blocks,
+                           const CSRGraph &SuccsCSR, const CSRGraph &PredsCSR,
                            const std::vector<std::vector<uint32_t>> *BackEdges,
                            const std::vector<uint64_t> *AllowedMask,
                            std::vector<uint64_t> &Metering) {
@@ -1126,7 +1192,7 @@ static bool lemma614Update(uint32_t NodeId, const std::vector<GasBlock> &Blocks,
   }
 
   uint64_t MinSucc = UINT64_MAX;
-  for (uint32_t Succ : Node.Succs) {
+  for (uint32_t Succ : SuccsCSR[NodeId]) {
     if (BackEdges && isBackEdge(*BackEdges, NodeId, Succ)) {
       continue;
     }
@@ -1136,7 +1202,7 @@ static bool lemma614Update(uint32_t NodeId, const std::vector<GasBlock> &Blocks,
       MinSucc = 0;
       continue;
     }
-    if (effectivePredCount(Blocks[Succ]) != 1) {
+    if (effectivePredCount(Succ, Blocks, PredsCSR) != 1) {
       MinSucc = 0;
       continue;
     }
@@ -1152,14 +1218,14 @@ static bool lemma614Update(uint32_t NodeId, const std::vector<GasBlock> &Blocks,
   }
 
   Metering[NodeId] += MinSucc;
-  for (uint32_t Succ : Node.Succs) {
+  for (uint32_t Succ : SuccsCSR[NodeId]) {
     if (BackEdges && isBackEdge(*BackEdges, NodeId, Succ)) {
       continue;
     }
     if (AllowedMask && !bitsetTest(*AllowedMask, Succ)) {
       continue;
     }
-    if (effectivePredCount(Blocks[Succ]) != 1) {
+    if (effectivePredCount(Succ, Blocks, PredsCSR) != 1) {
       continue;
     }
     if (isGasChunkTerminator(Blocks[Succ].LastOpcode)) {
@@ -1228,8 +1294,16 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   splitCriticalEdges(Blocks, CodeSize);
   EVM_PROFILE_END(splitCriticalEdges);
 
+  // Freeze adjacency: collapse the per-block Succs/Preds vectors into CSR
+  // (one heap alloc per direction) so downstream passes traverse neighbour
+  // lists out of contiguous arrays instead of chasing N small heap chunks.
+  EVM_PROFILE_BEGIN(buildCSR);
+  const CSRGraph SuccsCSR = buildAdjacencyCSR<true>(Blocks);
+  const CSRGraph PredsCSR = buildAdjacencyCSR<false>(Blocks);
+  EVM_PROFILE_END(buildCSR);
+
   EVM_PROFILE_BEGIN(computeReachable);
-  std::vector<uint8_t> Reachable = computeReachable(Blocks, 0);
+  std::vector<uint8_t> Reachable = computeReachable(SuccsCSR, 0);
   // Seed dyn-target JUMPDESTs as reachability roots so dom/loop analyses
   // include them and their static successors. Statically-dead JUMPDESTs
   // (no static pred, no dyn-jump in the contract) are intentionally left
@@ -1248,7 +1322,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
     while (!Stack.empty()) {
       const uint32_t Node = Stack.back();
       Stack.pop_back();
-      for (uint32_t Succ : Blocks[Node].Succs) {
+      for (uint32_t Succ : SuccsCSR[Node]) {
         if (Reachable[Succ] == 0) {
           Reachable[Succ] = 1;
           Stack.push_back(Succ);
@@ -1259,16 +1333,16 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   EVM_PROFILE_END(computeReachable);
 
   EVM_PROFILE_BEGIN(computeDomInfo);
-  const DomInfo Dom = computeDomInfo(Blocks, Reachable);
+  const DomInfo Dom = computeDomInfo(SuccsCSR, PredsCSR, Reachable);
   EVM_PROFILE_END(computeDomInfo);
 
   EVM_PROFILE_BEGIN(findBackEdges);
   std::vector<std::vector<uint32_t>> BackEdges;
-  findBackEdgesUsingDominators(Blocks, Dom, BackEdges);
+  findBackEdgesUsingDominators(SuccsCSR, Dom, BackEdges);
   EVM_PROFILE_END(findBackEdges);
 
   EVM_PROFILE_BEGIN(computeReverseTopo);
-  const std::vector<uint32_t> RevTopo = computeReverseTopo(Blocks, BackEdges);
+  const std::vector<uint32_t> RevTopo = computeReverseTopo(SuccsCSR, BackEdges);
   std::vector<size_t> RevTopoIndex(Blocks.size(), 0);
   for (size_t Index = 0; Index < RevTopo.size(); ++Index) {
     RevTopoIndex[RevTopo[Index]] = Index;
@@ -1276,7 +1350,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   EVM_PROFILE_END(computeReverseTopo);
 
   EVM_PROFILE_BEGIN(computeInCycle);
-  const std::vector<uint8_t> InCycle = computeInCycle(Blocks);
+  const std::vector<uint8_t> InCycle = computeInCycle(SuccsCSR, PredsCSR);
   EVM_PROFILE_END(computeInCycle);
 
   EVM_PROFILE_BEGIN(buildLoopsUsingDominance);
@@ -1284,8 +1358,8 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   std::vector<int32_t> LoopOf;
   std::vector<std::vector<uint32_t>> ExitLoops;
   std::vector<std::vector<uint8_t>> ExitFlags;
-  bool UseLinearSPP = buildLoopsUsingDominance(Blocks, Dom, Reachable, Loops,
-                                               LoopOf, ExitLoops, ExitFlags);
+  bool UseLinearSPP = buildLoopsUsingDominance(
+      SuccsCSR, PredsCSR, Dom, Reachable, Loops, LoopOf, ExitLoops, ExitFlags);
   EVM_PROFILE_END(buildLoopsUsingDominance);
 
   EVM_PROFILE_BEGIN(meteringInit);
@@ -1309,7 +1383,8 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
       if (InCycle[NodeId] != 0) {
         continue;
       }
-      lemma614Update(NodeId, Blocks, &BackEdges, &NonCycleMask, Metering);
+      lemma614Update(NodeId, Blocks, SuccsCSR, PredsCSR, &BackEdges, &NonCycleMask,
+                     Metering);
     }
   } else {
     std::vector<std::vector<uint64_t>> LoopNonCycleMask(Loops.size());
@@ -1349,8 +1424,8 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
         if (InCycle[NodeId] != 0) {
           continue;
         }
-        lemma614Update(NodeId, Blocks, nullptr, &LoopNonCycleMask[LoopId],
-                       Metering);
+        lemma614Update(NodeId, Blocks, SuccsCSR, PredsCSR, nullptr,
+                       &LoopNonCycleMask[LoopId], Metering);
       }
       LoopProcessed[LoopId] = 1;
     };
@@ -1361,7 +1436,8 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
         if (InCycle[NodeId] != 0) {
           continue;
         }
-        lemma614Update(NodeId, Blocks, &BackEdges, &NonCycleMask, Metering);
+        lemma614Update(NodeId, Blocks, SuccsCSR, PredsCSR, &BackEdges, &NonCycleMask,
+                     Metering);
       } else {
         Recorded[LoopId].push_back(NodeId);
         ++RecordedCount[LoopId];
@@ -1442,18 +1518,44 @@ computeIDomForTesting(const std::vector<std::vector<uint32_t>> &Succs,
   if (Reachable.size() != N) {
     return std::vector<uint32_t>(N, UINT32_MAX);
   }
-  std::vector<GasBlock> Blocks(N);
+  // Flatten Succs[] into CSR directly, then derive Preds CSR from it. The
+  // helper exists only to drive computeDomInfo in isolation; we do not need
+  // the GasBlock vector here.
+  CSRGraph SuccsCSR;
+  SuccsCSR.Off.resize(N + 1, 0);
   for (size_t I = 0; I < N; ++I) {
-    Blocks[I].Succs = Succs[I];
+    SuccsCSR.Off[I + 1] = SuccsCSR.Off[I] + static_cast<uint32_t>(Succs[I].size());
   }
+  SuccsCSR.Data.resize(SuccsCSR.Off[N]);
+  for (size_t I = 0; I < N; ++I) {
+    uint32_t Pos = SuccsCSR.Off[I];
+    for (uint32_t S : Succs[I]) {
+      SuccsCSR.Data[Pos++] = S;
+    }
+  }
+  // Build Preds CSR by counting in-degree then bucketing.
+  CSRGraph PredsCSR;
+  PredsCSR.Off.assign(N + 1, 0);
   for (size_t I = 0; I < N; ++I) {
     for (uint32_t S : Succs[I]) {
       if (S < N) {
-        Blocks[S].Preds.push_back(static_cast<uint32_t>(I));
+        ++PredsCSR.Off[S + 1];
       }
     }
   }
-  return computeDomInfo(Blocks, Reachable).IDom;
+  for (size_t I = 1; I <= N; ++I) {
+    PredsCSR.Off[I] += PredsCSR.Off[I - 1];
+  }
+  PredsCSR.Data.resize(PredsCSR.Off[N]);
+  std::vector<uint32_t> Cursor = PredsCSR.Off;
+  for (size_t I = 0; I < N; ++I) {
+    for (uint32_t S : Succs[I]) {
+      if (S < N) {
+        PredsCSR.Data[Cursor[S]++] = static_cast<uint32_t>(I);
+      }
+    }
+  }
+  return computeDomInfo(SuccsCSR, PredsCSR, Reachable).IDom;
 }
 
 } // namespace for_testing
