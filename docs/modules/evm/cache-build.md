@@ -199,10 +199,10 @@ to anchor PR-time perf measurements:
   fixpoint takes to settle. Used to validate that adding SemiNCA would
   not save a measurable number of rounds on representative workloads.
 
-The counters add ~0.5-1 µs per phase boundary, which adds up to ~1-1.3
-ms of overhead at the N=100k synthetic stress (13 phase pairs × 100k
-nodes). Treat per-phase columns as approximate share, not exact
-decomposition.
+The counters add ~0.5-1 µs per phase boundary; the 13 phase pairs
+inside `buildGasChunksSPP` (plus phase 0 in `buildBytecodeCache`)
+accumulate to ~1-1.3 ms of overhead at the N=100k synthetic stress.
+Treat per-phase columns as approximate share, not exact decomposition.
 
 ## Cross-References
 
