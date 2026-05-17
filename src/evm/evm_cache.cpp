@@ -676,6 +676,11 @@ struct DomInfo {
   std::vector<uint32_t> IDom;
   std::vector<uint32_t> Enter;
   std::vector<uint32_t> Exit;
+  // Reverse post-order: forward DFS visit, postorder pushes, reversed.
+  // Exposed so downstream passes that need a topo order over the
+  // non-back-edge sub-DAG (e.g. computeReverseTopo, lemma614Schedule)
+  // can reuse this traversal instead of running their own DFS.
+  std::vector<uint32_t> RPO;
 
   bool dominates(uint32_t A, uint32_t B) const {
     if (A >= IDom.size() || B >= IDom.size()) {
@@ -725,7 +730,7 @@ static DomInfo computeDomInfo(const CSRGraph &SuccsCSR,
   // Iterative DFS for postorder. Reserve up front so back() refs are
   // not invalidated by push_back reallocations.
   std::vector<uint32_t> PostOrderId(N, UINT32_MAX);
-  std::vector<uint32_t> RPO;
+  std::vector<uint32_t> &RPO = Info.RPO;
   RPO.reserve(N);
   std::vector<uint8_t> Visited(N, 0);
   struct DfsFrame {
@@ -929,46 +934,18 @@ static bool isBackEdge(const std::vector<std::vector<uint32_t>> &BackEdges,
   return std::find(Edges.begin(), Edges.end(), To) != Edges.end();
 }
 
-static std::vector<uint32_t>
-computeReverseTopo(const CSRGraph &SuccsCSR,
-                   const std::vector<std::vector<uint32_t>> &BackEdges) {
-  const size_t NumBlocks =
-      SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
-  std::vector<uint8_t> Visited(NumBlocks, 0);
+// Reverse-topo order for lemma614Schedule. This is the postorder of the
+// forward DFS that visits every node once and never follows back-edges
+// (back-edges always target an already-visited ancestor, so they are
+// implicitly skipped by the visited check). computeDomInfo already runs
+// exactly that DFS and stores reverse(postorder) in DomInfo::RPO, so we
+// just return its reverse here instead of repeating the traversal.
+static std::vector<uint32_t> computeReverseTopo(const DomInfo &Dom) {
   std::vector<uint32_t> Order;
-  Order.reserve(NumBlocks);
-
-  for (uint32_t StartNode = 0; StartNode < NumBlocks; ++StartNode) {
-    if (Visited[StartNode] != 0) {
-      continue;
-    }
-    std::vector<uint32_t> Stack;
-    Stack.push_back(StartNode);
-    while (!Stack.empty()) {
-      uint32_t Current = Stack.back();
-      Stack.pop_back();
-      if (Visited[Current] == 2) {
-        continue;
-      }
-      if (Visited[Current] == 1) {
-        Visited[Current] = 2;
-        Order.push_back(Current);
-        continue;
-      }
-      Visited[Current] = 1;
-      Stack.push_back(Current);
-      const auto Succs = SuccsCSR[Current];
-      // Reverse iteration so DFS pops successors in original order.
-      for (size_t I = Succs.size(); I-- > 0;) {
-        uint32_t Succ = Succs[I];
-        if (!isBackEdge(BackEdges, Current, Succ) && Visited[Succ] == 0) {
-          Visited[Succ] = 1;
-          Stack.push_back(Succ);
-        }
-      }
-    }
+  Order.reserve(Dom.RPO.size());
+  for (auto It = Dom.RPO.rbegin(); It != Dom.RPO.rend(); ++It) {
+    Order.push_back(*It);
   }
-
   return Order;
 }
 
@@ -1348,7 +1325,7 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   EVM_PROFILE_END(findBackEdges);
 
   EVM_PROFILE_BEGIN(computeReverseTopo);
-  const std::vector<uint32_t> RevTopo = computeReverseTopo(SuccsCSR, BackEdges);
+  const std::vector<uint32_t> RevTopo = computeReverseTopo(Dom);
   std::vector<size_t> RevTopoIndex(Blocks.size(), 0);
   for (size_t Index = 0; Index < RevTopo.size(); ++Index) {
     RevTopoIndex[RevTopo[Index]] = Index;
