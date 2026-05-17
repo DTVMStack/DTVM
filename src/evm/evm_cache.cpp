@@ -522,10 +522,9 @@ static bool bitsetTest(const std::vector<uint64_t> &Bits, size_t Index) {
   return (Bits[Index / 64] & (uint64_t{1} << (Index % 64))) != 0;
 }
 
-static std::vector<uint8_t>
-computeInCycle(const CSRGraph &SuccsCSR, const CSRGraph &PredsCSR) {
-  const size_t NumBlocks =
-      SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
+static std::vector<uint8_t> computeInCycle(const CSRGraph &SuccsCSR,
+                                           const CSRGraph &PredsCSR) {
+  const size_t NumBlocks = SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
   std::vector<uint8_t> Visited(NumBlocks, 0);
   std::vector<uint32_t> Order;
   Order.reserve(NumBlocks);
@@ -644,8 +643,7 @@ static size_t bitsetCount(const std::vector<uint64_t> &Bits) {
 
 static std::vector<uint8_t> computeReachable(const CSRGraph &SuccsCSR,
                                              uint32_t EntryId) {
-  const size_t NumBlocks =
-      SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
+  const size_t NumBlocks = SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
   std::vector<uint8_t> Reachable(NumBlocks, 0);
   if (NumBlocks == 0 || EntryId >= NumBlocks) {
     return Reachable;
@@ -914,8 +912,7 @@ static DomInfo computeDomInfo(const CSRGraph &SuccsCSR,
 static void
 findBackEdgesUsingDominators(const CSRGraph &SuccsCSR, const DomInfo &Dom,
                              std::vector<std::vector<uint32_t>> &BackEdges) {
-  const size_t NumBlocks =
-      SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
+  const size_t NumBlocks = SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
   BackEdges.assign(NumBlocks, {});
 
   for (size_t From = 0; From < NumBlocks; ++From) {
@@ -960,8 +957,7 @@ struct LoopInfo {
 
 static std::vector<uint64_t>
 collectNaturalLoop(uint32_t From, uint32_t Header, const CSRGraph &PredsCSR,
-                   size_t NumBlocks,
-                   const std::vector<uint8_t> &Reachable) {
+                   size_t NumBlocks, const std::vector<uint8_t> &Reachable) {
   std::vector<uint64_t> LoopBits(bitsetWordCount(NumBlocks), 0);
   bitsetSet(LoopBits, Header);
   bitsetSet(LoopBits, From);
@@ -988,8 +984,7 @@ static bool buildLoopsUsingDominance(
     const std::vector<uint8_t> &Reachable, std::vector<LoopInfo> &Loops,
     std::vector<int32_t> &LoopOf, std::vector<std::vector<uint32_t>> &ExitLoops,
     std::vector<std::vector<uint8_t>> &ExitFlags) {
-  const size_t NumBlocks =
-      SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
+  const size_t NumBlocks = SuccsCSR.Off.empty() ? 0 : SuccsCSR.Off.size() - 1;
   const size_t Words = bitsetWordCount(NumBlocks);
 
   struct LoopBuild {
@@ -1391,8 +1386,8 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
       if (InCycle[NodeId] != 0) {
         continue;
       }
-      lemma614Update(NodeId, Blocks, SuccsCSR, PredsCSR, &BackEdges, &NonCycleMask,
-                     Metering);
+      lemma614Update(NodeId, Blocks, SuccsCSR, PredsCSR, &BackEdges,
+                     &NonCycleMask, Metering);
     }
   } else {
     std::vector<std::vector<uint64_t>> LoopNonCycleMask(Loops.size());
@@ -1444,8 +1439,8 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
         if (InCycle[NodeId] != 0) {
           continue;
         }
-        lemma614Update(NodeId, Blocks, SuccsCSR, PredsCSR, &BackEdges, &NonCycleMask,
-                     Metering);
+        lemma614Update(NodeId, Blocks, SuccsCSR, PredsCSR, &BackEdges,
+                       &NonCycleMask, Metering);
       } else {
         Recorded[LoopId].push_back(NodeId);
         ++RecordedCount[LoopId];
@@ -1532,7 +1527,8 @@ computeIDomForTesting(const std::vector<std::vector<uint32_t>> &Succs,
   CSRGraph SuccsCSR;
   SuccsCSR.Off.resize(N + 1, 0);
   for (size_t I = 0; I < N; ++I) {
-    SuccsCSR.Off[I + 1] = SuccsCSR.Off[I] + static_cast<uint32_t>(Succs[I].size());
+    SuccsCSR.Off[I + 1] =
+        SuccsCSR.Off[I] + static_cast<uint32_t>(Succs[I].size());
   }
   SuccsCSR.Data.resize(SuccsCSR.Off[N]);
   for (size_t I = 0; I < N; ++I) {
