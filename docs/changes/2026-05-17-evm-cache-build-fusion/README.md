@@ -1,10 +1,11 @@
 # Change: EVM Cache Build — Phase Fusion + CSR Adjacency + GasBlock Compaction
 
-- **Status**: Implemented
+- **Status**: Implemented (Phase 4 R1 round applied; see `reviews/`)
 - **Date**: 2026-05-17
 - **Tier**: Full
 - **Branch**: `perf/cache-build-fusion` (off `perf/evm-spp-foundation`)
 - **Depends on**: PR A (`perf/evm-spp-foundation` / 2026-05-16-evm-spp-overhaul) for dom-CHK foundation + `ZEN_EVM_CACHE_PROFILE` instrumentation hooks
+- **Commits**: 11 implementation + 1 docs = 12 commits total on the branch
 
 ## Overview
 
@@ -60,24 +61,31 @@ The `chkFixpointRounds` diagnostic counter ships under
 ### Per-phase breakdown after PR A landed
 
 Running `evmCacheComplexityDemo 100000` with
-`-DZEN_EVM_CACHE_PROFILE=ON` (9-rep mean) at PR A HEAD:
+`-DZEN_EVM_CACHE_PROFILE=ON` at PR A HEAD (commit `592fd35`), 50-rep
+mean per phase, interleaved 100-rep median for the total:
 
-| Phase | Mean (us) | % of total |
+| Phase | Mean (us) | % of instrumented sum |
 |---|---:|---:|
-| buildGasBlocks | 9525 | 23.0 % |
-| computeDomInfo | 7233 | 17.5 % |
-| computeInCycle | 5694 | 13.7 % |
-| buildCFGEdges | 4562 | 11.0 % |
-| computeReachable | 1818 | 4.4 % |
-| lemma614Schedule | 1733 | 4.2 % |
-| computeReverseTopo | 1651 | 4.0 % |
-| buildLoopsUsingDominance | 1309 | 3.2 % |
-| findBackEdges | 1169 | 2.8 % |
-| splitCriticalEdges | 657 | 1.6 % |
-| writeback | 457 | 1.1 % |
-| meteringInit | 378 | 0.9 % |
-| buildJumpDestMap | 24 | 0.06 % |
-| **&lt;TOTAL&gt;** | **41412** | |
+| computeDomInfo | 10818 | 22.2 % |
+| buildGasBlocks | 10350 | 21.3 % |
+| computeInCycle | 7263 | 14.9 % |
+| buildCFGEdges | 5477 | 11.2 % |
+| lemma614Schedule | 3091 | 6.3 % |
+| computeReachable | 2531 | 5.2 % |
+| computeReverseTopo | 2423 | 5.0 % |
+| buildLoopsUsingDominance | 2076 | 4.3 % |
+| findBackEdges | 1938 | 4.0 % |
+| splitCriticalEdges | 933 | 1.9 % |
+| writeback | 783 | 1.6 % |
+| meteringInit | 533 | 1.1 % |
+| collectJumpDests | 484 | 1.0 % |
+| **Σ instrumented** | **48700** | |
+| **&lt;TOTAL median&gt;** | **47343** | |
+
+The instrumented sum (48700 us) slightly exceeds the median wall-clock
+(47343 us) because `EVM_PROFILE_BEGIN`/`END` chrono pairs add ~0.5-1 us
+overhead at each of 13 phase boundaries. Treat the per-phase column as
+"approximate share" rather than an exact decomposition.
 
 Three families of targets surfaced:
 
@@ -141,16 +149,26 @@ makes the case visible.
 ### Files touched
 
 - `src/evm/evm_cache.cpp` — all optimisations land here. Net diff:
-  +236 / -171 lines.
-- `src/tests/evm_cache_tests.cpp` — unchanged (existing 14 tests still
-  pass, including `IrreducibleImproperRegion` which exercises the
-  Tarjan fallback path).
+  +312 / -188 lines (`git diff --numstat perf/evm-spp-foundation..HEAD`).
+- `src/tests/evm_cache_tests.cpp` — unchanged. The existing 14 tests
+  still pass; **none of them drives `UseLinearSPP=false`**, so the
+  conditional-Tarjan-skip branch added by this PR has no dedicated
+  unit-test coverage. End-to-end soundness on irreducible CFGs is
+  established by `evmone-statetest -k fork_Cancun` 2723/2723. See
+  R2 below for the actual safety invariant.
 
 ### Public API / ABI
 
-None. `EVMBytecodeCache` is byte-identical for every contract on every
-input. The `ZEN_EVM_CACHE_PROFILE` flag remains opt-in and macro-elides
-to no-ops in release builds.
+None. `EVMBytecodeCache` is behaviourally identical
+(`evmone-statetest --vm external_vm -k fork_Cancun` 2723/2723 pass)
+and the JIT / interpreter contract is unchanged. A literal byte-by-byte
+diff of `EVMBytecodeCache` between baseline and HEAD over a corpus
+was not run for this PR (statetest equivalence is the property runtime
+actually relies on); if a future audit needs strict byte-identity
+proof, a fixture corpus + `memcmp` test would be a one-off addition.
+
+The `ZEN_EVM_CACHE_PROFILE` flag remains opt-in and macro-elides to
+no-ops in release builds.
 
 ### Memory footprint
 
@@ -176,10 +194,16 @@ None. This is a drop-in pipeline refactor under the existing entry point
 
 ## Implementation Plan
 
-The 11 commits land in the order below. Each commit was verified
-independently by re-running `evmCacheTests` and
+The 11 implementation commits land in the order below. Each commit was
+verified independently by re-running `evmCacheTests` and
 `evmone-statetest --vm external_vm -k fork_Cancun` before the next was
-authored, so any of them can be cherry-picked or reverted in isolation.
+authored. Note: **commits within a phase form a unit**. In particular
+Phase 5's commits (`55a250b` `Blocks.reserve` → `689e5d5` `EdgeTables`
+split → `f7630d8` 32-byte pack) and the Phase 2 pair (`0dd5bb9` CSR
+introduces `buildAdjacencyCSR(const vector<GasBlock>&)`; `689e5d5`
+later changes that signature to `(const EdgeTables&)`) cannot be
+reverted in isolation without breaking the build — the per-commit
+greenness claim holds, the "single-commit cherry-pick" claim does not.
 
 ### Phase 1 — Bytecode-walk fusion (commits 1-2)
 
@@ -220,50 +244,80 @@ authored, so any of them can be cherry-picked or reverted in isolation.
 
 ## Results
 
-### Per-phase deltas (N=100k synthetic, mean us)
+### Measurement methodology (this section)
+
+All numbers below come from a single same-session pair of measurements:
+
+1. `evmCacheComplexityDemo` rebuilt twice — once from `592fd35`'s
+   `src/evm/evm_cache.cpp` (PR A HEAD) and once from this PR's HEAD —
+   keeping every other source file and the CMake build configuration
+   identical.
+2. Both binaries kept on disk, then exercised with 100 reps **alternated
+   per-rep** at each N (baseline, head, baseline, head, …) so any
+   per-second thermal or scheduling drift hits both binaries equally.
+3. Medians are reported (more robust than means under tail variance).
+
+Run-to-run variance on this machine is roughly ±5 % at N=100k; a
+non-interleaved comparison can drift further if the system thermal
+state changes mid-run. Reviewers reproducing should use the same
+interleaved methodology or expect the bands to widen.
+
+### Per-phase deltas (N=100k synthetic, 50-rep mean per phase)
 
 | Phase | PR A baseline | This PR HEAD | Δ |
 |---|---:|---:|---:|
-| buildGasBlocks | 9525 | 2157 | **-77 %** |
-| buildCFGEdges | 4562 | 4265 | -6.5 % |
-| computeDomInfo | 7233 | 4370 | **-40 %** |
-| buildCSR | — (new) | 3064 | n/a |
-| computeInCycle | 5694 | 36 | **-99.4 %** |
-| computeReachable | 1818 | 1052 | -42 % |
-| lemma614Schedule | 1733 | 745 | -57 % |
-| buildLoopsUsingDominance | 1309 | 1288 | -1.6 % |
-| findBackEdges | 1169 | 1046 | -10.5 % |
-| computeReverseTopo | 1651 | 172 | **-90 %** |
-| splitCriticalEdges | 657 | 361 | -45 % |
-| writeback | 457 | 331 | -28 % |
-| meteringInit | 378 | 794 | +110 %\* |
-| buildJumpDestMap | 24 | 32 | noise |
-| **&lt;TOTAL median&gt;** | **45603 / 47429**† | **27764** | **-39 % / -41 %** |
+| computeDomInfo | 10 818 | 4 482 | **-58.6 %** |
+| buildGasBlocks | 10 350 | 2 181 | **-78.9 %** |
+| computeInCycle | 7 263 | 37 | **-99.5 %** |
+| buildCFGEdges | 5 477 | 4 512 | -17.6 % |
+| lemma614Schedule | 3 091 | 886 | **-71.3 %** |
+| computeReachable | 2 531 | 1 076 | **-57.5 %** |
+| computeReverseTopo | 2 423 | 197 | **-91.9 %** |
+| buildLoopsUsingDominance | 2 076 | 1 348 | -35.1 % |
+| findBackEdges | 1 938 | 1 099 | -43.3 % |
+| splitCriticalEdges | 933 | 366 | -60.8 % |
+| writeback | 783 | 399 | -49.0 % |
+| meteringInit | 533 | 842 | +57.9 %\* |
+| collectJumpDests | 484 | — (folded) | n/a |
+| buildCSR | — (new) | 3 326 | n/a |
+| buildJumpDestMap | — (new instrumented) | 35 | n/a |
+| **&lt;TOTAL median&gt;** | **47 343** | **27 945** | **-41.0 %** |
 
-\* `meteringInit` increased absolutely but its share is small (<3 %).
-Likely cache-effect attribution from the reordered pipeline; total wall
-clock still drops.
+\* `meteringInit` increased absolutely. Most likely cache-effect
+attribution: the prior pipeline left `Blocks[].Succs/Preds` cache-warm
+for the subsequent `Metering[Id] = Blocks[Id].Cost` walk, while the
+new pipeline keeps the Block scalars cold until that loop touches them.
+This is a conjecture from the access pattern, not a measured cause —
+it could also be chrono-overhead artefact at the sub-millisecond scale.
+The +309 us increase is dwarfed by the net win.
 
-† PR A baseline measured separately at 100-rep median 47429 us
-(rebuilt from `592fd35` `src/evm/evm_cache.cpp` against the same build
-configuration). The 45603 figure is from an earlier 25-rep run cited
-for context; the 47429 number is the apples-to-apples gate.
+### Cross-N speedup vs `perf/evm-spp-foundation` HEAD (100-rep interleaved median)
 
-### Cross-N speedup vs `perf/evm-spp-foundation` HEAD (100-rep median)
+| N | Baseline (us) | This PR (us) | Speedup | Δ |
+|---:|---:|---:|---:|---:|
+| 10 000 | 2 742 | 2 200 | **1.25×** | -19.8 % |
+| 20 000 | 6 096 | 4 773 | **1.28×** | -21.7 % |
+| 50 000 | 19 476 | 13 593 | **1.43×** | -30.2 % |
+| 100 000 | 47 343 | 27 945 | **1.69×** | -41.0 % |
 
-| N | Baseline (us) | This PR (us) | Speedup |
-|---:|---:|---:|---:|
-| 10 000 | 2746 | 2163 | **1.27×** |
-| 20 000 | 6074 | 4625 | **1.31×** |
-| 50 000 | 18 653 | 12 776 | **1.46×** |
-| 100 000 | 47 429 | 27 764 | **1.71×** |
+The speedup ratio grows with N. The plausible mechanism is that
+the dominant wins (CSR cache density, GasBlock 80→32 byte stride
+compression, Blocks reserve eliminating geometric realloc churn) all
+have constant amortised cost per node but the baseline pipeline's
+heap-chasing reader cost grows super-linearly as the working set
+spills L2 → L3 → DRAM. **This is a hypothesis from the access pattern,
+not measured with hardware counters.** It could also be a
+synthetic-generator-specific pathology — the synthetic CFG is uniform
+(alternating PUSH/JUMP/JUMPDEST blocks), which is exactly the case
+where flat sequential CSR access wins biggest over scattered
+per-block heap chunks. A real-corpus paired-ratio measurement (à la
+PR A's harness) would be a useful follow-up.
 
-Speedup ratio scales with N because the dominant wins (CSR cache
-density, GasBlock stride compression, Blocks reserve) all become more
-valuable as `Blocks` and the adjacency working set spill L2 → L3 → DRAM.
-Production EIP-170 contracts (N typically 100-2000) sit in the
-"-21 % to -27 %" band; algorithmic stress tests live in the
-"-30 % to -41 %" band.
+Production EIP-170 contracts cap at CodeSize ≤ 24 576 bytes, so the
+applicable region is N ≤ 8000 blocks at most pathological packing,
+practically N = 100-2000. That band aligns with the "-19.8 % to -21.7 %"
+end of the table. The "-41 %" figure is algorithmic-DoS hygiene, not
+a production headline.
 
 ### Caveat on the headline number
 
@@ -278,44 +332,89 @@ realistic-scale impact.
 
 | Gate | Result |
 |---|---|
-| `tools/format.sh check` | clean |
-| `cmake --build build --target dtvmapi -j$(nproc)` | success, no new warnings |
+| `tools/format.sh check` (files touched by this PR) | clean |
+| `cmake --build build --target dtvmapi -j$(nproc)` | success, no new warnings (use `CCACHE_DISABLE=1` if ccache cache lives on a read-only mount) |
 | `build/evmCacheTests` | 14 / 14 pass |
 | `evmone-statetest --vm external_vm -k fork_Cancun` | 2723 / 2723 pass (~77 s) |
 | `evmCacheComplexityDemo` at N=10k/20k/50k/100k | all green, monotone improvement vs baseline |
-| `chkFixpointRounds` counter | 2 at every N (validates SemiNCA-drop decision) |
+| `chkFixpointRounds` counter | 2 at every measured N (synthetic + unit tests; see R4) |
 
 `tools/format.sh check`, build, evmCacheTests, and statetest all re-ran
-after every single one of the 11 commits, not just at the end. Each
-commit is independently green and individually revertable.
+after every single one of the 11 implementation commits, not just at
+the end. Each commit was independently green when authored.
+
+**Caveat on `tools/format.sh check`**: a Round-1 reviewer observed exit
+code 123 with pre-existing violations in `src/singlepass/x64/assembler.h`
+and `src/platform/sgx/zen_sgx_file.h` — neither of which this PR
+touches. On the author's machine the gate is clean; the discrepancy
+appears environment-specific (different clang-format version or repo
+state). The PR's own diff is `tools/format.sh format`-idempotent.
 
 ## Risks
 
-- **R1 — `Blocks.reserve(CodeSize)` over-allocates for typical EVM code**:
-  The reserve uses `CodeSize` as a conservative upper bound (1 byte = 1
-  block worst case). Real contracts average 3-10 bytes per block, so the
-  reserve over-allocates by 3-10×. At EIP-170 max (24576 bytes) this is
-  at most 0.79 MB transient — well within memory budgets. At the
-  synthetic N=100k stress (CodeSize ≈ 300 KB) it is 9.6 MB transient,
-  released when `Blocks` is destroyed. **Mitigation**: the alternative —
-  a pre-scan pass to count blocks exactly — would itself cost ~1 ms at
-  N=100k, defeating the purpose. Reserve is cheaper than the geometric
-  growth it eliminates (~16 MB of memmove traffic at N=100k). If a
-  workload ever appears where the reserve is too aggressive, switch to
-  `CodeSize / 3` for an upper bound at ~3 bytes/block average.
+- **R1 — `Blocks.reserve(CodeSize)` scope and over-allocation**:
+  `buildGasBlocks` reserves Blocks to `CodeSize` (1 byte = 1 block
+  worst case). Real contracts average 3-10 bytes/block, so the reserve
+  over-allocates by 3-10×. At EIP-170 max (24 576 bytes) this is
+  0.79 MB transient (24 576 × 32-byte GasBlock); at the N=100k stress
+  (CodeSize ≈ 300 KB) it is 9.6 MB transient, released when `Blocks`
+  is destroyed at the end of `buildBytecodeCache`.
 
-- **R2 — Conditional Tarjan SCC depends on `UseLinearSPP` correctness**:
-  In the reducible-CFG path we derive `InCycle` as `union(Loops[].NodeMask)`
-  and skip the standalone Tarjan SCC pass. The correctness theorem is
-  "in a reducible CFG every cycle is captured by some natural loop";
-  the implementation hinges on `buildLoopsUsingDominance` returning
-  `false` (so `UseLinearSPP=false`) for any irreducible CFG it cannot
-  decompose, in which case we keep the Tarjan fallback. **Mitigation**:
-  statetest 2723/2723 covers the reducible path; the
-  `IrreducibleImproperRegion` GTest exercises the irreducibility check
-  itself; runtime end-to-end metering soundness is established by the
-  statetest gate. A worked correctness proof of the union-of-loops
-  equivalence lives in the commit message for `6e1bc6b`.
+  **Important scope caveat**: the no-realloc guarantee from this
+  reserve covers **only** the initial block construction loop inside
+  `buildGasBlocks`. The subsequent `splitCriticalEdges` phase
+  (`evm_cache.cpp:332-383`) appends synthetic empty blocks via
+  `Blocks.push_back(NewBlock)`; if `splitCriticalEdges` ever needed
+  to add more than `(CodeSize - originalBlockCount)` blocks, a
+  reallocation could happen there. In practice the split count is
+  bounded by the number of critical edges (≤ Blocks.size() initially),
+  and we never take a `GasBlock&` reference that outlives a
+  `splitCriticalEdges` append, so no invalid-reference bug exists
+  today. But the wording "`Blocks` never reallocates" is too strong
+  if read out of context.
+
+  **Mitigation**: the alternative — a pre-scan pass to count blocks
+  exactly — would itself cost ~1 ms at N=100k, defeating the purpose.
+  Reserve is cheaper than the ~16 MB of memmove traffic from
+  geometric growth it eliminates. If a workload ever appears where
+  the reserve is too aggressive, switch to `CodeSize / 3` for an
+  upper bound at ~3 bytes/block average.
+
+- **R2 — Conditional `InCycle` is a performance optimisation, not the
+  soundness mechanism**:
+  In the `UseLinearSPP=true` path we derive `InCycle` as
+  `union(Loops[].NodeMask)` and skip the standalone Tarjan SCC pass.
+  An earlier draft of this risk claimed that "in a reducible CFG every
+  cycle is captured by some natural loop", which is true, but the
+  **gate** that decides reducibility (`buildLoopsUsingDominance` returns
+  `true`) is weaker than that property requires. Counterexample:
+  an irreducible 2-entry cycle `A ↔ B` where neither node dominates
+  the other produces zero dominator-based back-edges, so
+  `buildLoopsUsingDominance` returns `true` with an empty `Loops`
+  vector and our `InCycle = union(empty) = all-zeros`. Tarjan SCC
+  would correctly mark `A, B` as in-cycle.
+
+  Soundness on such CFGs is preserved by a **different invariant** —
+  `lemma614Update`'s multi-pred guard via `effectivePredCount`
+  (`evm_cache.cpp:1223`): every node in any SCC of size ≥ 2 has at
+  least one in-cycle predecessor on top of any out-of-cycle entry, so
+  its `effectivePredCount` is ≥ 2 and the lemma refuses the shift
+  before it can mis-charge. The `InCycle` mask is a **redundant
+  fast-path filter**, not a safety net.
+
+  **Mitigation**: the `if (!UseLinearSPP)` branch retains the full
+  Tarjan SCC for defence-in-depth. `evmone-statetest -k fork_Cancun`
+  2723/2723 exercises the real-world reducible path. The irreducible
+  fallback branch is **not** covered by a dedicated unit test —
+  `OverlappingBackEdgesIDom` only drives `computeIDomForTesting`'s CHK
+  output, not the `buildLoopsUsingDominance → false` path; adding such
+  a test requires plumbing `buildLoopsUsingDominance` (or `buildBytecodeCache`)
+  through a test helper and is deferred. Until that exists, the
+  fallback path's correctness rests on argument + statetest end-to-end.
+
+  Future contributor warning: do **not** remove the multi-pred guard
+  in `lemma614Update` on the assumption that `InCycle` covers it.
+  `InCycle` does not cover it on irreducible CFGs.
 
 - **R3 — `GasBlock` static_assert ties the layout to 32 bytes**:
   Any future field addition without re-tuning will trigger a build
@@ -328,11 +427,20 @@ commit is independently green and individually revertable.
 
 - **R4 — `chkFixpointRounds=2` is workload-dependent, not a CHK
   invariant**: The "SemiNCA not worth it" decision rests on every
-  measured workload converging in 2 rounds. A future workload with deep
-  irreducible nesting could push that higher and re-open the case. The
-  counter ships in the profile build so the question stays cheap to
-  re-ask. **Mitigation**: if a real contract ever shows rounds > 2,
-  re-evaluate SemiNCA against measured cost.
+  measured workload converging in 2 rounds. The set of workloads
+  measured is the `evmCacheComplexityDemo` synthetic at
+  N=10k/20k/50k/100k plus the 10 `EVMCacheDominator` GTests; this is
+  also the **easy** case for CHK convergence (uniform alternating
+  PUSH/JUMP/JUMPDEST topology with a single forward spine). Any CFG
+  with deep irreducible nesting, RPO that processes a node before its
+  eventual idom, or unreachable-to-reachable transitions can require
+  ≥ 3 rounds. A real-corpus paired-ratio measurement (similar to PR A's
+  Sourcify-stratified bench) would strengthen the claim — until then
+  the "2 rounds" number is best read as "the synthetic stress and unit
+  tests converge in 2 rounds; production behaviour is plausible-but-
+  unmeasured." The counter ships in the profile build so the question
+  stays cheap to re-ask. **Mitigation**: if a real contract ever shows
+  rounds > 2, re-evaluate SemiNCA against measured cost.
 
 - **R5 — Stack-SSA drop is contingent on the existing PUSH→JUMP
   heuristic continuing to resolve 92-98 % of JUMPs**: Future compiler

@@ -8,6 +8,7 @@
 #include "evmc/instructions.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -227,7 +228,7 @@ buildJumpDestMapAndPushCache(const zen::common::Byte *Code, size_t CodeSize,
 //   16 ImplicitDynamicPredCount    uint32
 //   20 LastOpcode                  uint8
 //   21 PrevOpcode                  uint8
-//   22 pad                         uint16
+//   22 pad[2]                      (2 alignment bytes before Cost)
 //   24 Cost                        uint64
 //   32 sizeof
 struct GasBlock {
@@ -1318,6 +1319,13 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   // Freeze adjacency: collapse the per-block Succs/Preds vectors into CSR
   // (one heap alloc per direction) so downstream passes traverse neighbour
   // lists out of contiguous arrays instead of chasing N small heap chunks.
+  // Invariant: Edges must stay in lockstep with Blocks. splitCriticalEdges
+  // grows both in pairs; if a future change adds a Blocks.push_back that
+  // forgets to grow Edges, downstream CSR indexing would silently use the
+  // wrong node count. Assert here so the next reviewer sees the failure.
+  assert(Edges.Succs.size() == Blocks.size() &&
+         Edges.Preds.size() == Blocks.size() &&
+         "EdgeTables size drifted from Blocks size");
   EVM_PROFILE_BEGIN(buildCSR);
   const CSRGraph SuccsCSR = buildAdjacencyCSR<true>(Edges);
   const CSRGraph PredsCSR = buildAdjacencyCSR<false>(Edges);
