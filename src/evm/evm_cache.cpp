@@ -212,25 +212,41 @@ buildJumpDestMapAndPushCache(const zen::common::Byte *Code, size_t CodeSize,
 }
 
 // GasBlock holds the per-block scalar metadata read by every downstream
-// pass. Compacted to ~40 bytes by keeping Succs/Preds in a parallel
-// EdgeTables structure -- removing the two embedded std::vectors halves
-// the per-block stride and roughly doubles cache density for the loops
-// in computeDomInfo, buildLoopsUsingDominance, meteringInit, writeback,
-// and lemma614Update.
+// pass. Compacted to 32 bytes by (a) keeping Succs/Preds in a parallel
+// EdgeTables structure and (b) ordering fields so the lone uint64 Cost
+// sits at the natural 8-byte boundary with no trailing padding. Halves
+// the per-block stride versus the original 80-byte layout and lets two
+// blocks share a single 64-byte cache line in the dominator / loop /
+// writeback scans.
+//
+// Layout (offsets shown):
+//   0  Start                       uint32
+//   4  End                         uint32
+//   8  LastPc                      uint32
+//   12 PrevPc                      uint32
+//   16 ImplicitDynamicPredCount    uint32
+//   20 LastOpcode                  uint8
+//   21 PrevOpcode                  uint8
+//   22 pad                         uint16
+//   24 Cost                        uint64
+//   32 sizeof
 struct GasBlock {
   uint32_t Start = 0;
   uint32_t End = 0;
   uint32_t LastPc = 0;
   uint32_t PrevPc = UINT32_MAX;
-  uint8_t LastOpcode = 0;
-  uint8_t PrevOpcode = 0;
-  uint64_t Cost = 0;
   // Count of dynamic-jump blocks in this contract that could land here at
   // runtime. Only nonzero for JUMPDEST blocks when the contract has at
   // least one unresolved dynamic jump. Carried separately so we avoid
   // materialising D*J explicit over-approximation edges (see buildCFGEdges).
   uint32_t ImplicitDynamicPredCount = 0;
+  uint8_t LastOpcode = 0;
+  uint8_t PrevOpcode = 0;
+  uint64_t Cost = 0;
 };
+static_assert(sizeof(GasBlock) == 32,
+              "GasBlock layout drifted -- cache-density wins depend on the "
+              "32-byte stride; re-tune profile measurements if intentional.");
 
 // Mutable adjacency used during CFG build (buildCFGEdges) and edge split
 // (splitCriticalEdges). After freezing, downstream passes read from the
@@ -313,8 +329,8 @@ static void addEdge(EdgeTables &Edges, uint32_t From, uint32_t To) {
 // Split critical edges: insert empty blocks on edges from nodes with
 // multiple successors to nodes with multiple predecessors.
 // Returns true if any edges were split.
-static bool splitCriticalEdges(std::vector<GasBlock> &Blocks,
-                               EdgeTables &Edges, size_t CodeSize) {
+static bool splitCriticalEdges(std::vector<GasBlock> &Blocks, EdgeTables &Edges,
+                               size_t CodeSize) {
   bool Changed = false;
   std::vector<std::pair<uint32_t, uint32_t>> EdgesToSplit;
 
