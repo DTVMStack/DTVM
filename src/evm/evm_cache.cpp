@@ -372,15 +372,24 @@ static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
   }
 
   BlockAtPc.assign(CodeSize, UINT32_MAX);
+  // Reserve to the maximum possible block count (1 byte = 1 block worst
+  // case, since opcodeLen >= 1) so emplace_back never reallocates and the
+  // Blocks.back() reference taken below stays valid through the inner loop.
+  // Real EVM code averages 3-10 bytes per block, so this over-reserves by
+  // ~3-10x. The saved geometric growth (log2(N) reallocs each moving
+  // ~80 bytes/block = ~MB of copy work at N=100k) is worth the transient
+  // extra capacity.
+  Blocks.reserve(CodeSize);
 
   size_t Pc = 0;
   while (Pc < CodeSize) {
-    GasBlock Block;
-    Block.Start = static_cast<uint32_t>(Pc);
     const uint8_t StartOpcode = static_cast<uint8_t>(Code[Pc]);
     if (StartOpcode == static_cast<uint8_t>(evmc_opcode::OP_JUMPDEST)) {
       JumpDestBlocks.push_back(static_cast<uint32_t>(Blocks.size()));
     }
+
+    GasBlock &Block = Blocks.emplace_back();
+    Block.Start = static_cast<uint32_t>(Pc);
 
     size_t CurPc = Pc;
     while (CurPc < CodeSize) {
@@ -403,9 +412,7 @@ static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
     }
 
     Block.End = static_cast<uint32_t>(CurPc);
-    const uint32_t BlockId = static_cast<uint32_t>(Blocks.size());
-    BlockAtPc[Pc] = BlockId;
-    Blocks.push_back(std::move(Block));
+    BlockAtPc[Pc] = static_cast<uint32_t>(Blocks.size() - 1);
     Pc = CurPc;
   }
 }
