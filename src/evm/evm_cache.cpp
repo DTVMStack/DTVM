@@ -211,6 +211,12 @@ buildJumpDestMapAndPushCache(const zen::common::Byte *Code, size_t CodeSize,
   }
 }
 
+// GasBlock holds the per-block scalar metadata read by every downstream
+// pass. Compacted to ~40 bytes by keeping Succs/Preds in a parallel
+// EdgeTables structure -- removing the two embedded std::vectors halves
+// the per-block stride and roughly doubles cache density for the loops
+// in computeDomInfo, buildLoopsUsingDominance, meteringInit, writeback,
+// and lemma614Update.
 struct GasBlock {
   uint32_t Start = 0;
   uint32_t End = 0;
@@ -219,17 +225,27 @@ struct GasBlock {
   uint8_t LastOpcode = 0;
   uint8_t PrevOpcode = 0;
   uint64_t Cost = 0;
-  // Mutable adjacency used during CFG build (buildCFGEdges) and edge split
-  // (splitCriticalEdges). After freezing, downstream passes read from the
-  // CSR-flattened SuccsCSR / PredsCSR instead, and these per-block vectors
-  // are cleared to release the per-block heap chunks.
-  std::vector<uint32_t> Succs;
-  std::vector<uint32_t> Preds;
   // Count of dynamic-jump blocks in this contract that could land here at
   // runtime. Only nonzero for JUMPDEST blocks when the contract has at
   // least one unresolved dynamic jump. Carried separately so we avoid
   // materialising D*J explicit over-approximation edges (see buildCFGEdges).
   uint32_t ImplicitDynamicPredCount = 0;
+};
+
+// Mutable adjacency used during CFG build (buildCFGEdges) and edge split
+// (splitCriticalEdges). After freezing, downstream passes read from the
+// CSR-flattened SuccsCSR / PredsCSR (built by buildAdjacencyCSR below)
+// instead, so these per-block vectors are write-once during this phase.
+struct EdgeTables {
+  std::vector<std::vector<uint32_t>> Succs;
+  std::vector<std::vector<uint32_t>> Preds;
+
+  void resize(size_t N) {
+    Succs.resize(N);
+    Preds.resize(N);
+  }
+
+  size_t size() const { return Succs.size(); }
 };
 
 // Compressed-sparse-row adjacency: one big contiguous edge-data array shared
@@ -261,36 +277,34 @@ struct CSRGraph {
   uint32_t degree(uint32_t Node) const { return Off[Node + 1] - Off[Node]; }
 };
 
-// Project Blocks[].Succs (or .Preds) into CSR form by copying. We leave the
-// per-block vectors intact rather than swap()ing them out: N back-to-back
-// std::vector dealloc()s cost more than the readers reclaim downstream, and
-// keeping the per-block storage lets later code still inspect the original
-// edge data (e.g. for debug). Memory peaks ~50% higher during the lifetime
-// of buildGasChunksSPP but the per-call cache build is short-lived.
+// Project EdgeTables.Succs (or .Preds) into CSR form by copying. We leave
+// the per-block vectors intact rather than swap()ing them out: N
+// back-to-back std::vector dealloc()s cost more than the readers reclaim
+// downstream. Memory peaks ~50% higher during the lifetime of
+// buildGasChunksSPP but the per-call cache build is short-lived.
 template <bool SelectSuccs>
-static CSRGraph buildAdjacencyCSR(const std::vector<GasBlock> &Blocks) {
+static CSRGraph buildAdjacencyCSR(const EdgeTables &Edges) {
   CSRGraph G;
-  const size_t N = Blocks.size();
+  const auto &Tables = SelectSuccs ? Edges.Succs : Edges.Preds;
+  const size_t N = Tables.size();
   G.Off.resize(N + 1);
   G.Off[0] = 0;
   for (size_t I = 0; I < N; ++I) {
-    const auto &Vec = SelectSuccs ? Blocks[I].Succs : Blocks[I].Preds;
-    G.Off[I + 1] = G.Off[I] + static_cast<uint32_t>(Vec.size());
+    G.Off[I + 1] = G.Off[I] + static_cast<uint32_t>(Tables[I].size());
   }
   G.Data.resize(G.Off[N]);
   for (size_t I = 0; I < N; ++I) {
-    const auto &Vec = SelectSuccs ? Blocks[I].Succs : Blocks[I].Preds;
-    std::copy(Vec.begin(), Vec.end(), G.Data.begin() + G.Off[I]);
+    std::copy(Tables[I].begin(), Tables[I].end(), G.Data.begin() + G.Off[I]);
   }
   return G;
 }
 
-static void addEdge(std::vector<GasBlock> &Blocks, uint32_t From, uint32_t To) {
-  auto &FromSuccs = Blocks[From].Succs;
+static void addEdge(EdgeTables &Edges, uint32_t From, uint32_t To) {
+  auto &FromSuccs = Edges.Succs[From];
   if (std::find(FromSuccs.begin(), FromSuccs.end(), To) == FromSuccs.end()) {
     FromSuccs.push_back(To);
   }
-  auto &ToPreds = Blocks[To].Preds;
+  auto &ToPreds = Edges.Preds[To];
   if (std::find(ToPreds.begin(), ToPreds.end(), From) == ToPreds.end()) {
     ToPreds.push_back(From);
   }
@@ -299,17 +313,18 @@ static void addEdge(std::vector<GasBlock> &Blocks, uint32_t From, uint32_t To) {
 // Split critical edges: insert empty blocks on edges from nodes with
 // multiple successors to nodes with multiple predecessors.
 // Returns true if any edges were split.
-static bool splitCriticalEdges(std::vector<GasBlock> &Blocks, size_t CodeSize) {
+static bool splitCriticalEdges(std::vector<GasBlock> &Blocks,
+                               EdgeTables &Edges, size_t CodeSize) {
   bool Changed = false;
   std::vector<std::pair<uint32_t, uint32_t>> EdgesToSplit;
 
   // Find critical edges
   for (size_t FromId = 0; FromId < Blocks.size(); ++FromId) {
-    if (Blocks[FromId].Succs.size() <= 1) {
+    if (Edges.Succs[FromId].size() <= 1) {
       continue; // Not a critical edge source
     }
-    for (uint32_t ToId : Blocks[FromId].Succs) {
-      if (Blocks[ToId].Preds.size() > 1) {
+    for (uint32_t ToId : Edges.Succs[FromId]) {
+      if (Edges.Preds[ToId].size() > 1) {
         // Critical edge: From has multiple succs, To has multiple preds
         EdgesToSplit.push_back({static_cast<uint32_t>(FromId), ToId});
       }
@@ -336,17 +351,19 @@ static bool splitCriticalEdges(std::vector<GasBlock> &Blocks, size_t CodeSize) {
     const uint32_t NewId = static_cast<uint32_t>(Blocks.size());
 
     // Remove edge From -> To
-    auto &FromSuccs = Blocks[FromId].Succs;
+    auto &FromSuccs = Edges.Succs[FromId];
     FromSuccs.erase(std::remove(FromSuccs.begin(), FromSuccs.end(), ToId),
                     FromSuccs.end());
-    auto &ToPreds = Blocks[ToId].Preds;
+    auto &ToPreds = Edges.Preds[ToId];
     ToPreds.erase(std::remove(ToPreds.begin(), ToPreds.end(), FromId),
                   ToPreds.end());
 
-    // Add edges: From -> New, New -> To
+    // Add the new block and grow the parallel edge tables to match.
     Blocks.push_back(NewBlock);
-    addEdge(Blocks, FromId, NewId);
-    addEdge(Blocks, NewId, ToId);
+    Edges.Succs.emplace_back();
+    Edges.Preds.emplace_back();
+    addEdge(Edges, FromId, NewId);
+    addEdge(Edges, NewId, ToId);
 
     Changed = true;
   }
@@ -468,7 +485,7 @@ static bool resolveConstantJumpTarget(const std::vector<uint8_t> &JumpDestMap,
 // that is a potential dynamic-jump target sees `effectivePredCount > 1` and
 // `lemma614Update` refuses to shift gas across that edge, exactly as it
 // would have done against an explicit over-approximated `Preds` set.
-static void buildCFGEdges(std::vector<GasBlock> &Blocks,
+static void buildCFGEdges(std::vector<GasBlock> &Blocks, EdgeTables &Edges,
                           const std::vector<uint32_t> &BlockAtPc,
                           const std::vector<uint8_t> &JumpDestMap,
                           const std::vector<intx::uint256> &PushValueMap,
@@ -490,7 +507,7 @@ static void buildCFGEdges(std::vector<GasBlock> &Blocks,
     if (!IsTerminator && Block.End < CodeSize) {
       const uint32_t SuccId = BlockAtPc[Block.End];
       if (SuccId != UINT32_MAX) {
-        addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
+        addEdge(Edges, static_cast<uint32_t>(BlockId), SuccId);
       }
     }
 
@@ -502,7 +519,7 @@ static void buildCFGEdges(std::vector<GasBlock> &Blocks,
         // Static (constant) jump: single known target.
         const uint32_t SuccId = BlockAtPc[DestPc];
         if (SuccId != UINT32_MAX) {
-          addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
+          addEdge(Edges, static_cast<uint32_t>(BlockId), SuccId);
         }
       } else {
         ++DynamicJumpCount;
@@ -1270,21 +1287,24 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   // effectivePredCount). Narrowing to partial call-site resolution would
   // under-approximate the CFG and let SPP shift gas along non-existent
   // edges, producing unsafe metering.
+  EdgeTables Edges;
+  Edges.resize(Blocks.size());
+
   EVM_PROFILE_BEGIN(buildCFGEdges);
-  buildCFGEdges(Blocks, BlockAtPc, JumpDestMap, PushValueMap, JumpDestBlocks,
-                CodeSize);
+  buildCFGEdges(Blocks, Edges, BlockAtPc, JumpDestMap, PushValueMap,
+                JumpDestBlocks, CodeSize);
   EVM_PROFILE_END(buildCFGEdges);
 
   EVM_PROFILE_BEGIN(splitCriticalEdges);
-  splitCriticalEdges(Blocks, CodeSize);
+  splitCriticalEdges(Blocks, Edges, CodeSize);
   EVM_PROFILE_END(splitCriticalEdges);
 
   // Freeze adjacency: collapse the per-block Succs/Preds vectors into CSR
   // (one heap alloc per direction) so downstream passes traverse neighbour
   // lists out of contiguous arrays instead of chasing N small heap chunks.
   EVM_PROFILE_BEGIN(buildCSR);
-  const CSRGraph SuccsCSR = buildAdjacencyCSR<true>(Blocks);
-  const CSRGraph PredsCSR = buildAdjacencyCSR<false>(Blocks);
+  const CSRGraph SuccsCSR = buildAdjacencyCSR<true>(Edges);
+  const CSRGraph PredsCSR = buildAdjacencyCSR<false>(Edges);
   EVM_PROFILE_END(buildCSR);
 
   EVM_PROFILE_BEGIN(computeReachable);
