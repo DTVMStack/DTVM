@@ -803,8 +803,14 @@ static DomInfo computeDomInfo(const CSRGraph &SuccsCSR,
   };
 
   bool Changed = true;
+#ifdef ZEN_EVM_CACHE_PROFILE
+  int FixpointRounds = 0;
+#endif
   while (Changed) {
     Changed = false;
+#ifdef ZEN_EVM_CACHE_PROFILE
+    ++FixpointRounds;
+#endif
     for (uint32_t Node : RPO) {
       if (IDom[Node] == Node) {
         continue; // root
@@ -837,6 +843,10 @@ static DomInfo computeDomInfo(const CSRGraph &SuccsCSR,
       }
     }
   }
+#ifdef ZEN_EVM_CACHE_PROFILE
+  std::fprintf(stderr, "EVM_CACHE_PROFILE,chkFixpointRounds,%d\n",
+               FixpointRounds);
+#endif
 
   // Defensive backstop: classes A/B/C are seeded at init above, so any
   // UINT32_MAX here is an orphan reachable component not reached by RPO
