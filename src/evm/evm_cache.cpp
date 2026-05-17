@@ -297,6 +297,11 @@ static bool splitCriticalEdges(std::vector<GasBlock> &Blocks, size_t CodeSize) {
   return Changed;
 }
 
+// Single-pass block partitioning: walk bytecode once, closing the current
+// block when we hit a mid-block JUMPDEST (starts a new block) or a gas-chunk
+// terminator (ends current, next byte starts next). Replaces the previous
+// 2-pass (mark IsBlockStart[CodeSize], then walk it) which materialised a
+// CodeSize-sized auxiliary array.
 static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
                            const evmc_instruction_metrics *MetricsTable,
                            std::vector<GasBlock> &Blocks,
@@ -305,48 +310,21 @@ static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
     return;
   }
 
-  std::vector<uint8_t> IsBlockStart(CodeSize, 0);
-  IsBlockStart[0] = 1;
-
-  for (size_t Pc = 0; Pc < CodeSize;) {
-    const uint8_t CurOpcodeU8 = static_cast<uint8_t>(Code[Pc]);
-    if (CurOpcodeU8 == static_cast<uint8_t>(evmc_opcode::OP_JUMPDEST)) {
-      IsBlockStart[Pc] = 1;
-    }
-
-    const uint8_t Len = opcodeLen(CurOpcodeU8);
-    if (isGasChunkTerminator(CurOpcodeU8)) {
-      const size_t NextPc = Pc + Len;
-      if (NextPc < CodeSize) {
-        IsBlockStart[NextPc] = 1;
-      }
-    }
-    Pc += Len;
-  }
-
   BlockAtPc.assign(CodeSize, UINT32_MAX);
 
   size_t Pc = 0;
   while (Pc < CodeSize) {
-    if (IsBlockStart[Pc] == 0) {
-      ++Pc;
-      continue;
-    }
-
     GasBlock Block;
     Block.Start = static_cast<uint32_t>(Pc);
 
-    if (Block.Start >= CodeSize) {
-      break;
-    }
-
     size_t CurPc = Pc;
     while (CurPc < CodeSize) {
-      if (CurPc != Block.Start && IsBlockStart[CurPc] != 0) {
+      const uint8_t CurOpcodeU8 = static_cast<uint8_t>(Code[CurPc]);
+      if (CurPc != Block.Start &&
+          CurOpcodeU8 == static_cast<uint8_t>(evmc_opcode::OP_JUMPDEST)) {
         break;
       }
 
-      const uint8_t CurOpcodeU8 = static_cast<uint8_t>(Code[CurPc]);
       Block.PrevPc = Block.LastPc;
       Block.PrevOpcode = Block.LastOpcode;
       Block.LastPc = static_cast<uint32_t>(CurPc);
@@ -361,8 +339,8 @@ static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
 
     Block.End = static_cast<uint32_t>(CurPc);
     const uint32_t BlockId = static_cast<uint32_t>(Blocks.size());
-    Blocks.push_back(std::move(Block));
     BlockAtPc[Pc] = BlockId;
+    Blocks.push_back(std::move(Block));
     Pc = CurPc;
   }
 }
@@ -1446,8 +1424,10 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
     Cache.GasChunkCostSPP.clear();
   }
 
+  EVM_PROFILE_BEGIN(buildJumpDestMap);
   buildJumpDestMapAndPushCache(Code, CodeSize, Cache.JumpDestMap,
                                Cache.PushValueMap);
+  EVM_PROFILE_END(buildJumpDestMap);
   const auto *MetricsTable = evmc_get_instruction_metrics_table(Rev);
   if (!MetricsTable) {
     MetricsTable = evmc_get_instruction_metrics_table(DEFAULT_REVISION);
