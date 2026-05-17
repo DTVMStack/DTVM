@@ -1359,10 +1359,6 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   }
   EVM_PROFILE_END(computeReverseTopo);
 
-  EVM_PROFILE_BEGIN(computeInCycle);
-  const std::vector<uint8_t> InCycle = computeInCycle(SuccsCSR, PredsCSR);
-  EVM_PROFILE_END(computeInCycle);
-
   EVM_PROFILE_BEGIN(buildLoopsUsingDominance);
   std::vector<LoopInfo> Loops;
   std::vector<int32_t> LoopOf;
@@ -1371,6 +1367,35 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   bool UseLinearSPP = buildLoopsUsingDominance(
       SuccsCSR, PredsCSR, Dom, Reachable, Loops, LoopOf, ExitLoops, ExitFlags);
   EVM_PROFILE_END(buildLoopsUsingDominance);
+
+  // In a reducible CFG (UseLinearSPP=true) every cycle is captured by some
+  // natural loop -- the loop induced by the back-edge to that cycle's
+  // dominator header. The union of natural-loop NodeMasks therefore equals
+  // the in-cycle set Tarjan SCC would produce, and we skip the standalone
+  // Tarjan pass. For irreducible CFGs (the fallback path), dominator-based
+  // loop discovery may miss multi-entry cycles, so we keep the Tarjan SCC
+  // backstop to ensure lemma614Update never shifts gas across an
+  // undetected cycle.
+  EVM_PROFILE_BEGIN(computeInCycle);
+  std::vector<uint8_t> InCycle;
+  if (UseLinearSPP) {
+    const size_t Words = bitsetWordCount(Blocks.size());
+    std::vector<uint64_t> CycleBits(Words, 0);
+    for (const auto &Loop : Loops) {
+      for (size_t W = 0; W < Words; ++W) {
+        CycleBits[W] |= Loop.NodeMask[W];
+      }
+    }
+    InCycle.assign(Blocks.size(), 0);
+    for (size_t I = 0; I < Blocks.size(); ++I) {
+      if (bitsetTest(CycleBits, I)) {
+        InCycle[I] = 1;
+      }
+    }
+  } else {
+    InCycle = computeInCycle(SuccsCSR, PredsCSR);
+  }
+  EVM_PROFILE_END(computeInCycle);
 
   EVM_PROFILE_BEGIN(meteringInit);
   // Initialize m = c (metering function = cost function)
