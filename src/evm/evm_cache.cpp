@@ -301,11 +301,15 @@ static bool splitCriticalEdges(std::vector<GasBlock> &Blocks, size_t CodeSize) {
 // block when we hit a mid-block JUMPDEST (starts a new block) or a gas-chunk
 // terminator (ends current, next byte starts next). Replaces the previous
 // 2-pass (mark IsBlockStart[CodeSize], then walk it) which materialised a
-// CodeSize-sized auxiliary array.
+// CodeSize-sized auxiliary array. Also emits JumpDestBlocks in block-id
+// order whenever a new block opens with OP_JUMPDEST -- every JUMPDEST byte
+// in valid code is a block start, so this list is exactly the set the
+// previous standalone collectJumpDests pass produced.
 static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
                            const evmc_instruction_metrics *MetricsTable,
                            std::vector<GasBlock> &Blocks,
-                           std::vector<uint32_t> &BlockAtPc) {
+                           std::vector<uint32_t> &BlockAtPc,
+                           std::vector<uint32_t> &JumpDestBlocks) {
   if (CodeSize == 0) {
     return;
   }
@@ -316,6 +320,10 @@ static void buildGasBlocks(const zen::common::Byte *Code, size_t CodeSize,
   while (Pc < CodeSize) {
     GasBlock Block;
     Block.Start = static_cast<uint32_t>(Pc);
+    const uint8_t StartOpcode = static_cast<uint8_t>(Code[Pc]);
+    if (StartOpcode == static_cast<uint8_t>(evmc_opcode::OP_JUMPDEST)) {
+      JumpDestBlocks.push_back(static_cast<uint32_t>(Blocks.size()));
+    }
 
     size_t CurPc = Pc;
     while (CurPc < CodeSize) {
@@ -1173,8 +1181,10 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
                               bool EnableSPP) {
   std::vector<GasBlock> Blocks;
   std::vector<uint32_t> BlockAtPc;
+  std::vector<uint32_t> JumpDestBlocks;
   EVM_PROFILE_BEGIN(buildGasBlocks);
-  buildGasBlocks(Code, CodeSize, MetricsTable, Blocks, BlockAtPc);
+  buildGasBlocks(Code, CodeSize, MetricsTable, Blocks, BlockAtPc,
+                 JumpDestBlocks);
   EVM_PROFILE_END(buildGasBlocks);
 
   if (Blocks.empty()) {
@@ -1198,25 +1208,10 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
   // Always build CFG — no early exit for dynamic jumps.
   // Unresolved jumps get over-approximated edges to all JUMPDESTs.
 
-  EVM_PROFILE_BEGIN(collectJumpDests);
-  std::vector<uint32_t> JumpDestBlocks;
-  if (!JumpDestMap.empty()) {
-    std::vector<uint8_t> SeenBlocks(Blocks.size(), 0);
-    for (size_t Pc = 0; Pc < CodeSize; ++Pc) {
-      if (JumpDestMap[Pc] == 0) {
-        continue;
-      }
-      const uint32_t BlockId = BlockAtPc[Pc];
-      if (BlockId == UINT32_MAX || BlockId >= Blocks.size()) {
-        continue;
-      }
-      if (SeenBlocks[BlockId] == 0) {
-        SeenBlocks[BlockId] = 1;
-        JumpDestBlocks.push_back(BlockId);
-      }
-    }
-  }
-  EVM_PROFILE_END(collectJumpDests);
+  // JumpDestBlocks is now produced inline by buildGasBlocks (one push per
+  // block whose first opcode is OP_JUMPDEST), eliminating the prior bytecode
+  // re-scan + SeenBlocks dedup. The two enumerations are equivalent because
+  // every JUMPDEST byte under EVM semantics starts a new gas block.
 
   // Static jumps get precise single-target edges. For unresolved dynamic
   // jumps, the CFG over-approximation is encoded as
