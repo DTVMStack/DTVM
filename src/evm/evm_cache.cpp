@@ -467,27 +467,15 @@ static void buildCFGEdges(std::vector<GasBlock> &Blocks,
                           const std::vector<intx::uint256> &PushValueMap,
                           const std::vector<uint32_t> &JumpDestBlocks,
                           size_t CodeSize) {
-  // Count unresolved dynamic jumps once so we can stamp every JUMPDEST with
-  // the right implicit-predecessor count in O(N) instead of O(D*J).
+  // Single pass: add fallthrough + static-jump edges, count unresolved
+  // dynamic jumps inline so we can stamp every JUMPDEST with the right
+  // implicit-predecessor count once at the end (in O(N) instead of O(D*J)).
+  // The previous two-loop structure called resolveConstantJumpTarget twice
+  // per JUMP block (once to count, once to decide the edge); fusing them
+  // halves the call count and the bytecode rescan it performs.
   uint32_t DynamicJumpCount = 0;
-  for (const auto &Block : Blocks) {
-    if (!isJumpOpcode(Block.LastOpcode)) {
-      continue;
-    }
-    uint32_t DestPc = 0;
-    if (!resolveConstantJumpTarget(JumpDestMap, PushValueMap, CodeSize, Block,
-                                   DestPc)) {
-      ++DynamicJumpCount;
-    }
-  }
-  if (DynamicJumpCount > 0) {
-    for (uint32_t JdId : JumpDestBlocks) {
-      Blocks[JdId].ImplicitDynamicPredCount = DynamicJumpCount;
-    }
-  }
-
   for (size_t BlockId = 0; BlockId < Blocks.size(); ++BlockId) {
-    auto &Block = Blocks[BlockId];
+    const auto &Block = Blocks[BlockId];
     const bool IsTerminator = isControlFlowTerminator(Block.LastOpcode);
 
     // Add fallthrough edge for non-terminating opcodes (CALL/CREATE/GAS,
@@ -509,9 +497,17 @@ static void buildCFGEdges(std::vector<GasBlock> &Blocks,
         if (SuccId != UINT32_MAX) {
           addEdge(Blocks, static_cast<uint32_t>(BlockId), SuccId);
         }
+      } else {
+        ++DynamicJumpCount;
       }
       // Dynamic jump: handled by the implicit-predecessor count stamped onto
-      // every JUMPDEST above. No explicit Succs/Preds edges added.
+      // every JUMPDEST below. No explicit Succs/Preds edges added.
+    }
+  }
+
+  if (DynamicJumpCount > 0) {
+    for (uint32_t JdId : JumpDestBlocks) {
+      Blocks[JdId].ImplicitDynamicPredCount = DynamicJumpCount;
     }
   }
 }
