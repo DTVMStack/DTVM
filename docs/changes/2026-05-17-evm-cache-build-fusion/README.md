@@ -84,8 +84,23 @@ mean per phase, interleaved 100-rep median for the total:
 
 The instrumented sum (48700 us) slightly exceeds the median wall-clock
 (47343 us) because `EVM_PROFILE_BEGIN`/`END` chrono pairs add ~0.5-1 us
-overhead at each of 13 phase boundaries. Treat the per-phase column as
+overhead at each of 13 phase boundaries (13 × ~0.1 us × N=100k ≈ 1.3 ms,
+matching the ~1.4 ms overshoot). Treat the per-phase column as
 "approximate share" rather than an exact decomposition.
+
+On the post-PR-HEAD side the relationship flips: HEAD phases sum to
+~20.8 ms but the total median is ~27.9 ms — the gap (~7.1 ms) is
+un-instrumented work in `buildBytecodeCache`'s outer scope (vector
+allocation + zero-init of `Cache.JumpDestMap`/`PushValueMap`/
+`GasChunkEnd`/`GasChunkCost`/`GasChunkCostSPP`, plus per-cache
+bookkeeping). This is large only at the synthetic N=100k stress
+because `Cache.PushValueMap` is `vector<intx::uint256>` of length
+CodeSize = 9.6 MB; for EIP-170 production code (≤24 576 B) the same
+outer allocation is ~0.2 ms. The asymmetry between baseline
+(sum > total) and HEAD (sum < total) is therefore expected: baseline
+spent most of its time in instrumented phases, while HEAD's gains
+mostly drained out of those phases and left the (unchanged) outer
+allocation cost in relative relief.
 
 Three families of targets surfaced:
 
