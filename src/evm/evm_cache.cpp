@@ -287,6 +287,12 @@ struct CSRGraph {
   };
 
   Range operator[](uint32_t Node) const {
+    // Guard against `Data.data()` being null (empty CSR, e.g. a single-block
+    // contract with no edges): `nullptr + 0` is undefined pointer arithmetic
+    // per [expr.add]/4 even when the offset is zero, which UBSan flags.
+    if (Data.empty()) {
+      return {nullptr, nullptr};
+    }
     const uint32_t *Base = Data.data();
     return {Base + Off[Node], Base + Off[Node + 1]};
   }
@@ -1387,14 +1393,21 @@ static bool buildGasChunksSPP(const zen::common::Byte *Code, size_t CodeSize,
       SuccsCSR, PredsCSR, Dom, Reachable, Loops, LoopOf, ExitLoops, ExitFlags);
   EVM_PROFILE_END(buildLoopsUsingDominance);
 
-  // In a reducible CFG (UseLinearSPP=true) every cycle is captured by some
-  // natural loop -- the loop induced by the back-edge to that cycle's
-  // dominator header. The union of natural-loop NodeMasks therefore equals
-  // the in-cycle set Tarjan SCC would produce, and we skip the standalone
-  // Tarjan pass. For irreducible CFGs (the fallback path), dominator-based
-  // loop discovery may miss multi-entry cycles, so we keep the Tarjan SCC
-  // backstop to ensure lemma614Update never shifts gas across an
-  // undetected cycle.
+  // InCycle is a performance fast-path filter for lemma614Update, NOT the
+  // soundness mechanism. On reducible CFGs (UseLinearSPP=true) the union of
+  // natural-loop NodeMasks coincides with the in-cycle set Tarjan SCC would
+  // produce, so we skip the standalone Tarjan pass. On irreducible CFGs
+  // (UseLinearSPP=false) buildLoopsUsingDominance can miss multi-entry
+  // cycles (e.g. an irreducible 2-entry cycle A<->B with no dominator-based
+  // back-edge), so the Tarjan SCC backstop fills InCycle for those nodes.
+  //
+  // Soundness on irreducible CFGs ultimately rests on lemma614Update's
+  // effectivePredCount(Succ) != 1 multi-pred guard at line 1224: every SCC
+  // node has at least one in-cycle predecessor on top of any out-of-cycle
+  // entry, so its effectivePredCount is >= 2 and the shift is refused even
+  // when InCycle is empty. See docs/modules/evm/cache-build.md §Invariants
+  // -- do NOT remove the multi-pred guard on the assumption that InCycle
+  // covers it.
   EVM_PROFILE_BEGIN(computeInCycle);
   std::vector<uint8_t> InCycle;
   if (UseLinearSPP) {
