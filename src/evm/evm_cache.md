@@ -61,9 +61,12 @@ using a linear-time SPP pass:
   fixpoint typically settles in 2-3 passes for reducible CFGs and degrades
   gracefully on irreducible cycles. Output is a packed `IDom[]` array plus
   Tarjan DFS Enter/Exit intervals (`DomEnter[]` / `DomExit[]`) so that
-  `dominates(a, b)` queries answer in `O(1)` via interval containment. Time
-  complexity is `O((N + E) · α(N))` and memory is `O(N)` — both linear, vs
-  the prior iterative-bitset dataflow's `O(N²/64)` time and `O(N²)` memory.
+  `dominates(a, b)` queries answer in `O(1)` via interval containment. Each
+  CHK fixpoint sweep is `O(N + E)`; the number of sweeps `R` is workload-
+  dependent (`R = 2` on every measured workload, logged via the
+  `chkFixpointRounds` counter), worst-case bounded by the dominator-tree
+  depth. Memory is `O(N)`. Both compare favourably with the prior
+  iterative-bitset dataflow's `O(N²/64)` time and `O(N²)` memory.
   Natural loops are then computed from `IDom[]` via the standard back-edge
   walk (`buildLoopsUsingDominance`). The pass scans nodes in reverse
   topological order:
