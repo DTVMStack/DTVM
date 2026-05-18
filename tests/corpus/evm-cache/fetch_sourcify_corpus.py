@@ -82,8 +82,12 @@ def fetch_contract_detail(address: str) -> Optional[dict]:
 def static_jump_stats(code: bytes) -> Tuple[int, int, int, float]:
     """Return (n_jumpdests, n_jumps, n_jumpis, dyn_jump_ratio).
 
-    dyn_jump_ratio = jumps whose immediate predecessor instruction is NOT a
-    PUSH that produced a single static target.
+    A jump is counted as static iff the immediately-preceding instruction is
+    a PUSH AND the pushed value is a valid JUMPDEST PC (i.e. lands on a
+    JUMPDEST opcode outside any PUSH-data region). This matches the cache
+    builder's resolveConstantJumpTarget semantics in src/evm/evm_cache.cpp,
+    so a PUSH whose constant points to a non-JUMPDEST byte is correctly
+    counted as dynamic here.
     """
     OP_JUMP = 0x56
     OP_JUMPI = 0x57
@@ -91,41 +95,59 @@ def static_jump_stats(code: bytes) -> Tuple[int, int, int, float]:
     PUSH1 = 0x60
     PUSH32 = 0x7F
 
-    n_jd = 0
+    n = len(code)
+
+    # Pass 1: collect valid JUMPDEST PCs (skipping PUSH-data regions).
+    jumpdests: set = set()
+    pc = 0
+    while pc < n:
+        op = code[pc]
+        if PUSH1 <= op <= PUSH32:
+            pc += 1 + (op - PUSH1 + 1)
+            continue
+        if op == OP_JUMPDEST:
+            jumpdests.add(pc)
+        pc += 1
+
+    # Pass 2: count jumps; classify as static iff the immediately preceding
+    # PUSH produced a value in `jumpdests`. prev_push_value is reset to None
+    # after every non-PUSH opcode so only the immediately-adjacent PUSH is
+    # considered (matching the cache builder's PrevPc/LastPc adjacency
+    # requirement).
+    n_jd = len(jumpdests)
     n_jump = 0
     n_jumpi = 0
     n_dyn = 0
-
+    prev_push_value = None
     pc = 0
-    prev_was_push_target = False
-    n = len(code)
     while pc < n:
         op = code[pc]
-        if op == OP_JUMPDEST:
-            n_jd += 1
-            prev_was_push_target = False
-            pc += 1
-            continue
         if op == OP_JUMP:
             n_jump += 1
-            if not prev_was_push_target:
+            if prev_push_value is None or prev_push_value not in jumpdests:
                 n_dyn += 1
-            prev_was_push_target = False
+            prev_push_value = None
             pc += 1
             continue
         if op == OP_JUMPI:
             n_jumpi += 1
-            if not prev_was_push_target:
+            if prev_push_value is None or prev_push_value not in jumpdests:
                 n_dyn += 1
-            prev_was_push_target = False
+            prev_push_value = None
             pc += 1
             continue
         if PUSH1 <= op <= PUSH32:
             sz = op - PUSH1 + 1
-            prev_was_push_target = True
+            raw = code[pc + 1 : pc + 1 + sz]
+            # PUSH at end-of-code is zero-padded on the right per EVM
+            # semantics; mirror that here so the integer value matches the
+            # interpreter's stack value.
+            if len(raw) < sz:
+                raw = raw + b"\x00" * (sz - len(raw))
+            prev_push_value = int.from_bytes(raw, "big")
             pc += 1 + sz
             continue
-        prev_was_push_target = False
+        prev_push_value = None
         pc += 1
     total = n_jump + n_jumpi
     ratio = (n_dyn / total) if total else 0.0
