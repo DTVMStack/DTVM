@@ -778,21 +778,10 @@ DTVM::DTVM()
     }
   }
 
-  // Greedy RA has been observed to crash in long-running EVM multipass JIT
-  // compilation. Disabled by default; override with
-  // DTVM_EVM_DISABLE_MULTIPASS_GREEDYRA.
-  Config.DisableMultipassGreedyRA = true;
-  if (const char *DisableGreedyRA =
-          std::getenv("DTVM_EVM_DISABLE_MULTIPASS_GREEDYRA");
-      DisableGreedyRA != nullptr) {
-    bool ParsedDisableGreedyRA = true;
-    if (parseBoolEnvValue(DisableGreedyRA, ParsedDisableGreedyRA)) {
-      Config.DisableMultipassGreedyRA = ParsedDisableGreedyRA;
-    } else {
-      ZEN_LOG_WARN("ignore invalid DTVM_EVM_DISABLE_MULTIPASS_GREEDYRA=%s",
-                   DisableGreedyRA);
-    }
-  }
+  // Greedy RA has been observed to crash during long-running multipass JIT
+  // (e.g. Silkworm sync). Keep the default (greedy enabled); use
+  // --disable-multipass-greedyra or loadEVMModuleWithRegAllocRetry() FastRA
+  // fallback when compilation fails in the regalloc phase.
 }
 } // namespace
 
