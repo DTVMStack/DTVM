@@ -3093,8 +3093,8 @@ EVMMirBuilder::handleClz(const Operand &ValueOp) {
   // EIP-7939 CLZ inlined: 4-limb chain-select on the highest non-zero limb
   // plus a base offset (limb index 3 -> 0, 2 -> 64, 1 -> 128, 0 -> 192).
   // CLZ(0) = 256 is enforced by an outer Select(IsZero, 256, partial).
-  // Pattern mirrors handleExp's computeExpByteSize lambda (see
-  // evm_mir_compiler.cpp:2511-2562) for parity with proven MIR shapes.
+  // Pattern mirrors handleExp's computeExpByteSize for parity with
+  // proven MIR shapes.
   MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
@@ -3108,11 +3108,11 @@ EVMMirBuilder::handleClz(const Operand &ValueOp) {
 
   auto NePred = CmpInstruction::Predicate::ICMP_NE;
   MInstruction *Has1 = createInstruction<CmpInstruction>(
-      false, NePred, &Ctx.I64Type, Value[1], Zero);
+      false, NePred, MirI64Type, Value[1], Zero);
   MInstruction *Has2 = createInstruction<CmpInstruction>(
-      false, NePred, &Ctx.I64Type, Value[2], Zero);
+      false, NePred, MirI64Type, Value[2], Zero);
   MInstruction *Has3 = createInstruction<CmpInstruction>(
-      false, NePred, &Ctx.I64Type, Value[3], Zero);
+      false, NePred, MirI64Type, Value[3], Zero);
 
   // OR all four limbs to detect the all-zero case.
   MInstruction *Any01 = createInstruction<BinaryInstruction>(
@@ -3123,7 +3123,7 @@ EVMMirBuilder::handleClz(const Operand &ValueOp) {
       false, OP_or, MirI64Type, Any01, Any23);
   auto EqPred = CmpInstruction::Predicate::ICMP_EQ;
   MInstruction *IsZero =
-      createInstruction<CmpInstruction>(false, EqPred, &Ctx.I64Type, Any, Zero);
+      createInstruction<CmpInstruction>(false, EqPred, MirI64Type, Any, Zero);
 
   // Chain-select the highest non-zero limb.
   MInstruction *Limb01 = createInstruction<SelectInstruction>(
