@@ -38,11 +38,19 @@ representative bench is staged.
 
 ## Impact
 
-- `src/compiler/evm_frontend/evm_mir_compiler.cpp::handleClz` (single function)
-- No header changes (signature is unchanged).
-- `RuntimeFunctions.GetClz` / `evmGetClz` remain in the runtime table for now;
-  callsite removal is deferred to a follow-up cleanup commit so this diff
-  stays focused on the perf change.
+Two commits in this PR:
+
+1. `src/compiler/evm_frontend/evm_mir_compiler.cpp::handleClz` — replace the
+   `callRuntimeFor` body with the inline 4-limb chain-select MIR pattern. The
+   C++ signature is unchanged.
+2. `src/compiler/evm_frontend/evm_imported.{h,cpp}` — drop the now-unused
+   `RuntimeFunctions.GetClz` typedef field, `evmGetClz` declaration,
+   dispatch-table entry, and function body. After step 1 the helper has no
+   remaining callers; whole-tree `grep` and `nm -D libdtvmapi.so` confirm
+   internal linkage with no external consumers.
+
+`RuntimeFunctions` is accessed only via designated initializer and named
+field, so removing one field does not shift offsets for any consumer.
 
 ## Implementation
 
@@ -84,9 +92,11 @@ representative bench is staged.
    narrow-consumer analysis (PR #493 `EVMRangeAnalyzer`) sees the tight
    range across basic blocks.
 
-3. Do **not** delete `RuntimeFunctions.GetClz` or `evmGetClz` in this commit
-   — defer to a separate cleanup once we are confident the new path is
-   stable across CI.
+3. Delete the now-dead runtime surface as a second commit:
+   `RuntimeFunctions.GetClz` field (`evm_imported.h`), `evmGetClz`
+   declaration (`evm_imported.h`), dispatch-table entry
+   (`evm_imported.cpp`), and the function body (`evm_imported.cpp`). With
+   `handleClz` inlined in step 1, no caller remains.
 
 ## Checklist
 
