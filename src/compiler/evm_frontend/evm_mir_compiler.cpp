@@ -1775,6 +1775,21 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDivModGeneral(
     ResultVars[I] = CurFunc->createVariable(I64Type);
   }
 
+  // Materialize operand components to variables BEFORE the branch.
+  // Raw instruction pointers (e.g., ADD carry, CMP results) from this BB
+  // may not survive the cross-BB transition to MultiLimbBB — the register
+  // allocator can spill them and reload stale data.  Saving through
+  // dedicated variables (Dassign here, Dread in MultiLimbBB via
+  // variable-backed Operand) guarantees correct value propagation.
+  U256Var DividendVars = {};
+  U256Var DivisorVars = {};
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    DividendVars[I] = storeInstructionInTemp(A[I], I64Type);
+    DivisorVars[I] = storeInstructionInTemp(B[I], I64Type);
+  }
+  Operand SafeDividendOp(DividendVars, EVMType::UINT256);
+  Operand SafeDivisorOp(DivisorVars, EVMType::UINT256);
+
   auto storeResult = [&](const U256Inst &Values) {
     for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
       createInstruction<DassignInstruction>(true, &(Ctx.VoidType), Values[I],
@@ -1846,11 +1861,11 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDivModGeneral(
   if (WantQuotient) {
     RuntimeResult = callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
                                    const intx::uint256 &>(
-        RuntimeFunctions.GetDiv, DividendOp, DivisorOp);
+        RuntimeFunctions.GetDiv, SafeDividendOp, SafeDivisorOp);
   } else {
     RuntimeResult = callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
                                    const intx::uint256 &>(
-        RuntimeFunctions.GetMod, DividendOp, DivisorOp);
+        RuntimeFunctions.GetMod, SafeDividendOp, SafeDivisorOp);
   }
   storeResult(extractU256Operand(RuntimeResult));
   createInstruction<BrInstruction>(true, Ctx, AfterBB);
@@ -2071,6 +2086,14 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
           return Values;
         };
 
+        // Materialize dividend to variables before branching to avoid
+        // cross-BB stale register issues (same as handleDivModGeneral).
+        U256Var DividendVars = {};
+        for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+          DividendVars[I] = storeInstructionInTemp(A[I], I64Type);
+        }
+        Operand SafeDividendOp(DividendVars, EVMType::UINT256);
+
         MBasicBlock *KnownU64BB = createBasicBlock();
         MBasicBlock *SlowBB = createBasicBlock();
         MBasicBlock *AfterBB = createBasicBlock();
@@ -2081,8 +2104,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
 
         setInsertBlock(KnownU64BB);
         MInstruction *DivConst = createIntConstInstruction(I64Type, D);
+        MInstruction *A0Local = loadVariable(DividendVars[0]);
         MInstruction *Quotient = createInstruction<BinaryInstruction>(
-            false, OP_udiv, I64Type, A[0], DivConst);
+            false, OP_udiv, I64Type, A0Local, DivConst);
         U256Inst FastResult = {Quotient, Zero, Zero, Zero};
         storeResult(FastResult);
         createInstruction<BrInstruction>(true, Ctx, AfterBB);
@@ -2090,7 +2114,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
 
         setInsertBlock(SlowBB);
         U256Inst SlowResult =
-            extractU256Operand(handleDivU64Divisor(DividendOp, D));
+            extractU256Operand(handleDivU64Divisor(SafeDividendOp, D));
         storeResult(SlowResult);
         createInstruction<BrInstruction>(true, Ctx, AfterBB);
         addSuccessor(AfterBB);
@@ -2343,6 +2367,21 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
     ResultVars[I] = CurFunc->createVariable(I64Type);
   }
 
+  // Materialize operand components to variables BEFORE the branch to avoid
+  // cross-basic-block stale register issues.  Raw instruction pointers from
+  // this BB (e.g. CMP results, zero-extends) may not survive the transition
+  // to FastBB/SlowBB — the register allocator can spill and reload garbage.
+  // Same fix as handleDivModGeneral for issue #487.
+  U256Var AugendVars = {}, AddendVars = {}, ModulusVars = {};
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    AugendVars[I] = storeInstructionInTemp(Augend[I], I64Type);
+    AddendVars[I] = storeInstructionInTemp(Addend[I], I64Type);
+    ModulusVars[I] = storeInstructionInTemp(Modulus[I], I64Type);
+  }
+  Operand SafeAugendOp(AugendVars, EVMType::UINT256);
+  Operand SafeAddendOp(AddendVars, EVMType::UINT256);
+  Operand SafeModulusOp(ModulusVars, EVMType::UINT256);
+
   auto storeResult = [&](const U256Inst &Values) {
     for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
       createInstruction<DassignInstruction>(true, &(Ctx.VoidType), Values[I],
@@ -2369,33 +2408,43 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
   // === Fast path (inline addmod) ===
   setInsertBlock(FastBB);
   {
+    // Re-load operand limbs from variables in this BB.
+    U256Inst FAugend = {}, FAddend = {}, FModulus = {};
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      FAugend[I] = loadVariable(AugendVars[I]);
+      FAddend[I] = loadVariable(AddendVars[I]);
+      FModulus[I] = loadVariable(ModulusVars[I]);
+    }
+
     // Step 1: Normalize augend — if augend >= mod, use augend - mod
-    MInstruction *AugLtMod = u256UnsignedLT(Augend, Modulus);
+    MInstruction *AugLtMod = u256UnsignedLT(FAugend, FModulus);
 
     // Compute augend - mod (u256 SUB chain)
     Operand AugSubMod =
-        handleBinaryArithmetic<BinaryOperator::BO_SUB>(AugendOp, ModulusOp);
+        handleBinaryArithmetic<BinaryOperator::BO_SUB>(SafeAugendOp,
+                                                        SafeModulusOp);
     U256Inst AugDiff = extractU256Operand(AugSubMod);
 
     // NormAugend = AugLtMod ? Augend : AugDiff  (if augend < mod, keep augend)
     U256Inst NormAugend = {};
     for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
       NormAugend[I] = createInstruction<SelectInstruction>(
-          false, I64Type, AugLtMod, Augend[I], AugDiff[I]);
+          false, I64Type, AugLtMod, FAugend[I], AugDiff[I]);
     }
 
     // Step 2: Normalize addend — if addend >= mod, use addend - mod
-    MInstruction *AddLtMod = u256UnsignedLT(Addend, Modulus);
+    MInstruction *AddLtMod = u256UnsignedLT(FAddend, FModulus);
 
     Operand AddSubMod =
-        handleBinaryArithmetic<BinaryOperator::BO_SUB>(AddendOp, ModulusOp);
+        handleBinaryArithmetic<BinaryOperator::BO_SUB>(SafeAddendOp,
+                                                        SafeModulusOp);
     U256Inst AddDiff = extractU256Operand(AddSubMod);
 
     // NormAddend = AddLtMod ? Addend : AddDiff
     U256Inst NormAddend = {};
     for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
       NormAddend[I] = createInstruction<SelectInstruction>(
-          false, I64Type, AddLtMod, Addend[I], AddDiff[I]);
+          false, I64Type, AddLtMod, FAddend[I], AddDiff[I]);
     }
 
     // Step 3: Sum = NormAugend + NormAddend (u256 ADD chain)
@@ -2409,13 +2458,17 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
     MInstruction *Overflow = u256UnsignedLT(Sum, NormAugend);
 
     // Step 4: SumSubMod = Sum - Mod (u256 SUB chain)
-    Operand ModulusOpLocal(Modulus, EVMType::UINT256);
     Operand SumSubModOp =
-        handleBinaryArithmetic<BinaryOperator::BO_SUB>(SumOp, ModulusOpLocal);
+        handleBinaryArithmetic<BinaryOperator::BO_SUB>(SumOp, SafeModulusOp);
     U256Inst SumSubMod = extractU256Operand(SumSubModOp);
 
     // Detect borrow: Sum < Mod
-    MInstruction *SumLtMod = u256UnsignedLT(Sum, Modulus);
+    // Re-load Modulus limbs for comparison (avoid cross-BB stale values).
+    U256Inst FMod2 = {};
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+      FMod2[I] = loadVariable(ModulusVars[I]);
+    }
+    MInstruction *SumLtMod = u256UnsignedLT(Sum, FMod2);
 
     // Result selection: if (overflow || !borrow) use SumSubMod, else Sum
     // !borrow means Sum >= Mod, i.e., !SumLtMod
@@ -2449,7 +2502,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
     U256Inst SlowResult = extractU256Operand(
         callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
                        const intx::uint256 &, const intx::uint256 &>(
-            RuntimeFunctions.GetAddMod, AugendOp, AddendOp, ModulusOp));
+            RuntimeFunctions.GetAddMod, SafeAugendOp, SafeAddendOp,
+            SafeModulusOp));
     storeResult(SlowResult);
     createInstruction<BrInstruction>(true, Ctx, AfterBB);
     addSuccessor(AfterBB);
@@ -5827,6 +5881,14 @@ MInstruction *EVMMirBuilder::packU256Argument(const Operand &Param,
       auto *IntConst = llvm::cast<MConstantInt>(&ConstInstr->getConstant());
       Component = createIntConstInstruction(
           I64Type, IntConst->getValue().getZExtValue());
+    } else if (auto *DreadInstr =
+                   llvm::dyn_cast<DreadInstruction>(Component)) {
+      // Re-read variables near the store to shorten live ranges.
+      // Same root cause as issue #487: long-lived values between the
+      // original definition (e.g. in a DIV/MOD merge block) and the
+      // scratch store here can be spilled and reloaded with stale data.
+      Component = createInstruction<DreadInstruction>(
+          false, DreadInstr->getType(), DreadInstr->getVarIdx());
     }
 
     const int32_t Offset =
