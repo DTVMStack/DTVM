@@ -247,8 +247,18 @@ GTEST_API_ int main(int argc, char **argv) {
                   "Number of threads for multipass JIT(set 0 for automatic "
                   "determination)")
       ->excludes(DMMOption);
-  CLIParser.add_flag("--enable-multipass-lazy", Config.EnableMultipassLazy,
-                     "Enable multipass lazy mode(on request compile)");
+  CLIParser.add_flag("--enable-profile-guided-jit",
+                     Config.EnableProfileGuidedJIT,
+                     "Enable profile-guided JIT mode");
+  // Deprecated compatibility flag: kept for parity with other multipass JIT
+  // CLIs/test binaries so existing CI scripts that pass
+  // --enable-multipass-lazy do not fail argument parsing. The flag has no
+  // effect on solidity contract tests.
+  bool EnableMultipassLazyCompatibility = false;
+  CLIParser.add_flag(
+      "--enable-multipass-lazy", EnableMultipassLazyCompatibility,
+      "Deprecated compatibility flag accepted for parity with other "
+      "multipass JIT CLIs; ignored by solidity contract tests");
 #endif // ZEN_ENABLE_MULTIPASS_JIT
   CLI11_PARSE(CLIParser, argc, argv);
 

@@ -283,7 +283,10 @@ int main(int argc, char *argv[]) {
                      "determination)")
         ->excludes(DMMOption);
     CLIParser->add_flag("--enable-multipass-lazy", Config.EnableMultipassLazy,
-                        "Enable multipass lazy mode(on request compile)");
+                        "Enable multipass lazy mode (on request compile)");
+    CLIParser->add_flag("--enable-profile-guided-jit",
+                        Config.EnableProfileGuidedJIT,
+                        "Enable profile-guided JIT mode");
     CLIParser->add_option("--entry-hint", EntryHint, "Entry function hint");
 #ifdef ZEN_ENABLE_EVM
     CLIParser->add_flag("--enable-evm-gas", Config.EnableEvmGasMetering,

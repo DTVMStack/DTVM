@@ -392,6 +392,8 @@ void EVMMirBuilder::initEVM(CompilerContext *Context) {
   ReturnBB = createBasicBlock();
   loadEVMInstanceAttr();
 
+  // Normal execution continues from here (bytecode at PC=0)
+
   GasChunkEnd = EvmCtx->getGasChunkEnd();
   GasChunkCost = EvmCtx->getGasChunkCost();
   GasChunkCostSPP = EvmCtx->getGasChunkCostSPP();

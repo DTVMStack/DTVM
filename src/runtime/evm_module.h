@@ -8,6 +8,8 @@
 #include "evmc/evmc.hpp"
 #include "runtime/evm_memory_specialization.h"
 #include "runtime/module.h"
+#include <atomic>
+#include <future>
 #include <limits>
 #include <memory>
 
@@ -79,9 +81,14 @@ public:
   }
 
   void setJITCodeAndSize(void *Code, size_t Size) {
-    JITCode = Code;
     JITCodeSize = Size;
+    JITCode.store(Code, std::memory_order_release);
   }
+  // Future for background JIT compilation (managed by JITCompilePool).
+  std::future<void> JITCompileFuture;
+
+  // Per-module execution statistics for profile-guided JIT diagnostics.
+  uint64_t ModuleExecuteCount = 0;
 #endif // ZEN_ENABLE_JIT
 
   void *getJITCode() const {
@@ -126,7 +133,7 @@ private:
 
 #ifdef ZEN_ENABLE_JIT
   std::unique_ptr<common::CodeMemPool> JITCodeMemPool;
-  void *JITCode = nullptr;
+  std::atomic<void *> JITCode{nullptr};
   size_t JITCodeSize = 0;
 #endif // ZEN_ENABLE_JIT
 };

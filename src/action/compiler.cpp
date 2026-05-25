@@ -46,12 +46,8 @@ void performEVMJITCompile(runtime::EVMModule &Mod) {
   switch (Mod.getRuntime()->getConfig().Mode) {
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
   case common::RunMode::MultipassMode: {
-    if (Mod.getRuntime()->getConfig().EnableMultipassLazy) {
-      ZEN_LOG_WARN("EVMJIT does not support lazy compilation now");
-    } else {
-      COMPILER::EagerEVMJITCompiler ECompiler(&Mod);
-      ECompiler.compile();
-    }
+    COMPILER::EagerEVMJITCompiler ECompiler(&Mod);
+    ECompiler.compile();
     break;
   }
 #endif
