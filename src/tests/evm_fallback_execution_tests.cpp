@@ -32,6 +32,20 @@ protected:
     }
   }
 
+  // Pad bytecode with JUMPDEST (0x5B) prefix to exceed kMinJITCodeSize (64).
+  // This ensures the test exercises the JIT path rather than the interpreter
+  // fast path which skips contracts smaller than 64 bytes.
+  static std::vector<uint8_t> padBytecode(std::initializer_list<uint8_t> Code) {
+    static constexpr size_t kMinJITCodeSize = 64;
+    std::vector<uint8_t> Padded;
+    size_t CodeLen = Code.size();
+    if (CodeLen < kMinJITCodeSize) {
+      Padded.resize(kMinJITCodeSize - CodeLen, 0x5B); // JUMPDEST padding
+    }
+    Padded.insert(Padded.end(), Code.begin(), Code.end());
+    return Padded;
+  }
+
   // Helper method to execute bytecode and return result
   evmc_result executeBytecode(const std::vector<uint8_t> &Bytecode,
                               int64_t GasLimit = 1000000) {
@@ -70,11 +84,12 @@ protected:
 TEST_F(EVMFallbackExecutionTest, BasicFallbackExecution) {
 #ifdef ZEN_ENABLE_JIT_FALLBACK_TEST
   // Test bytecode: PUSH1 42, FALLBACK(0xEE), STOP
-  std::vector<uint8_t> Bytecode = {
+  // Padded to >= 64 bytes to pass kMinJITCodeSize threshold.
+  std::vector<uint8_t> Bytecode = padBytecode({
       0x60, 0x2A, // PUSH1 42
       0xEE,       // FALLBACK trigger
       0x00        // STOP
-  };
+  });
 
   evmc_result Result = executeBytecode(Bytecode);
 
@@ -91,11 +106,11 @@ TEST_F(EVMFallbackExecutionTest, BasicFallbackExecution) {
   }
 #else
   // When fallback testing is disabled, 0xEE should be treated as undefined
-  std::vector<uint8_t> Bytecode = {
+  std::vector<uint8_t> Bytecode = padBytecode({
       0x60, 0x2A, // PUSH1 42
       0xEE,       // Should be treated as undefined opcode
       0x00        // STOP (won't be reached)
-  };
+  });
 
   evmc_result Result = executeBytecode(Bytecode);
 
@@ -113,7 +128,8 @@ TEST_F(EVMFallbackExecutionTest, BasicFallbackExecution) {
 TEST_F(EVMFallbackExecutionTest, FallbackWithStackOperations) {
 #ifdef ZEN_ENABLE_JIT_FALLBACK_TEST
   // Test bytecode: PUSH1 10, PUSH1 20, ADD, FALLBACK, PUSH1 5, ADD, STOP
-  std::vector<uint8_t> Bytecode = {
+  // Padded to >= 64 bytes to pass kMinJITCodeSize threshold.
+  std::vector<uint8_t> Bytecode = padBytecode({
       0x60, 0x0A, // PUSH1 10
       0x60, 0x14, // PUSH1 20
       0x01,       // ADD (stack: [30])
@@ -121,7 +137,7 @@ TEST_F(EVMFallbackExecutionTest, FallbackWithStackOperations) {
       0x60, 0x05, // PUSH1 5 (should execute in interpreter)
       0x01,       // ADD (stack: [35])
       0x00        // STOP
-  };
+  });
 
   evmc_result Result = executeBytecode(Bytecode);
 
@@ -144,7 +160,8 @@ TEST_F(EVMFallbackExecutionTest, FallbackWithStackOperations) {
 TEST_F(EVMFallbackExecutionTest, MultipleFallbackTriggers) {
 #ifdef ZEN_ENABLE_JIT_FALLBACK_TEST
   // Test bytecode with multiple 0xEE triggers
-  std::vector<uint8_t> Bytecode = {
+  // Padded to >= 64 bytes to pass kMinJITCodeSize threshold.
+  std::vector<uint8_t> Bytecode = padBytecode({
       0x60, 0x01, // PUSH1 1
       0xEE,       // FALLBACK 1
       0x60, 0x02, // PUSH1 2
@@ -153,7 +170,7 @@ TEST_F(EVMFallbackExecutionTest, MultipleFallbackTriggers) {
       0x60, 0x03, // PUSH1 3
       0x01,       // ADD
       0x00        // STOP
-  };
+  });
 
   evmc_result Result = executeBytecode(Bytecode);
 
@@ -181,12 +198,12 @@ TEST_F(EVMFallbackExecutionTest, FallbackAtDifferentPositions) {
   };
 
   std::vector<TestCase> TestCases = {
-      {{0xEE, 0x00}, // FALLBACK at PC=0, STOP
+      {padBytecode({0xEE, 0x00}), // FALLBACK at PC=N, STOP
        "Fallback at beginning"},
-      {{0x60, 0x01, 0xEE, 0x00}, // PUSH1 1, FALLBACK at PC=2, STOP
+      {padBytecode({0x60, 0x01, 0xEE, 0x00}), // PUSH1 1, FALLBACK, STOP
        "Fallback after PUSH"},
-      {{0x60, 0x01, 0x60, 0x02, 0x01, 0xEE,
-        0x00}, // PUSH1 1, PUSH1 2, ADD, FALLBACK at PC=5, STOP
+      {padBytecode({0x60, 0x01, 0x60, 0x02, 0x01, 0xEE,
+                    0x00}), // PUSH1 1, PUSH1 2, ADD, FALLBACK, STOP
        "Fallback after arithmetic"}};
 
   for (const auto &TestCase : TestCases) {
@@ -209,7 +226,8 @@ TEST_F(EVMFallbackExecutionTest, FallbackAtDifferentPositions) {
 TEST_F(EVMFallbackExecutionTest, FallbackWithMemoryOperations) {
 #ifdef ZEN_ENABLE_JIT_FALLBACK_TEST
   // Test bytecode: PUSH1 0x42, PUSH1 0, MSTORE, FALLBACK, PUSH1 0, MLOAD, STOP
-  std::vector<uint8_t> Bytecode = {
+  // Padded to >= 64 bytes to pass kMinJITCodeSize threshold.
+  std::vector<uint8_t> Bytecode = padBytecode({
       0x60, 0x42, // PUSH1 0x42
       0x60, 0x00, // PUSH1 0
       0x52,       // MSTORE (store 0x42 at memory position 0)
@@ -218,7 +236,7 @@ TEST_F(EVMFallbackExecutionTest, FallbackWithMemoryOperations) {
       0x60, 0x20, // PUSH1 0x20
       0x60, 0x00, // PUSH1 0
       0xF3        // RETURN
-  };
+  });
 
   evmc_result Result = executeBytecode(Bytecode);
 
@@ -244,21 +262,23 @@ TEST_F(EVMFallbackExecutionTest, FallbackGasConsumption) {
   // Test that fallback operations consume appropriate gas
 
   // Bytecode without fallback
-  std::vector<uint8_t> NormalBytecode = {
+  // Padded to >= 64 bytes to pass kMinJITCodeSize threshold.
+  std::vector<uint8_t> NormalBytecode = padBytecode({
       0x60, 0x01, // PUSH1 1
       0x60, 0x02, // PUSH1 2
       0x01,       // ADD
       0x00        // STOP
-  };
+  });
 
   // Bytecode with fallback
-  std::vector<uint8_t> FallbackBytecode = {
+  // Padded to >= 64 bytes to pass kMinJITCodeSize threshold.
+  std::vector<uint8_t> FallbackBytecode = padBytecode({
       0x60, 0x01, // PUSH1 1
       0xEE,       // FALLBACK
       0x60, 0x02, // PUSH1 2
       0x01,       // ADD
       0x00        // STOP
-  };
+  });
 
   evmc_result NormalResult = executeBytecode(NormalBytecode);
   evmc_result FallbackResult = executeBytecode(FallbackBytecode);
@@ -287,13 +307,14 @@ TEST_F(EVMFallbackExecutionTest, FallbackGasConsumption) {
 TEST_F(EVMFallbackExecutionTest, FallbackErrorHandling) {
 #ifdef ZEN_ENABLE_JIT_FALLBACK_TEST
   // Test fallback behavior with stack underflow after fallback
-  std::vector<uint8_t> Bytecode = {
+  // Padded to >= 64 bytes to pass kMinJITCodeSize threshold.
+  std::vector<uint8_t> Bytecode = padBytecode({
       0x60, 0x01, // PUSH1 1
       0x50,       // POP
       0xEE,       // FALLBACK
       0x50,       // POP (should cause stack underflow)
       0x00        // STOP
-  };
+  });
 
   evmc_result Result = executeBytecode(Bytecode);
 
@@ -314,24 +335,24 @@ TEST_F(EVMFallbackExecutionTest, FallbackErrorHandling) {
 TEST_F(EVMFallbackExecutionTest, ComprehensiveFallbackWorkflow) {
 #ifdef ZEN_ENABLE_JIT_FALLBACK_TEST
   // Complex bytecode testing complete fallback workflow
-  std::vector<uint8_t> ComplexBytecode = {
-      0x60, 0x10, // PUSH1 16      (PC = 0, 1)
-      0x60, 0x20, // PUSH1 32      (PC = 2, 3)
-      0x01,       // ADD           (PC = 4)     -> stack: [48]
-      0x80,       // DUP1          (PC = 5)     -> stack: [48, 48]
-      0x60, 0x00, // PUSH1 0       (PC = 6, 7)  -> stack: [48, 48, 0]
-      0x52, // MSTORE        (PC = 8)     -> store 48 at memory[0], stack: [48]
-      0xEE, // FALLBACK      (PC = 9)     -> should continue from PC = 10
-      0x60, 0x05, // PUSH1 5       (PC = 10, 11) -> stack: [48, 5]
-      0x01,       // ADD           (PC = 12)    -> stack: [53]
-      0x60, 0x00, // PUSH1 0       (PC = 13, 14) -> stack: [53, 0]
-      0x51, // MLOAD         (PC = 15)    -> load from memory[0], stack: [53,
-            // 48]
-      0x90, // SWAP1         (PC = 16)    -> stack: [48, 53]
+  // Padded to >= 64 bytes to pass kMinJITCodeSize threshold.
+  std::vector<uint8_t> ComplexBytecode = padBytecode({
+      0x60, 0x10, // PUSH1 16
+      0x60, 0x20, // PUSH1 32
+      0x01,       // ADD            -> stack: [48]
+      0x80,       // DUP1           -> stack: [48, 48]
+      0x60, 0x00, // PUSH1 0        -> stack: [48, 48, 0]
+      0x52,       // MSTORE         -> store 48 at memory[0], stack: [48]
+      0xEE,       // FALLBACK       -> should continue in interpreter
+      0x60, 0x05, // PUSH1 5        -> stack: [48, 5]
+      0x01,       // ADD            -> stack: [53]
+      0x60, 0x00, // PUSH1 0        -> stack: [53, 0]
+      0x51,       // MLOAD          -> load from memory[0], stack: [53, 48]
+      0x90,       // SWAP1          -> stack: [48, 53]
       0x60, 0x20, // PUSH1 0x20
       0x60, 0x00, // PUSH1 0
       0xF3        // RETURN
-  };
+  });
 
   evmc_result Result = executeBytecode(
       ComplexBytecode, 2000000); // More gas for complex operations
