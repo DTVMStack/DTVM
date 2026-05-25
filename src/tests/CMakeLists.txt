@@ -81,6 +81,7 @@ if(ZEN_ENABLE_SPEC_TEST)
     if(ZEN_ENABLE_LIBEVM)
       add_executable(evmFallbackExecutionTests evm_fallback_execution_tests.cpp)
       add_executable(evmModuleCacheTests evm_module_cache_tests.cpp)
+      add_executable(evmProfileGuidedJITTests evm_profile_guided_jit_tests.cpp)
     endif()
     add_executable(mptCompareCpp mpt_compare_cpp.cpp)
   else()
@@ -170,6 +171,11 @@ if(ZEN_ENABLE_SPEC_TEST)
             PRIVATE dtvmapi gtest_main -fsanitize=address
             PUBLIC ${GTEST_BOTH_LIBRARIES}
           )
+          target_link_libraries(
+            evmProfileGuidedJITTests
+            PRIVATE dtvmapi gtest_main -fsanitize=address
+            PUBLIC ${GTEST_BOTH_LIBRARIES}
+          )
         endif()
         target_link_libraries(
           mptCompareCpp PRIVATE dtvmcore rapidjson mpt -fsanitize=address
@@ -249,6 +255,11 @@ if(ZEN_ENABLE_SPEC_TEST)
             PRIVATE dtvmapi gtest_main -fsanitize=address -static-libasan
             PUBLIC ${GTEST_BOTH_LIBRARIES}
           )
+          target_link_libraries(
+            evmProfileGuidedJITTests
+            PRIVATE dtvmapi gtest_main -fsanitize=address -static-libasan
+            PUBLIC ${GTEST_BOTH_LIBRARIES}
+          )
         endif()
         target_link_libraries(
           mptCompareCpp PRIVATE dtvmcore rapidjson mpt -fsanitize=address
@@ -312,6 +323,11 @@ if(ZEN_ENABLE_SPEC_TEST)
           PRIVATE dtvmapi gtest_main
           PUBLIC ${GTEST_BOTH_LIBRARIES}
         )
+        target_link_libraries(
+          evmProfileGuidedJITTests
+          PRIVATE dtvmapi gtest_main
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
       endif()
       target_link_libraries(mptCompareCpp PRIVATE dtvmcore rapidjson mpt)
     endif()
@@ -346,6 +362,7 @@ if(ZEN_ENABLE_SPEC_TEST)
     if(ZEN_ENABLE_LIBEVM)
       add_test(NAME evmFallbackExecutionTests COMMAND evmFallbackExecutionTests)
       add_test(NAME evmModuleCacheTests COMMAND evmModuleCacheTests)
+      add_test(NAME evmProfileGuidedJITTests COMMAND evmProfileGuidedJITTests)
     endif()
   endif()
 endif()

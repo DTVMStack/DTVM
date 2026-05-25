@@ -70,6 +70,9 @@ case $RUN_MODE in
         else
             EXTRA_EXE_OPTIONS="$EXTRA_EXE_OPTIONS --disable-multipass-multithread"
         fi
+        if [ "${ENABLE_PROFILE_GUIDED_JIT:-false}" = true ]; then
+            EXTRA_EXE_OPTIONS="$EXTRA_EXE_OPTIONS --enable-profile-guided-jit"
+        fi
         ;;
 esac
 
@@ -302,6 +305,7 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
         "evmfallbacksuite")
             python3 tools/run_evm_tests.py -r build/dtvm $EXTRA_EXE_OPTIONS
             ./build/evmFallbackExecutionTests
+            ./build/evmProfileGuidedJITTests
             ;;
         "benchmarksuite")
             # Clone evmone and run performance regression check
