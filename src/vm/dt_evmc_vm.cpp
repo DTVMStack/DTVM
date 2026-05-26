@@ -287,7 +287,7 @@ struct DTVM : evmc_vm {
   // evmc ships a std::hash<evmc::address> specialisation so the map works
   // out of the box and we save an allocation per call on the hot path.
   std::unordered_map<evmc::address, ContractProfile> ProfileStore;
-  CallRingBuffer RingBuffer{profile::RING_BUFFER_CAPACITY};
+  CallRingBuffer RingBuffer{Config.RingBufferCapacity};
   // Thread pool for background JIT compilation (lazily initialized).
   std::unique_ptr<JITCompilePool> CompilePool;
   // Statistics: number of background JIT compilations actually triggered.
@@ -380,6 +380,14 @@ enum evmc_set_option_result set_option(evmc_vm *VMInstance, const char *Name,
     int Parsed = std::atoi(Value);
     if (Parsed > 0) {
       VM->Config.JITTriggerTotalGas = static_cast<uint64_t>(Parsed);
+      return EVMC_SET_OPTION_SUCCESS;
+    }
+    return EVMC_SET_OPTION_INVALID_VALUE;
+  } else if (std::strcmp(Name, "ring_buffer_capacity") == 0) {
+    int Parsed = std::atoi(Value);
+    if (Parsed > 0 && Parsed <= 10000) {
+      VM->Config.RingBufferCapacity = static_cast<size_t>(Parsed);
+      VM->RingBuffer = CallRingBuffer{VM->Config.RingBufferCapacity};
       return EVMC_SET_OPTION_SUCCESS;
     }
     return EVMC_SET_OPTION_INVALID_VALUE;
@@ -847,6 +855,7 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
                                       CodeSize);
   }
 
+#ifdef ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
   // Skip JIT for small contracts -- the per-call overhead of the JIT
   // execution path (TLS setup, callNativeGeneral, etc.) exceeds any
   // speedup for contracts with fewer than ~64 opcodes.
@@ -855,6 +864,7 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
     return executeInterpreterFastPath(VM, Host, Context, Rev, Msg, Code,
                                       CodeSize);
   }
+#endif // ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
 
 #ifdef ZEN_ENABLE_JIT
   {
@@ -1016,3 +1026,8 @@ DTVM::DTVM()
 } // namespace
 
 extern "C" evmc_vm *evmc_create_dtvmapi() { return new DTVM; }
+
+extern "C" uint64_t dtvm_get_jit_trigger_count(evmc_vm *vm) {
+  auto *VM = static_cast<DTVM *>(vm);
+  return VM->BackgroundJITTriggerCount;
+}

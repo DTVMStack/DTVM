@@ -50,6 +50,8 @@ struct RuntimeConfig {
   // Defaults match profile::JIT_TRIGGER_CALL_COUNT / JIT_TRIGGER_TOTAL_GAS.
   uint64_t JITTriggerCallCount = 32;
   uint64_t JITTriggerTotalGas = 100000;
+  // Ring buffer capacity for the sliding-window call profiler.
+  size_t RingBufferCapacity = 100;
 #endif // ZEN_ENABLE_MULTIPASS_JIT
 
   bool validate() {

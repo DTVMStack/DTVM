@@ -87,16 +87,19 @@ case $TestSuite in
         CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_SPEC_TEST=ON -DZEN_ENABLE_CHECKED_ARITHMETIC=ON -DZEN_ENABLE_EVM=ON"
         ;;
     "evmonetestsuite")
-        CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON -DZEN_ENABLE_JIT_PRECOMPILE_FALLBACK=ON"
+        CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON"
         ;;
     "evmonestatetestsuite")
         CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON"
+        ;;
+    "evmpgjsuite")
+        CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_SPEC_TEST=ON -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON -DZEN_ENABLE_JIT_PRECOMPILE_FALLBACK=ON"
         ;;
     "evmfallbacksuite")
         CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_SPEC_TEST=ON -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON -DZEN_ENABLE_JIT_FALLBACK_TEST=ON"
         ;;
     "benchmarksuite")
-        CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON -DZEN_ENABLE_JIT_PRECOMPILE_FALLBACK=ON"
+        CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON"
         ;;
 esac
 
@@ -121,6 +124,10 @@ fi
 if [[ $TestSuite == "evmonestatetestsuite" ]]; then
     STACK_TYPES=("-DZEN_ENABLE_VIRTUAL_STACK=ON")
 fi
+if [[ $TestSuite == "evmpgjsuite" ]]; then
+    STACK_TYPES=("-DZEN_ENABLE_VIRTUAL_STACK=ON")
+fi
+
 
 if [[ $TestSuite == "benchmarksuite" ]]; then
     STACK_TYPES=("-DZEN_ENABLE_VIRTUAL_STACK=ON")
@@ -302,10 +309,12 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 fi
             done
             ;;
+        "evmpgjsuite")
+            ./build/evmProfileGuidedJITTests
+            ;;
         "evmfallbacksuite")
             python3 tools/run_evm_tests.py -r build/dtvm $EXTRA_EXE_OPTIONS
             ./build/evmFallbackExecutionTests
-            ./build/evmProfileGuidedJITTests
             ;;
         "benchmarksuite")
             # Clone evmone and run performance regression check
