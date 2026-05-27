@@ -336,7 +336,9 @@ bool shouldUsePersistentModuleCache(const evmc_message *Msg) {
 
 bool shouldRetryModuleLoadWithFastRA(const DTVM *VM, const Error &Err) {
   return VM->Config.Mode == RunMode::MultipassMode &&
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
          !VM->Config.DisableMultipassGreedyRA &&
+#endif
          Err.getPhase() == ErrorPhase::Compilation &&
          Err.getSubphase() == ErrorSubphase::RegAlloc;
 }
@@ -351,7 +353,9 @@ zen::common::MayBe<EVMModule *> loadEVMModuleWithRegAllocRetry(
   }
 
   RuntimeConfig RetryConfig = VM->Config;
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
   RetryConfig.DisableMultipassGreedyRA = true;
+#endif
   ScopedConfig Retry(VM->RT.get(), RetryConfig);
   return VM->RT->loadEVMModule(ModName, Code, CodeSize, Rev, MemoryProfile);
 }
