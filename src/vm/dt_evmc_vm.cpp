@@ -385,7 +385,8 @@ enum evmc_set_option_result set_option(evmc_vm *VMInstance, const char *Name,
     return EVMC_SET_OPTION_INVALID_VALUE;
   } else if (std::strcmp(Name, "ring_buffer_capacity") == 0) {
     int Parsed = std::atoi(Value);
-    if (Parsed > 0 && Parsed <= 10000) {
+    if (Parsed > 0 &&
+        static_cast<size_t>(Parsed) <= profile::MAX_RING_BUFFER_CAPACITY) {
       VM->Config.RingBufferCapacity = static_cast<size_t>(Parsed);
       VM->RingBuffer = CallRingBuffer{VM->Config.RingBufferCapacity};
       return EVMC_SET_OPTION_SUCCESS;
@@ -798,11 +799,15 @@ void updateProfileAndMaybeTriggerJIT(DTVM *VM, const evmc_message *Msg,
   }
 
   // Trigger background JIT compilation via thread pool.
+  auto &Pool = getOrCreateCompilePool(VM);
+  auto Future =
+      Pool.submit([Mod]() { zen::action::performEVMJITCompile(*Mod); });
+  if (!Future.valid()) {
+    return;
+  }
   CurrentProfile.JITTriggered = true;
   VM->BackgroundJITTriggerCount++;
-  auto &Pool = getOrCreateCompilePool(VM);
-  Mod->JITCompileFuture =
-      Pool.submit([Mod]() { zen::action::performEVMJITCompile(*Mod); });
+  Mod->JITCompileFuture = std::move(Future);
 }
 #endif // ZEN_ENABLE_MULTIPASS_JIT
 

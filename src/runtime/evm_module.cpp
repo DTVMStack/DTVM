@@ -53,14 +53,9 @@ EVMModule::EVMModule(Runtime *RT)
 EVMModule::~EVMModule() {
 #ifdef ZEN_ENABLE_JIT
   if (JITCompileFuture.valid()) {
-    // Use a bounded wait to avoid hanging forever if the compilation
-    // thread is stuck. 30 seconds is generous for any single contract
-    // compilation; if it hasn't finished by then, something is wrong.
-    auto Status = JITCompileFuture.wait_for(std::chrono::seconds(30));
-    if (Status == std::future_status::timeout) {
-      ZEN_LOG_ERROR("JIT compilation timed out during module destruction; "
-                    "leaking compile thread to avoid deadlock");
-    }
+    // The JIT task dereferences this EVMModule. Destruction must not
+    // continue until the background compilation has fully finished.
+    JITCompileFuture.get();
   }
 #endif
 

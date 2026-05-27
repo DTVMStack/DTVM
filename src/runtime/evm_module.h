@@ -81,7 +81,7 @@ public:
   }
 
   void setJITCodeAndSize(void *Code, size_t Size) {
-    JITCodeSize = Size;
+    JITCodeSize.store(Size, std::memory_order_relaxed);
     JITCode.store(Code, std::memory_order_release);
   }
   // Future for background JIT compilation (managed by JITCompilePool).
@@ -101,7 +101,7 @@ public:
 
   size_t getJITCodeSize() const {
 #ifdef ZEN_ENABLE_JIT
-    return JITCodeSize;
+    return JITCodeSize.load(std::memory_order_acquire);
 #else
     return 0;
 #endif
@@ -134,7 +134,7 @@ private:
 #ifdef ZEN_ENABLE_JIT
   std::unique_ptr<common::CodeMemPool> JITCodeMemPool;
   std::atomic<void *> JITCode{nullptr};
-  size_t JITCodeSize = 0;
+  std::atomic<size_t> JITCodeSize{0};
 #endif // ZEN_ENABLE_JIT
 };
 

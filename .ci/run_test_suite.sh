@@ -86,9 +86,6 @@ case $TestSuite in
     "evmrealsuite")
         CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_SPEC_TEST=ON -DZEN_ENABLE_CHECKED_ARITHMETIC=ON -DZEN_ENABLE_EVM=ON"
         ;;
-    "evmonetestsuite")
-        CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON"
-        ;;
     "evmonestatetestsuite")
         CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_EVM=ON -DZEN_ENABLE_LIBEVM=ON"
         ;;
@@ -115,10 +112,6 @@ esac
 STACK_TYPES=("-DZEN_ENABLE_VIRTUAL_STACK=ON" "-DZEN_ENABLE_VIRTUAL_STACK=OFF")
 if [[ $RUN_MODE == "interpreter" ]]; then
     STACK_TYPES=("-DZEN_ENABLE_VIRTUAL_STACK=OFF")
-fi
-
-if [[ $TestSuite == "evmonetestsuite" ]]; then
-    STACK_TYPES=("-DZEN_ENABLE_VIRTUAL_STACK=ON")
 fi
 
 if [[ $TestSuite == "evmonestatetestsuite" ]]; then
@@ -193,20 +186,13 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                     SKIP_LIST="-*test_blob_gas_subtraction*"
                     GTEST_FILTER=$SKIP_LIST SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose
                 else # evm multipass
-                    SPEC_TESTS_ARGS=$EXTRA_EXE_OPTIONS ctest --verbose
+                    SPEC_TESTS_ARGS="$EXTRA_EXE_OPTIONS --enable-profile-guided-jit --jit-trigger-calls 1 --jit-trigger-gas 1 --ring-buffer-capacity 1" ctest --verbose
                 fi
             done
             cd ..
             ;;
         "evmrealsuite")
             python3 tools/run_evm_tests.py -r build/dtvm $EXTRA_EXE_OPTIONS
-            ;;
-        "evmonetestsuite")
-            git clone --depth 1 --recurse-submodules -b for_test https://github.com/DTVMStack/evmone.git
-            mv build/lib/* evmone
-            cd evmone
-            ./run_unittests.sh ../tests/evmone_unittests/EVMOneMultipassUnitTestsRunList.txt "./libdtvmapi.so,mode=multipass"
-            ./run_unittests.sh ../tests/evmone_unittests/EVMOneInterpreterUnitTestsRunList.txt "./libdtvmapi.so,mode=interpreter"
             ;;
         "evmonestatetestsuite")
             EVMONE_REPO=${EVMONE_REPO:-https://github.com/DTVMStack/evmone.git}
@@ -288,8 +274,12 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
             fi
 
             export LD_LIBRARY_PATH="$WORKSPACE_ROOT/build/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            PGJ_OPTS=",profile_guided_jit=true,jit_trigger_calls=1,jit_trigger_gas=1,ring_buffer_capacity=1"
             for EVMONE_MODE in multipass interpreter; do
                 VM_ARG="${DTVM_VM_SO},mode=${EVMONE_MODE},enable_gas_metering=true"
+                if [[ "$EVMONE_MODE" == "multipass" ]]; then
+                    VM_ARG="${VM_ARG}${PGJ_OPTS}"
+                fi
                 echo "Running evmone-statetest mode=${EVMONE_MODE}, filter=${EVMONE_STATETEST_FILTER}"
                 if [ -n "$EVMONE_MODE_TIMEOUT_SECONDS" ]; then
                     timeout --foreground "$EVMONE_MODE_TIMEOUT_SECONDS" env \

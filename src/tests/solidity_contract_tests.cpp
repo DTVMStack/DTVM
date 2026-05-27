@@ -250,6 +250,12 @@ GTEST_API_ int main(int argc, char **argv) {
   CLIParser.add_flag("--enable-profile-guided-jit",
                      Config.EnableProfileGuidedJIT,
                      "Enable profile-guided JIT mode");
+  CLIParser.add_option("--jit-trigger-calls", Config.JITTriggerCallCount,
+                       "PGJ: call count threshold to trigger JIT");
+  CLIParser.add_option("--jit-trigger-gas", Config.JITTriggerTotalGas,
+                       "PGJ: gas usage threshold to trigger JIT");
+  CLIParser.add_option("--ring-buffer-capacity", Config.RingBufferCapacity,
+                       "PGJ: sliding window ring buffer capacity");
   // Deprecated compatibility flag: kept for parity with other multipass JIT
   // CLIs/test binaries so existing CI scripts that pass
   // --enable-multipass-lazy do not fail argument parsing. The flag has no

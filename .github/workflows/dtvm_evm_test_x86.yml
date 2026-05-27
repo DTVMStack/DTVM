@@ -111,6 +111,7 @@ jobs:
           export ENABLE_LAZY=false
           export ENABLE_MULTITHREAD=true
           export TestSuite=evmtestsuite
+          export ENABLE_PROFILE_GUIDED_JIT=true
           export CPU_EXCEPTION_TYPE='check'
           export ENABLE_GAS_METER=true
 
@@ -281,9 +282,52 @@ jobs:
 
           bash .ci/run_test_suite.sh
 
+  build_test_release_evmone_unittests_on_x86:
+    name: Test DTVM-EVM multipass and interpreter using evmone unit tests in release mode on x86-64
+    runs-on: ubuntu-latest
+    container:
+      image: dtvmdev1/dtvm-dev-x64:main
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          submodules: "true"
+      - name: Cache FetchContent deps
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.fetchcontent
+          key: ${{ runner.os }}-fc-${{ github.workflow }}-ninja-v2-${{ hashFiles('third_party/AddDeps.cmake') }}
+      - name: Cache Hunter
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.hunter
+          key: ${{ runner.os }}-hunter-evmone-v1-${{ hashFiles('.ci/run_test_suite.sh', '.github/workflows/dtvm_evm_test_x86.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-hunter-evmone-v1-
+      - name: Code Format Check
+        run: |
+          ./tools/format.sh check
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+      - name: Build and Test
+        env:
+          LLVM_SYS_150_PREFIX: /opt/llvm15
+          CMAKE_BUILD_TARGET: Release
+          ENABLE_ASAN: "true"
+          RUN_MODE: multipass
+          INPUT_FORMAT: evm
+          CPU_EXCEPTION_TYPE: cpu
+          TestSuite: evmonetestsuite
+          ENABLE_PROFILE_GUIDED_JIT: "true"
+        run: |
+          echo "current home is $HOME"
+          export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
+          export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
+
+          bash .ci/run_test_suite.sh
+
   build_test_release_evmone_statetests_on_x86:
     name: Test DTVM-EVM multipass and interpreter using evmone statetests in release mode on x86-64
-
     timeout-minutes: 90
     runs-on: ubuntu-latest
     container:
@@ -322,6 +366,7 @@ jobs:
           ENABLE_GAS_METER: "true"
           CPU_EXCEPTION_TYPE: cpu
           TestSuite: evmonestatetestsuite
+          ENABLE_PROFILE_GUIDED_JIT: "true"
           EVMONE_STATETEST_FILTER: fork_Cancun
           EVMONE_MODE_TIMEOUT_SECONDS: "3600"
         run: |
@@ -330,7 +375,6 @@ jobs:
           export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
 
           bash .ci/run_test_suite.sh
-
 
   build_test_release_multipass_evmpgj_on_x86:
     name: Test DTVM-EVM profile-guided JIT on x86-64
@@ -350,23 +394,24 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.10
       - name: Build and Test
+        env:
+          LLVM_SYS_150_PREFIX: /opt/llvm15
+          CMAKE_BUILD_TARGET: Release
+          ENABLE_ASAN: "true"
+          RUN_MODE: multipass
+          INPUT_FORMAT: evm
+          ENABLE_LAZY: "false"
+          ENABLE_MULTITHREAD: "true"
+          ENABLE_GAS_METER: "true"
+          CPU_EXCEPTION_TYPE: check
+          TestSuite: evmpgjsuite
         run: |
           echo "current home is $HOME"
-          export LLVM_SYS_150_PREFIX=/opt/llvm15
           export LLVM_DIR=$LLVM_SYS_150_PREFIX/lib/cmake/llvm
           export PATH=$LLVM_SYS_150_PREFIX/bin:$PATH
-          export CMAKE_BUILD_TARGET=Release
-          export ENABLE_ASAN=true
-          export RUN_MODE=multipass
-          export INPUT_FORMAT=evm
-          export ENABLE_LAZY=false
-          export ENABLE_MULTITHREAD=true
-          export TestSuite=evmpgjsuite
-          export CPU_EXCEPTION_TYPE='check'
-          export ENABLE_GAS_METER=true
-
 
           bash .ci/run_test_suite.sh
+
   build_test_release_multipass_evmjitfallback_on_x86_ctest:
     name: Test DTVM-EVM JIT fallback in release mode with ctest on x86-64
     runs-on: ubuntu-latest

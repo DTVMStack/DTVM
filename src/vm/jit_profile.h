@@ -32,6 +32,9 @@ namespace zen::vm {
 namespace profile {
 // Ring buffer capacity: number of recent global contract call records.
 static constexpr size_t RING_BUFFER_CAPACITY = 100;
+// Maximum allowed ring buffer capacity (each entry is ~28 bytes, so 10000
+// entries ≈ 280 KB — a conservative upper bound to prevent misuse).
+static constexpr size_t MAX_RING_BUFFER_CAPACITY = 10000;
 // JIT trigger conditions: both must be met within the sliding window.
 static constexpr uint64_t JIT_TRIGGER_CALL_COUNT = 32;
 static constexpr uint64_t JIT_TRIGGER_TOTAL_GAS = 100000;
