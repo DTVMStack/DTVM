@@ -23,7 +23,6 @@ void EVMCallThreadState::setJITTraces() {
     return;
   }
   uint32_t IgnoredDepth = getTrapState().NumIgnoredFrames;
-  ZEN_ASSERT(Inst);
   void *JITCode = Inst->getModule()->getJITCode();
   void *JITCodeEnd =
       static_cast<uint8_t *>(JITCode) + Inst->getModule()->getJITCodeSize();
@@ -120,14 +119,6 @@ bool initEVMPlatformTrapHandler() {
       // it. It will either crash synchronously, fix up the instruction
       // so that execution can continue and return, or trigger a crash by
       // returning the signal to it's original disposition and returning.
-
-      // Unblock the signal before forwarding to the previous handler,
-      // preserving the same semantics as when SA_NODEFER was used.
-      sigset_t SignalSet;
-      sigemptyset(&SignalSet);
-      sigaddset(&SignalSet, SigNum);
-      int UnblockResult = sigprocmask(SIG_UNBLOCK, &SignalSet, nullptr);
-      ZEN_ASSERT(UnblockResult == 0);
       if ((PrevSigAction->sa_flags & SA_SIGINFO) != 0) {
         PrevSigAction->sa_sigaction(SigNum, SigInfo, Ctx);
       } else if ((void (*)(int))PrevSigAction->sa_sigaction == SIG_DFL ||
@@ -159,9 +150,9 @@ bool initEVMPlatformTrapHandler() {
     struct sigaction Handler;
     memset(&Handler, 0x0, sizeof(struct sigaction));
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
-    Handler.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    Handler.sa_flags = SA_SIGINFO | SA_NODEFER | SA_ONSTACK;
 #else
-    Handler.sa_flags = SA_SIGINFO;
+    Handler.sa_flags = SA_SIGINFO | SA_NODEFER;
 #endif // ZEN_ENABLE_VIRTUAL_STACK
     Handler.sa_sigaction = TrapHandler;
     sigemptyset(&Handler.sa_mask);

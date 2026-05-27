@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
 #include "utils/virtual_stack.h"
@@ -174,6 +175,15 @@ bool parseBoolEnvValue(const char *Value, bool &ParsedValue) {
   return false;
 }
 
+bool isLikelyPrecompile(const evmc_address &Addr) {
+  for (size_t I = 0; I < 19; ++I) {
+    if (Addr.bytes[I] != 0) {
+      return false;
+    }
+  }
+  return Addr.bytes[19] >= 1 && Addr.bytes[19] <= 9;
+}
+
 // VM interface for DTVM
 struct DTVM : evmc_vm {
   DTVM();
@@ -247,6 +257,9 @@ struct DTVM : evmc_vm {
   std::vector<std::unique_ptr<zen::evm::InterpreterExecContext>> NestedCtxPool;
   // Instance pool for depth > 0
   std::vector<EVMInstance *> CacheInsts;
+  // Serialize execute() for nested host calls (re-entrancy-safe via
+  // recursive_mutex).
+  std::recursive_mutex ExecuteMutex;
 
   bool isModuleInUse(const EVMModule *Mod) const {
     if (CachedMainInst && CachedMainInst->getModule() == Mod)
@@ -544,6 +557,9 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
   evmc_message MsgWithCode = *Msg;
   MsgWithCode.code = reinterpret_cast<uint8_t *>(Mod->Code);
   MsgWithCode.code_size = Mod->CodeSize;
+  if (Msg->depth == 0) {
+    TheInst->clearMessageCache();
+  }
   TheInst->setExeResult(evmc::Result{EVMC_SUCCESS, 0, 0});
   TheInst->pushMessage(&MsgWithCode);
 
@@ -626,6 +642,20 @@ evmc_result executeMultipassFastPath(DTVM *VM, const evmc_host_interface *Host,
     return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
   }
 
+  // Empty-code top-level CALL to a non-precompile has no bytecode execution.
+  if (Msg && Msg->depth == 0 && CodeSize == 0 && Msg->kind == EVMC_CALL &&
+      !isLikelyPrecompile(Msg->recipient)) {
+    evmc::Result NoCodeResult{EVMC_SUCCESS, static_cast<int64_t>(Msg->gas), 0};
+    return NoCodeResult.release_raw();
+  }
+
+  // Nested empty-code CALLs: use interpreter path (precompiles may have no
+  // code).
+  if (Msg && Msg->depth > 0 && CodeSize == 0 && Msg->kind == EVMC_CALL) {
+    return executeInterpreterFastPath(VM, Host, Context, Rev, Msg, Code,
+                                      CodeSize);
+  }
+
   // Module lookup: L1 address-based cache -> Cold load
   bool IsTransientMod = false;
   EVMModule *Mod =
@@ -653,6 +683,9 @@ evmc_result executeMultipassFastPath(DTVM *VM, const evmc_host_interface *Host,
   evmc_message MsgWithCode = *Msg;
   MsgWithCode.code = reinterpret_cast<uint8_t *>(Mod->Code);
   MsgWithCode.code_size = Mod->CodeSize;
+  if (Msg->depth == 0) {
+    TheInst->clearMessageCache();
+  }
   TheInst->setExeResult(evmc::Result{EVMC_SUCCESS, 0, 0});
   TheInst->pushMessage(&MsgWithCode);
 
@@ -688,6 +721,7 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
                     const evmc_message *Msg, const uint8_t *Code,
                     size_t CodeSize) {
   auto *VM = static_cast<DTVM *>(EVMInstance);
+  std::lock_guard<std::recursive_mutex> Guard(VM->ExecuteMutex);
 
   // Interpreter mode: use optimized fast path (bypasses callEVMMain)
   if (VM->Config.Mode == RunMode::InterpMode) {
@@ -746,6 +780,11 @@ DTVM::DTVM()
                    StrictValidation);
     }
   }
+
+  // Greedy RA has been observed to crash during long-running multipass JIT
+  // (e.g. Silkworm sync). Keep the default (greedy enabled); use
+  // --disable-multipass-greedyra or loadEVMModuleWithRegAllocRetry() FastRA
+  // fallback when compilation fails in the regalloc phase.
 }
 } // namespace
 
