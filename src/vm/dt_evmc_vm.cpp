@@ -5,6 +5,7 @@
 #include "action/compiler.h"
 #include "common/enums.h"
 #include "common/errors.h"
+#include "compiler/evm_frontend/evm_analyzer.h"
 #include "evm/interpreter.h"
 #include "evm/opcode_handlers.h"
 #include "jit_profile.h"
@@ -13,9 +14,6 @@
 #include "runtime/isolation.h"
 #include "runtime/runtime.h"
 #include "wrapped_host.h"
-#ifdef ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
-#include "compiler/evm_frontend/evm_analyzer.h"
-#endif // ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
 #include <algorithm>
 
 #include <evmc/evmc.h>
@@ -786,12 +784,10 @@ void updateProfileAndMaybeTriggerJIT(DTVM *VM, const evmc_message *Msg,
     return;
   }
 
-#ifdef ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
   if (Mod->ShouldFallbackToInterp) {
     CurrentProfile.JITRejected = true;
     return;
   }
-#endif // ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
 
   // Avoid duplicate JIT triggers.
   if ((Mod->JITCompileFuture.valid() &&
@@ -864,7 +860,6 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
                                       CodeSize);
   }
 
-#ifdef ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
   // Skip JIT for small contracts -- the per-call overhead of the JIT
   // execution path (TLS setup, callNativeGeneral, etc.) exceeds any
   // speedup for contracts with fewer than ~64 opcodes.
@@ -873,7 +868,6 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
     return executeInterpreterFastPath(VM, Host, Context, Rev, Msg, Code,
                                       CodeSize);
   }
-#endif // ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
 
 #ifdef ZEN_ENABLE_JIT
   {
@@ -894,14 +888,12 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
     ModuleGuard ModGuard(VM, Mod, IsTransientMod);
     Mod->ModuleExecuteCount++;
 
-#ifdef ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
     // O(1) flag check replaces per-call O(n) EVMAnalyzer scan.
     // The flag was set once at module creation in EVMModule::newEVMModule().
     if (Mod->ShouldFallbackToInterp) {
       return executeInterpreterFastPath(VM, Host, Context, Rev, Msg, Code,
                                         CodeSize);
     }
-#endif // ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK
 
     // Instance reuse (shared only for cacheable top-level calls)
     auto *TheInst = getOrCreateInstance(VM, Mod, Rev, Msg->depth);
