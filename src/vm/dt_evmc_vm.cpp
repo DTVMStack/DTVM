@@ -209,7 +209,9 @@ struct DTVM : evmc_vm {
   ~DTVM() {
     // Drain the JIT compile thread pool first: wait for all in-flight
     // compilation tasks to finish before unloading modules they reference.
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
     CompilePool.reset();
+#endif // ZEN_ENABLE_MULTIPASS_JIT
     if (CachedMainInst && Iso) {
       Iso->deleteEVMInstance(CachedMainInst);
       CachedMainInst = nullptr;
@@ -283,6 +285,7 @@ struct DTVM : evmc_vm {
   std::vector<EVMInstance *> CacheInsts;
 
   // ---- Profile-guided JIT state ----
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
   // Keyed by code_address (20 bytes) instead of a heap-allocated hex string;
   // evmc ships a std::hash<evmc::address> specialisation so the map works
   // out of the box and we save an allocation per call on the hot path.
@@ -292,6 +295,7 @@ struct DTVM : evmc_vm {
   std::unique_ptr<JITCompilePool> CompilePool;
   // Statistics: number of background JIT compilations actually triggered.
   uint64_t BackgroundJITTriggerCount = 0;
+#endif // ZEN_ENABLE_MULTIPASS_JIT
   // Statistics: total execute() call count.
   uint64_t ExecuteCallCount = 0;
 
@@ -412,6 +416,7 @@ bool ensureRuntimeAndIsolation(DTVM *VM) {
   return true;
 }
 
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
 /// Lazily initialize the JIT compile thread pool.
 JITCompilePool &getOrCreateCompilePool(DTVM *VM) {
   if (!VM->CompilePool) {
@@ -420,6 +425,7 @@ JITCompilePool &getOrCreateCompilePool(DTVM *VM) {
   }
   return *VM->CompilePool;
 }
+#endif // ZEN_ENABLE_MULTIPASS_JIT
 
 bool isNonCreateOperation(const evmc_message *Msg) {
   // Returns true if the EVM operation is not a CREATE or CREATE2.
@@ -1037,6 +1043,10 @@ DTVM::DTVM()
 extern "C" evmc_vm *evmc_create_dtvmapi() { return new DTVM; }
 
 extern "C" uint64_t dtvm_get_jit_trigger_count(evmc_vm *vm) {
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
   auto *VM = static_cast<DTVM *>(vm);
   return VM->BackgroundJITTriggerCount;
+#else
+  return 0;
+#endif // ZEN_ENABLE_MULTIPASS_JIT
 }
