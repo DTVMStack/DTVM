@@ -1894,6 +1894,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
     MInstruction *MulLo = createEvmUmul128(A[0], B[0]);
     MInstruction *MulHi = createEvmUmul128Hi(MulLo);
     U256Inst Result = {MulLo, MulHi, Zero, Zero};
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    ++MemStats.MulFastRangeU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     return Operand(Result, EVMType::UINT256, ValueRange::U128);
   }
 
@@ -1965,10 +1968,23 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
     R3 = addTermNoCarry(R3, C2);
 
     U256Inst Result = {R0, R1, R2, R3};
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    ++MemStats.MulFastConstU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     return Operand(Result, EVMType::UINT256);
   }
 
   // General case: use EvmU256MulInstruction for full 4x4 multiplication
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+  {
+    ValueRange RA = MultiplicandOp.getRange();
+    ValueRange RB = MultiplierOp.getRange();
+    if ((RA == ValueRange::U128 && RB <= ValueRange::U128) ||
+        (RB == ValueRange::U128 && RA <= ValueRange::U128)) {
+      ++MemStats.MulU128OpportunityCount;
+    }
+  }
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   U256Inst A = extractU256Operand(MultiplicandOp);
   U256Inst B = extractU256Operand(MultiplierOp);
   MType *I64Type = &Ctx.I64Type;
@@ -1982,6 +1998,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
                          false, I64Type, MulInst, 2),
                      createInstruction<EvmU256MulResultInstruction>(
                          false, I64Type, MulInst, 3)};
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+  ++MemStats.MulFullCount;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   return Operand(Result, EVMType::UINT256);
 }
 
@@ -2032,6 +2051,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
         false, I64Type, IsZero, Zero, Quotient);
 
     U256Inst Result = {DivResult, Zero, Zero, Zero};
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    ++MemStats.DivFastRangeU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     return Operand(Result, EVMType::UINT256, ValueRange::U64);
   }
 
@@ -2096,8 +2118,14 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
         addSuccessor(AfterBB);
 
         setInsertBlock(AfterBB);
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+        ++MemStats.DivFastConstU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
         return Operand(loadResult(), EVMType::UINT256);
       }
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+      ++MemStats.DivFastConstU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
       return handleDivU64Divisor(DividendOp, D);
     }
   }
@@ -2105,9 +2133,23 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
   // u64 dividend: OR-fold + select
   if (DividendOp.isConstU64()) {
     uint64_t A = DividendOp.getConstValue()[0];
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    ++MemStats.DivFastConstU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     return handleDivU64Dividend(A, DivisorOp);
   }
 
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+  ++MemStats.DivFullCount;
+  {
+    ValueRange RA = DividendOp.getRange();
+    ValueRange RB = DivisorOp.getRange();
+    if ((RA == ValueRange::U128 && RB <= ValueRange::U128) ||
+        (RB == ValueRange::U128 && RA <= ValueRange::U128)) {
+      ++MemStats.DivU128OpportunityCount;
+    }
+  }
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   return handleDivModGeneral(DividendOp, DivisorOp, /*WantQuotient=*/true);
 }
 
@@ -2202,22 +2244,43 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
         false, I64Type, IsZero, Zero, Remainder);
 
     U256Inst Result = {ModResult, Zero, Zero, Zero};
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    ++MemStats.ModFastRangeU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     return Operand(Result, EVMType::UINT256, ValueRange::U64);
   }
 
   // u64 divisor: inline cascading 128/64 mod
   if (DivisorOp.isConstU64()) {
     uint64_t D = DivisorOp.getConstValue()[0];
-    if (D != 0)
+    if (D != 0) {
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+      ++MemStats.ModFastConstU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
       return handleModU64Divisor(DividendOp, D);
+    }
   }
 
   // u64 dividend: OR-fold + select
   if (DividendOp.isConstU64()) {
     uint64_t A = DividendOp.getConstValue()[0];
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    ++MemStats.ModFastConstU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     return handleModU64Dividend(A, DivisorOp);
   }
 
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+  ++MemStats.ModFullCount;
+  {
+    ValueRange RA = DividendOp.getRange();
+    ValueRange RB = DivisorOp.getRange();
+    if ((RA == ValueRange::U128 && RB <= ValueRange::U128) ||
+        (RB == ValueRange::U128 && RA <= ValueRange::U128)) {
+      ++MemStats.ModU128OpportunityCount;
+    }
+  }
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   return handleDivModGeneral(DividendOp, DivisorOp, /*WantQuotient=*/false);
 }
 
@@ -6158,7 +6221,19 @@ bool EVMMirBuilder::hasMemoryCompileStats() const {
          MemStats.HashPrepLiftSimCandidateRegionCount != 0 ||
          MemStats.HashPrepMarkerCandidateRegionCount != 0 ||
          MemStats.HashPrepMarkerMarkedRegionCount != 0 ||
-         MemStats.HashPrepMarkerRejectedRegionCount != 0;
+         MemStats.HashPrepMarkerRejectedRegionCount != 0 ||
+         MemStats.AddFastRangeU64Count != 0 ||
+         MemStats.AddFastConstU64Count != 0 || MemStats.AddFullCount != 0 ||
+         MemStats.SubFastConstU64Count != 0 || MemStats.SubFullCount != 0 ||
+         MemStats.MulFastRangeU64Count != 0 ||
+         MemStats.MulFastConstU64Count != 0 || MemStats.MulFullCount != 0 ||
+         MemStats.DivFastRangeU64Count != 0 ||
+         MemStats.DivFastConstU64Count != 0 || MemStats.DivFullCount != 0 ||
+         MemStats.ModFastRangeU64Count != 0 ||
+         MemStats.ModFastConstU64Count != 0 || MemStats.ModFullCount != 0 ||
+         MemStats.MulU128OpportunityCount != 0 ||
+         MemStats.DivU128OpportunityCount != 0 ||
+         MemStats.ModU128OpportunityCount != 0;
 }
 
 void EVMMirBuilder::noteBlockMemoryEventPC(uint64_t PC) {
@@ -6580,6 +6655,32 @@ void EVMMirBuilder::dumpMemoryCompileStats() const {
           MemStats.HashPrepMarkerRejectedPointerInstability),
       static_cast<unsigned long long>(
           MemStats.HashPrepMarkerRejectedUnknownHelper));
+
+  ZEN_LOG_DEBUG(
+      "[EVM-ARITH-SUMMARY] add_fast_range_u64=%llu add_fast_const_u64=%llu "
+      "add_full=%llu sub_fast_const_u64=%llu sub_full=%llu "
+      "mul_fast_range_u64=%llu mul_fast_const_u64=%llu mul_full=%llu "
+      "div_fast_range_u64=%llu div_fast_const_u64=%llu div_full=%llu "
+      "mod_fast_range_u64=%llu mod_fast_const_u64=%llu mod_full=%llu "
+      "mul_u128_opportunity=%llu div_u128_opportunity=%llu "
+      "mod_u128_opportunity=%llu",
+      static_cast<unsigned long long>(MemStats.AddFastRangeU64Count),
+      static_cast<unsigned long long>(MemStats.AddFastConstU64Count),
+      static_cast<unsigned long long>(MemStats.AddFullCount),
+      static_cast<unsigned long long>(MemStats.SubFastConstU64Count),
+      static_cast<unsigned long long>(MemStats.SubFullCount),
+      static_cast<unsigned long long>(MemStats.MulFastRangeU64Count),
+      static_cast<unsigned long long>(MemStats.MulFastConstU64Count),
+      static_cast<unsigned long long>(MemStats.MulFullCount),
+      static_cast<unsigned long long>(MemStats.DivFastRangeU64Count),
+      static_cast<unsigned long long>(MemStats.DivFastConstU64Count),
+      static_cast<unsigned long long>(MemStats.DivFullCount),
+      static_cast<unsigned long long>(MemStats.ModFastRangeU64Count),
+      static_cast<unsigned long long>(MemStats.ModFastConstU64Count),
+      static_cast<unsigned long long>(MemStats.ModFullCount),
+      static_cast<unsigned long long>(MemStats.MulU128OpportunityCount),
+      static_cast<unsigned long long>(MemStats.DivU128OpportunityCount),
+      static_cast<unsigned long long>(MemStats.ModU128OpportunityCount));
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
 }
 

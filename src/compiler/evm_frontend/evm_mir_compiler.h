@@ -390,6 +390,9 @@ public:
             false, CmpInstruction::ICMP_ULT, MirI64Type, Sum, LHS[0]);
         MInstruction *CarryExt = zeroExtendToI64(CarryCmp);
         U256Inst Result = {Sum, CarryExt, Zero, Zero};
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+        ++MemStats.AddFastRangeU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
         return Operand(Result, EVMType::UINT256, ValueRange::U128);
       }
     }
@@ -402,6 +405,9 @@ public:
         // ADD is commutative: normalize so the u64 const is on the RHS
         const Operand &FullOp = LHSIsU64 ? RHSOp : LHSOp;
         const Operand &U64Op = LHSIsU64 ? LHSOp : RHSOp;
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+        ++MemStats.AddFastConstU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
         return handleAddU64Const(FullOp, U64Op);
       }
     }
@@ -409,6 +415,9 @@ public:
     // Phase 2: u64 fast path for SUB (only when RHS is u64 const)
     if constexpr (Operator == BinaryOperator::BO_SUB) {
       if (RHSOp.isConstU64()) {
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+        ++MemStats.SubFastConstU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
         return handleSubU64Const(LHSOp, RHSOp);
       }
     }
@@ -473,6 +482,13 @@ public:
     } else {
       ZEN_ASSERT_TODO();
     }
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    if constexpr (Operator == BinaryOperator::BO_ADD) {
+      ++MemStats.AddFullCount;
+    } else if constexpr (Operator == BinaryOperator::BO_SUB) {
+      ++MemStats.SubFullCount;
+    }
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     return Operand(Result, EVMType::UINT256);
   }
 
@@ -1250,6 +1266,30 @@ private:
     uint64_t HashPrepMarkerRejectedGasMemorySemantics = 0;
     uint64_t HashPrepMarkerRejectedPointerInstability = 0;
     uint64_t HashPrepMarkerRejectedUnknownHelper = 0;
+
+    // Arithmetic fast-path tier hit counters. Increments are gated by
+    // ZEN_ENABLE_MULTIPASS_JIT_LOGGING; the fields always exist.
+    uint64_t AddFastRangeU64Count = 0;
+    uint64_t AddFastConstU64Count = 0;
+    uint64_t AddFullCount = 0;
+    uint64_t SubFastConstU64Count = 0;
+    uint64_t SubFullCount = 0;
+    uint64_t MulFastRangeU64Count = 0;
+    uint64_t MulFastConstU64Count = 0;
+    uint64_t MulFullCount = 0;
+    uint64_t DivFastRangeU64Count = 0;
+    uint64_t DivFastConstU64Count = 0;
+    uint64_t DivFullCount = 0;
+    uint64_t ModFastRangeU64Count = 0;
+    uint64_t ModFastConstU64Count = 0;
+    uint64_t ModFullCount = 0;
+
+    // U128-consumer opportunity counters: incremented on the genuine
+    // full-limb fallback when one operand has proven range U128 and the
+    // other is <= U128, i.e. a 128-bit half-width path could have applied.
+    uint64_t MulU128OpportunityCount = 0;
+    uint64_t DivU128OpportunityCount = 0;
+    uint64_t ModU128OpportunityCount = 0;
   };
   bool hasMemoryCompileStats() const;
   MemoryCompileStats MemStats;
