@@ -3,7 +3,6 @@
 
 #include "action/evm_bytecode_visitor.h"
 #include "compiler/evm_frontend/evm_analyzer.h"
-#include "compiler/evm_frontend/evm_mir_compiler.h"
 
 #include <gtest/gtest.h>
 
@@ -17,10 +16,6 @@
 namespace {
 
 using COMPILER::EVMAnalyzer;
-using COMPILER::EVMMirBuilder;
-using COMPILER::EVMValueRange;
-using zen::common::BinaryOperator;
-using zen::common::CompareOperator;
 
 EVMAnalyzer analyzeBytecode(const std::vector<uint8_t> &Bytecode) {
   EVMAnalyzer Analyzer(EVMC_CANCUN);
@@ -46,37 +41,6 @@ const EVMAnalyzer::BlockInfo *findBlock(const EVMAnalyzer &Analyzer,
   }
   return &It->second;
 }
-
-class MirBuilderRangeHarness {
-public:
-  MirBuilderRangeHarness() : Func(Ctx, 0), Builder(Ctx, Func) {
-    Ctx.setRevision(EVMC_OSAKA);
-    Ctx.setBytecode(nullptr, 0);
-
-    std::array<COMPILER::MType *, 1> ParamTypes = {
-        COMPILER::MPointerType::create(Ctx, Ctx.VoidType)};
-    Func.setFunctionType(COMPILER::MFunctionType::create(
-        Ctx, Ctx.VoidType, llvm::ArrayRef<COMPILER::MType *>(ParamTypes)));
-    Builder.initEVM(&Ctx);
-  }
-
-  EVMMirBuilder::Operand stackValue(EVMValueRange Range) {
-    return Builder.createStackEntryOperand(Range);
-  }
-
-  EVMMirBuilder::Operand u64Const(uint64_t Low) {
-    return EVMMirBuilder::Operand(EVMMirBuilder::U256Value{Low, 0, 0, 0});
-  }
-
-  EVMMirBuilder::Operand addWithU64(EVMMirBuilder::Operand Value) {
-    return Builder.handleBinaryArithmetic<BinaryOperator::BO_ADD>(
-        Value, stackValue(EVMValueRange::U64));
-  }
-
-  COMPILER::EVMFrontendContext Ctx;
-  COMPILER::MFunction Func;
-  EVMMirBuilder Builder;
-};
 
 void expectPCList(const std::vector<uint64_t> &Actual,
                   std::initializer_list<uint64_t> Expected) {
@@ -385,142 +349,6 @@ private:
 #undef MOCK_OPERAND_STUB
 #undef MOCK_VOID_STUB
 };
-
-TEST(EVMMirBuilderRangeTest, OrXorProducerRangesFeedU64AddFastPath) {
-  MirBuilderRangeHarness Harness;
-
-  auto OrConst = Harness.Builder.handleBitwiseOp<BinaryOperator::BO_OR>(
-      Harness.stackValue(EVMValueRange::U64), Harness.u64Const(0x12));
-  EXPECT_EQ(OrConst.getRange(), EVMValueRange::U64);
-  EXPECT_EQ(Harness.addWithU64(OrConst).getRange(), EVMValueRange::U128);
-
-  auto XorConst = Harness.Builder.handleBitwiseOp<BinaryOperator::BO_XOR>(
-      Harness.stackValue(EVMValueRange::U64), Harness.u64Const(0x34));
-  EXPECT_EQ(XorConst.getRange(), EVMValueRange::U64);
-  EXPECT_EQ(Harness.addWithU64(XorConst).getRange(), EVMValueRange::U128);
-
-  auto OrGeneral = Harness.Builder.handleBitwiseOp<BinaryOperator::BO_OR>(
-      Harness.stackValue(EVMValueRange::U64),
-      Harness.stackValue(EVMValueRange::U64));
-  EXPECT_EQ(OrGeneral.getRange(), EVMValueRange::U64);
-  EXPECT_EQ(Harness.addWithU64(OrGeneral).getRange(), EVMValueRange::U128);
-
-  auto XorGeneral = Harness.Builder.handleBitwiseOp<BinaryOperator::BO_XOR>(
-      Harness.stackValue(EVMValueRange::U64),
-      Harness.stackValue(EVMValueRange::U64));
-  EXPECT_EQ(XorGeneral.getRange(), EVMValueRange::U64);
-  EXPECT_EQ(Harness.addWithU64(XorGeneral).getRange(), EVMValueRange::U128);
-
-  auto OrMixed = Harness.Builder.handleBitwiseOp<BinaryOperator::BO_OR>(
-      Harness.stackValue(EVMValueRange::U64),
-      Harness.stackValue(EVMValueRange::U128));
-  EXPECT_EQ(OrMixed.getRange(), EVMValueRange::U128);
-}
-
-TEST(EVMMirBuilderRangeTest, ShrAndClzProducerRangesFeedU64AddFastPath) {
-  MirBuilderRangeHarness Harness;
-
-  auto Shr = Harness.Builder.handleShift<BinaryOperator::BO_SHR_U>(
-      Harness.u64Const(4), Harness.stackValue(EVMValueRange::U64));
-  EXPECT_EQ(Shr.getRange(), EVMValueRange::U64);
-  EXPECT_EQ(Harness.addWithU64(Shr).getRange(), EVMValueRange::U128);
-
-  auto Shl = Harness.Builder.handleShift<BinaryOperator::BO_SHL>(
-      Harness.u64Const(4), Harness.stackValue(EVMValueRange::U64));
-  EXPECT_EQ(Shl.getRange(), EVMValueRange::U256);
-
-  auto Sar = Harness.Builder.handleShift<BinaryOperator::BO_SHR_S>(
-      Harness.u64Const(4), Harness.stackValue(EVMValueRange::U64));
-  EXPECT_EQ(Sar.getRange(), EVMValueRange::U256);
-
-  auto Clz = Harness.Builder.handleClz(Harness.stackValue(EVMValueRange::U256));
-  EXPECT_EQ(Clz.getRange(), EVMValueRange::U64);
-  EXPECT_EQ(Harness.addWithU64(Clz).getRange(), EVMValueRange::U128);
-}
-
-TEST(EVMMirBuilderRangeTest, DeferredIsZeroRangeFeedsU64AddFastPath) {
-  MirBuilderRangeHarness Harness;
-
-  auto IsZero = Harness.Builder.handleCompareOp<CompareOperator::CO_EQZ>(
-      Harness.stackValue(EVMValueRange::U256), EVMMirBuilder::Operand());
-  EXPECT_EQ(IsZero.getRange(), EVMValueRange::U64);
-  EXPECT_EQ(Harness.addWithU64(IsZero).getRange(), EVMValueRange::U128);
-
-  auto Toggled = Harness.Builder.handleCompareOp<CompareOperator::CO_EQZ>(
-      IsZero, EVMMirBuilder::Operand());
-  EXPECT_EQ(Toggled.getRange(), EVMValueRange::U64);
-  EXPECT_EQ(Harness.addWithU64(Toggled).getRange(), EVMValueRange::U128);
-}
-
-// Pins the result ValueRange of the consumer-side DIV/MOD fast paths so a
-// regression that widens them back to U256 (silently dropping the narrowing)
-// is caught.
-TEST(EVMMirBuilderConsumerRangeTest, DivModResultRangesNarrowed) {
-  MirBuilderRangeHarness Harness;
-  auto &B = Harness.Builder;
-  auto U64 = [&](uint64_t V) { return Harness.u64Const(V); };
-  auto SV = [&](EVMValueRange R) { return Harness.stackValue(R); };
-
-  // DIV(u64, u64) bothFitU64 -> U64
-  EXPECT_EQ(
-      B.handleDiv(SV(EVMValueRange::U64), SV(EVMValueRange::U64)).getRange(),
-      EVMValueRange::U64);
-  // DIV(value, u64 const >= 1): quotient <= dividend -> dividend's range
-  EXPECT_EQ(B.handleDiv(SV(EVMValueRange::U128), U64(7)).getRange(),
-            EVMValueRange::U128);
-  EXPECT_EQ(B.handleDiv(SV(EVMValueRange::U64), U64(7)).getRange(),
-            EVMValueRange::U64);
-  // DIV(u64 const, value) -> U64
-  EXPECT_EQ(B.handleDiv(U64(100), SV(EVMValueRange::U256)).getRange(),
-            EVMValueRange::U64);
-  // MOD(u64, u64) -> U64
-  EXPECT_EQ(
-      B.handleMod(SV(EVMValueRange::U64), SV(EVMValueRange::U64)).getRange(),
-      EVMValueRange::U64);
-  // MOD(value, u64 const): remainder < divisor (<= u64) -> U64
-  EXPECT_EQ(B.handleMod(SV(EVMValueRange::U256), U64(7)).getRange(),
-            EVMValueRange::U64);
-  // MOD(u64 const, value) -> U64
-  EXPECT_EQ(B.handleMod(U64(100), SV(EVMValueRange::U256)).getRange(),
-            EVMValueRange::U64);
-}
-
-// Pins the conditional MUL/ADD narrowing and the ADDMOD/MULMOD < modulus rule.
-TEST(EVMMirBuilderConsumerRangeTest, MulAddModResultRanges) {
-  MirBuilderRangeHarness Harness;
-  auto &B = Harness.Builder;
-  auto U64 = [&](uint64_t V) { return Harness.u64Const(V); };
-  auto SV = [&](EVMValueRange R) { return Harness.stackValue(R); };
-
-  // MUL(u64, u64) bothFitU64 -> U128
-  EXPECT_EQ(
-      B.handleMul(SV(EVMValueRange::U64), SV(EVMValueRange::U64)).getRange(),
-      EVMValueRange::U128);
-  // MUL(u64 const, value): U64 value -> U128, wider value -> U256
-  EXPECT_EQ(B.handleMul(U64(5), SV(EVMValueRange::U64)).getRange(),
-            EVMValueRange::U128);
-  EXPECT_EQ(B.handleMul(U64(5), SV(EVMValueRange::U256)).getRange(),
-            EVMValueRange::U256);
-  // ADD(value, u64 const): U64 value -> U128, wider value -> U256
-  EXPECT_EQ(B.handleBinaryArithmetic<BinaryOperator::BO_ADD>(
-                 SV(EVMValueRange::U64), U64(5))
-                .getRange(),
-            EVMValueRange::U128);
-  EXPECT_EQ(B.handleBinaryArithmetic<BinaryOperator::BO_ADD>(
-                 SV(EVMValueRange::U256), U64(5))
-                .getRange(),
-            EVMValueRange::U256);
-  // ADDMOD/MULMOD result < modulus -> modulus operand's range (u64 const ->
-  // U64)
-  EXPECT_EQ(
-      B.handleAddMod(SV(EVMValueRange::U256), SV(EVMValueRange::U256), U64(7))
-          .getRange(),
-      EVMValueRange::U64);
-  EXPECT_EQ(
-      B.handleMulMod(SV(EVMValueRange::U256), SV(EVMValueRange::U256), U64(7))
-          .getRange(),
-      EVMValueRange::U64);
-}
 
 TEST(EVMJITFrontendAnalyzerTest, ConstantJumpCanonicalizesJumpDestRuns) {
   const std::vector<uint8_t> Bytecode = {

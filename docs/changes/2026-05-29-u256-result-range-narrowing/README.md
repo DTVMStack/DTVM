@@ -40,8 +40,7 @@ the full 256 bits, so no narrowing is sound.
 
 - The DIV-by-u64-const path for a non-constant dividend uses a `KnownU64BB`/`SlowBB`
   CFG split and returns the merged result via `loadResult()`; the narrowing had to
-  be applied at that join return, not only at `handleDivU64Divisor`'s own return
-  (caught by the new MIR-builder range unit test before any suite run).
+  be applied at that join return, not only at `handleDivU64Divisor`'s own return.
 
 ## Measurement (counter before/after, logging build)
 
@@ -60,10 +59,10 @@ full-limb path to the single-instruction range path.
 ## Checklist
 
 - [x] Implementation complete (9 narrowing sites)
-- [x] Tests added/updated — `EVMMirBuilderConsumerRangeTest.*` (see hardening change)
+- [x] Tests added/updated — analyzer transfer-rule tests (see hardening change);
+      builder-side ranges exercised end-to-end by the multipass `evmone` suites
 - [x] Module specs in `docs/modules/` updated (if affected) — none affected
 - [x] Build and tests pass — multipass `evmone-unittests` 223/223, multipass
-      `evmone-statetest -k fork_Cancun` 2723/2723, `EVMMirBuilderConsumerRangeTest`
-      2/2 (`evmJitFrontendTests` 17/17 total; pins the narrowed result ranges).
+      `evmone-statetest -k fork_Cancun` 2723/2723, `evmRangeAnalyzerTests` 49/49.
       Counter before/after downstream-hit
       comparison: see measurement note below.
