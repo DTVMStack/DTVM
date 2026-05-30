@@ -1,0 +1,26 @@
+// Semi-real control-flow fixture for U256 ValueRange producer-to-consumer.
+// Stack layout at loop entry: [i, acc].
+// Each iteration computes ISZERO(i) + ISZERO(i), forcing two non-constant U64
+// producers into the ADD consumer before updating the accumulator.
+PUSH0
+PUSH0
+JUMPDEST
+DUP2
+ISZERO
+DUP3
+ISZERO
+ADD
+ADD
+SWAP1
+PUSH1 0x01
+ADD
+DUP1
+PUSH3 0x0186A0
+EQ
+PUSH1 0x1A
+JUMPI
+SWAP1
+PUSH1 0x02
+JUMP
+JUMPDEST
+STOP

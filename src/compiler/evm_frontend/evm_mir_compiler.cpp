@@ -1647,8 +1647,9 @@ EVMMirBuilder::handleDivU64Divisor(const Operand &DividendOp,
   MInstruction *Rem1 = createEvmUrem128By64(Div1);
   MInstruction *Div0 = createEvmUdiv128By64(Rem1, A[0], DivConst);
 
+  // DIV(x, d>=1) <= x, so the quotient fits wherever the dividend fits.
   U256Inst Result = {Div0, Div1, Div2, Div3};
-  return Operand(Result, EVMType::UINT256);
+  return Operand(Result, EVMType::UINT256, DividendOp.getRange());
 }
 
 typename EVMMirBuilder::Operand
@@ -1670,8 +1671,9 @@ EVMMirBuilder::handleModU64Divisor(const Operand &DividendOp,
   MInstruction *Div0 = createEvmUdiv128By64(Rem1, A[0], DivConst);
   MInstruction *Rem0 = createEvmUrem128By64(Div0);
 
+  // MOD(x, d) with u64 divisor d: remainder < d <= 2^64-1, so it fits in u64.
   U256Inst Result = {Rem0, Zero, Zero, Zero};
-  return Operand(Result, EVMType::UINT256);
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
 typename EVMMirBuilder::Operand
@@ -1707,8 +1709,9 @@ EVMMirBuilder::handleDivU64Dividend(uint64_t Dividend,
   MInstruction *DivResult = createInstruction<SelectInstruction>(
       false, I64Type, HasUpper, Zero, TmpResult);
 
+  // DIV(u64 dividend, x) <= the u64 dividend, so the quotient fits in u64.
   U256Inst Result = {DivResult, Zero, Zero, Zero};
-  return Operand(Result, EVMType::UINT256);
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
 typename EVMMirBuilder::Operand
@@ -1743,8 +1746,9 @@ EVMMirBuilder::handleModU64Dividend(uint64_t Dividend,
   MInstruction *ModResult = createInstruction<SelectInstruction>(
       false, I64Type, HasUpper, A0, TmpResult);
 
+  // MOD(u64 dividend, x) <= the u64 dividend, so the remainder fits in u64.
   U256Inst Result = {ModResult, Zero, Zero, Zero};
-  return Operand(Result, EVMType::UINT256);
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleDivModGeneral(
@@ -1969,11 +1973,14 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
     R3 = addTermNoCarry(R3, PLo[3]);
     R3 = addTermNoCarry(R3, C2);
 
+    // u64const * value: if the value fits in u64, the product is < 2^128;
+    // for a u128 value it can reach ~2^192, so only narrow in the u64 case.
+    const ValueRange ResultRange = Operand::widenOneTier(U256Op.getRange());
     U256Inst Result = {R0, R1, R2, R3};
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     ++MemStats.MulFastConstU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
-    return Operand(Result, EVMType::UINT256);
+    return Operand(Result, EVMType::UINT256, ResultRange);
   }
 
   // General case: use EvmU256MulInstruction for full 4x4 multiplication
@@ -2123,7 +2130,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
         ++MemStats.DivFastConstU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
-        return Operand(loadResult(), EVMType::UINT256);
+       // DIV(x, d>=1) <= x, so the quotient fits wherever the dividend fits.
+        return Operand(loadResult(), EVMType::UINT256, DividendOp.getRange());
       }
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
       ++MemStats.DivFastConstU64Count;
@@ -2521,8 +2529,10 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
   }
 
   // === After block: load result ===
+  // ADDMOD(a, b, N) < N (or 0 when N == 0), so the result fits wherever the
+  // modulus operand fits.
   setInsertBlock(AfterBB);
-  return Operand(loadResult(), EVMType::UINT256);
+  return Operand(loadResult(), EVMType::UINT256, ModulusOp.getRange());
 }
 
 typename EVMMirBuilder::Operand
@@ -2540,10 +2550,14 @@ EVMMirBuilder::handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
     return Operand(intxToU256Value(Result));
   }
 
+  // MULMOD(a, b, N) < N (or 0 when N == 0), so the result fits wherever the
+  // modulus operand fits.
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
-                        const intx::uint256 &, const intx::uint256 &>(
+  Operand Result = callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
+                                  const intx::uint256 &, const intx::uint256 &>(
       RuntimeFunctions.GetMulMod, MultiplicandOp, MultiplierOp, ModulusOp);
+  Result.setRange(ModulusOp.getRange());
+  return Result;
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
@@ -3006,7 +3020,10 @@ EVMMirBuilder::handleAddU64Const(const Operand &FullOp,
       Result[I] = AdcInst;
     }
   }
-  return Operand(Result, EVMType::UINT256);
+  // u64const + value: if the value fits in u64, the sum is < 2^65 (fits u128);
+  // for wider operands a carry past bit 127 is possible, so stay conservative.
+  const ValueRange ResultRange = Operand::widenOneTier(FullOp.getRange());
+  return Operand(Result, EVMType::UINT256, ResultRange);
 }
 
 typename EVMMirBuilder::Operand

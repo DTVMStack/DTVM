@@ -29,6 +29,18 @@ static_assert(static_cast<uint8_t>(EVMValueRange::U64) <
               "AND uses std::min for narrowing and OR/XOR uses std::max for "
               "widening, both rely on this ordinal contract.");
 
+// Soundness invariant: range propagation relies on the numeric ordering of the
+// enumerators tracking bit-width monotonically.  `std::min`/`std::max`,
+// `Operand::maxRange`, and the dataflow meet (= max) all assume
+// U64 < U128 < U256.  Reordering these enumerators would invert those
+// operations and could mark a full-256-bit result as U64/U128 — an unsound
+// too-narrow range that downstream u64 fast paths would miscompile.
+static_assert(static_cast<uint8_t>(EVMValueRange::U64) <
+                      static_cast<uint8_t>(EVMValueRange::U128) &&
+                  static_cast<uint8_t>(EVMValueRange::U128) <
+                      static_cast<uint8_t>(EVMValueRange::U256),
+              "EVMValueRange must stay ordered by width (U64 < U128 < U256)");
+
 } // namespace COMPILER
 
 #endif // EVM_FRONTEND_EVM_VALUE_RANGE_H

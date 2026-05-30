@@ -13,6 +13,7 @@
 #include "evm/evm.h"
 #include "evmc/instructions.h"
 #include "intx/intx.hpp"
+#include <algorithm>
 #include <unordered_map>
 #include <vector>
 
@@ -201,6 +202,7 @@ public:
       Result.DeferredValueKind =
           IsNegated ? DeferredKind::ZERO_TEST_NE : DeferredKind::ZERO_TEST_EQ;
       Result.U256Components = BaseComponents;
+      Result.Range = ValueRange::U64;
       return Result;
     }
 
@@ -272,6 +274,16 @@ public:
     // Check whether both operands provably fit in u64
     static bool bothFitU64(const Operand &A, const Operand &B) {
       return A.getRange() == ValueRange::U64 && B.getRange() == ValueRange::U64;
+    }
+
+    static ValueRange maxRange(const Operand &A, const Operand &B) {
+      return std::max(A.getRange(), B.getRange());
+    }
+
+    // One tier wider in the U64<U128<U256 lattice: U64->U128, else U256. Shared
+    // by the u64-const ADD/MUL result ranges (u64+u64 < 2^65, u64*u64 < 2^128).
+    static ValueRange widenOneTier(ValueRange R) {
+      return R == ValueRange::U64 ? ValueRange::U128 : ValueRange::U256;
     }
 
     constexpr bool isReg() { return false; }
@@ -719,11 +731,10 @@ public:
           false, getMirOpcode(Operator), MirI64Type, LHS[I], RHS[I]);
       Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
     }
-    // OR/XOR are monotone on range: result range = max(LHS, RHS).
     if constexpr (Operator == BinaryOperator::BO_OR ||
                   Operator == BinaryOperator::BO_XOR) {
-      return Operand(Result, EVMType::UINT256,
-                     std::max(LHSOp.getRange(), RHSOp.getRange()));
+      ValueRange ResultRange = Operand::maxRange(LHSOp, RHSOp);
+      return Operand(Result, EVMType::UINT256, ResultRange);
     }
     return Operand(Result, EVMType::UINT256);
   }
