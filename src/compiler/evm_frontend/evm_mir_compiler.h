@@ -511,6 +511,10 @@ public:
   Operand handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
                        Operand ModulusOp);
   Operand handleExp(Operand BaseOp, Operand ExponentOp);
+  // EIP-160 dynamic gas for a constant-exponent EXP (GasPerByte * significant
+  // exponent bytes). Static + public so the const-fold path and tests share it.
+  static uint64_t constExpDynamicGas(const intx::uint256 &Exponent,
+                                     evmc_revision Rev);
   template <CompareOperator Operator>
   Operand handleCompareOp(Operand LHSOp, Operand RHSOp) {
     // Phase 0: Constant folding

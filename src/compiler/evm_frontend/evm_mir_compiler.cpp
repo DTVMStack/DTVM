@@ -2546,8 +2546,36 @@ EVMMirBuilder::handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
       RuntimeFunctions.GetMulMod, MultiplicandOp, MultiplierOp, ModulusOp);
 }
 
+uint64_t EVMMirBuilder::constExpDynamicGas(const intx::uint256 &Exponent,
+                                           evmc_revision Rev) {
+  // EIP-160 dynamic gas for EXP: GasPerByte * number of significant bytes of
+  // the exponent.  Uses the same intx::count_significant_bytes helper as the
+  // runtime EXP gas path (evm_imported.cpp) so the const-fold and runtime
+  // charges cannot diverge.
+  const uint64_t GasPerByte = Rev < EVMC_SPURIOUS_DRAGON
+                                  ? zen::evm::EXP_BYTE_GAS_PRE_SPURIOUS_DRAGON
+                                  : zen::evm::EXP_BYTE_GAS;
+  return intx::count_significant_bytes(Exponent) * GasPerByte;
+}
+
 typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
                                                          Operand ExponentOp) {
+  // Constant folding: both base and exponent known at compile time.
+  // EVM EXP is base ** exponent mod 2^256, which intx::exp computes directly,
+  // avoiding the inline square-and-multiply loop for compile-time constants
+  // (e.g. 10 ** 18, 2 ** 96 masks pervasive in Solidity).  The EIP-160 dynamic
+  // gas (GasPerByte * exponent-byte-size) must still be charged here, since the
+  // exponent magnitude is observable in the gas cost.
+  if (BaseOp.isConstant() && ExponentOp.isConstant()) {
+    MType *FoldI64Type =
+        EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+    const intx::uint256 Base = u256ValueToIntx(BaseOp.getConstValue());
+    const intx::uint256 Exponent = u256ValueToIntx(ExponentOp.getConstValue());
+    chargeDynamicGasIR(createIntConstInstruction(
+        FoldI64Type, constExpDynamicGas(Exponent, Ctx.getRevision())));
+    return Operand(intxToU256Value(intx::exp(Base, Exponent)));
+  }
+
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MInstruction *Zero = createIntConstInstruction(I64Type, 0);
   MInstruction *One = createIntConstInstruction(I64Type, 1);
@@ -3960,6 +3988,21 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
 //   SIGNEXTEND(31, 0x1234) = 0x1234 (no extension when index >= 31)
 typename EVMMirBuilder::Operand
 EVMMirBuilder::handleSignextend(Operand IndexOp, Operand ValueOp) {
+  // Constant folding: both index and value known at compile time.  Mirrors the
+  // inline lowering below: index >= 31 leaves the value untouched (the sign
+  // byte is already the top byte); otherwise sign-extend from bit index*8+7.
+  if (IndexOp.isConstant() && ValueOp.isConstant()) {
+    intx::uint256 Value = u256ValueToIntx(ValueOp.getConstValue());
+    const intx::uint256 Index = u256ValueToIntx(IndexOp.getConstValue());
+    if (Index < 31) {
+      const unsigned SignBit = static_cast<unsigned>(Index) * 8 + 7;
+      const intx::uint256 LowMask = (intx::uint256(1) << (SignBit + 1)) - 1;
+      const bool Negative = (static_cast<uint64_t>(Value >> SignBit) & 1) != 0;
+      Value = Negative ? (Value | ~LowMask) : (Value & LowMask);
+    }
+    return Operand(intxToU256Value(Value));
+  }
+
   U256Inst IndexComponents = extractU256Operand(IndexOp);
   U256Inst ValueComponents = extractU256Operand(ValueOp);
 

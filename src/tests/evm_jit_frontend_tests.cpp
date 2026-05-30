@@ -3,6 +3,7 @@
 
 #include "action/evm_bytecode_visitor.h"
 #include "compiler/evm_frontend/evm_analyzer.h"
+#include "compiler/evm_frontend/evm_mir_compiler.h"
 
 #include <gtest/gtest.h>
 
@@ -16,6 +17,10 @@
 namespace {
 
 using COMPILER::EVMAnalyzer;
+using COMPILER::EVMMirBuilder;
+using COMPILER::EVMValueRange;
+using zen::common::BinaryOperator;
+using zen::common::CompareOperator;
 
 EVMAnalyzer analyzeBytecode(const std::vector<uint8_t> &Bytecode) {
   EVMAnalyzer Analyzer(EVMC_CANCUN);
@@ -41,6 +46,24 @@ const EVMAnalyzer::BlockInfo *findBlock(const EVMAnalyzer &Analyzer,
   }
   return &It->second;
 }
+
+class MirBuilderConstFoldHarness {
+public:
+  MirBuilderConstFoldHarness() : Func(Ctx, 0), Builder(Ctx, Func) {
+    Ctx.setRevision(EVMC_OSAKA);
+    Ctx.setBytecode(nullptr, 0);
+
+    std::array<COMPILER::MType *, 1> ParamTypes = {
+        COMPILER::MPointerType::create(Ctx, Ctx.VoidType)};
+    Func.setFunctionType(COMPILER::MFunctionType::create(
+        Ctx, Ctx.VoidType, llvm::ArrayRef<COMPILER::MType *>(ParamTypes)));
+    Builder.initEVM(&Ctx);
+  }
+
+  COMPILER::EVMFrontendContext Ctx;
+  COMPILER::MFunction Func;
+  EVMMirBuilder Builder;
+};
 
 void expectPCList(const std::vector<uint64_t> &Actual,
                   std::initializer_list<uint64_t> Expected) {
@@ -349,6 +372,92 @@ private:
 #undef MOCK_OPERAND_STUB
 #undef MOCK_VOID_STUB
 };
+
+TEST(EVMMirBuilderConstFoldTest, ExpFoldsConstantOperands) {
+  MirBuilderConstFoldHarness Harness;
+  using Operand = EVMMirBuilder::Operand;
+  using U256Value = EVMMirBuilder::U256Value;
+
+  auto fold = [&](U256Value Base, U256Value Exp) {
+    return Harness.Builder.handleExp(Operand(Base), Operand(Exp));
+  };
+
+  // 10 ** 2 == 100
+  auto R = fold({10, 0, 0, 0}, {2, 0, 0, 0});
+  ASSERT_TRUE(R.isConstant());
+  EXPECT_EQ(R.getConstValue(), (U256Value{100, 0, 0, 0}));
+
+  // 2 ** 64 carries into limb 1
+  EXPECT_EQ(fold({2, 0, 0, 0}, {64, 0, 0, 0}).getConstValue(),
+            (U256Value{0, 1, 0, 0}));
+
+  // 2 ** 256 wraps to 0 (mod 2^256)
+  EXPECT_EQ(fold({2, 0, 0, 0}, {256, 0, 0, 0}).getConstValue(),
+            (U256Value{0, 0, 0, 0}));
+
+  // 0 ** 0 == 1 (EVM convention)
+  EXPECT_EQ(fold({0, 0, 0, 0}, {0, 0, 0, 0}).getConstValue(),
+            (U256Value{1, 0, 0, 0}));
+}
+
+// Pins the gas charged on the EXP const-fold path (the soundness-critical half:
+// the exponent magnitude is observable in gas), independent of the folded
+// value. Values are the EIP-160 spec constants, not the impl's own constants.
+TEST(EVMMirBuilderConstFoldTest, ExpConstDynamicGasMatchesEip160) {
+  // Post-Spurious-Dragon: 50 gas / significant exponent byte; 0 for exponent 0.
+  EXPECT_EQ(EVMMirBuilder::constExpDynamicGas(intx::uint256{0}, EVMC_CANCUN),
+            0u);
+  EXPECT_EQ(EVMMirBuilder::constExpDynamicGas(intx::uint256{0xFF}, EVMC_CANCUN),
+            50u);
+  EXPECT_EQ(
+      EVMMirBuilder::constExpDynamicGas(intx::uint256{0x100}, EVMC_CANCUN),
+      100u);
+  EXPECT_EQ(
+      EVMMirBuilder::constExpDynamicGas(intx::uint256{0x010000}, EVMC_CANCUN),
+      150u);
+  // Full 32-byte exponent: 32 * 50 = 1600.
+  EXPECT_EQ(EVMMirBuilder::constExpDynamicGas(~intx::uint256{0}, EVMC_CANCUN),
+            1600u);
+  // Pre-Spurious-Dragon: 10 gas / byte.
+  EXPECT_EQ(
+      EVMMirBuilder::constExpDynamicGas(intx::uint256{0xFF}, EVMC_FRONTIER),
+      10u);
+  EXPECT_EQ(
+      EVMMirBuilder::constExpDynamicGas(intx::uint256{0x100}, EVMC_FRONTIER),
+      20u);
+}
+
+TEST(EVMMirBuilderConstFoldTest, SignextendFoldsConstantOperands) {
+  MirBuilderConstFoldHarness Harness;
+  using Operand = EVMMirBuilder::Operand;
+  using U256Value = EVMMirBuilder::U256Value;
+  const uint64_t Ones = ~0ULL;
+
+  auto fold = [&](U256Value Index, U256Value Value) {
+    return Harness.Builder.handleSignextend(Operand(Index), Operand(Value));
+  };
+
+  // SIGNEXTEND(0, 0xFF): byte 0 sign bit set -> fills all higher bits with 1
+  auto R = fold({0, 0, 0, 0}, {0xFF, 0, 0, 0});
+  ASSERT_TRUE(R.isConstant());
+  EXPECT_EQ(R.getConstValue(), (U256Value{Ones, Ones, Ones, Ones}));
+
+  // SIGNEXTEND(0, 0x7F): byte 0 sign bit clear -> unchanged
+  EXPECT_EQ(fold({0, 0, 0, 0}, {0x7F, 0, 0, 0}).getConstValue(),
+            (U256Value{0x7F, 0, 0, 0}));
+
+  // SIGNEXTEND(0, 0x1234): low byte 0x34, sign bit clear -> 0x34
+  EXPECT_EQ(fold({0, 0, 0, 0}, {0x1234, 0, 0, 0}).getConstValue(),
+            (U256Value{0x34, 0, 0, 0}));
+
+  // SIGNEXTEND(1, 0x80FF): sign bit is bit 15 (set) -> ones above bit 15
+  EXPECT_EQ(fold({1, 0, 0, 0}, {0x80FF, 0, 0, 0}).getConstValue(),
+            (U256Value{0xFFFFFFFFFFFF80FFULL, Ones, Ones, Ones}));
+
+  // SIGNEXTEND(31, x): index >= 31 leaves the value untouched
+  EXPECT_EQ(fold({31, 0, 0, 0}, {1, 0, 0, Ones}).getConstValue(),
+            (U256Value{1, 0, 0, Ones}));
+}
 
 TEST(EVMJITFrontendAnalyzerTest, ConstantJumpCanonicalizesJumpDestRuns) {
   const std::vector<uint8_t> Bytecode = {
