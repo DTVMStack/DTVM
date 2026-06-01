@@ -6221,8 +6221,11 @@ bool EVMMirBuilder::hasMemoryCompileStats() const {
          MemStats.HashPrepLiftSimCandidateRegionCount != 0 ||
          MemStats.HashPrepMarkerCandidateRegionCount != 0 ||
          MemStats.HashPrepMarkerMarkedRegionCount != 0 ||
-         MemStats.HashPrepMarkerRejectedRegionCount != 0 ||
-         MemStats.AddFastRangeU64Count != 0 ||
+         MemStats.HashPrepMarkerRejectedRegionCount != 0;
+}
+
+bool EVMMirBuilder::hasArithCompileStats() const {
+  return MemStats.AddFastRangeU64Count != 0 ||
          MemStats.AddFastConstU64Count != 0 || MemStats.AddFullCount != 0 ||
          MemStats.SubFastConstU64Count != 0 || MemStats.SubFullCount != 0 ||
          MemStats.MulFastRangeU64Count != 0 ||
@@ -6464,7 +6467,7 @@ void EVMMirBuilder::noteKeccak256MemoryAccess(bool OffsetWasConstU64,
 }
 
 void EVMMirBuilder::dumpMemoryCompileStats() const {
-  if (!hasMemoryCompileStats()) {
+  if (!hasMemoryCompileStats() && !hasArithCompileStats()) {
     return;
   }
 
@@ -6656,31 +6659,33 @@ void EVMMirBuilder::dumpMemoryCompileStats() const {
       static_cast<unsigned long long>(
           MemStats.HashPrepMarkerRejectedUnknownHelper));
 
-  ZEN_LOG_DEBUG(
-      "[EVM-ARITH-SUMMARY] add_fast_range_u64=%llu add_fast_const_u64=%llu "
-      "add_full=%llu sub_fast_const_u64=%llu sub_full=%llu "
-      "mul_fast_range_u64=%llu mul_fast_const_u64=%llu mul_full=%llu "
-      "div_fast_range_u64=%llu div_fast_const_u64=%llu div_full=%llu "
-      "mod_fast_range_u64=%llu mod_fast_const_u64=%llu mod_full=%llu "
-      "mul_u128_opportunity=%llu div_u128_opportunity=%llu "
-      "mod_u128_opportunity=%llu",
-      static_cast<unsigned long long>(MemStats.AddFastRangeU64Count),
-      static_cast<unsigned long long>(MemStats.AddFastConstU64Count),
-      static_cast<unsigned long long>(MemStats.AddFullCount),
-      static_cast<unsigned long long>(MemStats.SubFastConstU64Count),
-      static_cast<unsigned long long>(MemStats.SubFullCount),
-      static_cast<unsigned long long>(MemStats.MulFastRangeU64Count),
-      static_cast<unsigned long long>(MemStats.MulFastConstU64Count),
-      static_cast<unsigned long long>(MemStats.MulFullCount),
-      static_cast<unsigned long long>(MemStats.DivFastRangeU64Count),
-      static_cast<unsigned long long>(MemStats.DivFastConstU64Count),
-      static_cast<unsigned long long>(MemStats.DivFullCount),
-      static_cast<unsigned long long>(MemStats.ModFastRangeU64Count),
-      static_cast<unsigned long long>(MemStats.ModFastConstU64Count),
-      static_cast<unsigned long long>(MemStats.ModFullCount),
-      static_cast<unsigned long long>(MemStats.MulU128OpportunityCount),
-      static_cast<unsigned long long>(MemStats.DivU128OpportunityCount),
-      static_cast<unsigned long long>(MemStats.ModU128OpportunityCount));
+  if (hasArithCompileStats()) {
+    ZEN_LOG_DEBUG(
+        "[EVM-ARITH-SUMMARY] add_fast_range_u64=%llu add_fast_const_u64=%llu "
+        "add_full=%llu sub_fast_const_u64=%llu sub_full=%llu "
+        "mul_fast_range_u64=%llu mul_fast_const_u64=%llu mul_full=%llu "
+        "div_fast_range_u64=%llu div_fast_const_u64=%llu div_full=%llu "
+        "mod_fast_range_u64=%llu mod_fast_const_u64=%llu mod_full=%llu "
+        "mul_u128_opportunity=%llu div_u128_opportunity=%llu "
+        "mod_u128_opportunity=%llu",
+        static_cast<unsigned long long>(MemStats.AddFastRangeU64Count),
+        static_cast<unsigned long long>(MemStats.AddFastConstU64Count),
+        static_cast<unsigned long long>(MemStats.AddFullCount),
+        static_cast<unsigned long long>(MemStats.SubFastConstU64Count),
+        static_cast<unsigned long long>(MemStats.SubFullCount),
+        static_cast<unsigned long long>(MemStats.MulFastRangeU64Count),
+        static_cast<unsigned long long>(MemStats.MulFastConstU64Count),
+        static_cast<unsigned long long>(MemStats.MulFullCount),
+        static_cast<unsigned long long>(MemStats.DivFastRangeU64Count),
+        static_cast<unsigned long long>(MemStats.DivFastConstU64Count),
+        static_cast<unsigned long long>(MemStats.DivFullCount),
+        static_cast<unsigned long long>(MemStats.ModFastRangeU64Count),
+        static_cast<unsigned long long>(MemStats.ModFastConstU64Count),
+        static_cast<unsigned long long>(MemStats.ModFullCount),
+        static_cast<unsigned long long>(MemStats.MulU128OpportunityCount),
+        static_cast<unsigned long long>(MemStats.DivU128OpportunityCount),
+        static_cast<unsigned long long>(MemStats.ModU128OpportunityCount));
+  }
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
 }
 

@@ -1292,6 +1292,7 @@ private:
     uint64_t ModU128OpportunityCount = 0;
   };
   bool hasMemoryCompileStats() const;
+  bool hasArithCompileStats() const;
   MemoryCompileStats MemStats;
 
   struct MemoryBlockCompileStats {

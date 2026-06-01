@@ -28,20 +28,25 @@ u64, ADDMOD, MUL) and U128-consumer work.
 
 - Module: `src/compiler/evm_frontend` — `MemoryCompileStats` (counter fields),
   `handleBinaryArithmetic` (ADD/SUB, header), `handleMul`/`handleDiv`/`handleMod`
-  (`.cpp`), `hasMemoryCompileStats`, `dumpMemoryCompileStats`.
+  (`.cpp`), `hasArithCompileStats` (new, arith-domain gate), `dumpMemoryCompileStats`.
 - Counter triples: ADD/MUL/DIV/MOD get `FastRangeU64` (non-const `bothFitU64`
   path), `FastConstU64` (`isConstU64` path), `Full` (multi-limb fallback); SUB
   gets `FastConstU64` + `Full` (no range path exists for SUB).
 - All increments are wrapped in `#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING`, so
-  the default and CI builds compile them out — **zero runtime/codegen impact**.
-  No change to lowering or results in any build.
+  the default and CI builds compile them out — **no change to lowering,
+  generated code, or execution results in any build**. The counter fields
+  themselves are always present in the transient per-compile
+  `MemoryCompileStats`, so the only unconditional cost is a small fixed
+  increase in that diagnostic struct's size (no effect on generated code,
+  runtime EVM state, or any public ABI).
 - Measurement requires a `-DZEN_ENABLE_JIT_LOGGING=ON` build; the
   summary is logged via `ZEN_LOG_DEBUG`.
 
 ## Checklist
 
 - [x] Implementation complete (14 counters; 17 `#ifdef`-gated increment sites;
-      `[EVM-ARITH-SUMMARY]` dump; `hasMemoryCompileStats` extended)
+      `[EVM-ARITH-SUMMARY]` dump gated by a dedicated `hasArithCompileStats`,
+      keeping `hasMemoryCompileStats` memory-domain-only)
 - [x] Tests added/updated — covered by regression; no new unit test (counters
       are macro-gated diagnostics with no codegen/behavior change)
 - [x] Module specs in `docs/modules/` updated (if affected) — none affected
