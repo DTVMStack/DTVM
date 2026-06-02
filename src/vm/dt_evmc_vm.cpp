@@ -463,9 +463,16 @@ zen::common::MayBe<EVMModule *> loadEVMModuleWithRegAllocRetry(
 
 EVMModule *loadTransientModule(DTVM *VM, const uint8_t *Code, size_t CodeSize,
                                evmc_revision Rev) {
+  // Transient modules (CREATE init code, CreatedAddrsInTx contracts) are
+  // short-lived and unlikely to benefit from JIT. Load them in interpreter
+  // mode to skip EVMAnalyzer scans and JIT compilation entirely.
+  RuntimeConfig TransientConfig = VM->Config;
+  TransientConfig.Mode = RunMode::InterpMode;
+  ScopedConfig InterpScope(VM->RT.get(), TransientConfig);
+
   std::string ModName = "tmp_mod_" + std::to_string(VM->ModCounter++);
-  auto ModRet = loadEVMModuleWithRegAllocRetry(
-      VM, ModName, Code, CodeSize, Rev, EVMMemorySpecializationProfile{});
+  auto ModRet =
+      loadEVMModuleWithRegAllocRetry(VM, ModName, Code, CodeSize, Rev);
   if (!ModRet)
     return nullptr;
   return *ModRet;
