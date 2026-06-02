@@ -7,6 +7,7 @@
 #include "compiler/evm_frontend/evm_analyzer.h"
 #include "compiler/evm_frontend/evm_lifted_stack_lifter.h"
 #include "compiler/evm_frontend/evm_mir_compiler.h"
+#include "evm/arith_profile.h"
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
 #include "runtime/evm_module.h"
@@ -143,6 +144,10 @@ private:
       const uint8_t *Bytecode =
           reinterpret_cast<const uint8_t *>(Ctx->getBytecode());
       size_t BytecodeSize = Ctx->getBytecodeSize();
+      if (zen::evm::arith_profile::rangeProfileEnabled()) {
+        ProfileCodeHash =
+            zen::evm::arith_profile::fnv1aCodeHash(Bytecode, BytecodeSize);
+      }
       EVMAnalyzer Analyzer(Ctx->getRevision());
       if (Ctx->getResolvedJumpTargets()) {
         Analyzer.setResolvedJumpTargets(Ctx->getResolvedJumpTargets());
@@ -383,6 +388,7 @@ private:
           Operand Offset = pop();
           Operand Length = pop();
           Operand Result = Builder.handleKeccak256(Offset, Length);
+          Result.setSource(Operand::SourceKind::KECCAK);
           push(Result);
           break;
         }
@@ -421,6 +427,7 @@ private:
         case OP_CALLDATALOAD: {
           Operand Offset = pop();
           Operand Result = Builder.handleCallDataLoad(Offset);
+          Result.setSource(Operand::SourceKind::CALLDATALOAD);
           push(Result);
           break;
         }
@@ -573,6 +580,7 @@ private:
           maybePrepareLinearBlockMemoryPrecheck(Opcode);
           Operand Addr = pop();
           Operand Result = Builder.handleMLoad(Addr);
+          Result.setSource(Operand::SourceKind::MLOAD);
           push(Result);
           break;
         }
@@ -597,6 +605,7 @@ private:
         case OP_SLOAD: {
           Operand Key = pop();
           Operand Result = Builder.handleSLoad(Key);
+          Result.setSource(Operand::SourceKind::SLOAD);
           push(Result);
           break;
         }
@@ -1653,45 +1662,112 @@ private:
     return Plan;
   }
 
+  // ---- Dual-tap Stream B helpers (ZEN_EVM_RANGE_PROFILE) ----
+
+  static const char *rangeName(typename IRBuilder::ValueRange R) {
+    switch (R) {
+    case IRBuilder::ValueRange::U64:
+      return "U64";
+    case IRBuilder::ValueRange::U128:
+      return "U128";
+    case IRBuilder::ValueRange::U256:
+      return "U256";
+    }
+    return "U256";
+  }
+
+  static const char *sourceName(typename Operand::SourceKind S) {
+    switch (S) {
+    case Operand::SourceKind::OTHER:
+      return "OTHER";
+    case Operand::SourceKind::PUSH:
+      return "PUSH";
+    case Operand::SourceKind::CALLDATALOAD:
+      return "CALLDATALOAD";
+    case Operand::SourceKind::SLOAD:
+      return "SLOAD";
+    case Operand::SourceKind::MLOAD:
+      return "MLOAD";
+    case Operand::SourceKind::CALL_RET:
+      return "CALL_RET";
+    case Operand::SourceKind::PRIOR_ARITH:
+      return "PRIOR_ARITH";
+    case Operand::SourceKind::KECCAK:
+      return "KECCAK";
+    }
+    return "OTHER";
+  }
+
+  // Emit one Stream B CSV row for a two-operand arithmetic site. PC is the
+  // byte offset of the opcode currently being lowered (set ungated in the
+  // decode loop). Dormant unless ZEN_EVM_RANGE_PROFILE is set.
+  void profileArithRange(uint8_t Opcode, const Operand &LHS,
+                         const Operand &RHS) {
+    if (!zen::evm::arith_profile::rangeProfileEnabled()) {
+      return;
+    }
+    zen::evm::arith_profile::recordRange(
+        ProfileCodeHash, PC, Opcode, rangeName(LHS.getRange()),
+        rangeName(RHS.getRange()), sourceName(LHS.getSource()),
+        sourceName(RHS.getSource()));
+  }
+
   template <BinaryOperator Opr> void handleBinaryArithmetic() {
     Operand LHS = pop();
     Operand RHS = pop();
+    // handleBinaryArithmetic is reached only by ADD and SUB.
+    constexpr uint8_t Opcode = (Opr == BinaryOperator::BO_ADD)
+                                   ? static_cast<uint8_t>(OP_ADD)
+                                   : static_cast<uint8_t>(OP_SUB);
+    profileArithRange(Opcode, LHS, RHS);
     Operand Result = Builder.template handleBinaryArithmetic<Opr>(LHS, RHS);
+    Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
 
   void handleMul() {
     Operand MultiplicandOp = pop();
     Operand MultiplierOp = pop();
+    profileArithRange(static_cast<uint8_t>(OP_MUL), MultiplicandOp,
+                      MultiplierOp);
     Operand Result = Builder.handleMul(MultiplicandOp, MultiplierOp);
+    Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
 
   void handleDiv() {
     Operand DividendOp = pop();
     Operand DivisorOp = pop();
+    profileArithRange(static_cast<uint8_t>(OP_DIV), DividendOp, DivisorOp);
     Operand Result = Builder.handleDiv(DividendOp, DivisorOp);
+    Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
 
   void handleSDiv() {
     Operand DividendOp = pop();
     Operand DivisorOp = pop();
+    profileArithRange(static_cast<uint8_t>(OP_SDIV), DividendOp, DivisorOp);
     Operand Result = Builder.handleSDiv(DividendOp, DivisorOp);
+    Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
 
   void handleMod() {
     Operand DividendOp = pop();
     Operand DivisorOp = pop();
+    profileArithRange(static_cast<uint8_t>(OP_MOD), DividendOp, DivisorOp);
     Operand Result = Builder.handleMod(DividendOp, DivisorOp);
+    Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
 
   void handleSMod() {
     Operand DividendOp = pop();
     Operand DivisorOp = pop();
+    profileArithRange(static_cast<uint8_t>(OP_SMOD), DividendOp, DivisorOp);
     Operand Result = Builder.handleSMod(DividendOp, DivisorOp);
+    Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
 
@@ -1699,7 +1775,10 @@ private:
     Operand AugendOp = pop();
     Operand AddendOp = pop();
     Operand ModulusOp = pop();
+    // Two-operand Stream B schema: record the two addends.
+    profileArithRange(static_cast<uint8_t>(OP_ADDMOD), AugendOp, AddendOp);
     Operand Result = Builder.handleAddMod(AugendOp, AddendOp, ModulusOp);
+    Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
 
@@ -1707,8 +1786,12 @@ private:
     Operand MultiplicandOp = pop();
     Operand MultiplierOp = pop();
     Operand ModulusOp = pop();
+    // Two-operand Stream B schema: record the two factors.
+    profileArithRange(static_cast<uint8_t>(OP_MULMOD), MultiplicandOp,
+                      MultiplierOp);
     Operand Result =
         Builder.handleMulMod(MultiplicandOp, MultiplierOp, ModulusOp);
+    Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
 
@@ -1769,6 +1852,7 @@ private:
   void handlePush(uint8_t NumBytes) {
     Bytes Data = readBytes(NumBytes);
     Operand Result = Builder.handlePush(Data);
+    Result.setSource(Operand::SourceKind::PUSH);
     push(Result);
   }
 
@@ -1921,6 +2005,9 @@ private:
   bool InDeadCode = false;
   uint64_t PC = 0;
   uint64_t CurrentBlockEntryPC = 0;
+  // Dual-tap Stream B join key; computed once per compile when
+  // ZEN_EVM_RANGE_PROFILE is set, else 0.
+  uint64_t ProfileCodeHash = 0;
   bool CurrentBlockLifted = false;
   uint32_t CurrentBlockHiddenLiveInPrefixDepth = 0;
 };

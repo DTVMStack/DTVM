@@ -4,6 +4,7 @@
 #ifndef ZEN_EVM_OPCODE_HANDLERS_H
 #define ZEN_EVM_OPCODE_HANDLERS_H
 
+#include "evm/arith_profile.h"
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
 #include <cstdint>
@@ -48,6 +49,10 @@ public:
   static thread_local EVMFrame *CurrentFrame;
   static thread_local InterpreterExecContext *CurrentContext;
   static thread_local const evmc_instruction_metrics *CurrentMetricsTable;
+  // Join key for the dual-tap arith profiler (ZEN_EVM_LIMB_PROFILE). FNV-1a
+  // hash of the currently-executing contract code; set once per interpret()
+  // run, dormant when the profiler is off.
+  static thread_local uint64_t CurrentCodeHash;
 
   static void setExecutionContext(EVMFrame *Frame,
                                   InterpreterExecContext *Context) {
@@ -57,12 +62,15 @@ public:
   static void setMetricsTable(const evmc_instruction_metrics *Table) {
     CurrentMetricsTable = Table;
   }
+  static void setCodeHash(uint64_t Hash) { CurrentCodeHash = Hash; }
+  static uint64_t getCodeHash() { return CurrentCodeHash; }
   /// Clear thread-local execution pointers after an interpreter run so reused
   /// InterpreterExecContext cannot leak cross-call state to host or tooling.
   static void clear() {
     CurrentFrame = nullptr;
     CurrentContext = nullptr;
     CurrentMetricsTable = nullptr;
+    CurrentCodeHash = 0;
   }
   /// Runs clear() on scope exit (including when interpret() throws).
   struct ClearGuard {
@@ -76,6 +84,43 @@ public:
     return CurrentContext;
   }
 };
+
+// Dual-tap Stream A helper: emit one CSV row per arithmetic operand recording
+// its dynamic 64-bit limb width. Reads the opcode byte straight from the
+// frame's code buffer at the current Pc. Dormant unless ZEN_EVM_LIMB_PROFILE
+// is set (the recordLimb gate is checked inside the emitter).
+inline void profileArithLimbs(EVMFrame *Frame, const intx::uint256 *const *Ops,
+                              uint32_t NumOps) {
+  if (!arith_profile::limbProfileEnabled()) {
+    return;
+  }
+  const uint8_t Opcode =
+      (Frame->Msg.code != nullptr && Frame->Pc < Frame->Msg.code_size)
+          ? Frame->Msg.code[Frame->Pc]
+          : 0;
+  // Restrict Stream A to the arithmetic opcodes Stream B also reports, so the
+  // two CSVs join cleanly. The shared BinaryOpHandler/TernaryOpHandler also
+  // back comparison/bitwise ops, which are out of scope here.
+  switch (Opcode) {
+  case OP_ADD:
+  case OP_MUL:
+  case OP_SUB:
+  case OP_DIV:
+  case OP_SDIV:
+  case OP_MOD:
+  case OP_SMOD:
+  case OP_ADDMOD:
+  case OP_MULMOD:
+    break;
+  default:
+    return;
+  }
+  const uint64_t CodeHash = EVMResource::getCodeHash();
+  for (uint32_t I = 0; I < NumOps; ++I) {
+    arith_profile::recordLimb(CodeHash, Frame->Pc, Opcode, I,
+                              arith_profile::limbWidth(*Ops[I]));
+  }
+}
 
 // CRTP Base class for all opcode handlers
 template <typename Derived> class EVMOpcodeHandlerBase {
@@ -131,6 +176,10 @@ public:
 
     auto &A = Frame->Stack[Frame->Sp - 1];
     auto &B = Frame->Stack[Frame->Sp - 2];
+    {
+      const intx::uint256 *Ops[2] = {&A, &B};
+      profileArithLimbs(Frame, Ops, 2);
+    }
     B = BinaryOp{}(A, B);
     --Frame->Sp;
   }
@@ -152,6 +201,10 @@ public:
     auto &A = Frame->Stack[Frame->Sp - 1];
     auto &B = Frame->Stack[Frame->Sp - 2];
     auto &C = Frame->Stack[Frame->Sp - 3];
+    {
+      const intx::uint256 *Ops[3] = {&A, &B, &C};
+      profileArithLimbs(Frame, Ops, 3);
+    }
     C = TernaryOp{}(A, B, C);
     Frame->Sp -= 2;
   }

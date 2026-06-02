@@ -374,6 +374,12 @@ void BaseInterpreter::interpret() {
 
   size_t CodeSize = Mod->CodeSize;
   Byte *Code = Mod->Code;
+  // Stash the dual-tap join key once per run (Stream A). Dormant unless
+  // ZEN_EVM_LIMB_PROFILE is set.
+  if (arith_profile::limbProfileEnabled()) {
+    EVMResource::setCodeHash(arith_profile::fnv1aCodeHash(
+        reinterpret_cast<const uint8_t *>(Code), CodeSize));
+  }
   evmc_revision Revision = Context.getInstance()->getRevision();
   const auto *MetricsTable = evmc_get_instruction_metrics_table(Revision);
   EVMResource::setMetricsTable(MetricsTable);

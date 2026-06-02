@@ -18,6 +18,7 @@ thread_local zen::evm::InterpreterExecContext
     *zen::evm::EVMResource::CurrentContext = nullptr;
 thread_local const evmc_instruction_metrics
     *zen::evm::EVMResource::CurrentMetricsTable = nullptr;
+thread_local uint64_t zen::evm::EVMResource::CurrentCodeHash = 0;
 
 using namespace zen;
 using namespace zen::evm;
@@ -321,6 +322,15 @@ void SignExtendHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
+  if (arith_profile::limbProfileEnabled()) {
+    const uint64_t CodeHash = EVMResource::getCodeHash();
+    arith_profile::recordLimb(
+        CodeHash, Frame->Pc, OP_SIGNEXTEND, 0,
+        arith_profile::limbWidth(Frame->Stack[Frame->Sp - 1]));
+    arith_profile::recordLimb(
+        CodeHash, Frame->Pc, OP_SIGNEXTEND, 1,
+        arith_profile::limbWidth(Frame->Stack[Frame->Sp - 2]));
+  }
   intx::uint256 I = Frame->pop();
   intx::uint256 V = Frame->pop();
 
@@ -392,6 +402,13 @@ void ExpHandler::doExecute() {
 
   auto &A = Frame->Stack[Frame->Sp - 1];
   auto &B = Frame->Stack[Frame->Sp - 2];
+  if (arith_profile::limbProfileEnabled()) {
+    const uint64_t CodeHash = EVMResource::getCodeHash();
+    arith_profile::recordLimb(CodeHash, Frame->Pc, OP_EXP, 0,
+                              arith_profile::limbWidth(A));
+    arith_profile::recordLimb(CodeHash, Frame->Pc, OP_EXP, 1,
+                              arith_profile::limbWidth(B));
+  }
   uint64_t BytesNum = intx::count_significant_bytes(B);
   uint64_t ByteGas = currentRevision() < EVMC_SPURIOUS_DRAGON
                          ? EXP_BYTE_GAS_PRE_SPURIOUS_DRAGON

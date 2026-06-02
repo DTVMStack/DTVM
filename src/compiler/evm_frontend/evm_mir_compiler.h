@@ -151,6 +151,21 @@ public:
       ZERO_TEST_NE
     };
 
+    // Provenance tag for the dual-tap range profiler (ZEN_EVM_RANGE_PROFILE).
+    // Records what produced this stack value so offline analysis can attribute
+    // missed narrow-width headroom to its source. Copied for free by DUP/SWAP
+    // because Operand is value-copied.
+    enum class SourceKind : uint8_t {
+      OTHER,
+      PUSH,
+      CALLDATALOAD,
+      SLOAD,
+      MLOAD,
+      CALL_RET,
+      PRIOR_ARITH,
+      KECCAK
+    };
+
     Operand() = default;
     Operand(MInstruction *Instr, EVMType Type) : Instr(Instr), Type(Type) {}
     Operand(Variable *Var, EVMType Type) : Var(Var), Type(Type) {}
@@ -269,6 +284,10 @@ public:
     ValueRange getRange() const { return Range; }
     void setRange(ValueRange NewRange) { Range = NewRange; }
 
+    // Source-kind provenance tag (dual-tap Stream B).
+    SourceKind getSource() const { return Source; }
+    void setSource(SourceKind NewSource) { Source = NewSource; }
+
     // Check whether both operands provably fit in u64
     static bool bothFitU64(const Operand &A, const Operand &B) {
       return A.getRange() == ValueRange::U64 && B.getRange() == ValueRange::U64;
@@ -282,6 +301,7 @@ public:
     Variable *Var = nullptr;
     EVMType Type = EVMType::VOID;
     ValueRange Range = ValueRange::U256;
+    SourceKind Source = SourceKind::OTHER;
 
     // For EVMU256Type: 4 I64 components [0]=low, [1]=mid-low, [2]=mid-high,
     // [3]=high
