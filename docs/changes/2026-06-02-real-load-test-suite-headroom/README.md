@@ -3,14 +3,21 @@
 ## 执行摘要
 
 构建了一套基于真实主网交易的 EVM 测试套件,并用它量化了 DTVM multipass JIT
-value-range 分析的精度缺口。核心结论:**在真实合约负载下,被静态分析器漏证的
-动态-u64 操作数质量占比 65.2%**(`runtime_narrow_but_static_unknown_ratio =
-0.652`)。该缺口集中在操作数来源(SLOAD/MLOAD/CALLDATALOAD/PRIOR_ARITH)处,
-而 PUSH 常量已被完全证明(missed = 0)——直接为 ValueRange roadmap 的
-source-tagging 类任务(T-R2)定了收益上界。
+value-range 分析的精度缺口。核心结论(扩桩后的权威值,覆盖算术+比较+位运算
+consumer):**在真实合约负载下,被静态分析器漏证的动态-u64 操作数质量占比
+60.0%**(`runtime_narrow_but_static_unknown_ratio = 0.600`,4652 个联结操作数
+槽)。该缺口集中在操作数来源(SLOAD/CALL_RET/MLOAD/CALLDATALOAD/PRIOR_ARITH 等
+missed≈0.68–1.0)处,而 PUSH 常量已被完全证明(missed = 0)——直接为
+ValueRange roadmap 的 source-tagging 类任务(T-R2)定了收益上界。
 
-测量来自 225 笔真实 Cancun 交易,跨 5 个应用类别;所有 5 类的 missed_headroom
-都在 0.36–0.66 区间,说明该缺口是普遍现象,而非单一合约类型的伪影。
+测量来自 225 笔真实 Cancun 交易,跨 5 个应用类别。同时用 4-bit limb 占用掩码
+做了完整形态分布:真实负载下 u64 占 81.5%(执行加权)、zero 10.5%,而 high-
+sparse(`{0,x,0,0}` 这类低位为零、高位非零)只占 0.69%——即便在非 u64 操作数里
+也只占 8.7%(执行加权),87.6% 是稠密低位。high-sparse 可忽略这一结论得到本语料
+独立确认。
+
+> 注:首版(仅算术 consumer)headline 为 0.652 / 2330 槽;扩桩加入比较+位运算
+> consumer 后口径变为 0.600 / 4652 槽。下文表格以扩桩后的权威值为准。
 
 ## 背景
 
@@ -62,6 +69,25 @@ join key:两引擎均无 codehash,故用同一份 bytecode 的 FNV-1a 64-bit 哈
   `source_kind × dynamic_u64_rate × analyzer_proved_u64_rate × missed_headroom`,
   并按 source_kind / opcode / app_class 分组 + 总体 headline 指标。
 - `test_headroom_join.py` — 5 个单测(全过)。
+
+## 复现
+
+语料固定在 `~/dtvm-perf-corpora/mainnet-replay/cancun-suite/`(225 个
+`<txhash>.json`,内部 test 名形如 `replay_0x…`)。对其跑 statetest **不要**加
+`-k fork_Cancun`——该语料 test 名不带 fork 后缀,加了会匹配 0 个 test:
+
+```bash
+EVMONE_EXTERNAL_OPTIONS="$(pwd)/build/lib/libdtvmapi.so,mode=multipass,enable_gas_metering=true" \
+  ~/evmone/build/bin/evmone-statetest \
+  ~/dtvm-perf-corpora/mainnet-replay/cancun-suite \
+  --vm external_vm
+```
+
+headroom 量化另跑双 tap 插桩(`ZEN_EVM_LIMB_PROFILE` / `ZEN_EVM_RANGE_PROFILE`
+env 开启的插桩构建),再用 `tests/corpus/headroom/headroom_join.py` 离线联结两
+路 CSV。注意:下文「正确性验证」用的是标准 EEST 套件的 Cancun 子集,那里**仍
+需** `-k fork_Cancun`——与本节 replay 语料相反,两者名字都带 "cancun" 但是不同
+套件。
 
 ## 结果
 
@@ -134,8 +160,78 @@ joiner 单测 5/5;生成器对现有语料做 determinism 回归(两次生成 by
 4. **插桩为测量用途**:env-gated 常驻 tap,非临时 fprintf;是否随 PR 落地或
    revert 待定。
 
+## 扩桩(第二轮:覆盖更多 consumer + 拆细 source + occupancy)
+
+首版只在算术 consumer 上量 headroom、producer 只分 6 类(OTHER 占约一半)。
+第二轮扩桩:
+
+**consumer 扩展**(新增量 headroom 的算子):比较 LT/GT/SLT/SGT/EQ/ISZERO、
+位运算 AND/OR/XOR/NOT/BYTE/SHL/SHR/SAR——解锁 roadmap T-R1(比较)/T-R3
+(AND-mask)的缺口测量。
+
+**producer 拆细**(`SourceKind` 追加,OTHER 联结槽占比 ~50% → 33%):新增
+`AND` / `SHIFT` / `BITWISE` / `COMPARE` / `ENV`(25 个环境 opcode),并接线一直
+空着的 `CALL_RET`(CALL/CALLCODE/DELEGATECALL/STATICCALL 的成功标志)。
+
+**occupancy 掩码**:Stream A 增 `limb_mask`(4-bit,bit i = limb[i]≠0),区分
+high-sparse 与 dense u128(`limb_width` 会把两者压成同一值)。产出完整 16-mask
+分布报告 `tests/corpus/headroom/limb_occupancy_report.md`。
+
+### 插桩清单(以落地代码为准)
+
+CONSUMER tap(在该 opcode 上量 headroom):
+
+| opcode | Stream A(运行时 limb) | Stream B(静态 range+source) |
+|---|:---:|:---:|
+| ADD SUB MUL DIV SDIV MOD SMOD ADDMOD MULMOD | ✓ | ✓ |
+| EXP SIGNEXTEND | ✓ | ✗(B 未 tap,不参与联结) |
+| LT GT SLT SGT EQ ISZERO | ✓ | ✓ |
+| AND OR XOR NOT BYTE SHL SHR SAR | ✓ | ✓ |
+
+PRODUCER source tag(operand 来源):PUSH / CALLDATALOAD / SLOAD / MLOAD /
+KECCAK / PRIOR_ARITH(算术结果)/ AND / SHIFT(SHL/SHR/SAR)/ BITWISE
+(OR/XOR/NOT/BYTE)/ COMPARE(比较结果)/ ENV(25 个环境 opcode)/ CALL_RET /
+OTHER(默认残差)。DUP/SWAP 按值拷贝 Operand,标签自动传播。无法 tap:
+`RETURNDATALOAD`(本 evmc 无 EIP-7069)。
+
+### 扩桩后权威结果
+
+headline **`runtime_narrow_but_static_unknown_ratio = 0.600`**(4652 联结槽);
+join 覆盖 Stream A 2597 站点 / Stream B 23167 站点 / shared 2446。
+
+按来源(missed_headroom 降序):SLOAD 1.00、CALL_RET 1.00、OTHER 0.925、
+MLOAD 0.884、PRIOR_ARITH 0.880、SHIFT 0.698、CALLDATALOAD 0.676、ENV 0.659、
+BITWISE 0.489、AND 0.324、COMPARE 0.233、PUSH 0.000、KECCAK 0.000。
+
+occupancy(执行加权 / 站点加权):ZERO 10.5%/10.6%、U64 81.5%/77.4%、
+U128-dense 0.63%/0.85%、U192-U256-dense 6.3%/8.7%、HIGH-SPARSE 0.69%/2.13%、
+MID-GAP 0.29%/0.34%。high-sparse 主要出现在 SHR(13%)/DIV(23%)/BYTE(32%);
+ADD/MUL/SHL 几乎不产生。
+
+正确性(env 全关):multipass unittests 223/223、interpreter 215/215;插桩单测
+14/14(headroom 8 + occupancy 6)。
+
+## runtime 数据持久化(供后续分析)
+
+为避免后续分析重跑 VM,把 runtime 测量数据落到语料旁(repo 外)的持久目录
+`~/dtvm-perf-corpora/mainnet-replay/cancun-suite/runtime-profile/`:
+
+| 文件 | 行数 | 内容 |
+|---|---:|---|
+| `stream_a_limb.csv` | 61,498 | 原始逐次执行(interpreter,含 limb_width+limb_mask) |
+| `stream_b_range.csv` | 26,984 | 原始逐次编译(JIT,静态 range+source) |
+| `site_histogram.csv` | 4,931 | per-site 聚合直方图(每站点 mask×16 + width×5 + 执行次数) |
+| `app_class_map.json` | 24 | FNV-1a→app_class 桥接 |
+
+`site_histogram.csv` 是分析就绪形态——已校验能无损还原原始流(total 61498、
+u64 56611/92.05% 双向一致),后续分析只用它即可,不必碰原始流或 VM。聚合脚本
+`tests/corpus/headroom/runtime_histogram.py`,目录自带 `README.md` 记 schema 与
+复现步骤。
+
 ## 后续
 
-headroom 数据已定 source-tagging 的收益上界(0.652)。下一步是按本数据驱动
-ValueRange roadmap 的 T-R2(在 producer 处对 CALLDATALOAD/SLOAD/MLOAD 标
-U64)与 T-R1(比较路径 range fast path),并用本套件复测命中率抬升。
+headroom 数据已定 source-tagging 的收益上界(0.600)。下一步按本数据驱动
+ValueRange roadmap:T-R2(producer 处对 CALLDATALOAD/SLOAD/MLOAD 标 U64)、
+T-R1(比较路径 range fast path,COMPARE 已能量到 0.233 缺口)、T-R3(AND-mask,
+AND 缺口 0.324),并用本套件复测命中率抬升。OTHER 仍占联结槽 33%,可继续给
+残余 producer 打标进一步拆细。

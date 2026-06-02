@@ -395,6 +395,7 @@ private:
 
         case OP_ADDRESS: {
           Operand Result = Builder.handleAddress();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -402,24 +403,28 @@ private:
         case OP_BALANCE: {
           Operand Address = pop();
           Operand Result = Builder.handleBalance(Address);
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_ORIGIN: {
           Operand Result = Builder.handleOrigin();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_CALLER: {
           Operand Result = Builder.handleCaller();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_CALLVALUE: {
           Operand Result = Builder.handleCallValue();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -434,6 +439,7 @@ private:
 
         case OP_CALLDATASIZE: {
           Operand Result = Builder.handleCallDataSize();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -449,6 +455,7 @@ private:
 
         case OP_CODESIZE: {
           Operand Result = Builder.handleCodeSize();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -464,6 +471,7 @@ private:
 
         case OP_GASPRICE: {
           Operand Result = Builder.handleGasPrice();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -471,6 +479,7 @@ private:
         case OP_EXTCODESIZE: {
           Operand Address = pop();
           Operand Result = Builder.handleExtCodeSize(Address);
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -487,6 +496,7 @@ private:
 
         case OP_RETURNDATASIZE: {
           Operand Result = Builder.handleReturnDataSize();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -503,6 +513,7 @@ private:
         case OP_EXTCODEHASH: {
           Operand Address = pop();
           Operand Result = Builder.handleExtCodeHash(Address);
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -510,54 +521,63 @@ private:
         case OP_BLOCKHASH: {
           Operand BlockNumber = pop();
           Operand Result = Builder.handleBlockHash(BlockNumber);
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_COINBASE: {
           Operand Result = Builder.handleCoinBase();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_TIMESTAMP: {
           Operand Result = Builder.handleTimestamp();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_NUMBER: {
           Operand Result = Builder.handleNumber();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_PREVRANDAO: {
           Operand Result = Builder.handlePrevRandao();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_GASLIMIT: {
           Operand Result = Builder.handleGasLimit();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_CHAINID: {
           Operand Result = Builder.handleChainId();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_SELFBALANCE: {
           Operand Result = Builder.handleSelfBalance();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_BASEFEE: {
           Operand Result = Builder.handleBaseFee();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -565,12 +585,14 @@ private:
         case OP_BLOBHASH: {
           Operand Index = pop();
           Operand Result = Builder.handleBlobHash(Index);
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_BLOBBASEFEE: {
           Operand Result = Builder.handleBlobBaseFee();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -620,6 +642,7 @@ private:
         case OP_MSIZE: {
           Builder.noteMemoryOpcodeInBlock(Opcode, PC);
           Operand Result = Builder.handleMSize();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -842,12 +865,14 @@ private:
         // Environment operations
         case OP_PC: {
           Operand Result = Builder.handlePC(PC);
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
 
         case OP_GAS: {
           Operand Result = Builder.handleGas();
+          Result.setSource(Operand::SourceKind::ENV);
           push(Result);
           break;
         }
@@ -1694,6 +1719,16 @@ private:
       return "PRIOR_ARITH";
     case Operand::SourceKind::KECCAK:
       return "KECCAK";
+    case Operand::SourceKind::AND:
+      return "AND";
+    case Operand::SourceKind::SHIFT:
+      return "SHIFT";
+    case Operand::SourceKind::BITWISE:
+      return "BITWISE";
+    case Operand::SourceKind::COMPARE:
+      return "COMPARE";
+    case Operand::SourceKind::ENV:
+      return "ENV";
     }
     return "OTHER";
   }
@@ -1710,6 +1745,18 @@ private:
         ProfileCodeHash, PC, Opcode, rangeName(LHS.getRange()),
         rangeName(RHS.getRange()), sourceName(LHS.getSource()),
         sourceName(RHS.getSource()));
+  }
+
+  // Emit one Stream B CSV row for a single-operand site. The lone operand
+  // occupies the lhs_* columns; rhs_* carry the sentinel "NA" so the schema is
+  // unchanged. Dormant unless ZEN_EVM_RANGE_PROFILE is set.
+  void profileArithRangeUnary(uint8_t Opcode, const Operand &Opnd) {
+    if (!zen::evm::arith_profile::rangeProfileEnabled()) {
+      return;
+    }
+    zen::evm::arith_profile::recordRange(ProfileCodeHash, PC, Opcode,
+                                         rangeName(Opnd.getRange()), "NA",
+                                         sourceName(Opnd.getSource()), "NA");
   }
 
   template <BinaryOperator Opr> void handleBinaryArithmetic() {
@@ -1804,21 +1851,38 @@ private:
 
   template <CompareOperator Opr> void handleCompare() {
     Operand CmpLHS = pop();
-    Operand CmpRHS = (Opr != CompareOperator::CO_EQZ) ? pop() : Operand();
+    if (Opr == CompareOperator::CO_EQZ) {
+      // ISZERO is unary; record its single operand and tag the boolean result.
+      profileArithRangeUnary(static_cast<uint8_t>(OP_ISZERO), CmpLHS);
+      Operand Result = Builder.template handleCompareOp<Opr>(CmpLHS, Operand());
+      Result.setSource(Operand::SourceKind::COMPARE);
+      push(Result);
+      return;
+    }
+    Operand CmpRHS = pop();
+    profileArithRange(compareOpcode<Opr>(), CmpLHS, CmpRHS);
     Operand Result = Builder.template handleCompareOp<Opr>(CmpLHS, CmpRHS);
+    Result.setSource(Operand::SourceKind::COMPARE);
     push(Result);
   }
 
   template <BinaryOperator Opr> void handleBitwiseOp() {
     Operand LHS = pop();
     Operand RHS = pop();
+    profileArithRange(bitwiseOpcode<Opr>(), LHS, RHS);
     Operand Result = Builder.template handleBitwiseOp<Opr>(LHS, RHS);
+    // AND keeps its own source bucket (mask candidate); OR/XOR share BITWISE.
+    Result.setSource(Opr == BinaryOperator::BO_AND
+                         ? Operand::SourceKind::AND
+                         : Operand::SourceKind::BITWISE);
     push(Result);
   }
 
   void handleNot() {
     Operand Opnd = pop();
+    profileArithRangeUnary(static_cast<uint8_t>(OP_NOT), Opnd);
     Operand Result = Builder.handleNot(Opnd);
+    Result.setSource(Operand::SourceKind::BITWISE);
     push(Result);
   }
 
@@ -1838,15 +1902,41 @@ private:
   void handleByte() {
     Operand IndexOp = pop();
     Operand ValueOp = pop();
+    // Stream B schema: operand 0 = byte index, operand 1 = source value.
+    profileArithRange(static_cast<uint8_t>(OP_BYTE), IndexOp, ValueOp);
     Operand Result = Builder.handleByte(IndexOp, ValueOp);
+    Result.setSource(Operand::SourceKind::BITWISE);
     push(Result);
   }
 
   template <BinaryOperator Opr> void handleShift() {
     Operand ShiftOp = pop();
     Operand ValueOp = pop();
+    // Stream B schema: operand 0 = shift amount, operand 1 = shifted value.
+    profileArithRange(shiftOpcode<Opr>(), ShiftOp, ValueOp);
     Operand Result = Builder.template handleShift<Opr>(ShiftOp, ValueOp);
+    Result.setSource(Operand::SourceKind::SHIFT);
     push(Result);
+  }
+
+  // Map the template compare/bitwise/shift operators back to their EVM opcode
+  // bytes so the two streams join on the same opcode value.
+  template <CompareOperator Opr> static constexpr uint8_t compareOpcode() {
+    return Opr == CompareOperator::CO_LT     ? static_cast<uint8_t>(OP_LT)
+           : Opr == CompareOperator::CO_GT   ? static_cast<uint8_t>(OP_GT)
+           : Opr == CompareOperator::CO_LT_S ? static_cast<uint8_t>(OP_SLT)
+           : Opr == CompareOperator::CO_GT_S ? static_cast<uint8_t>(OP_SGT)
+                                             : static_cast<uint8_t>(OP_EQ);
+  }
+  template <BinaryOperator Opr> static constexpr uint8_t bitwiseOpcode() {
+    return Opr == BinaryOperator::BO_AND  ? static_cast<uint8_t>(OP_AND)
+           : Opr == BinaryOperator::BO_OR ? static_cast<uint8_t>(OP_OR)
+                                          : static_cast<uint8_t>(OP_XOR);
+  }
+  template <BinaryOperator Opr> static constexpr uint8_t shiftOpcode() {
+    return Opr == BinaryOperator::BO_SHL     ? static_cast<uint8_t>(OP_SHL)
+           : Opr == BinaryOperator::BO_SHR_U ? static_cast<uint8_t>(OP_SHR)
+                                             : static_cast<uint8_t>(OP_SAR);
   }
 
   void handlePush(uint8_t NumBytes) {
@@ -1980,6 +2070,7 @@ private:
     Operand StatusOp =
         (Builder.*handler)(GasOp, ToAddrOp, ValueOp, ArgsOffsetOp, ArgsSizeOp,
                            RetOffsetOp, RetSizeOp);
+    StatusOp.setSource(Operand::SourceKind::CALL_RET);
     push(StatusOp);
   }
 
@@ -1994,6 +2085,7 @@ private:
     Operand RetSizeOp = pop();
     Operand StatusOp = (Builder.*handler)(GasOp, ToAddrOp, ArgsOffsetOp,
                                           ArgsSizeOp, RetOffsetOp, RetSizeOp);
+    StatusOp.setSource(Operand::SourceKind::CALL_RET);
     push(StatusOp);
   }
 

@@ -98,9 +98,10 @@ inline void profileArithLimbs(EVMFrame *Frame, const intx::uint256 *const *Ops,
       (Frame->Msg.code != nullptr && Frame->Pc < Frame->Msg.code_size)
           ? Frame->Msg.code[Frame->Pc]
           : 0;
-  // Restrict Stream A to the arithmetic opcodes Stream B also reports, so the
-  // two CSVs join cleanly. The shared BinaryOpHandler/TernaryOpHandler also
-  // back comparison/bitwise ops, which are out of scope here.
+  // Restrict Stream A to the opcodes Stream B also reports, so the two CSVs
+  // join cleanly. Covers arithmetic, comparison, and bitwise/shift consumers.
+  // Unary consumers (ISZERO, NOT) and the hand-written BYTE/SAR/SIGNEXTEND/EXP
+  // handlers emit their own rows directly.
   switch (Opcode) {
   case OP_ADD:
   case OP_MUL:
@@ -111,15 +112,46 @@ inline void profileArithLimbs(EVMFrame *Frame, const intx::uint256 *const *Ops,
   case OP_SMOD:
   case OP_ADDMOD:
   case OP_MULMOD:
+  case OP_LT:
+  case OP_GT:
+  case OP_SLT:
+  case OP_SGT:
+  case OP_EQ:
+  case OP_AND:
+  case OP_OR:
+  case OP_XOR:
+  case OP_SHL:
+  case OP_SHR:
     break;
   default:
     return;
   }
   const uint64_t CodeHash = EVMResource::getCodeHash();
   for (uint32_t I = 0; I < NumOps; ++I) {
-    arith_profile::recordLimb(CodeHash, Frame->Pc, Opcode, I,
-                              arith_profile::limbWidth(*Ops[I]));
+    arith_profile::recordLimbValue(CodeHash, Frame->Pc, Opcode, I, *Ops[I]);
   }
+}
+
+// Stream A helper for single-operand consumers (ISZERO, NOT). Records the lone
+// operand at operand_index 0 so it joins Stream B's lhs_* slot. Dormant unless
+// ZEN_EVM_LIMB_PROFILE is set.
+inline void profileArithLimbsUnary(EVMFrame *Frame, const intx::uint256 &Op) {
+  if (!arith_profile::limbProfileEnabled()) {
+    return;
+  }
+  const uint8_t Opcode =
+      (Frame->Msg.code != nullptr && Frame->Pc < Frame->Msg.code_size)
+          ? Frame->Msg.code[Frame->Pc]
+          : 0;
+  switch (Opcode) {
+  case OP_ISZERO:
+  case OP_NOT:
+    break;
+  default:
+    return;
+  }
+  arith_profile::recordLimbValue(EVMResource::getCodeHash(), Frame->Pc, Opcode,
+                                 0, Op);
 }
 
 // CRTP Base class for all opcode handlers
@@ -158,6 +190,7 @@ public:
     EVM_STACK_CHECK(Frame, 1);
 
     auto &A = Frame->Stack[Frame->Sp - 1];
+    profileArithLimbsUnary(Frame, A);
     A = UnaryOp{}(A);
   }
   static uint64_t calculateGas();

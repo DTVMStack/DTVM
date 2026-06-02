@@ -163,7 +163,14 @@ public:
       MLOAD,
       CALL_RET,
       PRIOR_ARITH,
-      KECCAK
+      KECCAK,
+      // Appended for the extended dual-tap producer classification. Existing
+      // values above are kept in order so prior stream CSVs stay comparable.
+      AND,     // result of AND (mask candidate)
+      SHIFT,   // result of SHL/SHR/SAR
+      BITWISE, // result of OR/XOR/NOT/BYTE
+      COMPARE, // result of LT/GT/SLT/SGT/EQ/ISZERO (structurally 0/1)
+      ENV      // value-producing environment/context opcode
     };
 
     Operand() = default;

@@ -64,20 +64,22 @@ bool rangeProfileEnabled() {
 }
 
 void recordLimb(uint64_t CodeHash, uint64_t Pc, uint8_t Opcode,
-                uint32_t OperandIndex, uint32_t LimbWidth) {
+                uint32_t OperandIndex, uint32_t LimbWidth, uint32_t LimbMask) {
   if (!limbProfileEnabled()) {
     return;
   }
-  FILE *F = LimbSink.get("ZEN_EVM_LIMB_PROFILE", "/tmp/dtvm_limb_profile.csv",
-                         "codehash,pc,opcode,operand_index,limb_width\n");
+  FILE *F =
+      LimbSink.get("ZEN_EVM_LIMB_PROFILE", "/tmp/dtvm_limb_profile.csv",
+                   "codehash,pc,opcode,operand_index,limb_width,limb_mask\n");
   if (F == nullptr) {
     return;
   }
   std::lock_guard<std::mutex> Lock(LimbSink.Mtx);
-  std::fprintf(F, "%016llx,%llu,%u,%u,%u\n",
+  std::fprintf(F, "%016llx,%llu,%u,%u,%u,%u\n",
                static_cast<unsigned long long>(CodeHash),
                static_cast<unsigned long long>(Pc),
-               static_cast<unsigned>(Opcode), OperandIndex, LimbWidth);
+               static_cast<unsigned>(Opcode), OperandIndex, LimbWidth,
+               LimbMask);
 }
 
 void recordRange(uint64_t CodeHash, uint64_t Pc, uint8_t Opcode,

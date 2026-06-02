@@ -43,6 +43,10 @@ inline uint64_t fnv1aCodeHash(const uint8_t *Code, size_t CodeSize) {
 }
 
 // Number of significant 64-bit limbs of a uint256 (0 if zero, else 1..4).
+// This is the magnitude-collapsed metric: it reports only the highest set limb
+// position and therefore cannot distinguish a high-sparse value such as
+// {0,x,0,0} from a dense u128 {x,x,0,0} (both report width 2). Use limbMask()
+// for the full per-limb occupancy pattern.
 inline uint32_t limbWidth(const intx::uint256 &V) {
   if (V[3] != 0) {
     return 4;
@@ -59,15 +63,34 @@ inline uint32_t limbWidth(const intx::uint256 &V) {
   return 0;
 }
 
+// 4-bit limb-occupancy mask of a uint256 (little-endian limbs [V0,V1,V2,V3],
+// V0 = low 64 bits). Bit i is set iff limb Vi is non-zero, so the result is in
+// 0..15. Unlike limbWidth(), this preserves the full per-limb occupancy
+// pattern: {0,x,0,0} yields 0b0010 (mask 2) while {x,x,0,0} yields 0b0011
+// (mask 3), distinguishing high-sparse from dense operands.
+inline uint32_t limbMask(const intx::uint256 &V) {
+  return (V[0] != 0 ? 1u : 0u) | (V[1] != 0 ? 2u : 0u) | (V[2] != 0 ? 4u : 0u) |
+         (V[3] != 0 ? 8u : 0u);
+}
+
 // ---- Stream A: interpreter dynamic limb width ----
 
 // Returns true when ZEN_EVM_LIMB_PROFILE is set (cached after first call).
 bool limbProfileEnabled();
 
-// Append one CSV row: codehash,pc,opcode,operand_index,limb_width.
-// No-op unless limbProfileEnabled().
+// Append one CSV row: codehash,pc,opcode,operand_index,limb_width,limb_mask.
+// limb_width is the magnitude-collapsed highest-set-limb metric (0..4);
+// limb_mask is the full 4-bit per-limb occupancy pattern (0..15). No-op unless
+// limbProfileEnabled().
 void recordLimb(uint64_t CodeHash, uint64_t Pc, uint8_t Opcode,
-                uint32_t OperandIndex, uint32_t LimbWidth);
+                uint32_t OperandIndex, uint32_t LimbWidth, uint32_t LimbMask);
+
+// Convenience overload: derives both limb_width and limb_mask from the operand
+// value so call sites cannot let the two columns drift apart.
+inline void recordLimbValue(uint64_t CodeHash, uint64_t Pc, uint8_t Opcode,
+                            uint32_t OperandIndex, const intx::uint256 &V) {
+  recordLimb(CodeHash, Pc, Opcode, OperandIndex, limbWidth(V), limbMask(V));
+}
 
 // ---- Stream B: JIT static range + source kind ----
 

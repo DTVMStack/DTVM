@@ -121,6 +121,65 @@ class HeadroomJoinTest(unittest.TestCase):
         self.assertEqual(hj.opcode_name(0x0A), "EXP")
         self.assertEqual(hj.opcode_name(0xFF), "0xff")
 
+    def test_opcode_name_extended_consumers(self):
+        # Comparison, bitwise and shift consumers added by the extended taps.
+        self.assertEqual(hj.opcode_name(0x10), "LT")
+        self.assertEqual(hj.opcode_name(0x14), "EQ")
+        self.assertEqual(hj.opcode_name(0x15), "ISZERO")
+        self.assertEqual(hj.opcode_name(0x16), "AND")
+        self.assertEqual(hj.opcode_name(0x1A), "BYTE")
+        self.assertEqual(hj.opcode_name(0x1D), "SAR")
+
+    def test_unary_consumer_single_slot(self):
+        # ISZERO is unary: Stream A emits operand_index 0 only; Stream B carries
+        # the "NA" sentinel in the rhs slot. The join must yield exactly one
+        # slot and never surface the "NA" rhs source.
+        write_csv(
+            self.a,
+            "codehash,pc,opcode,operand_index,limb_width",
+            [
+                ("aa", 3, 0x15, 0, 1),
+                ("aa", 3, 0x15, 0, 4),
+            ],
+        )
+        write_csv(
+            self.b,
+            "codehash,pc,opcode,lhs_range,rhs_range,lhs_source,rhs_source",
+            [("aa", 3, 0x15, "U256", "NA", "SLOAD", "NA")],
+        )
+        a = hj.read_stream_a(self.a)
+        b = hj.read_stream_b(self.b)
+        table = hj.build_cross_table(a, b)
+        self.assertEqual(len(table), 1)
+        self.assertEqual(table[0]["operand_index"], 0)
+        self.assertEqual(table[0]["source_kind"], "SLOAD")
+        self.assertNotIn("NA", [r["source_kind"] for r in table])
+
+    def test_new_source_kinds_aggregate(self):
+        # The extended producer tags (ENV, AND, SHIFT, COMPARE) must survive the
+        # join and aggregate distinctly by source_kind.
+        write_csv(
+            self.a,
+            "codehash,pc,opcode,operand_index,limb_width",
+            [
+                ("bb", 1, 0x16, 0, 1),
+                ("bb", 1, 0x16, 1, 1),
+            ],
+        )
+        write_csv(
+            self.b,
+            "codehash,pc,opcode,lhs_range,rhs_range,lhs_source,rhs_source",
+            [("bb", 1, 0x16, "U64", "U256", "ENV", "AND")],
+        )
+        a = hj.read_stream_a(self.a)
+        b = hj.read_stream_b(self.b)
+        table = hj.build_cross_table(a, b)
+        by_src = {r["source_kind"]: r for r in hj.aggregate(table, "source_kind")}
+        self.assertIn("ENV", by_src)
+        self.assertIn("AND", by_src)
+        self.assertAlmostEqual(by_src["ENV"]["analyzer_proved_u64_rate"], 1.0)
+        self.assertAlmostEqual(by_src["AND"]["analyzer_proved_u64_rate"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

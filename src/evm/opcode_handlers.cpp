@@ -324,12 +324,10 @@ void SignExtendHandler::doExecute() {
   EVM_STACK_CHECK(Frame, 2);
   if (arith_profile::limbProfileEnabled()) {
     const uint64_t CodeHash = EVMResource::getCodeHash();
-    arith_profile::recordLimb(
-        CodeHash, Frame->Pc, OP_SIGNEXTEND, 0,
-        arith_profile::limbWidth(Frame->Stack[Frame->Sp - 1]));
-    arith_profile::recordLimb(
-        CodeHash, Frame->Pc, OP_SIGNEXTEND, 1,
-        arith_profile::limbWidth(Frame->Stack[Frame->Sp - 2]));
+    arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_SIGNEXTEND, 0,
+                                   Frame->Stack[Frame->Sp - 1]);
+    arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_SIGNEXTEND, 1,
+                                   Frame->Stack[Frame->Sp - 2]);
   }
   intx::uint256 I = Frame->pop();
   intx::uint256 V = Frame->pop();
@@ -360,6 +358,13 @@ void ByteHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
+  if (arith_profile::limbProfileEnabled()) {
+    const uint64_t CodeHash = EVMResource::getCodeHash();
+    arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_BYTE, 0,
+                                   Frame->Stack[Frame->Sp - 1]);
+    arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_BYTE, 1,
+                                   Frame->Stack[Frame->Sp - 2]);
+  }
   intx::uint256 I = Frame->pop();
   intx::uint256 Val = Frame->pop();
 
@@ -375,6 +380,13 @@ void SarHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
+  if (arith_profile::limbProfileEnabled()) {
+    const uint64_t CodeHash = EVMResource::getCodeHash();
+    arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_SAR, 0,
+                                   Frame->Stack[Frame->Sp - 1]);
+    arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_SAR, 1,
+                                   Frame->Stack[Frame->Sp - 2]);
+  }
   intx::uint256 Shift = Frame->pop();
   intx::uint256 Value = Frame->pop();
 
@@ -404,10 +416,8 @@ void ExpHandler::doExecute() {
   auto &B = Frame->Stack[Frame->Sp - 2];
   if (arith_profile::limbProfileEnabled()) {
     const uint64_t CodeHash = EVMResource::getCodeHash();
-    arith_profile::recordLimb(CodeHash, Frame->Pc, OP_EXP, 0,
-                              arith_profile::limbWidth(A));
-    arith_profile::recordLimb(CodeHash, Frame->Pc, OP_EXP, 1,
-                              arith_profile::limbWidth(B));
+    arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_EXP, 0, A);
+    arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_EXP, 1, B);
   }
   uint64_t BytesNum = intx::count_significant_bytes(B);
   uint64_t ByteGas = currentRevision() < EVMC_SPURIOUS_DRAGON

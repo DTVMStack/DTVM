@@ -45,6 +45,20 @@ OPCODE_NAMES = {
     0x09: "MULMOD",
     0x0A: "EXP",
     0x0B: "SIGNEXTEND",
+    0x10: "LT",
+    0x11: "GT",
+    0x12: "SLT",
+    0x13: "SGT",
+    0x14: "EQ",
+    0x15: "ISZERO",
+    0x16: "AND",
+    0x17: "OR",
+    0x18: "XOR",
+    0x19: "NOT",
+    0x1A: "BYTE",
+    0x1B: "SHL",
+    0x1C: "SHR",
+    0x1D: "SAR",
 }
 
 
