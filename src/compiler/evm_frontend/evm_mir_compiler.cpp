@@ -1865,6 +1865,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDivModGeneral(
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
                                                          Operand MultiplierOp) {
+  resetLoweringPath();
   // Phase 0: Constant folding
   if (MultiplicandOp.isConstant() && MultiplierOp.isConstant()) {
     intx::uint256 A = u256ValueToIntx(MultiplicandOp.getConstValue());
@@ -1899,6 +1900,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     ++MemStats.MulFastRangeU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    setLoweringPath(LoweringPath::NARROW_U128);
     return Operand(Result, EVMType::UINT256, ValueRange::U128);
   }
 
@@ -1906,6 +1908,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
   bool AIsU64 = MultiplicandOp.isConstU64();
   bool BIsU64 = MultiplierOp.isConstU64();
   if (AIsU64 || BIsU64) {
+    setLoweringPath(LoweringPath::CONST_U64);
     const Operand &U256Op = AIsU64 ? MultiplierOp : MultiplicandOp;
     const Operand &U64Op = AIsU64 ? MultiplicandOp : MultiplierOp;
 
@@ -2008,6 +2011,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
                                                          Operand DivisorOp) {
+  resetLoweringPath();
   if (DividendOp.isConstant() && DivisorOp.isConstant()) {
     intx::uint256 D = u256ValueToIntx(DivisorOp.getConstValue());
     if (D == 0)
@@ -2027,7 +2031,11 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
         ++ShiftAmt;
       }
       Operand ShiftOp(U256Value{ShiftAmt, 0, 0, 0});
-      return handleShift<BinaryOperator::BO_SHR_U>(ShiftOp, DividendOp);
+      Operand R = handleShift<BinaryOperator::BO_SHR_U>(ShiftOp, DividendOp);
+      // Const power-of-two divisor strength-reduced to a shift: count as a
+      // const-specialized fast path (override the path set by handleShift).
+      setLoweringPath(LoweringPath::CONST_U64);
+      return R;
     }
   }
 
@@ -2056,6 +2064,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     ++MemStats.DivFastRangeU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    setLoweringPath(LoweringPath::NARROW_U64);
     return Operand(Result, EVMType::UINT256, ValueRange::U64);
   }
 
@@ -2063,6 +2072,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
   if (DivisorOp.isConstU64()) {
     uint64_t D = DivisorOp.getConstValue()[0];
     if (D != 0) {
+      setLoweringPath(LoweringPath::CONST_U64);
       if (!DividendOp.isConstant()) {
         U256Inst A = extractU256Operand(DividendOp);
         MType *I64Type = &Ctx.I64Type;
@@ -2138,6 +2148,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     ++MemStats.DivFastConstU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    setLoweringPath(LoweringPath::CONST_U64);
     return handleDivU64Dividend(A, DivisorOp);
   }
 
@@ -2157,6 +2168,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleSDiv(Operand DividendOp,
                                                           Operand DivisorOp) {
+  resetLoweringPath();
   if (DividendOp.isConstant() && DivisorOp.isConstant()) {
     intx::uint256 D = u256ValueToIntx(DivisorOp.getConstValue());
     if (D == 0)
@@ -2196,11 +2208,15 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleSDiv(Operand DividendOp,
         FinalInst[I] = createInstruction<SelectInstruction>(
             false, I64Type, SignBit, NRes[I], URes[I]);
       }
+      // Const u64 divisor specialization (overrides paths set by the
+      // handleNot / handleAddU64Const / handleDivU64Divisor helpers above).
+      setLoweringPath(LoweringPath::CONST_U64);
       return Operand(FinalInst, EVMType::UINT256);
     }
   }
 
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  resetLoweringPath();
   return callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
                         const intx::uint256 &>(RuntimeFunctions.GetSDiv,
                                                DividendOp, DivisorOp);
@@ -2208,6 +2224,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleSDiv(Operand DividendOp,
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
                                                          Operand DivisorOp) {
+  resetLoweringPath();
   if (DividendOp.isConstant() && DivisorOp.isConstant()) {
     intx::uint256 D = u256ValueToIntx(DivisorOp.getConstValue());
     if (D == 0)
@@ -2221,7 +2238,11 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
     intx::uint256 D = u256ValueToIntx(DivisorOp.getConstValue());
     if (D != 0 && (D & (D - 1)) == 0) {
       Operand MaskOp(intxToU256Value(D - 1));
-      return handleBitwiseOp<BinaryOperator::BO_AND>(DividendOp, MaskOp);
+      Operand R = handleBitwiseOp<BinaryOperator::BO_AND>(DividendOp, MaskOp);
+      // Const power-of-two modulus strength-reduced to AND mask: const fast
+      // path (override the path set by handleBitwiseOp).
+      setLoweringPath(LoweringPath::CONST_U64);
+      return R;
     }
   }
 
@@ -2249,6 +2270,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     ++MemStats.ModFastRangeU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    setLoweringPath(LoweringPath::NARROW_U64);
     return Operand(Result, EVMType::UINT256, ValueRange::U64);
   }
 
@@ -2259,6 +2281,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
       ++MemStats.ModFastConstU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+      setLoweringPath(LoweringPath::CONST_U64);
       return handleModU64Divisor(DividendOp, D);
     }
   }
@@ -2269,6 +2292,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     ++MemStats.ModFastConstU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+    setLoweringPath(LoweringPath::CONST_U64);
     return handleModU64Dividend(A, DivisorOp);
   }
 
@@ -2288,6 +2312,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleSMod(Operand DividendOp,
                                                           Operand DivisorOp) {
+  resetLoweringPath();
   if (DividendOp.isConstant() && DivisorOp.isConstant()) {
     intx::uint256 D = u256ValueToIntx(DivisorOp.getConstValue());
     if (D == 0)
@@ -2327,11 +2352,15 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleSMod(Operand DividendOp,
         FinalInst[I] = createInstruction<SelectInstruction>(
             false, I64Type, SignBit, NRes[I], URes[I]);
       }
+      // Const u64 divisor specialization (overrides paths set by the
+      // handleNot / handleAddU64Const / handleModU64Divisor helpers above).
+      setLoweringPath(LoweringPath::CONST_U64);
       return Operand(FinalInst, EVMType::UINT256);
     }
   }
 
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
+  resetLoweringPath();
   return callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
                         const intx::uint256 &>(RuntimeFunctions.GetSMod,
                                                DividendOp, DivisorOp);
@@ -2340,6 +2369,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleSMod(Operand DividendOp,
 typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
                                                             Operand AddendOp,
                                                             Operand ModulusOp) {
+  resetLoweringPath();
+  // ADDMOD has no static range/const path: the inline impl emits a runtime
+  // fast/slow branch, so every compiled site is recorded as FULL.
   if (AugendOp.isConstant() && AddendOp.isConstant() &&
       ModulusOp.isConstant()) {
     intx::uint256 M = u256ValueToIntx(ModulusOp.getConstValue());
@@ -2522,12 +2554,17 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
 
   // === After block: load result ===
   setInsertBlock(AfterBB);
+  // The nested handleBinaryArithmetic calls above mutate LastLoweringPath;
+  // restore FULL so the profiler attributes this ADDMOD site correctly.
+  setLoweringPath(LoweringPath::FULL);
   return Operand(loadResult(), EVMType::UINT256);
 }
 
 typename EVMMirBuilder::Operand
 EVMMirBuilder::handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
                             Operand ModulusOp) {
+  resetLoweringPath();
+  // MULMOD has no static range/const path: every compiled site is FULL.
   if (MultiplicandOp.isConstant() && MultiplierOp.isConstant() &&
       ModulusOp.isConstant()) {
     intx::uint256 M = u256ValueToIntx(ModulusOp.getConstValue());
@@ -2955,6 +2992,8 @@ EVMMirBuilder::handleCompareGT_LT(const U256Inst &LHS, const U256Inst &RHS,
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
+  resetLoweringPath();
+  // NOT has no narrow/const fast path: deferred or full 4-limb. Always FULL.
   // Phase 0: Constant folding
   if (LHSOp.isConstant()) {
     const auto &V = LHSOp.getConstValue();
@@ -3849,6 +3888,7 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
 // (value >> (8 × (31 - index))) & 0xFF
 typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
                                                           Operand ValueOp) {
+  resetLoweringPath();
   MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
@@ -3902,6 +3942,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
     uint64_t Index = IndexConst[0];
     size_t ComponentIndex = 3 - static_cast<size_t>(Index >> 3);
     uint64_t BitOffset = (7 - (Index & 7)) << 3;
+    // Const byte index: single-limb select fast path.
+    setLoweringPath(LoweringPath::CONST_U64);
     return buildByteResult(ValueComponents[ComponentIndex],
                            createIntConstInstruction(MirI64Type, BitOffset));
   }

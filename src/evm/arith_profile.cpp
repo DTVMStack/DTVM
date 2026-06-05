@@ -84,22 +84,23 @@ void recordLimb(uint64_t CodeHash, uint64_t Pc, uint8_t Opcode,
 
 void recordRange(uint64_t CodeHash, uint64_t Pc, uint8_t Opcode,
                  const char *LhsRange, const char *RhsRange,
-                 const char *LhsSource, const char *RhsSource) {
+                 const char *LhsSource, const char *RhsSource,
+                 const char *Path) {
   if (!rangeProfileEnabled()) {
     return;
   }
   FILE *F = RangeSink.get(
       "ZEN_EVM_RANGE_PROFILE", "/tmp/dtvm_range_profile.csv",
-      "codehash,pc,opcode,lhs_range,rhs_range,lhs_source,rhs_source\n");
+      "codehash,pc,opcode,lhs_range,rhs_range,lhs_source,rhs_source,path\n");
   if (F == nullptr) {
     return;
   }
   std::lock_guard<std::mutex> Lock(RangeSink.Mtx);
-  std::fprintf(F, "%016llx,%llu,%u,%s,%s,%s,%s\n",
+  std::fprintf(F, "%016llx,%llu,%u,%s,%s,%s,%s,%s\n",
                static_cast<unsigned long long>(CodeHash),
                static_cast<unsigned long long>(Pc),
                static_cast<unsigned>(Opcode), LhsRange, RhsRange, LhsSource,
-               RhsSource);
+               RhsSource, Path);
 }
 
 } // namespace zen::evm::arith_profile

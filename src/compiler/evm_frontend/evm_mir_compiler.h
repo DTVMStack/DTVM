@@ -140,6 +140,21 @@ public:
   // single-instruction fast paths instead of expensive multi-limb arithmetic.
   using ValueRange = EVMValueRange;
 
+  // Which lowering path an arithmetic/compare/bitwise handler actually
+  // committed to. Used only by the env-gated path profiler
+  // (ZEN_EVM_RANGE_PROFILE); set at the point a handler picks a path and read
+  // back by the visitor after the handler returns. Has no effect on codegen.
+  enum class LoweringPath : uint8_t {
+    FULL = 0,    // full 4-limb / 256-bit path (no fast path)
+    CONST_U64,   // const-specialized u64 fast path
+    NARROW_U64,  // both-operands-fit-u64 narrow fast path
+    NARROW_U128, // u128 fast path (e.g. MUL bothFitU64 -> u128, ADD -> u128)
+  };
+
+  void resetLoweringPath() { LastLoweringPath = LoweringPath::FULL; }
+  void setLoweringPath(LoweringPath P) { LastLoweringPath = P; }
+  LoweringPath getLoweringPath() const { return LastLoweringPath; }
+
   EVMMirBuilder(CompilerContext &Context, MFunction &MFunc);
 
   class Operand {
@@ -378,6 +393,7 @@ public:
 
   template <BinaryOperator Operator>
   Operand handleBinaryArithmetic(const Operand &LHSOp, const Operand &RHSOp) {
+    resetLoweringPath();
     // Phase 0: Constant folding
     if (LHSOp.isConstant() && RHSOp.isConstant()) {
       intx::uint256 L = u256ValueToIntx(LHSOp.getConstValue());
@@ -430,6 +446,7 @@ public:
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
         ++MemStats.AddFastRangeU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+        setLoweringPath(LoweringPath::NARROW_U128);
         return Operand(Result, EVMType::UINT256, ValueRange::U128);
       }
     }
@@ -445,6 +462,7 @@ public:
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
         ++MemStats.AddFastConstU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+        setLoweringPath(LoweringPath::CONST_U64);
         return handleAddU64Const(FullOp, U64Op);
       }
     }
@@ -455,6 +473,7 @@ public:
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
         ++MemStats.SubFastConstU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+        setLoweringPath(LoweringPath::CONST_U64);
         return handleSubU64Const(LHSOp, RHSOp);
       }
     }
@@ -540,6 +559,7 @@ public:
   Operand handleExp(Operand BaseOp, Operand ExponentOp);
   template <CompareOperator Operator>
   Operand handleCompareOp(Operand LHSOp, Operand RHSOp) {
+    resetLoweringPath();
     // Phase 0: Constant folding
     if constexpr (Operator == CompareOperator::CO_EQZ) {
       if (LHSOp.isConstant()) {
@@ -592,6 +612,7 @@ public:
       if (LHSOp.isConstU64() || RHSOp.isConstU64()) {
         const Operand &U64Op = LHSOp.isConstU64() ? LHSOp : RHSOp;
         const Operand &OtherOp = LHSOp.isConstU64() ? RHSOp : LHSOp;
+        setLoweringPath(LoweringPath::CONST_U64);
         return handleCompareEqU64(OtherOp, U64Op.getConstValue()[0]);
       }
     }
@@ -599,17 +620,21 @@ public:
     // Phase 3: u64 fast path for unsigned LT/GT
     if constexpr (Operator == CompareOperator::CO_LT) {
       if (RHSOp.isConstU64()) {
+        setLoweringPath(LoweringPath::CONST_U64);
         return handleCompareLtRhsU64(LHSOp, RHSOp.getConstValue()[0]);
       }
       if (LHSOp.isConstU64()) {
+        setLoweringPath(LoweringPath::CONST_U64);
         return handleCompareGtRhsU64(RHSOp, LHSOp.getConstValue()[0]);
       }
     }
     if constexpr (Operator == CompareOperator::CO_GT) {
       if (RHSOp.isConstU64()) {
+        setLoweringPath(LoweringPath::CONST_U64);
         return handleCompareGtRhsU64(LHSOp, RHSOp.getConstValue()[0]);
       }
       if (LHSOp.isConstU64()) {
+        setLoweringPath(LoweringPath::CONST_U64);
         return handleCompareLtRhsU64(RHSOp, LHSOp.getConstValue()[0]);
       }
     }
@@ -622,6 +647,7 @@ public:
   // EVM bitwise opcode: and, or, xor
   template <BinaryOperator Operator>
   Operand handleBitwiseOp(const Operand &LHSOp, const Operand &RHSOp) {
+    resetLoweringPath();
     // Phase 0: Constant folding
     if (LHSOp.isConstant() && RHSOp.isConstant()) {
       const auto &L = LHSOp.getConstValue();
@@ -680,6 +706,7 @@ public:
         for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
           Result[I] = Zero;
         }
+        setLoweringPath(LoweringPath::CONST_U64);
         return Operand(Result, EVMType::UINT256, ValueRange::U64);
       }
 
@@ -706,6 +733,9 @@ public:
                 MirI64Type);
           }
         }
+        setLoweringPath(NarrowRange == ValueRange::U64
+                            ? LoweringPath::NARROW_U64
+                            : LoweringPath::NARROW_U128);
         return Operand(Result, EVMType::UINT256, NarrowRange);
       }
     }
@@ -732,6 +762,7 @@ public:
         // OR/XOR with a u64 constant: limbs[1..3] pass through as the same
         // MInstruction pointers from OtherOp, so the value range of those
         // limbs is preserved exactly. max(U64, OtherOp.range) = OtherOp.range.
+        setLoweringPath(LoweringPath::CONST_U64);
         return Operand(Result, EVMType::UINT256, OtherOp.getRange());
       }
     }
@@ -765,6 +796,7 @@ public:
 
   template <BinaryOperator Operator>
   Operand handleShift(Operand ShiftOp, Operand ValueOp) {
+    resetLoweringPath();
     // Phase 0: Constant folding
     if (ShiftOp.isConstant() && ValueOp.isConstant()) {
       intx::uint256 ShiftVal = u256ValueToIntx(ShiftOp.getConstValue());
@@ -1195,6 +1227,10 @@ private:
   MBasicBlock *ExceptionReturnBB = nullptr;
   const evmc_instruction_metrics *InstructionMetrics = nullptr;
   const char *const *InstructionNames = nullptr;
+
+  // Last lowering path committed by an arithmetic/compare/bitwise handler.
+  // Profiler-only state (ZEN_EVM_RANGE_PROFILE); never affects codegen.
+  LoweringPath LastLoweringPath = LoweringPath::FULL;
 
   // Jump table for dynamic jumps
   bool HasIndirectJump = false;

@@ -1733,30 +1733,49 @@ private:
     return "OTHER";
   }
 
+  // Textual name of the lowering path the builder committed to for the site
+  // just lowered. Used for the Stream B `path` column.
+  static const char *pathName(typename IRBuilder::LoweringPath P) {
+    switch (P) {
+    case IRBuilder::LoweringPath::FULL:
+      return "FULL";
+    case IRBuilder::LoweringPath::CONST_U64:
+      return "CONST_U64";
+    case IRBuilder::LoweringPath::NARROW_U64:
+      return "NARROW_U64";
+    case IRBuilder::LoweringPath::NARROW_U128:
+      return "NARROW_U128";
+    }
+    return "FULL";
+  }
+
   // Emit one Stream B CSV row for a two-operand arithmetic site. PC is the
   // byte offset of the opcode currently being lowered (set ungated in the
-  // decode loop). Dormant unless ZEN_EVM_RANGE_PROFILE is set.
-  void profileArithRange(uint8_t Opcode, const Operand &LHS,
-                         const Operand &RHS) {
+  // decode loop). The path argument is the lowering path the builder actually
+  // emitted, read back after the handler returned. Dormant unless
+  // ZEN_EVM_RANGE_PROFILE is set.
+  void profileArithRange(uint8_t Opcode, const Operand &LHS, const Operand &RHS,
+                         typename IRBuilder::LoweringPath Path) {
     if (!zen::evm::arith_profile::rangeProfileEnabled()) {
       return;
     }
     zen::evm::arith_profile::recordRange(
         ProfileCodeHash, PC, Opcode, rangeName(LHS.getRange()),
         rangeName(RHS.getRange()), sourceName(LHS.getSource()),
-        sourceName(RHS.getSource()));
+        sourceName(RHS.getSource()), pathName(Path));
   }
 
   // Emit one Stream B CSV row for a single-operand site. The lone operand
   // occupies the lhs_* columns; rhs_* carry the sentinel "NA" so the schema is
   // unchanged. Dormant unless ZEN_EVM_RANGE_PROFILE is set.
-  void profileArithRangeUnary(uint8_t Opcode, const Operand &Opnd) {
+  void profileArithRangeUnary(uint8_t Opcode, const Operand &Opnd,
+                              typename IRBuilder::LoweringPath Path) {
     if (!zen::evm::arith_profile::rangeProfileEnabled()) {
       return;
     }
-    zen::evm::arith_profile::recordRange(ProfileCodeHash, PC, Opcode,
-                                         rangeName(Opnd.getRange()), "NA",
-                                         sourceName(Opnd.getSource()), "NA");
+    zen::evm::arith_profile::recordRange(
+        ProfileCodeHash, PC, Opcode, rangeName(Opnd.getRange()), "NA",
+        sourceName(Opnd.getSource()), "NA", pathName(Path));
   }
 
   template <BinaryOperator Opr> void handleBinaryArithmetic() {
@@ -1766,8 +1785,8 @@ private:
     constexpr uint8_t Opcode = (Opr == BinaryOperator::BO_ADD)
                                    ? static_cast<uint8_t>(OP_ADD)
                                    : static_cast<uint8_t>(OP_SUB);
-    profileArithRange(Opcode, LHS, RHS);
     Operand Result = Builder.template handleBinaryArithmetic<Opr>(LHS, RHS);
+    profileArithRange(Opcode, LHS, RHS, Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
@@ -1775,9 +1794,9 @@ private:
   void handleMul() {
     Operand MultiplicandOp = pop();
     Operand MultiplierOp = pop();
-    profileArithRange(static_cast<uint8_t>(OP_MUL), MultiplicandOp,
-                      MultiplierOp);
     Operand Result = Builder.handleMul(MultiplicandOp, MultiplierOp);
+    profileArithRange(static_cast<uint8_t>(OP_MUL), MultiplicandOp,
+                      MultiplierOp, Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
@@ -1785,8 +1804,9 @@ private:
   void handleDiv() {
     Operand DividendOp = pop();
     Operand DivisorOp = pop();
-    profileArithRange(static_cast<uint8_t>(OP_DIV), DividendOp, DivisorOp);
     Operand Result = Builder.handleDiv(DividendOp, DivisorOp);
+    profileArithRange(static_cast<uint8_t>(OP_DIV), DividendOp, DivisorOp,
+                      Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
@@ -1794,8 +1814,9 @@ private:
   void handleSDiv() {
     Operand DividendOp = pop();
     Operand DivisorOp = pop();
-    profileArithRange(static_cast<uint8_t>(OP_SDIV), DividendOp, DivisorOp);
     Operand Result = Builder.handleSDiv(DividendOp, DivisorOp);
+    profileArithRange(static_cast<uint8_t>(OP_SDIV), DividendOp, DivisorOp,
+                      Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
@@ -1803,8 +1824,9 @@ private:
   void handleMod() {
     Operand DividendOp = pop();
     Operand DivisorOp = pop();
-    profileArithRange(static_cast<uint8_t>(OP_MOD), DividendOp, DivisorOp);
     Operand Result = Builder.handleMod(DividendOp, DivisorOp);
+    profileArithRange(static_cast<uint8_t>(OP_MOD), DividendOp, DivisorOp,
+                      Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
@@ -1812,8 +1834,9 @@ private:
   void handleSMod() {
     Operand DividendOp = pop();
     Operand DivisorOp = pop();
-    profileArithRange(static_cast<uint8_t>(OP_SMOD), DividendOp, DivisorOp);
     Operand Result = Builder.handleSMod(DividendOp, DivisorOp);
+    profileArithRange(static_cast<uint8_t>(OP_SMOD), DividendOp, DivisorOp,
+                      Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
@@ -1822,9 +1845,10 @@ private:
     Operand AugendOp = pop();
     Operand AddendOp = pop();
     Operand ModulusOp = pop();
-    // Two-operand Stream B schema: record the two addends.
-    profileArithRange(static_cast<uint8_t>(OP_ADDMOD), AugendOp, AddendOp);
     Operand Result = Builder.handleAddMod(AugendOp, AddendOp, ModulusOp);
+    // Two-operand Stream B schema: record the two addends.
+    profileArithRange(static_cast<uint8_t>(OP_ADDMOD), AugendOp, AddendOp,
+                      Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
@@ -1833,11 +1857,11 @@ private:
     Operand MultiplicandOp = pop();
     Operand MultiplierOp = pop();
     Operand ModulusOp = pop();
-    // Two-operand Stream B schema: record the two factors.
-    profileArithRange(static_cast<uint8_t>(OP_MULMOD), MultiplicandOp,
-                      MultiplierOp);
     Operand Result =
         Builder.handleMulMod(MultiplicandOp, MultiplierOp, ModulusOp);
+    // Two-operand Stream B schema: record the two factors.
+    profileArithRange(static_cast<uint8_t>(OP_MULMOD), MultiplicandOp,
+                      MultiplierOp, Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::PRIOR_ARITH);
     push(Result);
   }
@@ -1853,15 +1877,17 @@ private:
     Operand CmpLHS = pop();
     if (Opr == CompareOperator::CO_EQZ) {
       // ISZERO is unary; record its single operand and tag the boolean result.
-      profileArithRangeUnary(static_cast<uint8_t>(OP_ISZERO), CmpLHS);
       Operand Result = Builder.template handleCompareOp<Opr>(CmpLHS, Operand());
+      profileArithRangeUnary(static_cast<uint8_t>(OP_ISZERO), CmpLHS,
+                             Builder.getLoweringPath());
       Result.setSource(Operand::SourceKind::COMPARE);
       push(Result);
       return;
     }
     Operand CmpRHS = pop();
-    profileArithRange(compareOpcode<Opr>(), CmpLHS, CmpRHS);
     Operand Result = Builder.template handleCompareOp<Opr>(CmpLHS, CmpRHS);
+    profileArithRange(compareOpcode<Opr>(), CmpLHS, CmpRHS,
+                      Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::COMPARE);
     push(Result);
   }
@@ -1869,8 +1895,9 @@ private:
   template <BinaryOperator Opr> void handleBitwiseOp() {
     Operand LHS = pop();
     Operand RHS = pop();
-    profileArithRange(bitwiseOpcode<Opr>(), LHS, RHS);
     Operand Result = Builder.template handleBitwiseOp<Opr>(LHS, RHS);
+    profileArithRange(bitwiseOpcode<Opr>(), LHS, RHS,
+                      Builder.getLoweringPath());
     // AND keeps its own source bucket (mask candidate); OR/XOR share BITWISE.
     Result.setSource(Opr == BinaryOperator::BO_AND
                          ? Operand::SourceKind::AND
@@ -1880,8 +1907,9 @@ private:
 
   void handleNot() {
     Operand Opnd = pop();
-    profileArithRangeUnary(static_cast<uint8_t>(OP_NOT), Opnd);
     Operand Result = Builder.handleNot(Opnd);
+    profileArithRangeUnary(static_cast<uint8_t>(OP_NOT), Opnd,
+                           Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::BITWISE);
     push(Result);
   }
@@ -1902,9 +1930,10 @@ private:
   void handleByte() {
     Operand IndexOp = pop();
     Operand ValueOp = pop();
-    // Stream B schema: operand 0 = byte index, operand 1 = source value.
-    profileArithRange(static_cast<uint8_t>(OP_BYTE), IndexOp, ValueOp);
     Operand Result = Builder.handleByte(IndexOp, ValueOp);
+    // Stream B schema: operand 0 = byte index, operand 1 = source value.
+    profileArithRange(static_cast<uint8_t>(OP_BYTE), IndexOp, ValueOp,
+                      Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::BITWISE);
     push(Result);
   }
@@ -1912,9 +1941,10 @@ private:
   template <BinaryOperator Opr> void handleShift() {
     Operand ShiftOp = pop();
     Operand ValueOp = pop();
-    // Stream B schema: operand 0 = shift amount, operand 1 = shifted value.
-    profileArithRange(shiftOpcode<Opr>(), ShiftOp, ValueOp);
     Operand Result = Builder.template handleShift<Opr>(ShiftOp, ValueOp);
+    // Stream B schema: operand 0 = shift amount, operand 1 = shifted value.
+    profileArithRange(shiftOpcode<Opr>(), ShiftOp, ValueOp,
+                      Builder.getLoweringPath());
     Result.setSource(Operand::SourceKind::SHIFT);
     push(Result);
   }
