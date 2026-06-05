@@ -98,15 +98,17 @@ inline void recordLimbValue(uint64_t CodeHash, uint64_t Pc, uint8_t Opcode,
 bool rangeProfileEnabled();
 
 // Append one CSV row:
-//   codehash,pc,opcode,lhs_range,rhs_range,lhs_source,rhs_source,path
+//   codehash,pc,opcode,lhs_range,rhs_range,lhs_source,rhs_source,path,
+//   lhs_const,rhs_const
 // Range/source/path values are textual enum names. The path column records
 // which lowering path the JIT handler actually emitted for the site (e.g.
-// FULL / CONST_U64 / NARROW_U64 / NARROW_U128). No-op unless
-// rangeProfileEnabled().
+// FULL / CONST_U64 / NARROW_U64 / NARROW_U128 / FOLDED). lhs_const/rhs_const
+// are 1 when that operand is a compile-time constant (Operand::isConstant()),
+// else 0. No-op unless rangeProfileEnabled().
 void recordRange(uint64_t CodeHash, uint64_t Pc, uint8_t Opcode,
                  const char *LhsRange, const char *RhsRange,
-                 const char *LhsSource, const char *RhsSource,
-                 const char *Path);
+                 const char *LhsSource, const char *RhsSource, const char *Path,
+                 int LhsConst, int RhsConst);
 
 } // namespace zen::evm::arith_profile
 

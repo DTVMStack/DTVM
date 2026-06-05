@@ -84,23 +84,24 @@ void recordLimb(uint64_t CodeHash, uint64_t Pc, uint8_t Opcode,
 
 void recordRange(uint64_t CodeHash, uint64_t Pc, uint8_t Opcode,
                  const char *LhsRange, const char *RhsRange,
-                 const char *LhsSource, const char *RhsSource,
-                 const char *Path) {
+                 const char *LhsSource, const char *RhsSource, const char *Path,
+                 int LhsConst, int RhsConst) {
   if (!rangeProfileEnabled()) {
     return;
   }
-  FILE *F = RangeSink.get(
-      "ZEN_EVM_RANGE_PROFILE", "/tmp/dtvm_range_profile.csv",
-      "codehash,pc,opcode,lhs_range,rhs_range,lhs_source,rhs_source,path\n");
+  FILE *F =
+      RangeSink.get("ZEN_EVM_RANGE_PROFILE", "/tmp/dtvm_range_profile.csv",
+                    "codehash,pc,opcode,lhs_range,rhs_range,lhs_source,"
+                    "rhs_source,path,lhs_const,rhs_const\n");
   if (F == nullptr) {
     return;
   }
   std::lock_guard<std::mutex> Lock(RangeSink.Mtx);
-  std::fprintf(F, "%016llx,%llu,%u,%s,%s,%s,%s,%s\n",
+  std::fprintf(F, "%016llx,%llu,%u,%s,%s,%s,%s,%s,%d,%d\n",
                static_cast<unsigned long long>(CodeHash),
                static_cast<unsigned long long>(Pc),
                static_cast<unsigned>(Opcode), LhsRange, RhsRange, LhsSource,
-               RhsSource, Path);
+               RhsSource, Path, LhsConst, RhsConst);
 }
 
 } // namespace zen::evm::arith_profile

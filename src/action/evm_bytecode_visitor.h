@@ -1764,7 +1764,8 @@ private:
     zen::evm::arith_profile::recordRange(
         ProfileCodeHash, PC, Opcode, rangeName(LHS.getRange()),
         rangeName(RHS.getRange()), sourceName(LHS.getSource()),
-        sourceName(RHS.getSource()), pathName(Path));
+        sourceName(RHS.getSource()), pathName(Path), LHS.isConstant() ? 1 : 0,
+        RHS.isConstant() ? 1 : 0);
   }
 
   // Emit one Stream B CSV row for a single-operand site. The lone operand
@@ -1777,7 +1778,8 @@ private:
     }
     zen::evm::arith_profile::recordRange(
         ProfileCodeHash, PC, Opcode, rangeName(Opnd.getRange()), "NA",
-        sourceName(Opnd.getSource()), "NA", pathName(Path));
+        sourceName(Opnd.getSource()), "NA", pathName(Path),
+        Opnd.isConstant() ? 1 : 0, 0);
   }
 
   template <BinaryOperator Opr> void handleBinaryArithmetic() {
