@@ -1745,6 +1745,8 @@ private:
       return "NARROW_U64";
     case IRBuilder::LoweringPath::NARROW_U128:
       return "NARROW_U128";
+    case IRBuilder::LoweringPath::FOLDED:
+      return "FOLDED";
     }
     return "FULL";
   }

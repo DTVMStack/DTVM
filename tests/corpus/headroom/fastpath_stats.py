@@ -69,7 +69,7 @@ OPCODE_NAMES = {
 
 # Path enum names, in report column order. Must match the C++ LoweringPath enum
 # names emitted by the visitor's pathName().
-PATHS = ["CONST_U64", "NARROW_U64", "NARROW_U128", "FULL"]
+PATHS = ["FOLDED", "CONST_U64", "NARROW_U64", "NARROW_U128", "FULL"]
 FAST_PATHS = ["CONST_U64", "NARROW_U64", "NARROW_U128"]
 
 STREAM_B_FIELDS = 8  # codehash,pc,opcode,lhs_range,rhs_range,lhs_source,rhs_source,path
@@ -193,8 +193,11 @@ def render_markdown(site_stats, exec_stats, unmatched_sites,
     L.append("")
     L.append(
         "Fast-path hit rate = fraction of sites (or executions) whose path is "
-        "not FULL. Paths: CONST_U64 (const-specialized), NARROW_U64 "
-        "(both-fit-u64), NARROW_U128 (u128 fast path), FULL (256-bit)."
+        "CONST_U64/NARROW (a runtime fast path). FOLDED is reported "
+        "separately: both operands constant, computed at compile time, no "
+        "runtime op. FULL is genuine 256-bit runtime arithmetic. Paths: "
+        "FOLDED, CONST_U64 (const-specialized), NARROW_U64 (both-fit-u64), "
+        "NARROW_U128 (u128 fast path), FULL (256-bit)."
     )
     L.append("")
     L.append("Two weightings:")
@@ -232,22 +235,25 @@ def render_markdown(site_stats, exec_stats, unmatched_sites,
     L.append("## Fast-path hit rate per opcode")
     L.append("")
     L.append(
-        "| opcode | sites | site fast-hit % | execs | exec fast-hit % |"
+        "| opcode | sites | site fast-hit % | site folded % | execs | "
+        "exec fast-hit % | exec folded % |"
     )
-    L.append("|---|---:|---:|---:|---:|")
+    L.append("|---|---:|---:|---:|---:|---:|---:|")
     for op in all_opcodes:
         sc = site_stats.get(op, Counter())
         ec = exec_stats.get(op, Counter())
         s_tot = total_count(sc)
         e_tot = total_count(ec)
         L.append(
-            "| %s | %d | %.2f%% | %d | %.2f%% |"
+            "| %s | %d | %.2f%% | %.2f%% | %d | %.2f%% | %.2f%% |"
             % (
                 opcode_name(op),
                 s_tot,
                 pct(fast_count(sc), s_tot),
+                pct(sc.get("FOLDED", 0), s_tot),
                 e_tot,
                 pct(fast_count(ec), e_tot),
+                pct(ec.get("FOLDED", 0), e_tot),
             )
         )
     L.append("")

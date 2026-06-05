@@ -1869,6 +1869,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
   // Phase 0: Constant folding
   if (MultiplicandOp.isConstant() && MultiplierOp.isConstant()) {
     intx::uint256 A = u256ValueToIntx(MultiplicandOp.getConstValue());
+    setLoweringPath(LoweringPath::FOLDED);
     intx::uint256 B = u256ValueToIntx(MultiplierOp.getConstValue());
     return Operand(intxToU256Value(A * B));
   }
@@ -2014,6 +2015,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
   resetLoweringPath();
   if (DividendOp.isConstant() && DivisorOp.isConstant()) {
     intx::uint256 D = u256ValueToIntx(DivisorOp.getConstValue());
+    setLoweringPath(LoweringPath::FOLDED);
     if (D == 0)
       return Operand(U256Value{0, 0, 0, 0});
     intx::uint256 N = u256ValueToIntx(DividendOp.getConstValue());
@@ -2171,6 +2173,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleSDiv(Operand DividendOp,
   resetLoweringPath();
   if (DividendOp.isConstant() && DivisorOp.isConstant()) {
     intx::uint256 D = u256ValueToIntx(DivisorOp.getConstValue());
+    setLoweringPath(LoweringPath::FOLDED);
     if (D == 0)
       return Operand(U256Value{0, 0, 0, 0});
     intx::uint256 N = u256ValueToIntx(DividendOp.getConstValue());
@@ -2227,6 +2230,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMod(Operand DividendOp,
   resetLoweringPath();
   if (DividendOp.isConstant() && DivisorOp.isConstant()) {
     intx::uint256 D = u256ValueToIntx(DivisorOp.getConstValue());
+    setLoweringPath(LoweringPath::FOLDED);
     if (D == 0)
       return Operand(U256Value{0, 0, 0, 0});
     intx::uint256 N = u256ValueToIntx(DividendOp.getConstValue());
@@ -2315,6 +2319,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleSMod(Operand DividendOp,
   resetLoweringPath();
   if (DividendOp.isConstant() && DivisorOp.isConstant()) {
     intx::uint256 D = u256ValueToIntx(DivisorOp.getConstValue());
+    setLoweringPath(LoweringPath::FOLDED);
     if (D == 0)
       return Operand(U256Value{0, 0, 0, 0});
     intx::uint256 N = u256ValueToIntx(DividendOp.getConstValue());
@@ -2375,6 +2380,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
   if (AugendOp.isConstant() && AddendOp.isConstant() &&
       ModulusOp.isConstant()) {
     intx::uint256 M = u256ValueToIntx(ModulusOp.getConstValue());
+    setLoweringPath(LoweringPath::FOLDED);
     if (M == 0)
       return Operand(U256Value{0, 0, 0, 0});
     intx::uint512 Sum =
@@ -2568,6 +2574,7 @@ EVMMirBuilder::handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
   if (MultiplicandOp.isConstant() && MultiplierOp.isConstant() &&
       ModulusOp.isConstant()) {
     intx::uint256 M = u256ValueToIntx(ModulusOp.getConstValue());
+    setLoweringPath(LoweringPath::FOLDED);
     if (M == 0)
       return Operand(U256Value{0, 0, 0, 0});
     intx::uint512 Product =
@@ -2997,6 +3004,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleNot(const Operand &LHSOp) {
   // Phase 0: Constant folding
   if (LHSOp.isConstant()) {
     const auto &V = LHSOp.getConstValue();
+    setLoweringPath(LoweringPath::FOLDED);
     return Operand(U256Value{~V[0], ~V[1], ~V[2], ~V[3]});
   }
 
@@ -3917,6 +3925,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
 
   if (IndexOp.isConstant() && ValueOp.isConstant()) {
     const auto &IndexConst = IndexOp.getConstValue();
+    setLoweringPath(LoweringPath::FOLDED);
     if (IndexConst[1] != 0 || IndexConst[2] != 0 || IndexConst[3] != 0 ||
         IndexConst[0] >= 32) {
       return Operand(U256Value{0, 0, 0, 0});

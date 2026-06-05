@@ -149,6 +149,7 @@ public:
     CONST_U64,   // const-specialized u64 fast path
     NARROW_U64,  // both-operands-fit-u64 narrow fast path
     NARROW_U128, // u128 fast path (e.g. MUL bothFitU64 -> u128, ADD -> u128)
+    FOLDED, // both operands constant: folded at compile time, no runtime op
   };
 
   void resetLoweringPath() { LastLoweringPath = LoweringPath::FULL; }
@@ -406,6 +407,7 @@ public:
       } else {
         ZEN_ASSERT_TODO();
       }
+      setLoweringPath(LoweringPath::FOLDED);
       return Operand(intxToU256Value(Res));
     }
 
@@ -565,6 +567,7 @@ public:
       if (LHSOp.isConstant()) {
         const auto &V = LHSOp.getConstValue();
         uint64_t R = (V[0] == 0 && V[1] == 0 && V[2] == 0 && V[3] == 0) ? 1 : 0;
+        setLoweringPath(LoweringPath::FOLDED);
         return Operand(U256Value{R, 0, 0, 0});
       }
 
@@ -603,6 +606,7 @@ public:
             Res = (L > R) ? 1 : 0;
           }
         }
+        setLoweringPath(LoweringPath::FOLDED);
         return Operand(U256Value{Res, 0, 0, 0});
       }
     }
@@ -662,6 +666,7 @@ public:
           Res[I] = L[I] ^ R[I];
         }
       }
+      setLoweringPath(LoweringPath::FOLDED);
       return Operand(Res);
     }
 
@@ -824,6 +829,7 @@ public:
           }
         }
       }
+      setLoweringPath(LoweringPath::FOLDED);
       return Operand(intxToU256Value(Res));
     }
 
