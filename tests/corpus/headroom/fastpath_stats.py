@@ -72,7 +72,7 @@ OPCODE_NAMES = {
 PATHS = ["FOLDED", "CONST_U64", "NARROW_U64", "NARROW_U128", "FULL"]
 FAST_PATHS = ["CONST_U64", "NARROW_U64", "NARROW_U128"]
 
-STREAM_B_FIELDS = 8  # codehash,pc,opcode,lhs_range,rhs_range,lhs_source,rhs_source,path
+STREAM_B_FIELDS = 8  # minimum: path is column index 7; extra trailing cols ok
 
 
 def opcode_name(opcode):
@@ -106,7 +106,9 @@ def read_stream_b(path):
                 "instrumented build (ZEN_EVM_RANGE_PROFILE)." % path
             )
         for fields in reader:
-            if len(fields) != STREAM_B_FIELDS:
+            # Need at least the first 8 columns (path is index 7); extra
+            # trailing columns (e.g. lhs_const/rhs_const) are tolerated.
+            if len(fields) < STREAM_B_FIELDS:
                 dropped += 1
                 continue
             codehash = fields[0]
