@@ -8,12 +8,22 @@
 #include "evmc/mocked_host.hpp"
 #include "host/evm/crypto.h"
 #include "runtime/evm_instance.h"
+#include "runtime/evm_memory_specialization.h"
 #include "runtime/isolation.h"
 #include "utils/evm.h"
 #include "utils/rlp_encoding.h"
 
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <optional>
+#include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 using namespace zen;
 using namespace zen::runtime;
@@ -46,6 +56,48 @@ private:
   std::vector<uint8_t> ReturnData;
   static inline std::atomic<uint64_t> ModuleCounter = 0;
   evmc_revision Revision = zen::evm::DEFAULT_REVISION;
+  struct InternalCallModuleCacheKey {
+    evmc::address CodeAddress{};
+    evmc::bytes32 AccountCodeHash{};
+    uint64_t CodeFingerprint = 0;
+    size_t CodeSize = 0;
+    evmc_revision Revision = zen::evm::DEFAULT_REVISION;
+    runtime::EVMMemorySpecializationCodegenKey MemoryKey{};
+  };
+
+  struct InternalCallModuleCacheKeyHash {
+    size_t operator()(const InternalCallModuleCacheKey &Key) const noexcept {
+      size_t H = std::hash<evmc::address>{}(Key.CodeAddress);
+      H ^= std::hash<evmc::bytes32>{}(Key.AccountCodeHash) +
+           0x9e3779b97f4a7c15ULL + (H << 6) + (H >> 2);
+      H ^= std::hash<uint64_t>{}(Key.CodeFingerprint) + 0x9e3779b97f4a7c15ULL +
+           (H << 6) + (H >> 2);
+      H ^= std::hash<size_t>{}(Key.CodeSize) + 0x9e3779b97f4a7c15ULL +
+           (H << 6) + (H >> 2);
+      H ^= std::hash<int>{}(static_cast<int>(Key.Revision)) +
+           0x9e3779b97f4a7c15ULL + (H << 6) + (H >> 2);
+      H ^= std::hash<uint8_t>{}(Key.MemoryKey.SkipLeadingZeroLimbStores) +
+           0x9e3779b97f4a7c15ULL + (H << 6) + (H >> 2);
+      return H;
+    }
+  };
+
+  struct InternalCallModuleCacheKeyEqual {
+    bool operator()(const InternalCallModuleCacheKey &LHS,
+                    const InternalCallModuleCacheKey &RHS) const noexcept {
+      return LHS.CodeAddress == RHS.CodeAddress &&
+             LHS.AccountCodeHash == RHS.AccountCodeHash &&
+             LHS.CodeFingerprint == RHS.CodeFingerprint &&
+             LHS.CodeSize == RHS.CodeSize && LHS.Revision == RHS.Revision &&
+             LHS.MemoryKey.SkipLeadingZeroLimbStores ==
+                 RHS.MemoryKey.SkipLeadingZeroLimbStores;
+    }
+  };
+
+  std::unordered_map<InternalCallModuleCacheKey, EVMModule *,
+                     InternalCallModuleCacheKeyHash,
+                     InternalCallModuleCacheKeyEqual>
+      InternalCallModuleCache;
   std::unordered_map<evmc::address, std::unordered_set<evmc::bytes32>>
       PrewarmStorageKeys;
   std::unordered_set<evmc::address> CreatedInTx;
@@ -90,12 +142,22 @@ public:
 
   ZenMockedEVMHost() = default;
 
-  void setRuntime(Runtime *NewRT) { RT = NewRT; }
+  void setRuntime(Runtime *NewRT) {
+    if (RT != NewRT) {
+      clearInternalCallModuleCache();
+    }
+    RT = NewRT;
+  }
   Runtime *getRuntime() const { return RT; }
+  size_t getInternalCallModuleCacheSize() const {
+    return InternalCallModuleCache.size();
+  }
+  void clearInternalCallModuleCache() { InternalCallModuleCache.clear(); }
 
   void loadInitialState(const evmc_tx_context &Context,
                         const std::vector<AccountInitEntry> &Accounts,
                         bool ClearExisting = true) {
+    clearInternalCallModuleCache();
     tx_context = Context;
     if (ClearExisting) {
       accounts.clear();
@@ -114,6 +176,7 @@ public:
       Result.ErrorMessage = "Runtime is not attached to ZenMockedEVMHost";
       return Result;
     }
+    clearInternalCallModuleCache();
     const evmc_revision ActiveRevision = Config.Revision;
     const bool IsCreateTx = Config.Message.kind == EVMC_CREATE ||
                             Config.Message.kind == EVMC_CREATE2;
@@ -520,27 +583,19 @@ public:
             evmc::hex(evmc::bytes_view(Msg.recipient.bytes, 20)).c_str());
         return ParentResult;
       }
-      uint64_t Counter = ModuleCounter++;
-      std::string ModName =
-          "evm_model_" + evmc::hex(evmc::bytes_view(Msg.recipient.bytes, 20)) +
-          "_" + std::to_string(Counter);
-      ;
-
-      auto ModRet =
-          RT->loadEVMModule(ModName, ContractCode.data(), ContractCode.size());
-      if (!ModRet) {
-        ZEN_LOG_ERROR("Failed to load EVM module: %s", ModName.c_str());
+      EVMModule *Mod = getOrLoadInternalCallModule(CodeAddr, It->second);
+      if (!Mod) {
+        ZEN_LOG_ERROR("Failed to load EVM module for code address: %s",
+                      evmc::hex(evmc::bytes_view(CodeAddr.bytes, 20)).c_str());
         restoreHostState(StateSnapshot);
         return makeInternalExecutionFailure(Msg);
       }
-
-      EVMModule *Mod = *ModRet;
 
       IsolationPtr Iso(nullptr, IsolationDeleter{RT});
       Iso.reset(RT->createManagedIsolation());
       if (!Iso) {
         ZEN_LOG_ERROR("Failed to create isolation for module: %s",
-                      ModName.c_str());
+                      Mod->getName());
         restoreHostState(StateSnapshot);
         return makeInternalExecutionFailure(Msg);
       }
@@ -549,7 +604,7 @@ public:
       auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
       if (!InstRet) {
         ZEN_LOG_ERROR("Failed to create EVM instance for module: %s",
-                      ModName.c_str());
+                      Mod->getName());
         restoreHostState(StateSnapshot);
         return makeInternalExecutionFailure(Msg);
       }
@@ -868,6 +923,47 @@ public:
   }
 
 private:
+  static uint64_t computeCodeFingerprint(const uint8_t *Data, size_t Size) {
+    uint64_t Hash = 1469598103934665603ULL;
+    for (size_t I = 0; I < Size; ++I) {
+      Hash ^= static_cast<uint64_t>(Data[I]);
+      Hash *= 1099511628211ULL;
+    }
+    return Hash;
+  }
+
+  EVMModule *getOrLoadInternalCallModule(
+      const evmc::address &CodeAddr, const evmc::MockedAccount &Account,
+      runtime::EVMMemorySpecializationProfile MemoryProfile = {}) {
+    const auto &ContractCode = Account.code;
+    InternalCallModuleCacheKey Key{
+        CodeAddr,
+        Account.codehash,
+        computeCodeFingerprint(ContractCode.data(), ContractCode.size()),
+        ContractCode.size(),
+        Revision,
+        runtime::getEVMMemorySpecializationCodegenKey(MemoryProfile),
+    };
+    auto Cached = InternalCallModuleCache.find(Key);
+    if (Cached != InternalCallModuleCache.end()) {
+      return Cached->second;
+    }
+
+    const uint64_t Counter = ModuleCounter++;
+    const std::string ModName =
+        "evm_model_" + evmc::hex(evmc::bytes_view(CodeAddr.bytes, 20)) + "_" +
+        std::to_string(Counter);
+    auto ModRet =
+        RT->loadEVMModule(ModName, ContractCode.data(), ContractCode.size(),
+                          Revision, MemoryProfile);
+    if (!ModRet) {
+      return nullptr;
+    }
+    EVMModule *Mod = *ModRet;
+    InternalCallModuleCache.emplace(Key, Mod);
+    return Mod;
+  }
+
   struct HostStateSnapshot {
     decltype(accounts) Accounts;
     decltype(recorded_logs) Logs;

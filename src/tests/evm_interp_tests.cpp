@@ -411,6 +411,56 @@ TEST_P(EVMSampleTest, ExecuteSample) {
       << "Frame should be deallocated after execution";
 }
 
+TEST(ZenMockedEVMHostModuleCacheTest, ReusesInternalCallModuleByCodeIdentity) {
+  RuntimeConfig Config;
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+  Config.Mode = common::RunMode::MultipassMode;
+#else
+  Config.Mode = common::RunMode::InterpMode;
+#endif
+
+  auto MockedHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  auto RT = Runtime::newEVMRuntime(Config, MockedHost.get());
+  ASSERT_TRUE(RT != nullptr) << "Failed to create runtime";
+  MockedHost->setRuntime(RT.get());
+
+  const evmc::address SenderAddr = evmc::literals::operator""_address(
+      "a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
+  const evmc::address ContractAddr = evmc::literals::operator""_address(
+      "00000000000000000000000000000000000000c1");
+
+  evmc::MockedAccount SenderAccount;
+  SenderAccount.set_balance(1000);
+  MockedHost->accounts[SenderAddr] = SenderAccount;
+
+  evmc::MockedAccount ContractAccount;
+  ContractAccount.code = {0x60, 0x00, 0x50, 0x00}; // PUSH1 0; POP; STOP
+  ContractAccount.codehash.bytes[31] = 0xaa;
+  MockedHost->accounts[ContractAddr] = ContractAccount;
+
+  evmc_message Msg{};
+  Msg.kind = EVMC_CALL;
+  Msg.gas = 100000;
+  Msg.recipient = ContractAddr;
+  Msg.sender = SenderAddr;
+  Msg.code_address = ContractAddr;
+
+  evmc::Result First = MockedHost->call(Msg);
+  ASSERT_EQ(First.status_code, EVMC_SUCCESS);
+  EXPECT_EQ(MockedHost->getInternalCallModuleCacheSize(), 1U);
+
+  evmc::Result Second = MockedHost->call(Msg);
+  ASSERT_EQ(Second.status_code, EVMC_SUCCESS);
+  EXPECT_EQ(MockedHost->getInternalCallModuleCacheSize(), 1U);
+
+  // Same address and codehash but different bytecode must not reuse the cached
+  // module. This protects replay tests from stale code when state changes.
+  MockedHost->accounts[ContractAddr].code = {0x60, 0x01, 0x50, 0x00};
+  evmc::Result Third = MockedHost->call(Msg);
+  ASSERT_EQ(Third.status_code, EVMC_SUCCESS);
+  EXPECT_EQ(MockedHost->getInternalCallModuleCacheSize(), 2U);
+}
+
 // if there is no evm files, we add a special string to make the test run and
 // handle it in the test case
 auto EvmFiles = getAllEvmBytecodeFiles();
