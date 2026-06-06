@@ -7,8 +7,23 @@ import random
 from dataclasses import dataclass
 
 
+__all__ = [
+    "DEFAULT_SEARCH_CONFIG", "COMMUTATIVE_OPS", "MASK64", "Expr",
+    "var", "const", "const_u256", "unary", "binary", "ternary",
+    "parse_expr", "canonicalize_expr", "canonicalize_pair",
+    "build_candidate_key", "build_rule_key_set", "build_sample_envs",
+    "build_search_space", "build_term_map",
+    "eval_expr", "expr_cost", "cost_delta", "dominates",
+    "load_rule_patterns", "is_candidate_covered",
+    "wrap_u64", "wrap_u256",
+]
+
+
 MASK64 = (1 << 64) - 1
-COMMUTATIVE_OPS = {"add", "and", "mul", "or", "xor"}
+MASK256 = (1 << 256) - 1
+COMMUTATIVE_OPS = {"add", "and", "mul", "or", "xor", "u256_and", "u256_or", "u256_xor"}
+U256_BINARY_OPS = {"u256_and", "u256_or", "u256_xor"}
+U256_SHIFT_OPS = {"u256_shl", "u256_shr", "u256_sar"}
 DEFAULT_SEARCH_CONFIG = {
     "base_terms": [
         "x",
@@ -16,6 +31,7 @@ DEFAULT_SEARCH_CONFIG = {
         "cond",
         "0:i64",
         "1:i64",
+        "2:i64",  # NEW — enables mul-pow2-to-shl, mul x 2 patterns
         "18446744073709551615:i64",
     ],
     "unary_not_terms": ["x", "y", "cond"],
@@ -91,6 +107,8 @@ class Expr:
             return str(self.value)
         if self.op == "const":
             return f"{self.value}:i64"
+        if self.op == "const_u256":
+            return f"(const_u256 {self.value})"
         rendered_args = " ".join(arg.render() for arg in self.args)
         return f"({self.op} {rendered_args})"
 
@@ -101,6 +119,10 @@ def var(name: str) -> Expr:
 
 def const(value: int) -> Expr:
     return Expr("const", value=value)
+
+
+def const_u256(value: int) -> Expr:
+    return Expr("const_u256", value=value)
 
 
 def unary(op: str, arg: Expr) -> Expr:
@@ -119,6 +141,14 @@ def wrap_u64(value: int) -> int:
     return value & MASK64
 
 
+def wrap_u256(value: int) -> int:
+    return value & MASK256
+
+
+def sign_broadcast_u256(value: int) -> int:
+    return MASK256 if (value >> 255) & 1 else 0
+
+
 def parse_expr(text: str) -> Expr:
     tokens = text.replace("(", " ( ").replace(")", " ) ").split()
     index = 0
@@ -134,6 +164,10 @@ def parse_expr(text: str) -> Expr:
             while tokens[index] != ")":
                 args.append(parse())
             index += 1
+            if op == "const_u256":
+                if len(args) != 1 or args[0].op != "var":
+                    raise ValueError("const_u256 expects one integer literal")
+                return const_u256(int(str(args[0].value), 10))
             return Expr(op, args=tuple(args))
         if token.endswith(":i64"):
             return const(int(token[:-4], 10))
@@ -160,7 +194,7 @@ def canonicalize_expr(expr: Expr, env: dict[str, str] | None = None) -> Expr:
         if name not in env:
             env[name] = canonical_var_name(len(env))
         return var(env[name])
-    if expr.op == "const":
+    if expr.op in {"const", "const_u256"}:
         return expr
 
     args = tuple(canonicalize_expr(arg, env) for arg in expr.args)
@@ -182,7 +216,7 @@ def build_candidate_key(lhs: Expr, rhs: Expr) -> tuple[str, str]:
 def substitute_expr(expr: Expr, bindings: dict[str, Expr]) -> Expr:
     if expr.op == "var":
         return bindings.get(str(expr.value), expr)
-    if expr.op == "const":
+    if expr.op in {"const", "const_u256"}:
         return expr
     return Expr(
         expr.op, args=tuple(substitute_expr(arg, bindings) for arg in expr.args)
@@ -197,7 +231,7 @@ def match_pattern(pattern: Expr, expr: Expr, bindings: dict[str, Expr]) -> bool:
             bindings[name] = expr
             return True
         return bound == expr
-    if pattern.op == "const":
+    if pattern.op in {"const", "const_u256"}:
         return pattern == expr
     if pattern.op != expr.op or len(pattern.args) != len(expr.args):
         return False
@@ -221,6 +255,8 @@ def eval_expr(expr: Expr, env: dict[str, int]) -> int:
         return env[str(expr.value)]
     if expr.op == "const":
         return int(expr.value)
+    if expr.op == "const_u256":
+        return wrap_u256(int(expr.value))
     if expr.op == "not":
         return wrap_u64(~eval_expr(expr.args[0], env))
     if expr.op == "add":
@@ -271,11 +307,35 @@ def eval_expr(expr: Expr, env: dict[str, int]) -> int:
         if amount >= 64:
             return 0
         return eval_expr(expr.args[0], env) >> amount
+    if expr.op == "u256_and":
+        return wrap_u256(eval_expr(expr.args[0], env) & eval_expr(expr.args[1], env))
+    if expr.op == "u256_or":
+        return wrap_u256(eval_expr(expr.args[0], env) | eval_expr(expr.args[1], env))
+    if expr.op == "u256_xor":
+        return wrap_u256(eval_expr(expr.args[0], env) ^ eval_expr(expr.args[1], env))
+    if expr.op == "u256_shl":
+        amount = eval_expr(expr.args[1], env)
+        if amount >= 256:
+            return 0
+        return wrap_u256(eval_expr(expr.args[0], env) << amount)
+    if expr.op == "u256_shr":
+        amount = eval_expr(expr.args[1], env)
+        if amount >= 256:
+            return 0
+        return eval_expr(expr.args[0], env) >> amount
+    if expr.op == "u256_sar":
+        amount = eval_expr(expr.args[1], env)
+        value = eval_expr(expr.args[0], env)
+        if amount >= 256:
+            return sign_broadcast_u256(value)
+        if value & (1 << 255):
+            value -= 1 << 256  # to signed
+        return wrap_u256(value >> amount)
     raise ValueError(f"unsupported op {expr.op}")
 
 
 def expr_cost(expr: Expr) -> dict[str, int]:
-    if expr.op in {"var", "const"}:
+    if expr.op in {"var", "const", "const_u256"}:
         return {
             "dmir_inst": 0,
             "select_depth": 0,
@@ -312,6 +372,44 @@ def cost_delta(lhs_cost: dict[str, int], rhs_cost: dict[str, int]) -> dict[str, 
         field: rhs_cost[field] - lhs_cost[field]
         for field in ("dmir_inst", "select_depth", "adc_chain", "runtime_calls")
     }
+
+
+def build_sample_envs_256() -> list[dict[str, int]]:
+    """Sample environments for u256-typed expression enumeration.
+
+    Variable convention: "x_256" and "y_256" are u256-valued; "k" is the u64
+    shift amount (kept in [0, 260) so both in-range and >=256 overflow cases
+    are covered)."""
+    base_256 = [
+        0,
+        1,
+        (1 << 64) - 1,
+        (1 << 64),
+        (1 << 128) - 1,
+        (1 << 192),
+        (1 << 255),
+        MASK256,
+        0xDEAD_BEEF_FEED_FACE_CAFE_BABE_0123_4567_89AB_CDEF_CAFE_BABE_DEAD_BEEF_FEED_FACE,
+    ]
+    shift_amounts = [0, 1, 8, 63, 64, 127, 128, 192, 255, 256]
+    envs = []
+    # Cartesian x × y with k=0 — distinguishes binary-bitwise ops
+    for x in base_256:
+        for y in base_256:
+            envs.append({"x_256": x, "y_256": y, "k": 0})
+    # Vary k for shift enumeration, y as small constant
+    for x in base_256:
+        for k in shift_amounts:
+            envs.append({"x_256": x, "y_256": 1, "k": k})
+    # Random
+    rng = random.Random(0x7D6B4A1C)
+    for _ in range(32):
+        envs.append({
+            "x_256": rng.getrandbits(256),
+            "y_256": rng.getrandbits(256),
+            "k": rng.randrange(0, 260),
+        })
+    return envs
 
 
 def build_sample_envs() -> list[dict[str, int]]:

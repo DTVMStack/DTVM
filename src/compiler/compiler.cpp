@@ -19,6 +19,9 @@
 #include "compiler/mir/module.h"
 #include "compiler/mir/pass/dead_basicblock_elim.h"
 #include "compiler/mir/pass/dmir_rewrite.h"
+#ifdef ZEN_ENABLE_DMIR_SHADOW_AUDIT
+#include "compiler/mir/pass/dmir_shadow_audit.h"
+#endif
 #include "compiler/mir/pass/verifier.h"
 #include "compiler/target/x86/x86_cg_peephole.h"
 #include "compiler/target/x86/x86_mc_lowering.h"
@@ -81,8 +84,16 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
 
   {
     ScopedCompilerPassTimer Timer(PassTiming, "dmir_rewrite");
+#ifdef ZEN_ENABLE_DMIR_SHADOW_AUDIT
+    DMirShadowAuditPass AuditPassOrig;
+    AuditPassOrig.runOnMFunction(MFunc, AuditPhase::OrigIR);
+#endif
     DMirRewritePass RewritePass;
     RewritePass.runOnMFunction(MFunc);
+#ifdef ZEN_ENABLE_DMIR_SHADOW_AUDIT
+    DMirShadowAuditPass AuditPassPost;
+    AuditPassPost.runOnMFunction(MFunc, AuditPhase::PostProd);
+#endif
   }
 
   CgFunction &MF = CgFunc;

@@ -13,12 +13,20 @@ ALLOWED_RULE_STATUSES = {
     "seed",
     "candidate",
     "accepted",
+    "synthesized-u256",
 }
 
 ALLOWED_VALIDATION_MODES = {
     "interpreter_sample",
     "interpreter_fuzz",
     "smt",
+    "smt_256",
+}
+
+SEMANTIC_VALIDATION_MODES = {
+    "interpreter_fuzz",
+    "smt",
+    "smt_256",
 }
 
 COST_FIELDS = (
@@ -118,6 +126,16 @@ def main():
         elif len(set(inputs)) != len(inputs):
             errors.append(f"rule '{name}' repeats input bindings")
 
+        ir_width = rule.get("ir_width")
+        if status == "synthesized-u256":
+            if ir_width != 256:
+                errors.append(
+                    f"rule '{name}' with status synthesized-u256 must set ir_width 256"
+                )
+        else:
+            if ir_width not in (None, 64):
+                errors.append(f"rule '{name}' has unexpected ir_width '{ir_width}'")
+
         for field in ("lhs", "rhs"):
             value = rule.get(field)
             if not isinstance(value, str) or not value.strip():
@@ -159,7 +177,7 @@ def main():
                     )
                     continue
                 mode_counts[mode] += 1
-                if mode in {"interpreter_fuzz", "smt"}:
+                if mode in SEMANTIC_VALIDATION_MODES:
                     has_semantic_mode = True
             if not has_semantic_mode:
                 errors.append(

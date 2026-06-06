@@ -133,6 +133,10 @@ if(ZEN_ENABLE_JIT_LOGGING OR ZEN_ENABLE_LINUX_PERF)
   list(APPEND COMPILER_SRCS utils/asm_dump.cpp)
 endif()
 
+if(ZEN_ENABLE_DMIR_SHADOW_AUDIT)
+  list(APPEND COMPILER_SRCS mir/pass/dmir_shadow_runtime.cpp)
+endif()
+
 set_property(
   DIRECTORY
   APPEND

@@ -56,6 +56,9 @@ if(ZEN_ENABLE_SPEC_TEST)
   if(ZEN_ENABLE_MULTIPASS_JIT)
     add_executable(x86CgPeepholeTests x86_cg_peephole_tests.cpp)
     add_executable(dmirValidationTests dmir_validation_tests.cpp)
+    if(ZEN_ENABLE_DMIR_SHADOW_AUDIT)
+      add_executable(dmirShadowRuntimeTests dmir_shadow_runtime_tests.cpp)
+    endif()
   endif()
   target_include_directories(
     mempoolTests PRIVATE ${googletest_SOURCE_DIR}/googletest/include
@@ -216,6 +219,14 @@ if(ZEN_ENABLE_SPEC_TEST)
                   -static-libasan
           PUBLIC ${GTEST_BOTH_LIBRARIES}
         )
+        if(ZEN_ENABLE_DMIR_SHADOW_AUDIT)
+          target_link_libraries(
+            dmirShadowRuntimeTests
+            PRIVATE compiler dtvmcore gtest_main -fsanitize=address
+                    -static-libasan
+            PUBLIC ${GTEST_BOTH_LIBRARIES}
+          )
+        endif()
       endif()
 
       if(ZEN_ENABLE_EVM)
@@ -314,6 +325,13 @@ if(ZEN_ENABLE_SPEC_TEST)
         PRIVATE compiler dtvmcore gtest_main
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
+      if(ZEN_ENABLE_DMIR_SHADOW_AUDIT)
+        target_link_libraries(
+          dmirShadowRuntimeTests
+          PRIVATE compiler dtvmcore gtest_main
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+      endif()
     endif()
 
     if(ZEN_ENABLE_EVM)
@@ -384,6 +402,9 @@ if(ZEN_ENABLE_SPEC_TEST)
   if(ZEN_ENABLE_MULTIPASS_JIT)
     add_test(NAME x86CgPeepholeTests COMMAND x86CgPeepholeTests)
     add_test(NAME dmirValidationTests COMMAND dmirValidationTests)
+    if(ZEN_ENABLE_DMIR_SHADOW_AUDIT)
+      add_test(NAME dmirShadowRuntimeTests COMMAND dmirShadowRuntimeTests)
+    endif()
     add_test(
       NAME x86CgPeepholeRuleGen
       COMMAND
