@@ -810,7 +810,33 @@ private:
           if (PC > RunStartPC && HasLiveFallthrough) {
             Builder.meterOpcodeRange(RunStartPC, PC);
           }
-          if (HasLiveFallthrough && tryAssignFallthroughEntryState(PC)) {
+          // When a JUMP/JUMPI terminator falls through into a JUMPDEST, the
+          // terminator handler already called handleBeginBlock for the
+          // fallthrough target before the JUMPDEST opcode is decoded, so the
+          // block currently being decoded IS this JUMPDEST's block
+          // (CurrentBlockEntryPC == RunStartPC). Its incoming entry edge was
+          // already assigned by the predecessor terminator. Re-running the
+          // fallthrough-edge assignment here would record a spurious self-edge
+          // (PredBlockPC == BlockPC) that is absent from the block's
+          // predecessor order, corrupting phi incoming-slot bookkeeping. Skip
+          // the redundant edge assignment in that case (gated on
+          // CurrentBlockLifted so the flag-OFF path is unchanged);
+          // handleJumpDest + the re-begin below still run to wire the body
+          // branch and re-materialize the lifted entry state in the canonical
+          // JUMPDEST body block.
+          bool AlreadyBegunLiftedEntry = HasLiveFallthrough &&
+                                         CurrentBlockLifted &&
+                                         RunStartPC == CurrentBlockEntryPC;
+          if (AlreadyBegunLiftedEntry) {
+            // Entry edge already assigned by the predecessor terminator; do not
+            // reassign. The predecessor's handleBeginBlock already restored
+            // this block's lifted logical entry state onto the logical stack.
+            // The re-begin below (handleBeginBlock after handleJumpDest)
+            // restores it again in the canonical JUMPDEST body block, so drain
+            // the stale copy first to prevent the logical stack from being
+            // doubled.
+            drainLogicalStack();
+          } else if (HasLiveFallthrough && tryAssignFallthroughEntryState(PC)) {
             // Keep runtime stack materialization elided on lifted fallthrough.
           } else {
             if (HasLiveFallthrough && CurrentBlockLifted && isLiftedBlock(PC)) {
