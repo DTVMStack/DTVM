@@ -1570,9 +1570,16 @@ MInstruction *EVMMirBuilder::createJumpCondition(const Operand &Cond) {
 
   // BrIfInstruction tests whether its condition operand is non-zero, so the
   // compare result can be consumed directly without materializing an i64 0/1.
-  auto BuildNonZeroOr = [this, MirI64Type](const U256Inst &Parts) {
+  // OR only the limbs that may be non-zero by the Range contract: JUMPI
+  // correctness depends on this invariant, so an over-narrow producer tag
+  // would skip a non-zero upper limb and branch wrong (not merely slower).
+  auto BuildNonZeroOr = [this, MirI64Type](const U256Inst &Parts,
+                                           ValueRange Range) {
+    size_t FoldLimbs = Range == ValueRange::U64    ? 1
+                       : Range == ValueRange::U128 ? 2
+                                                   : EVM_ELEMENTS_COUNT;
     MInstruction *OrResult = Parts[0];
-    for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    for (size_t I = 1; I < FoldLimbs; ++I) {
       OrResult = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
                                                       OrResult, Parts[I]);
     }
@@ -1580,7 +1587,8 @@ MInstruction *EVMMirBuilder::createJumpCondition(const Operand &Cond) {
   };
 
   if (Cond.isDeferredZeroTest()) {
-    MInstruction *OrResult = BuildNonZeroOr(Cond.getDeferredBaseComponents());
+    MInstruction *OrResult = BuildNonZeroOr(Cond.getDeferredBaseComponents(),
+                                            Cond.getDeferredBaseRange());
     auto Predicate = Cond.isDeferredZeroTestNegated()
                          ? CmpInstruction::Predicate::ICMP_NE
                          : CmpInstruction::Predicate::ICMP_EQ;
@@ -1589,7 +1597,7 @@ MInstruction *EVMMirBuilder::createJumpCondition(const Operand &Cond) {
   }
 
   U256Inst CondComponents = extractU256Operand(Cond);
-  MInstruction *OrResult = BuildNonZeroOr(CondComponents);
+  MInstruction *OrResult = BuildNonZeroOr(CondComponents, Cond.getRange());
   return createInstruction<CmpInstruction>(
       false, CmpInstruction::Predicate::ICMP_NE, &Ctx.I64Type, OrResult, Zero);
 }
@@ -2963,14 +2971,20 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
 
 EVMMirBuilder::U256Inst EVMMirBuilder::handleCompareEQZ(const U256Inst &LHS,
                                                         MType *ResultType,
-                                                        bool IsNegated) {
+                                                        bool IsNegated,
+                                                        ValueRange BaseRange) {
   U256Inst Result = {};
   MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
 
-  // For ISZERO: OR all components, then compare with 0
+  // For ISZERO: OR the limbs that may be non-zero, then compare with 0. Limbs
+  // proven zero by the Range contract are skipped: U64 -> limb0 only, U128 ->
+  // limbs 0-1, else all 4.
+  size_t FoldLimbs = BaseRange == ValueRange::U64    ? 1
+                     : BaseRange == ValueRange::U128 ? 2
+                                                     : EVM_ELEMENTS_COUNT;
   MInstruction *OrResult = nullptr;
-  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+  for (size_t I = 0; I < FoldLimbs; ++I) {
     if (OrResult == nullptr) {
       OrResult = LHS[I];
     } else {
@@ -3328,6 +3342,113 @@ EVMMirBuilder::handleCompareGtRhsU64(const Operand &LHSOp, uint64_t RhsU64) {
         false, NePred, &Ctx.I64Type, Upper, Zero);
     FinalResult = createInstruction<SelectInstruction>(false, &Ctx.I64Type,
                                                        HasUpper, One, LowGt);
+  }
+
+  U256Inst Result = {};
+  Result[0] = protectUnsafeValue(FinalResult, MirI64Type);
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    Result[I] = Zero;
+  }
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleCompareSltRhsU64(const Operand &LHSOp, uint64_t RhsU64) {
+  // SLT(a, u64_b): signed a < b where b fits in u64 (so b >= 0 as signed-256).
+  // a negative (bit255 set) -> true since b >= 0.
+  // a non-negative with any upper limb set -> a > b -> false.
+  // else unsigned compare a[0] < b.
+  U256Inst LHS = extractU256Operand(LHSOp);
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+
+  MInstruction *RhsVal = createIntConstInstruction(MirI64Type, RhsU64);
+  auto LtPred = CmpInstruction::Predicate::ICMP_ULT;
+  MInstruction *LowLt = createInstruction<CmpInstruction>(
+      false, LtPred, &Ctx.I64Type, LHS[0], RhsVal);
+
+  MInstruction *FinalResult;
+  if (LHSOp.getRange() == ValueRange::U64) {
+    // a is provably non-negative and < 2^64.
+    FinalResult = LowLt;
+  } else if (LHSOp.getRange() == ValueRange::U128) {
+    // a is non-negative; only LHS[1] can make a >= 2^64.
+    auto NePred = CmpInstruction::Predicate::ICMP_NE;
+    MInstruction *HasUpper = createInstruction<CmpInstruction>(
+        false, NePred, &Ctx.I64Type, LHS[1], Zero);
+    FinalResult = createInstruction<SelectInstruction>(false, &Ctx.I64Type,
+                                                       HasUpper, Zero, LowLt);
+  } else {
+    MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+    MInstruction *Upper = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, LHS[1], LHS[2]);
+    Upper = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                 Upper, LHS[3]);
+    auto NePred = CmpInstruction::Predicate::ICMP_NE;
+    MInstruction *HasUpper = createInstruction<CmpInstruction>(
+        false, NePred, &Ctx.I64Type, Upper, Zero);
+    auto SltPred = CmpInstruction::Predicate::ICMP_SLT;
+    MInstruction *IsNeg = createInstruction<CmpInstruction>(
+        false, SltPred, &Ctx.I64Type, LHS[3], Zero);
+    MInstruction *NonNegResult = createInstruction<SelectInstruction>(
+        false, &Ctx.I64Type, HasUpper, Zero, LowLt);
+    FinalResult = createInstruction<SelectInstruction>(
+        false, &Ctx.I64Type, IsNeg, One, NonNegResult);
+  }
+
+  U256Inst Result = {};
+  Result[0] = protectUnsafeValue(FinalResult, MirI64Type);
+  for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+    Result[I] = Zero;
+  }
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
+}
+
+typename EVMMirBuilder::Operand
+EVMMirBuilder::handleCompareSgtRhsU64(const Operand &LHSOp, uint64_t RhsU64) {
+  // SGT(a, u64_b): signed a > b where b fits in u64 (so b >= 0 as signed-256).
+  // a negative (bit255 set) -> false since b >= 0.
+  // a non-negative with any upper limb set -> a > b -> true.
+  // else unsigned compare a[0] > b.
+  U256Inst LHS = extractU256Operand(LHSOp);
+  MType *MirI64Type =
+      EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+
+  MInstruction *RhsVal = createIntConstInstruction(MirI64Type, RhsU64);
+  auto GtPred = CmpInstruction::Predicate::ICMP_UGT;
+  MInstruction *LowGt = createInstruction<CmpInstruction>(
+      false, GtPred, &Ctx.I64Type, LHS[0], RhsVal);
+
+  MInstruction *FinalResult;
+  if (LHSOp.getRange() == ValueRange::U64) {
+    // a is provably non-negative and < 2^64.
+    FinalResult = LowGt;
+  } else if (LHSOp.getRange() == ValueRange::U128) {
+    // a is non-negative; only LHS[1] can make a >= 2^64.
+    MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+    auto NePred = CmpInstruction::Predicate::ICMP_NE;
+    MInstruction *HasUpper = createInstruction<CmpInstruction>(
+        false, NePred, &Ctx.I64Type, LHS[1], Zero);
+    FinalResult = createInstruction<SelectInstruction>(false, &Ctx.I64Type,
+                                                       HasUpper, One, LowGt);
+  } else {
+    MInstruction *One = createIntConstInstruction(MirI64Type, 1);
+    MInstruction *Upper = createInstruction<BinaryInstruction>(
+        false, OP_or, MirI64Type, LHS[1], LHS[2]);
+    Upper = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                 Upper, LHS[3]);
+    auto NePred = CmpInstruction::Predicate::ICMP_NE;
+    MInstruction *HasUpper = createInstruction<CmpInstruction>(
+        false, NePred, &Ctx.I64Type, Upper, Zero);
+    auto SltPred = CmpInstruction::Predicate::ICMP_SLT;
+    MInstruction *IsNeg = createInstruction<CmpInstruction>(
+        false, SltPred, &Ctx.I64Type, LHS[3], Zero);
+    MInstruction *NonNegResult = createInstruction<SelectInstruction>(
+        false, &Ctx.I64Type, HasUpper, One, LowGt);
+    FinalResult = createInstruction<SelectInstruction>(
+        false, &Ctx.I64Type, IsNeg, Zero, NonNegResult);
   }
 
   U256Inst Result = {};
@@ -5415,7 +5536,8 @@ EVMMirBuilder::U256Inst EVMMirBuilder::extractU256Operand(const Operand &Opnd) {
 
   if (Opnd.isDeferredZeroTest()) {
     return handleCompareEQZ(Opnd.getDeferredBaseComponents(), &Ctx.I64Type,
-                            Opnd.isDeferredZeroTestNegated());
+                            Opnd.isDeferredZeroTestNegated(),
+                            Opnd.getDeferredBaseRange());
   }
 
   if (Opnd.isU256MultiComponent()) {

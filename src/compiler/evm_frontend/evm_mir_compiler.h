@@ -196,12 +196,16 @@ public:
     }
 
     static Operand createDeferredZeroTest(U256Inst BaseComponents,
-                                          bool IsNegated) {
+                                          bool IsNegated,
+                                          ValueRange BaseRange) {
       Operand Result;
       Result.Type = EVMType::UINT256;
       Result.DeferredValueKind =
           IsNegated ? DeferredKind::ZERO_TEST_NE : DeferredKind::ZERO_TEST_EQ;
       Result.U256Components = BaseComponents;
+      Result.DeferredBaseRange = BaseRange;
+      // The deferred value materializes to 0/1, so it structurally fits u64
+      // regardless of the base's range.
       Result.Range = ValueRange::U64;
       return Result;
     }
@@ -266,6 +270,10 @@ public:
                  "Not a deferred value");
       return U256Components;
     }
+    ValueRange getDeferredBaseRange() const {
+      ZEN_ASSERT(isDeferredZeroTest() && "Not a deferred zero-test value");
+      return DeferredBaseRange;
+    }
 
     // Provable value range — narrower ranges enable fast arithmetic paths
     ValueRange getRange() const { return Range; }
@@ -303,6 +311,9 @@ public:
     bool IsConstant = false;
     bool IsU256MultiComponent = false;
     DeferredKind DeferredValueKind = DeferredKind::NONE;
+    // Range of the base value of a deferred zero-test (the value being tested),
+    // used to narrow the OR-fold when materialized.
+    ValueRange DeferredBaseRange = ValueRange::U256;
   };
 
   bool compile(CompilerContext *Context);
@@ -576,12 +587,14 @@ public:
       }
 
       if (LHSOp.isDeferredZeroTest()) {
+        // Flip-negation reuses the same base; propagate its range unchanged.
         return Operand::createDeferredZeroTest(
             LHSOp.getDeferredBaseComponents(),
-            !LHSOp.isDeferredZeroTestNegated());
+            !LHSOp.isDeferredZeroTestNegated(), LHSOp.getDeferredBaseRange());
       }
 
-      return Operand::createDeferredZeroTest(extractU256Operand(LHSOp), false);
+      return Operand::createDeferredZeroTest(extractU256Operand(LHSOp), false,
+                                             LHSOp.getRange());
     } else {
       if (LHSOp.isConstant() && RHSOp.isConstant()) {
         intx::uint256 L = u256ValueToIntx(LHSOp.getConstValue());
@@ -638,6 +651,27 @@ public:
       }
       if (LHSOp.isConstU64()) {
         return handleCompareLtRhsU64(RHSOp, LHSOp.getConstValue()[0]);
+      }
+    }
+
+    // Phase 3: u64 fast path for signed LT/GT. A u64 constant is a
+    // non-negative signed-256 value (limbs[1..3] == 0).
+    if constexpr (Operator == CompareOperator::CO_LT_S) {
+      if (RHSOp.isConstU64()) {
+        return handleCompareSltRhsU64(LHSOp, RHSOp.getConstValue()[0]);
+      }
+      if (LHSOp.isConstU64()) {
+        // c <_s x  <=>  x >_s c
+        return handleCompareSgtRhsU64(RHSOp, LHSOp.getConstValue()[0]);
+      }
+    }
+    if constexpr (Operator == CompareOperator::CO_GT_S) {
+      if (RHSOp.isConstU64()) {
+        return handleCompareSgtRhsU64(LHSOp, RHSOp.getConstValue()[0]);
+      }
+      if (LHSOp.isConstU64()) {
+        // c >_s x  <=>  x <_s c
+        return handleCompareSltRhsU64(RHSOp, LHSOp.getConstValue()[0]);
       }
     }
 
@@ -760,6 +794,48 @@ public:
         // MInstruction pointers from OtherOp, so the value range of those
         // limbs is preserved exactly. max(U64, OtherOp.range) = OtherOp.range.
         return Operand(Result, EVMType::UINT256, OtherOp.getRange());
+      }
+
+      // Phase 2: range-narrowed OR/XOR for non-constant operands. Constants
+      // with u64 magnitude were already handled above.
+      MType *MirI64Type =
+          EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+      if (!LHSOp.isConstant() && !RHSOp.isConstant() &&
+          Operand::bothFitU64(LHSOp, RHSOp)) {
+        // Both upper limbs are semantically zero, so OR/XOR of them is zero.
+        U256Inst LHS = extractU256Operand(LHSOp);
+        U256Inst RHS = extractU256Operand(RHSOp);
+        MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+        U256Inst Result = {};
+        Result[0] = protectUnsafeValue(
+            createInstruction<BinaryInstruction>(false, getMirOpcode(Operator),
+                                                 MirI64Type, LHS[0], RHS[0]),
+            MirI64Type);
+        for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+          Result[I] = Zero;
+        }
+        return Operand(Result, EVMType::UINT256, ValueRange::U64);
+      }
+      if (!LHSOp.isConstant() && !RHSOp.isConstant() &&
+          ((LHSOp.getRange() == ValueRange::U64) ^
+           (RHSOp.getRange() == ValueRange::U64))) {
+        // Exactly one side is u64: its upper limbs are semantically zero, so
+        // OR/XOR with them is identity on the wide side's upper limbs.
+        const Operand &U64Op =
+            LHSOp.getRange() == ValueRange::U64 ? LHSOp : RHSOp;
+        const Operand &WideOp =
+            LHSOp.getRange() == ValueRange::U64 ? RHSOp : LHSOp;
+        U256Inst Narrow = extractU256Operand(U64Op);
+        U256Inst Wide = extractU256Operand(WideOp);
+        U256Inst Result = {};
+        Result[0] = protectUnsafeValue(
+            createInstruction<BinaryInstruction>(
+                false, getMirOpcode(Operator), MirI64Type, Narrow[0], Wide[0]),
+            MirI64Type);
+        for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
+          Result[I] = Wide[I];
+        }
+        return Operand(Result, EVMType::UINT256, WideOp.getRange());
       }
     }
 
@@ -1097,7 +1173,7 @@ private:
     U256Inst RHS = {};
 
     if constexpr (Operator == CompareOperator::CO_EQZ) {
-      return handleCompareEQZ(LHS, ResultType);
+      return handleCompareEQZ(LHS, ResultType, false, LHSOp.getRange());
     } else if constexpr (Operator == CompareOperator::CO_EQ) {
       RHS = extractU256Operand(RHSOp);
       return handleCompareEQ(LHS, RHS, ResultType);
@@ -1108,7 +1184,8 @@ private:
   }
 
   U256Inst handleCompareEQZ(const U256Inst &LHS, MType *ResultType,
-                            bool IsNegated = false);
+                            bool IsNegated = false,
+                            ValueRange BaseRange = ValueRange::U256);
   MInstruction *createJumpCondition(const Operand &Cond);
 
   U256Inst handleCompareEQ(const U256Inst &LHS, const U256Inst &RHS,
@@ -1148,6 +1225,8 @@ private:
   Operand handleCompareEqU64(const Operand &FullOp, uint64_t U64Val);
   Operand handleCompareLtRhsU64(const Operand &LHSOp, uint64_t RhsU64);
   Operand handleCompareGtRhsU64(const Operand &LHSOp, uint64_t RhsU64);
+  Operand handleCompareSltRhsU64(const Operand &LHSOp, uint64_t RhsU64);
+  Operand handleCompareSgtRhsU64(const Operand &LHSOp, uint64_t RhsU64);
 
   // Helper functions for inline U256 multiplication
   MInstruction *createEvmUmul128(MInstruction *LHS, MInstruction *RHS);
