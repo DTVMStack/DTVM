@@ -42,7 +42,12 @@ dropped or kept high limb into an observable interp-vs-multipass divergence.
 To keep the differential from being vacuous, `rangeDiffRun` forces synchronous
 multipass compilation (`DisableMultipassMultithread`) — the default async
 config can fall back to the interpreter for a single call — and `rangeDiffAgree`
-asserts `JITCompiled` so the multipass side really executes JIT code.
+asserts `JITCompiled` so the multipass side really executes JIT code. That
+assertion is compiled under `#ifdef ZEN_ENABLE_JIT`; the whole suite is already
+gated on `ZEN_ENABLE_MULTIPASS_JIT`, so in the builds where these tests run the
+multipass side is JIT-backed. In a hypothetical no-JIT build the assertion is
+absent and the comparison would reduce to interpreter-vs-interpreter (still
+correct, but not exercising the JIT).
 
 ## Adversarial operand set
 
