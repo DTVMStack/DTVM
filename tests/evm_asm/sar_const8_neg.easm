@@ -1,0 +1,14 @@
+// dyn(-1) SAR 8 -> all ones (sign-fill intact; const path only drops the
+// IsLargeShift guard, never source limbs)
+PUSH32 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH1 0x08
+SAR
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

@@ -3390,7 +3390,7 @@ std::optional<uint64_t> getConstShiftAmount(MInstruction *Inst) {
 
 EVMMirBuilder::U256Inst
 EVMMirBuilder::handleLeftShift(const U256Inst &Value, MInstruction *ShiftAmount,
-                               MInstruction *IsLargeShift) {
+                               MInstruction *IsLargeShift, size_t LiveLimbs) {
   MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   U256Inst Result = {};
@@ -3422,32 +3422,49 @@ EVMMirBuilder::handleLeftShift(const U256Inst &Value, MInstruction *ShiftAmount,
       MInstruction *R = Zero;
       if (I >= CompShift) {
         size_t SrcIdx = I - CompShift;
+        // Range-aware pruning: a source limb at index >= LiveLimbs is
+        // semantically zero, so its shifted/carry contributions vanish.
+        bool ShiftedLive = SrcIdx < LiveLimbs;
+        bool CarryLive = SrcIdx > 0 && (SrcIdx - 1) < LiveLimbs;
         if (ShiftMod == 0) {
           // Pure limb shift (multiple of 64): no intra-limb shift/carry needed.
-          R = Value[SrcIdx];
+          if (ShiftedLive)
+            R = Value[SrcIdx];
         } else {
-          MInstruction *SrcVal = Value[SrcIdx];
-          MInstruction *Shifted = createInstruction<BinaryInstruction>(
-              false, OP_shl, MirI64Type, SrcVal, ShiftModConst);
-          if (SrcIdx > 0 && RemainingBitsConst) {
-            MInstruction *Carry = createInstruction<BinaryInstruction>(
+          MInstruction *Shifted = nullptr;
+          if (ShiftedLive) {
+            Shifted = createInstruction<BinaryInstruction>(
+                false, OP_shl, MirI64Type, Value[SrcIdx], ShiftModConst);
+          }
+          MInstruction *Carry = nullptr;
+          if (CarryLive && RemainingBitsConst) {
+            Carry = createInstruction<BinaryInstruction>(
                 false, OP_ushr, MirI64Type, Value[SrcIdx - 1],
                 RemainingBitsConst);
+          }
+          if (Shifted && Carry) {
             R = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
                                                      Shifted, Carry);
-          } else {
+          } else if (Shifted) {
             R = Shifted;
+          } else if (Carry) {
+            R = Carry;
           }
         }
       }
       // Guard with IsLargeShift: if the full 256-bit shift has high limbs set,
-      // the result must be zero per EVM spec.
-      R = createInstruction<SelectInstruction>(false, MirI64Type, IsLargeShift,
-                                               Zero, R);
+      // the result must be zero per EVM spec. When the shift amount is a
+      // constant < 256 the caller passes nullptr and the guard is omitted.
+      if (IsLargeShift) {
+        R = createInstruction<SelectInstruction>(false, MirI64Type,
+                                                 IsLargeShift, Zero, R);
+      }
       Result[I] = protectUnsafeValue(R, MirI64Type);
     }
     return Result;
   }
+
+  ZEN_ASSERT(IsLargeShift != nullptr);
 
   MInstruction *One = createIntConstInstruction(MirI64Type, 1);
   MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
@@ -3578,10 +3595,9 @@ EVMMirBuilder::handleLeftShift(const U256Inst &Value, MInstruction *ShiftAmount,
   return Result;
 }
 
-EVMMirBuilder::U256Inst
-EVMMirBuilder::handleLogicalRightShift(const U256Inst &Value,
-                                       MInstruction *ShiftAmount,
-                                       MInstruction *IsLargeShift) {
+EVMMirBuilder::U256Inst EVMMirBuilder::handleLogicalRightShift(
+    const U256Inst &Value, MInstruction *ShiftAmount,
+    MInstruction *IsLargeShift, size_t LiveLimbs) {
   MType *MirI64Type =
       EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   U256Inst Result = {};
@@ -3603,13 +3619,17 @@ EVMMirBuilder::handleLogicalRightShift(const U256Inst &Value,
     if (ShiftMod == 0) {
       for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
         MInstruction *R = Zero;
-        if (I + CompShift < EVM_ELEMENTS_COUNT) {
-          size_t SrcIdx = I + CompShift;
+        size_t SrcIdx = I + CompShift;
+        // Range-aware pruning: drop limbs sourced from index >= LiveLimbs.
+        if (SrcIdx < EVM_ELEMENTS_COUNT && SrcIdx < LiveLimbs) {
           R = Value[SrcIdx];
         }
         // Guard with IsLargeShift for correctness with 256-bit shift values.
-        R = createInstruction<SelectInstruction>(false, MirI64Type,
-                                                 IsLargeShift, Zero, R);
+        // Omitted when the caller passes nullptr (constant amount < 256).
+        if (IsLargeShift) {
+          R = createInstruction<SelectInstruction>(false, MirI64Type,
+                                                   IsLargeShift, Zero, R);
+        }
         Result[I] = protectUnsafeValue(R, MirI64Type);
       }
       return Result;
@@ -3624,27 +3644,42 @@ EVMMirBuilder::handleLogicalRightShift(const U256Inst &Value,
 
     for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
       MInstruction *R = Zero;
-      if (I + CompShift < EVM_ELEMENTS_COUNT) {
-        size_t SrcIdx = I + CompShift;
-        MInstruction *SrcVal = Value[SrcIdx];
-        MInstruction *Shifted = createInstruction<BinaryInstruction>(
-            false, OP_ushr, MirI64Type, SrcVal, ShiftModConst);
-        if (SrcIdx + 1 < EVM_ELEMENTS_COUNT) {
-          MInstruction *Carry = createInstruction<BinaryInstruction>(
-              false, OP_shl, MirI64Type, Value[SrcIdx + 1], CarryShiftConst);
-          R = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
-                                                   Shifted, Carry);
-        } else {
-          R = Shifted;
-        }
+      size_t SrcIdx = I + CompShift;
+      // Range-aware pruning: the shifted term lives only when its source limb
+      // index is live; the carry-in pulls from SrcIdx + 1.
+      bool ShiftedLive = SrcIdx < EVM_ELEMENTS_COUNT && SrcIdx < LiveLimbs;
+      bool CarryLive =
+          SrcIdx + 1 < EVM_ELEMENTS_COUNT && (SrcIdx + 1) < LiveLimbs;
+      MInstruction *Shifted = nullptr;
+      if (ShiftedLive) {
+        Shifted = createInstruction<BinaryInstruction>(
+            false, OP_ushr, MirI64Type, Value[SrcIdx], ShiftModConst);
+      }
+      MInstruction *Carry = nullptr;
+      if (CarryLive) {
+        Carry = createInstruction<BinaryInstruction>(
+            false, OP_shl, MirI64Type, Value[SrcIdx + 1], CarryShiftConst);
+      }
+      if (Shifted && Carry) {
+        R = createInstruction<BinaryInstruction>(false, OP_or, MirI64Type,
+                                                 Shifted, Carry);
+      } else if (Shifted) {
+        R = Shifted;
+      } else if (Carry) {
+        R = Carry;
       }
       // Guard with IsLargeShift for correctness with 256-bit shift values.
-      R = createInstruction<SelectInstruction>(false, MirI64Type, IsLargeShift,
-                                               Zero, R);
+      // Omitted when the caller passes nullptr (constant amount < 256).
+      if (IsLargeShift) {
+        R = createInstruction<SelectInstruction>(false, MirI64Type,
+                                                 IsLargeShift, Zero, R);
+      }
       Result[I] = protectUnsafeValue(R, MirI64Type);
     }
     return Result;
   }
+
+  ZEN_ASSERT(IsLargeShift != nullptr);
 
   MInstruction *One = createIntConstInstruction(MirI64Type, 1);
   MInstruction *Const64 = createIntConstInstruction(MirI64Type, 64);
@@ -3810,8 +3845,11 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
           R = Value[SrcIdx];
         }
         // Guard with IsLargeShift for correctness with 256-bit shift values.
-        R = createInstruction<SelectInstruction>(
-            false, MirI64Type, IsLargeShift, LargeShiftResult, R);
+        // Omitted when the caller passes nullptr (constant amount < 256).
+        if (IsLargeShift) {
+          R = createInstruction<SelectInstruction>(
+              false, MirI64Type, IsLargeShift, LargeShiftResult, R);
+        }
         Result[I] = protectUnsafeValue(R, MirI64Type);
       }
       return Result;
@@ -3844,12 +3882,17 @@ EVMMirBuilder::handleArithmeticRightShift(const U256Inst &Value,
         }
       }
       // Guard with IsLargeShift for correctness with 256-bit shift values.
-      R = createInstruction<SelectInstruction>(false, MirI64Type, IsLargeShift,
-                                               LargeShiftResult, R);
+      // Omitted when the caller passes nullptr (constant amount < 256).
+      if (IsLargeShift) {
+        R = createInstruction<SelectInstruction>(
+            false, MirI64Type, IsLargeShift, LargeShiftResult, R);
+      }
       Result[I] = protectUnsafeValue(R, MirI64Type);
     }
     return Result;
   }
+
+  ZEN_ASSERT(IsLargeShift != nullptr);
 
   // intra-component shifts = shift % 64
   // shift_comp = shift / 64 (which component index shift from)

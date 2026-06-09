@@ -783,22 +783,60 @@ public:
       return Operand(intxToU256Value(Res));
     }
 
+    // Static large-shift resolution: when the shift amount is a compile-time
+    // constant, the >= 256 guard is statically decidable. For SHL/SHR_U a
+    // constant amount >= 256 yields an identically-zero result for any value
+    // (EVM spec), mirroring the Phase-0 both-const fold above. SHR_S keeps the
+    // generic flow because its fill depends on the value's sign bit.
+    if (ShiftOp.isConstant()) {
+      intx::uint256 Amount = u256ValueToIntx(ShiftOp.getConstValue());
+      if (Amount >= 256) {
+        if constexpr (Operator == BinaryOperator::BO_SHL ||
+                      Operator == BinaryOperator::BO_SHR_U) {
+          return Operand(U256Value{0, 0, 0, 0});
+        }
+      }
+    }
+
     U256Inst Shift = extractU256Operand(ShiftOp);
     U256Inst Value = extractU256Operand(ValueOp);
 
     // Check if shift amount >= 256
     // (EVM spec: result is 0 for SHL/SHR, sign-extended for SAR)
-    MInstruction *IsLargeShift = isU256GreaterOrEqual(Shift, 256);
+    // When the amount is a constant < 256, the guard is statically false:
+    // pass IsLargeShift = nullptr so the helper skips the per-limb Select.
+    MInstruction *IsLargeShift = nullptr;
+    if (!ShiftOp.isConstant() ||
+        u256ValueToIntx(ShiftOp.getConstValue()) >= 256) {
+      IsLargeShift = isU256GreaterOrEqual(Shift, 256);
+    }
 
     // Use only low 64 bits as shift amount
     MInstruction *ShiftAmount = Shift[0];
 
+    // Number of live source limbs implied by the value operand's range. A limb
+    // with index >= LiveLimbs is semantically zero under the Range contract,
+    // letting the const-amount SHL/SHR_U paths drop dead source terms.
+    size_t LiveLimbs = 4;
+    switch (ValueOp.getRange()) {
+    case ValueRange::U64:
+      LiveLimbs = 1;
+      break;
+    case ValueRange::U128:
+      LiveLimbs = 2;
+      break;
+    default:
+      LiveLimbs = 4;
+      break;
+    }
+
     U256Inst Result = {};
 
     if constexpr (Operator == BinaryOperator::BO_SHL) {
-      Result = handleLeftShift(Value, ShiftAmount, IsLargeShift);
+      Result = handleLeftShift(Value, ShiftAmount, IsLargeShift, LiveLimbs);
     } else if constexpr (Operator == BinaryOperator::BO_SHR_U) {
-      Result = handleLogicalRightShift(Value, ShiftAmount, IsLargeShift);
+      Result =
+          handleLogicalRightShift(Value, ShiftAmount, IsLargeShift, LiveLimbs);
     } else if constexpr (Operator == BinaryOperator::BO_SHR_S) {
       Result = handleArithmeticRightShift(Value, ShiftAmount, IsLargeShift);
     }
@@ -1033,11 +1071,12 @@ private:
       CompareOperator Operator);
 
   U256Inst handleLeftShift(const U256Inst &Value, MInstruction *ShiftAmount,
-                           MInstruction *IsLargeShift);
+                           MInstruction *IsLargeShift, size_t LiveLimbs = 4);
 
   U256Inst handleLogicalRightShift(const U256Inst &Value,
                                    MInstruction *ShiftAmount,
-                                   MInstruction *IsLargeShift);
+                                   MInstruction *IsLargeShift,
+                                   size_t LiveLimbs = 4);
 
   U256Inst handleArithmeticRightShift(const U256Inst &Value,
                                       MInstruction *ShiftAmount,
