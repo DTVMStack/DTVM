@@ -5216,7 +5216,12 @@ EVMMirBuilder::convertSingleInstrToU256Operand(MInstruction *SingleInstr) {
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
     Result[I] = createIntConstInstruction(I64Type, 0);
   }
-  return Operand(Result, EVMType::UINT256);
+  // limbs[1..3] are literal zero and limb[0] is zero-extended, so the value is
+  // structurally in [0, 2^64-1] regardless of caller intent. Tag it U64 so
+  // same-block consumers (e.g. size/bounds arithmetic over CALLDATASIZE / GAS /
+  // PC / MSIZE / CODESIZE / RETURNDATASIZE) hit the u64 fast path at first use
+  // instead of the full 256-bit lowering.
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
 Variable *EVMMirBuilder::storeInstructionInTemp(MInstruction *Value,
