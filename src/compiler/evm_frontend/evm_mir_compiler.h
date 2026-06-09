@@ -788,6 +788,7 @@ public:
     // constant amount >= 256 yields an identically-zero result for any value
     // (EVM spec), mirroring the Phase-0 both-const fold above. SHR_S keeps the
     // generic flow because its fill depends on the value's sign bit.
+    bool ConstAmountBelowLimit = false;
     if (ShiftOp.isConstant()) {
       intx::uint256 Amount = u256ValueToIntx(ShiftOp.getConstValue());
       if (Amount >= 256) {
@@ -795,6 +796,8 @@ public:
                       Operator == BinaryOperator::BO_SHR_U) {
           return Operand(U256Value{0, 0, 0, 0});
         }
+      } else {
+        ConstAmountBelowLimit = true;
       }
     }
 
@@ -806,8 +809,7 @@ public:
     // When the amount is a constant < 256, the guard is statically false:
     // pass IsLargeShift = nullptr so the helper skips the per-limb Select.
     MInstruction *IsLargeShift = nullptr;
-    if (!ShiftOp.isConstant() ||
-        u256ValueToIntx(ShiftOp.getConstValue()) >= 256) {
+    if (!ConstAmountBelowLimit) {
       IsLargeShift = isU256GreaterOrEqual(Shift, 256);
     }
 
