@@ -25,6 +25,7 @@ import argparse
 import csv
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -68,7 +69,7 @@ def run_logged(
 ) -> int:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("w", encoding="utf-8") as log:
-        log.write("$ " + " ".join(cmd) + "\n\n")
+        log.write("$ " + shlex.join(cmd) + "\n\n")
         log.flush()
         proc = subprocess.run(
             cmd,
@@ -143,11 +144,31 @@ def prepare_smoke_corpus(
     if not selected:
         raise SystemExit("smoke suite selection produced no fixtures")
 
+    def materialize_fixture(src: Path, dst: Path) -> None:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.symlink(src, dst)
+            return
+        except OSError as symlink_error:
+            try:
+                os.link(src, dst)
+                return
+            except OSError as link_error:
+                try:
+                    shutil.copy2(src, dst)
+                    return
+                except OSError as copy_error:
+                    raise SystemExit(
+                        "failed to materialize smoke fixture "
+                        f"{src} -> {dst}; symlink failed: {symlink_error}; "
+                        f"hardlink failed: {link_error}; copy failed: {copy_error}"
+                    ) from copy_error
+
     for fixture in selected:
         src = corpus / fixture["file"]
         if not src.exists():
             raise SystemExit(f"manifest fixture is missing: {src}")
-        os.symlink(src, target / fixture["file"])
+        materialize_fixture(src, target / fixture["file"])
     return target
 
 

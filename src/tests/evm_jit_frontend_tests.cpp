@@ -76,8 +76,8 @@ struct MockOperand {
         Range(COMPILER::EVMValueRange::U64) {}
   explicit MockOperand(
       std::shared_ptr<U256Value> Slot,
-      COMPILER::EVMValueRange Range = COMPILER::EVMValueRange::U256)
-      : Range(Range), Slot(std::move(Slot)) {}
+      COMPILER::EVMValueRange InitialRange = COMPILER::EVMValueRange::U256)
+      : Range(InitialRange), Slot(std::move(Slot)) {}
 
   bool isConstant() const { return Constant; }
 

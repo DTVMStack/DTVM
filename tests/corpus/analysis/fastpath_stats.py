@@ -88,8 +88,9 @@ def read_stream_b(path):
     the majority path; ties break toward the path that ranks first in PATHS for
     determinism.
 
-    Guards against a torn final CSV line on process exit: any data row whose
-    field count != STREAM_B_FIELDS is dropped and counted.
+    Guards against a torn final CSV line on process exit: any data row with
+    fewer than STREAM_B_FIELDS fields is dropped and counted. Extra trailing
+    columns are tolerated for CSV compatibility.
 
     Returns (sites, dropped) where sites maps (codehash, pc) -> (opcode, path).
     """

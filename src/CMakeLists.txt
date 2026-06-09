@@ -173,7 +173,7 @@ add_library(
   zetaengine-c.cpp
 )
 if(ZEN_ENABLE_EVM)
-  target_link_libraries(dtvmcore PUBLIC evmc::instructions)
+  target_link_libraries(dtvmcore PUBLIC evm_arith_profile evmc::instructions)
 endif()
 if(NOT ZEN_ENABLE_SGX)
   target_link_libraries(dtvmcore PRIVATE Threads::Threads)

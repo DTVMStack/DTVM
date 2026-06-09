@@ -95,13 +95,8 @@ set(COMPILER_SRCS
 )
 
 if(ZEN_ENABLE_EVM)
-  list(
-    APPEND
-    COMPILER_SRCS
-    evm_compiler.cpp
-    evm_frontend/evm_imported.cpp
-    evm_frontend/evm_mir_compiler.cpp
-    ../evm/arith_profile.cpp
+  list(APPEND COMPILER_SRCS evm_compiler.cpp evm_frontend/evm_imported.cpp
+       evm_frontend/evm_mir_compiler.cpp
   )
 endif()
 
@@ -118,7 +113,7 @@ set_property(
 add_library(compiler STATIC ${COMPILER_SRCS} $<TARGET_OBJECTS:utils>)
 target_link_libraries(compiler PRIVATE ${llvm_libs})
 if(ZEN_ENABLE_EVM)
-  target_link_libraries(compiler PUBLIC evmc::instructions)
+  target_link_libraries(compiler PUBLIC evm_arith_profile evmc::instructions)
 endif()
 
 add_executable(ircompiler ircompiler.cpp)
