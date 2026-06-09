@@ -419,6 +419,44 @@ public:
       }
     }
 
+    // Phase 1: Range-based u64 fast path for SUB.
+    // When both operands provably fit in u64, (a - b) mod 2^256 has only one
+    // meaningful limb of difference plus a borrow that sign-fills the upper
+    // 192 bits: limb0 = wrapping_sub(a0, b0); limbs[1..3] = 0 - borrow, where
+    // borrow = (a0 <u b0). In i64, 0 - 1 = 0xFFFFFFFFFFFFFFFF, so on underflow
+    // the upper limbs become all-ones (the wrapped 2^256 - (b - a)). The result
+    // is NOT provably narrow, so it carries the default U256 range.
+    if constexpr (Operator == BinaryOperator::BO_SUB) {
+      if (Operand::bothFitU64(LHSOp, RHSOp) && !LHSOp.isConstant() &&
+          !RHSOp.isConstant()) {
+        MType *MirI64Type =
+            EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+        MInstruction *Zero = createIntConstInstruction(MirI64Type, 0);
+        U256Inst LHS = extractU256Operand(LHSOp);
+        U256Inst RHS = extractU256Operand(RHSOp);
+        // No SBB chain here (the borrow is an explicit compare), so no
+        // flag-protection barrier is needed and Diff has a single consumer.
+        MInstruction *Diff = createInstruction<BinaryInstruction>(
+            false, OP_sub, MirI64Type, LHS[0], RHS[0]);
+        // Borrow = (LHS[0] < RHS[0]) ? 1 : 0
+        MInstruction *BorrowCmp = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_ULT, MirI64Type, LHS[0], RHS[0]);
+        MInstruction *BorrowExt = zeroExtendToI64(BorrowCmp);
+        // Fill = 0 - borrow; all-ones on underflow, zero otherwise.
+        MInstruction *Fill = createInstruction<BinaryInstruction>(
+            false, OP_sub, MirI64Type, Zero, BorrowExt);
+        // Materialize Fill once and re-read it per upper limb (the
+        // conservative multi-use pattern, matching stackPop/stackGet).
+        Variable *FillVar = storeInstructionInTemp(Fill, MirI64Type);
+        U256Inst Result = {Diff, loadVariable(FillVar), loadVariable(FillVar),
+                           loadVariable(FillVar)};
+#ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+        ++MemStats.SubFastRangeU64Count;
+#endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
+        return Operand(Result, EVMType::UINT256);
+      }
+    }
+
     // Phase 2: u64 fast path for ADD - share zero const for upper RHS limbs
     if constexpr (Operator == BinaryOperator::BO_ADD) {
       bool LHSIsU64 = LHSOp.isConstU64();
@@ -1325,6 +1363,7 @@ private:
     uint64_t AddFastRangeU64Count = 0;
     uint64_t AddFastConstU64Count = 0;
     uint64_t AddFullCount = 0;
+    uint64_t SubFastRangeU64Count = 0;
     uint64_t SubFastConstU64Count = 0;
     uint64_t SubFullCount = 0;
     uint64_t MulFastRangeU64Count = 0;

@@ -1,0 +1,24 @@
+// dyn-u64(42) - dyn-u64(0) = 42
+// The subtrahend is a dynamic zero (MLOAD round-trip), so it does NOT take the
+// const zero-identity shortcut; it exercises the range-based u64 fast path.
+// Push b = 0 first, then a = 42; SUB computes a - b.
+PUSH1 0x00
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH8 0xFFFFFFFFFFFFFFFF
+AND
+PUSH1 0x2a
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH8 0xFFFFFFFFFFFFFFFF
+AND
+SUB
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

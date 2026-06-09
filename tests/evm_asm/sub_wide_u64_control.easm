@@ -1,0 +1,23 @@
+// dyn-U256(2^192+5) - dyn-u64(5) = 2^192 (regression control)
+// The minuend is a dynamic wide U256 (no u64 mask), so only one operand is
+// range-proven u64. The range-based u64 fast path must NOT fire; the generic
+// 4-limb SBB path computes the result.
+// Push b = 5 (dyn-u64) first, then a = 2^192+5 (dyn-U256); SUB computes a - b.
+PUSH1 0x05
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH8 0xFFFFFFFFFFFFFFFF
+AND
+PUSH32 0x0000000000000001000000000000000000000000000000000000000000000005
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+SUB
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

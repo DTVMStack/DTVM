@@ -6482,6 +6482,7 @@ bool EVMMirBuilder::hasMemoryCompileStats() const {
 bool EVMMirBuilder::hasArithCompileStats() const {
   return MemStats.AddFastRangeU64Count != 0 ||
          MemStats.AddFastConstU64Count != 0 || MemStats.AddFullCount != 0 ||
+         MemStats.SubFastRangeU64Count != 0 ||
          MemStats.SubFastConstU64Count != 0 || MemStats.SubFullCount != 0 ||
          MemStats.MulFastRangeU64Count != 0 ||
          MemStats.MulFastConstU64Count != 0 || MemStats.MulFullCount != 0 ||
@@ -6917,7 +6918,8 @@ void EVMMirBuilder::dumpMemoryCompileStats() const {
   if (hasArithCompileStats()) {
     ZEN_LOG_DEBUG(
         "[EVM-ARITH-SUMMARY] add_fast_range_u64=%llu add_fast_const_u64=%llu "
-        "add_full=%llu sub_fast_const_u64=%llu sub_full=%llu "
+        "add_full=%llu sub_fast_range_u64=%llu sub_fast_const_u64=%llu "
+        "sub_full=%llu "
         "mul_fast_range_u64=%llu mul_fast_const_u64=%llu mul_full=%llu "
         "div_fast_range_u64=%llu div_fast_const_u64=%llu div_full=%llu "
         "mod_fast_range_u64=%llu mod_fast_const_u64=%llu mod_full=%llu "
@@ -6926,6 +6928,7 @@ void EVMMirBuilder::dumpMemoryCompileStats() const {
         static_cast<unsigned long long>(MemStats.AddFastRangeU64Count),
         static_cast<unsigned long long>(MemStats.AddFastConstU64Count),
         static_cast<unsigned long long>(MemStats.AddFullCount),
+        static_cast<unsigned long long>(MemStats.SubFastRangeU64Count),
         static_cast<unsigned long long>(MemStats.SubFastConstU64Count),
         static_cast<unsigned long long>(MemStats.SubFullCount),
         static_cast<unsigned long long>(MemStats.MulFastRangeU64Count),

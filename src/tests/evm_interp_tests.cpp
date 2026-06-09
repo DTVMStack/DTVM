@@ -688,4 +688,39 @@ TEST(EVMRegressionTest, Issue488_PCAsAddmodAugend_InterpMatchesMultipass) {
   EXPECT_EQ(InterpExec.OutputHex,
             "0000000000000000000000000000000000000000000000000000000000000006");
 }
+
+// Differential coverage for the range-based u64 SUB fast path. Each stem
+// exercises (a - b) mod 2^256 with both operands range-proven u64 (except the
+// wide control), including the adversarial underflow cases where the upper 192
+// bits sign-fill to all-ones. Interpreter and multipass JIT must agree.
+class EVMSubWrapDifferentialTest
+    : public ::testing::TestWithParam<std::string> {};
+
+TEST_P(EVMSubWrapDifferentialTest, InterpMatchesMultipass) {
+  const std::string Stem = GetParam();
+  const auto FilePath = (getEvmAsmDirPath() / (Stem + ".evm.hex")).string();
+
+  auto InterpExec =
+      executeEvmBytecodeFile(FilePath, common::RunMode::InterpMode);
+  auto MultipassExec =
+      executeEvmBytecodeFile(FilePath, common::RunMode::MultipassMode);
+
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(MultipassExec.JITCompiled)
+      << "Multipass JIT should compile " << Stem;
+#endif
+
+  EXPECT_EQ(InterpExec.Status, EVMC_SUCCESS)
+      << "Interpreter did not succeed for " << Stem;
+  EXPECT_EQ(MultipassExec.Status, InterpExec.Status)
+      << "Multipass status diverged from interpreter for " << Stem;
+  EXPECT_EQ(MultipassExec.OutputHex, InterpExec.OutputHex)
+      << "Multipass output diverged from interpreter for " << Stem;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    SubWrapU64, EVMSubWrapDifferentialTest,
+    ::testing::Values("sub_u64_pair_nounderflow", "sub_u64_pair_underflow",
+                      "sub_u64_pair_equal", "sub_u64_pair_wrap_boundary",
+                      "sub_u64_pair_zero_rhs_dyn", "sub_wide_u64_control"));
 #endif
