@@ -688,4 +688,248 @@ TEST(EVMRegressionTest, Issue488_PCAsAddmodAugend_InterpMatchesMultipass) {
   EXPECT_EQ(InterpExec.OutputHex,
             "0000000000000000000000000000000000000000000000000000000000000006");
 }
+
+// ===========================================================================
+// Value-range lowering differential harness.
+//
+// A multipass value-range fast path that emits a single- or double-limb result
+// MUST be bit-identical to the full 4-limb path for every input the range tag
+// claims to cover. A too-narrow tag silently miscompiles only on operands with
+// non-zero high limbs, which ordinary corpora rarely carry. Each test drives an
+// opcode with an adversarial operand matrix (value-range boundaries +
+// high-sparse {0,x,0,0}/{0,0,0,x}) and asserts the multipass JIT agrees
+// bit-for-bit with the interpreter (the full-width reference).
+//
+// Coverage split (the operands decide which lowering path fires):
+//   - BinaryOpsMatchInterpreterOnAdversarialOperands feeds two CALLDATALOAD
+//     operands, which are dynamic and U256-range, so they do NOT enter the
+//     bothFitU64 / AND-narrow fast paths: this test gates the FULL-width
+//     4-limb lowering (the #487-class high-limb-corruption surface).
+//   - The AndU64Mask* tests construct a provably-U64 operand (AND with a u64
+//     constant) and feed it directly / through a bothFitU64 ADD, so they gate
+//     the actual narrowing fast paths.
+// ===========================================================================
+
+// Build a big-endian 32-byte word holding `Val` in 64-bit limb `Limb`
+// (limb 0 = least significant). OR several together for multi-limb operands.
+static std::vector<uint8_t> rangeDiffLimb(int Limb, uint64_t Val) {
+  std::vector<uint8_t> W(32, 0);
+  const int Base = 24 - Limb * 8; // limb 0 -> bytes [24..31]
+  for (int I = 0; I < 8; ++I) {
+    W[Base + 7 - I] = static_cast<uint8_t>((Val >> (8 * I)) & 0xff);
+  }
+  return W;
+}
+
+static std::vector<uint8_t> rangeDiffOr(std::vector<uint8_t> A,
+                                        const std::vector<uint8_t> &B) {
+  for (size_t I = 0; I < A.size(); ++I) {
+    A[I] |= B[I];
+  }
+  return A;
+}
+
+// Adversarial operand matrix: each entry is a 32-byte big-endian u256.
+static std::vector<std::vector<uint8_t>> rangeDiffOperands() {
+  const uint64_t Max = 0xFFFFFFFFFFFFFFFFull;
+  std::vector<std::vector<uint8_t>> Ops;
+  Ops.push_back(rangeDiffLimb(0, 0));   // 0
+  Ops.push_back(rangeDiffLimb(0, 1));   // 1
+  Ops.push_back(rangeDiffLimb(0, Max)); // 2^64 - 1 (U64 boundary)
+  Ops.push_back(rangeDiffLimb(1, 1));   // 2^64
+  Ops.push_back(
+      rangeDiffOr(rangeDiffLimb(0, Max), rangeDiffLimb(1, Max))); // U128-1
+  Ops.push_back(rangeDiffLimb(2, 1)); // 2^128 (U128 boundary)
+  Ops.push_back(rangeDiffLimb(3, 1)); // 2^192 (high-sparse {0,0,0,x})
+  Ops.push_back(
+      rangeDiffOr(rangeDiffLimb(3, 1), rangeDiffLimb(0, 5))); // 2^192+5
+  Ops.push_back(rangeDiffLimb(1, 5)); // high-sparse {0,x,0,0}
+  Ops.push_back(rangeDiffLimb(3, 0x8000000000000000ull)); // 2^255 (sign bit)
+  Ops.push_back(rangeDiffOr(
+      rangeDiffOr(rangeDiffLimb(0, Max), rangeDiffLimb(1, Max)),
+      rangeDiffOr(rangeDiffLimb(2, Max), rangeDiffLimb(3, Max)))); // 2^256-1
+  return Ops;
+}
+
+static std::vector<uint8_t> rangeDiffCalldata(const std::vector<uint8_t> &A,
+                                              const std::vector<uint8_t> &B) {
+  std::vector<uint8_t> CD;
+  CD.insert(CD.end(), A.begin(), A.end());
+  CD.insert(CD.end(), B.begin(), B.end());
+  return CD;
+}
+
+// Execute `Bytecode` in `Mode`, forcing synchronous multipass compilation so
+// the multipass run actually executes JIT code (the default async/multithread
+// config can fall back to the interpreter for a single call, making a
+// differential test vacuous).
+static EVMExecutionResult rangeDiffRun(const std::string &Label,
+                                       const std::vector<uint8_t> &Bytecode,
+                                       common::RunMode Mode,
+                                       const std::vector<uint8_t> &CallData) {
+  EVMExecutionResult Empty;
+  RuntimeConfig Config;
+  Config.Mode = Mode;
+  Config.DisableMultipassMultithread = true; // compile before run -> JIT used
+
+  auto MockedHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  MockedHost->tx_context.tx_origin = zen::evm::DEFAULT_DEPLOYER_ADDRESS;
+  auto RT = Runtime::newEVMRuntime(Config, MockedHost.get());
+  if (!RT) {
+    ADD_FAILURE() << "runtime create failed: " << Label;
+    return Empty;
+  }
+  MockedHost->setRuntime(RT.get());
+
+  auto ModRet = RT->loadEVMModule(Label, Bytecode.data(), Bytecode.size());
+  if (!ModRet) {
+    ADD_FAILURE() << "module load failed: " << Label;
+    return Empty;
+  }
+  EVMModule *Mod = *ModRet;
+
+  Isolation *Iso = RT->createManagedIsolation();
+  if (!Iso) {
+    ADD_FAILURE() << "isolation create failed: " << Label;
+    return Empty;
+  }
+  const uint64_t GasLimit = 0xFFFF'FFFF'FFFF - zen::evm::BASIC_EXECUTION_COST;
+  auto InstRet = Iso->createEVMInstance(*Mod, GasLimit);
+  if (!InstRet) {
+    ADD_FAILURE() << "instance create failed: " << Label;
+    return Empty;
+  }
+  EVMInstance *Inst = *InstRet;
+  Inst->setRevision(evmc_revision::EVMC_OSAKA);
+
+  evmc_message Msg = {
+      .kind = EVMC_CALL,
+      .flags = 0u,
+      .depth = 0,
+      .gas = static_cast<int64_t>(GasLimit),
+      .recipient = {},
+      .sender = zen::evm::DEFAULT_DEPLOYER_ADDRESS,
+      .input_data = CallData.empty() ? nullptr : CallData.data(),
+      .input_size = CallData.size(),
+      .value = {},
+      .create2_salt = {},
+      .code_address = {},
+      .code = reinterpret_cast<const uint8_t *>(Mod->Code),
+      .code_size = Mod->CodeSize,
+  };
+  evmc::Result RawResult;
+  EVMExecutionResult Exec;
+#ifdef ZEN_ENABLE_JIT
+  Exec.JITCompiled = Mod->getJITCode() != nullptr && Mod->getJITCodeSize() > 0;
+#endif
+  EXPECT_NO_THROW({ RT->callEVMMain(*Inst, Msg, RawResult); });
+  Exec.Status = RawResult.status_code;
+  Exec.OutputHex =
+      zen::utils::toHex(RawResult.output_data, RawResult.output_size);
+  return Exec;
+}
+
+// Run `Bytecode` with `CallData` through interpreter and multipass, assert the
+// multipass JIT compiled (non-vacuous) and that status + 32-byte output agree.
+// Returns false on divergence so callers can stop flooding output.
+static bool rangeDiffAgree(const std::string &Label,
+                           const std::vector<uint8_t> &Bytecode,
+                           const std::vector<uint8_t> &CallData) {
+  auto Interp = rangeDiffRun(Label + "_interp", Bytecode,
+                             common::RunMode::InterpMode, CallData);
+  auto Multi = rangeDiffRun(Label + "_multipass", Bytecode,
+                            common::RunMode::MultipassMode, CallData);
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(Multi.JITCompiled) << "multipass did not JIT-compile: " << Label;
+#endif
+  EXPECT_EQ(Multi.Status, Interp.Status) << "status diverged: " << Label;
+  EXPECT_EQ(Multi.OutputHex, Interp.OutputHex) << "output diverged: " << Label;
+  return Multi.Status == Interp.Status && Multi.OutputHex == Interp.OutputHex;
+}
+
+// "a = calldata[0:32]; b = calldata[32:64]; OP". After the two pushes, b is on
+// top of the stack, so EVM evaluates `b OP a` (e.g. SUB = b - a; for shifts the
+// shift amount is b). The exact convention is irrelevant to a differential test
+// — both engines run identical bytecode — and the nested A*B sweep feeds every
+// matrix value into both slots regardless.
+static std::vector<uint8_t> rangeDiffBinOp(uint8_t Op) {
+  return {0x60, 0x00, 0x35,              // PUSH1 0    CALLDATALOAD -> a
+          0x60, 0x20, 0x35,              // PUSH1 0x20 CALLDATALOAD -> b
+          Op,                            // b OP a
+          0x60, 0x00, 0x52,              // PUSH1 0 MSTORE
+          0x60, 0x20, 0x60, 0x00, 0xf3}; // RETURN(0, 32)
+}
+
+// Differential over every binary opcode whose lowering touches limbs. Operands
+// are dynamic CALLDATALOAD (U256-range), so this gates the FULL-width 4-limb
+// path, not the narrow fast paths (those are gated by the AndU64Mask* tests).
+// On the first divergent (op, operand) pair the whole test returns, so a single
+// regression reports one op and skips the rest — intentional output-flood
+// control, not full per-op isolation.
+TEST(EVMRangeDifferential, BinaryOpsMatchInterpreterOnAdversarialOperands) {
+  struct OpCase {
+    uint8_t Op;
+    const char *Name;
+  };
+  const OpCase Cases[] = {
+      {0x01, "ADD"},  {0x02, "MUL"}, {0x03, "SUB"},  {0x04, "DIV"},
+      {0x05, "SDIV"}, {0x06, "MOD"}, {0x07, "SMOD"}, {0x10, "LT"},
+      {0x11, "GT"},   {0x12, "SLT"}, {0x13, "SGT"},  {0x14, "EQ"},
+      {0x16, "AND"},  {0x17, "OR"},  {0x18, "XOR"},  {0x1b, "SHL"},
+      {0x1c, "SHR"},  {0x1d, "SAR"},
+  };
+  const auto Operands = rangeDiffOperands();
+  for (const auto &C : Cases) {
+    const auto Bytecode = rangeDiffBinOp(C.Op);
+    for (const auto &A : Operands) {
+      for (const auto &B : Operands) {
+        if (!rangeDiffAgree(C.Name, Bytecode, rangeDiffCalldata(A, B))) {
+          return; // one divergence is enough; avoid output flood
+        }
+      }
+    }
+  }
+}
+
+// Directly exercise the AND-with-u64-constant fast path (CONST_U64): it tags
+// the result U64 and MUST zero limbs[1..3]. Returning the result directly (not
+// through a later narrow op that would discard the high limbs) is what makes a
+// too-narrow / too-wide limb bug observable. Feeding high-sparse calldata, the
+// masked result must equal the interpreter's.
+//   a = calldata[0:32]; MSTORE(0, a AND 0xFFFFFFFFFFFFFFFF); RETURN 32.
+TEST(EVMRangeDifferential, AndU64MaskMatchesInterpreter) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0x00, 0x35,                                     // CALLDATALOAD a
+      0x67, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // PUSH8 u64 mask
+      0x16,                                                 // AND -> m (U64)
+      0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xf3};      // RETURN(0,32)
+  const auto Operands = rangeDiffOperands();
+  for (const auto &A : Operands) {
+    if (!rangeDiffAgree("and_u64_mask", Bytecode, rangeDiffCalldata(A, A))) {
+      return;
+    }
+  }
+}
+
+// Exercise a narrow-result CONSUMER: AND with a u64 constant produces a U64
+// value that feeds a self-ADD on the bothFitU64 narrow path. The summed result
+// is returned; for any high-sparse input the narrowed two-limb sum must match
+// the interpreter's full-width sum.
+//   a = calldata[0:32]; m = a AND 0xFFFFFFFFFFFFFFFF; MSTORE(0, m + m); RETURN.
+TEST(EVMRangeDifferential, AndU64MaskThenNarrowAddMatchesInterpreter) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0x00, 0x35,                                     // CALLDATALOAD a
+      0x67, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // PUSH8 u64 mask
+      0x16,                                                 // AND -> m (U64)
+      0x80,                                                 // DUP1
+      0x01,                                            // ADD m + m (narrow)
+      0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xf3}; // RETURN(0,32)
+  const auto Operands = rangeDiffOperands();
+  for (const auto &A : Operands) {
+    if (!rangeDiffAgree("and_u64_mask_then_add", Bytecode,
+                        rangeDiffCalldata(A, A))) {
+      return;
+    }
+  }
+}
 #endif
