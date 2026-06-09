@@ -12,8 +12,6 @@ import subprocess
 import yaml
 from typing import Dict, Any, List, Tuple
 
-BASIC_EXECUTION_COST = 21000
-
 class Statistics:
     """Statistics class for tracking test results"""
     def __init__(self):
@@ -169,7 +167,7 @@ class TestRunner:
             cmd.append("--disable-multipass-multithread")
 
         if self.args.gas_limit:
-            cmd.extend(["--gas-limit", str(self.getExecutionGasLimit())])
+            cmd.extend(["--gas-limit", str(self.args.gas_limit)])
 
         if self.args.enable_evm_gas:
             cmd.append("--enable-evm-gas")
@@ -179,16 +177,6 @@ class TestRunner:
 
         cmd.append(test_case.file_path)
         return cmd
-
-    def getExecutionGasLimit(self) -> int:
-        gas_limit = self.args.gas_limit
-        if gas_limit < BASIC_EXECUTION_COST:
-            print(
-                f"Error: Gas limit {gas_limit} is below intrinsic gas "
-                f"{BASIC_EXECUTION_COST}"
-            )
-            sys.exit(1)
-        return gas_limit - BASIC_EXECUTION_COST
 
     def parseTestOutput(self, stdout: str, returncode: int) -> Dict[str, Any]:
         """Parse test output"""
@@ -444,7 +432,7 @@ def main():
     parser.add_argument("--disable-multipass-multithread", action="store_true",
                         help="Disable multipass multithreading")
     parser.add_argument("--gas-limit", type=lambda x: int(x, 0), default=0xFFFFFFFFFFFF,
-                        help="Transaction gas limit (intrinsic gas deducted before execution)")
+                        help="Transaction gas limit; intrinsic gas is deducted before EVM execution")
     parser.add_argument("--single-case", dest="single_case", default=None,
                     help="Path to a single test case file (e.g., tests/evm_asm/add_simple.evm.hex)")
     parser.add_argument("--enable-evm-gas", action="store_true",
