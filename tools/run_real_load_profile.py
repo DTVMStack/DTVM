@@ -11,8 +11,10 @@ mainnet replay fixtures to answer three questions:
 * how often the multipass JIT proves those operands narrow;
 * which lowering paths the JIT actually emits.
 
-The capture path runs the EVM once in interpreter mode with
-ZEN_EVM_LIMB_PROFILE and once in multipass mode with ZEN_EVM_RANGE_PROFILE.
+The capture path requires a DTVM build configured with
+ZEN_ENABLE_EVM_ARITH_PROFILE=ON, then runs the EVM once in interpreter mode
+with ZEN_EVM_LIMB_PROFILE and once in multipass mode with
+ZEN_EVM_RANGE_PROFILE.
 The analyze-only path consumes an existing runtime-profile directory and
 regenerates reports plus a compact summary.json.
 """
@@ -174,7 +176,9 @@ def capture_stream(
     )
     if not output_csv.exists() or output_csv.stat().st_size == 0:
         raise SystemExit(
-            f"{env_name} did not produce {output_csv}; see {log_path}"
+            f"{env_name} did not produce {output_csv}; see {log_path}. "
+            "For ZEN_EVM_LIMB_PROFILE, rebuild DTVM with "
+            "-DZEN_ENABLE_EVM_ARITH_PROFILE=ON."
         )
     return rc
 

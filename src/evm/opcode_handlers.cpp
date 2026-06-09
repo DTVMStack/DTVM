@@ -18,7 +18,9 @@ thread_local zen::evm::InterpreterExecContext
     *zen::evm::EVMResource::CurrentContext = nullptr;
 thread_local const evmc_instruction_metrics
     *zen::evm::EVMResource::CurrentMetricsTable = nullptr;
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
 thread_local uint64_t zen::evm::EVMResource::CurrentCodeHash = 0;
+#endif
 
 using namespace zen;
 using namespace zen::evm;
@@ -322,6 +324,7 @@ void SignExtendHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
   if (arith_profile::limbProfileEnabled()) {
     const uint64_t CodeHash = EVMResource::getCodeHash();
     arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_SIGNEXTEND, 0,
@@ -329,6 +332,7 @@ void SignExtendHandler::doExecute() {
     arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_SIGNEXTEND, 1,
                                    Frame->Stack[Frame->Sp - 2]);
   }
+#endif
   intx::uint256 I = Frame->pop();
   intx::uint256 V = Frame->pop();
 
@@ -358,6 +362,7 @@ void ByteHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
   if (arith_profile::limbProfileEnabled()) {
     const uint64_t CodeHash = EVMResource::getCodeHash();
     arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_BYTE, 0,
@@ -365,6 +370,7 @@ void ByteHandler::doExecute() {
     arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_BYTE, 1,
                                    Frame->Stack[Frame->Sp - 2]);
   }
+#endif
   intx::uint256 I = Frame->pop();
   intx::uint256 Val = Frame->pop();
 
@@ -380,6 +386,7 @@ void SarHandler::doExecute() {
   auto *Frame = getFrame();
   EVM_FRAME_CHECK(Frame);
   EVM_STACK_CHECK(Frame, 2);
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
   if (arith_profile::limbProfileEnabled()) {
     const uint64_t CodeHash = EVMResource::getCodeHash();
     arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_SAR, 0,
@@ -387,6 +394,7 @@ void SarHandler::doExecute() {
     arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_SAR, 1,
                                    Frame->Stack[Frame->Sp - 2]);
   }
+#endif
   intx::uint256 Shift = Frame->pop();
   intx::uint256 Value = Frame->pop();
 
@@ -414,11 +422,13 @@ void ExpHandler::doExecute() {
 
   auto &A = Frame->Stack[Frame->Sp - 1];
   auto &B = Frame->Stack[Frame->Sp - 2];
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
   if (arith_profile::limbProfileEnabled()) {
     const uint64_t CodeHash = EVMResource::getCodeHash();
     arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_EXP, 0, A);
     arith_profile::recordLimbValue(CodeHash, Frame->Pc, OP_EXP, 1, B);
   }
+#endif
   uint64_t BytesNum = intx::count_significant_bytes(B);
   uint64_t ByteGas = currentRevision() < EVMC_SPURIOUS_DRAGON
                          ? EXP_BYTE_GAS_PRE_SPURIOUS_DRAGON

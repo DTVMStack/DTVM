@@ -20,9 +20,10 @@
 // opcode in that same code. The two keys align because the interpreter and the
 // JIT visit the identical code buffer.
 //
-// All taps are pure-runtime getenv gates: with neither env set they stay
-// dormant and impose no measurable cost beyond a cached env lookup. No new
-// CMake flag is required.
+// The interpreter limb tap is compiled only when
+// ZEN_ENABLE_EVM_ARITH_PROFILE=ON. The JIT range tap remains a runtime env
+// gate because it runs during compilation, not on the interpreter opcode hot
+// path.
 
 #include "intx/intx.hpp"
 

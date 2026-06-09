@@ -95,8 +95,13 @@ set(COMPILER_SRCS
 )
 
 if(ZEN_ENABLE_EVM)
-  list(APPEND COMPILER_SRCS evm_compiler.cpp evm_frontend/evm_imported.cpp
-       evm_frontend/evm_mir_compiler.cpp
+  list(
+    APPEND
+    COMPILER_SRCS
+    evm_compiler.cpp
+    evm_frontend/evm_imported.cpp
+    evm_frontend/evm_mir_compiler.cpp
+    ../evm/arith_profile.cpp
   )
 endif()
 

@@ -70,14 +70,15 @@ It contains 225 Cancun-era transactions from blocks 20,000,000 through
 
 ### Dual Profiling Taps
 
-`src/evm/arith_profile.{h,cpp}` defines two environment-gated profiling
-streams. With the environment variables unset, the taps remain dormant.
+`src/evm/arith_profile.{h,cpp}` defines two profiling streams. The interpreter
+limb stream is compiled only when `ZEN_ENABLE_EVM_ARITH_PROFILE=ON`, so normal
+interpreter builds keep the opcode hot path unchanged. Each stream is still
+controlled by an environment variable at runtime.
 
-- Stream A, enabled by `ZEN_EVM_LIMB_PROFILE`, runs in interpreter mode and
-  records dynamic operand limb width and limb occupancy.
-- Stream B, enabled by `ZEN_EVM_RANGE_PROFILE`, runs in multipass JIT mode and
-  records static `ValueRange`, operand source kind, lowering path, and constant
-  flags.
+- `ZEN_EVM_LIMB_PROFILE` runs in interpreter mode and records dynamic operand
+  limb width and limb occupancy.
+- `ZEN_EVM_RANGE_PROFILE` runs in multipass JIT mode and records static
+  `ValueRange`, operand source kind, lowering path, and constant flags.
 
 Both streams use `(codehash, pc, opcode)` as the join key. The `codehash` field
 is an FNV-1a 64-bit hash over the bytecode buffer, not the manifest's keccak
@@ -141,6 +142,13 @@ python3 tools/run_real_load_profile.py \
 Run full capture and analysis:
 
 ```bash
+cmake -S . -B build \
+  -DZEN_ENABLE_EVM=ON \
+  -DZEN_ENABLE_LIBEVM=ON \
+  -DZEN_ENABLE_MULTIPASS_JIT=ON \
+  -DZEN_ENABLE_SINGLEPASS_JIT=OFF \
+  -DZEN_ENABLE_EVM_ARITH_PROFILE=ON
+cmake --build build --target dtvmapi
 python3 tools/run_real_load_profile.py \
   --corpus ~/dtvm-perf-corpora/mainnet-replay/cancun-suite \
   --out-dir build/real-load-profile/latest
@@ -149,6 +157,13 @@ python3 tools/run_real_load_profile.py \
 Run the local smoke suite:
 
 ```bash
+cmake -S . -B build \
+  -DZEN_ENABLE_EVM=ON \
+  -DZEN_ENABLE_LIBEVM=ON \
+  -DZEN_ENABLE_MULTIPASS_JIT=ON \
+  -DZEN_ENABLE_SINGLEPASS_JIT=OFF \
+  -DZEN_ENABLE_EVM_ARITH_PROFILE=ON
+cmake --build build --target dtvmapi
 python3 tools/run_real_load_profile.py \
   --suite smoke \
   --corpus ~/dtvm-perf-corpora/mainnet-replay/cancun-suite \

@@ -4,10 +4,13 @@
 #ifndef ZEN_EVM_OPCODE_HANDLERS_H
 #define ZEN_EVM_OPCODE_HANDLERS_H
 
-#include "evm/arith_profile.h"
 #include "evm/interpreter.h"
 #include "evmc/instructions.h"
 #include <cstdint>
+
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
+#include "evm/arith_profile.h"
+#endif
 
 // EVM error checking macro definitions
 #define EVM_STACK_CHECK(FramePtr, N)                                           \
@@ -49,10 +52,11 @@ public:
   static thread_local EVMFrame *CurrentFrame;
   static thread_local InterpreterExecContext *CurrentContext;
   static thread_local const evmc_instruction_metrics *CurrentMetricsTable;
-  // Join key for the dual-tap arith profiler (ZEN_EVM_LIMB_PROFILE). FNV-1a
-  // hash of the currently-executing contract code; set once per interpret()
-  // run, dormant when the profiler is off.
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
+  // Join key for the runtime operand profiler. Set once per interpret() run in
+  // instrumented builds and used only when ZEN_EVM_LIMB_PROFILE is set.
   static thread_local uint64_t CurrentCodeHash;
+#endif
 
   static void setExecutionContext(EVMFrame *Frame,
                                   InterpreterExecContext *Context) {
@@ -62,15 +66,19 @@ public:
   static void setMetricsTable(const evmc_instruction_metrics *Table) {
     CurrentMetricsTable = Table;
   }
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
   static void setCodeHash(uint64_t Hash) { CurrentCodeHash = Hash; }
   static uint64_t getCodeHash() { return CurrentCodeHash; }
+#endif
   /// Clear thread-local execution pointers after an interpreter run so reused
   /// InterpreterExecContext cannot leak cross-call state to host or tooling.
   static void clear() {
     CurrentFrame = nullptr;
     CurrentContext = nullptr;
     CurrentMetricsTable = nullptr;
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
     CurrentCodeHash = 0;
+#endif
   }
   /// Runs clear() on scope exit (including when interpret() throws).
   struct ClearGuard {
@@ -85,10 +93,11 @@ public:
   }
 };
 
-// Dual-tap Stream A helper: emit one CSV row per arithmetic operand recording
-// its dynamic 64-bit limb width. Reads the opcode byte straight from the
-// frame's code buffer at the current Pc. Dormant unless ZEN_EVM_LIMB_PROFILE
-// is set (the recordLimb gate is checked inside the emitter).
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
+// Runtime operand-profile helper: emit one CSV row per arithmetic operand
+// recording its dynamic 64-bit limb width. Reads the opcode byte straight from
+// the frame's code buffer at the current Pc. Dormant unless
+// ZEN_EVM_LIMB_PROFILE is set.
 inline void profileArithLimbs(EVMFrame *Frame, const intx::uint256 *const *Ops,
                               uint32_t NumOps) {
   if (!arith_profile::limbProfileEnabled()) {
@@ -153,6 +162,7 @@ inline void profileArithLimbsUnary(EVMFrame *Frame, const intx::uint256 &Op) {
   arith_profile::recordLimbValue(EVMResource::getCodeHash(), Frame->Pc, Opcode,
                                  0, Op);
 }
+#endif
 
 // CRTP Base class for all opcode handlers
 template <typename Derived> class EVMOpcodeHandlerBase {
@@ -190,7 +200,9 @@ public:
     EVM_STACK_CHECK(Frame, 1);
 
     auto &A = Frame->Stack[Frame->Sp - 1];
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
     profileArithLimbsUnary(Frame, A);
+#endif
     A = UnaryOp{}(A);
   }
   static uint64_t calculateGas();
@@ -209,10 +221,12 @@ public:
 
     auto &A = Frame->Stack[Frame->Sp - 1];
     auto &B = Frame->Stack[Frame->Sp - 2];
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
     {
       const intx::uint256 *Ops[2] = {&A, &B};
       profileArithLimbs(Frame, Ops, 2);
     }
+#endif
     B = BinaryOp{}(A, B);
     --Frame->Sp;
   }
@@ -234,10 +248,12 @@ public:
     auto &A = Frame->Stack[Frame->Sp - 1];
     auto &B = Frame->Stack[Frame->Sp - 2];
     auto &C = Frame->Stack[Frame->Sp - 3];
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
     {
       const intx::uint256 *Ops[3] = {&A, &B, &C};
       profileArithLimbs(Frame, Ops, 3);
     }
+#endif
     C = TernaryOp{}(A, B, C);
     Frame->Sp -= 2;
   }

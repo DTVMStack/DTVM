@@ -54,11 +54,30 @@ void expectPCList(const std::vector<uint64_t> &Actual,
 
 struct MockOperand {
   using U256Value = std::array<uint64_t, 4>;
+  enum class SourceKind : uint8_t {
+    OTHER,
+    PUSH,
+    CALLDATALOAD,
+    SLOAD,
+    MLOAD,
+    CALL_RET,
+    PRIOR_ARITH,
+    KECCAK,
+    AND,
+    SHIFT,
+    BITWISE,
+    COMPARE,
+    ENV,
+  };
 
   MockOperand() = default;
-  explicit MockOperand(uint64_t Low) : Value{Low, 0, 0, 0}, Constant(true) {}
-  explicit MockOperand(std::shared_ptr<U256Value> Slot)
-      : Slot(std::move(Slot)) {}
+  explicit MockOperand(uint64_t Low)
+      : Value{Low, 0, 0, 0}, Constant(true),
+        Range(COMPILER::EVMValueRange::U64) {}
+  explicit MockOperand(
+      std::shared_ptr<U256Value> Slot,
+      COMPILER::EVMValueRange Range = COMPILER::EVMValueRange::U256)
+      : Range(Range), Slot(std::move(Slot)) {}
 
   bool isConstant() const { return Constant; }
 
@@ -79,11 +98,16 @@ struct MockOperand {
     *Slot = Other.resolvedValue();
   }
 
-  void setRange(COMPILER::EVMValueRange) {}
+  COMPILER::EVMValueRange getRange() const { return Range; }
+  void setRange(COMPILER::EVMValueRange NewRange) { Range = NewRange; }
+  SourceKind getSource() const { return Source; }
+  void setSource(SourceKind NewSource) { Source = NewSource; }
 
 private:
   U256Value Value = {0, 0, 0, 0};
   bool Constant = false;
+  COMPILER::EVMValueRange Range = COMPILER::EVMValueRange::U256;
+  SourceKind Source = SourceKind::OTHER;
   std::shared_ptr<U256Value> Slot;
 };
 
@@ -98,6 +122,14 @@ class MockEVMBuilder {
 public:
   using CompilerContext = COMPILER::EVMFrontendContext;
   using Operand = MockOperand;
+  using ValueRange = COMPILER::EVMValueRange;
+  enum class LoweringPath : uint8_t {
+    FULL,
+    CONST_U64,
+    NARROW_U64,
+    NARROW_U128,
+    FOLDED,
+  };
 
 #define MOCK_OPERAND_STUB(Name)                                                \
   template <typename... Args> Operand Name(Args...) { return Operand(0); }
@@ -182,9 +214,10 @@ public:
   }
 
   Operand createStackEntryOperand(
-      COMPILER::EVMValueRange = COMPILER::EVMValueRange::U256) {
+      COMPILER::EVMValueRange Range = COMPILER::EVMValueRange::U256) {
     return Operand(std::make_shared<MockOperand::U256Value>(
-        MockOperand::U256Value{0, 0, 0, 0}));
+                       MockOperand::U256Value{0, 0, 0, 0}),
+                   Range);
   }
 
   void assignStackEntryOperand(const Operand &Dest, const Operand &Value) {
@@ -197,6 +230,7 @@ public:
   }
 
   void setCurrentDebugBlockPC(uint64_t) {}
+  LoweringPath getLoweringPath() const { return LastLoweringPath; }
 
   template <zen::common::BinaryOperator Opr>
   Operand handleBinaryArithmetic(Operand, Operand) {
@@ -345,6 +379,7 @@ private:
   std::vector<Operand> RuntimeStack;
   MockOperand::U256Value LastPushValue = {0, 0, 0, 0};
   bool HasLastPushValue = false;
+  LoweringPath LastLoweringPath = LoweringPath::FULL;
 
 #undef MOCK_OPERAND_STUB
 #undef MOCK_VOID_STUB
