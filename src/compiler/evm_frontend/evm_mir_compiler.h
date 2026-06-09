@@ -169,7 +169,7 @@ public:
 
     // Provenance tag for the dual-tap range profiler (ZEN_EVM_RANGE_PROFILE).
     // Records what produced this stack value so offline analysis can attribute
-    // missed narrow-width headroom to its source. Copied for free by DUP/SWAP
+    // static range gaps to their source. Copied for free by DUP/SWAP
     // because Operand is value-copied.
     enum class SourceKind : uint8_t {
       OTHER,

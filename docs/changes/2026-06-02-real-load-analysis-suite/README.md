@@ -1,4 +1,4 @@
-# 真实负载测试套件 + 分析精度 headroom 量化
+# 真实负载测试套件 + 分析精度缺口量化
 
 ## 执行摘要
 
@@ -7,7 +7,7 @@ value-range 分析的精度缺口。核心结论(扩桩后的权威值,覆盖算
 consumer):**在真实合约负载下,被静态分析器漏证的动态-u64 操作数质量占比
 60.0%**(`runtime_narrow_but_static_unknown_ratio = 0.600`,4652 个联结操作数
 槽)。该缺口集中在操作数来源(SLOAD/CALL_RET/MLOAD/CALLDATALOAD/PRIOR_ARITH 等
-missed≈0.68–1.0)处,而 PUSH 常量已被完全证明(missed = 0)——直接为
+static_gap≈0.68–1.0)处,而 PUSH 常量已被完全证明(static_gap = 0)——直接为
 ValueRange roadmap 的 source-tagging 类任务(T-R2)定了收益上界。
 
 测量来自 225 笔真实 Cancun 交易,跨 5 个应用类别。同时用 4-bit limb 占用掩码
@@ -63,18 +63,70 @@ env-gated、release 构建默认休眠(无 env 时零开销、JIT 汇编不变):
 join key:两引擎均无 codehash,故用同一份 bytecode 的 FNV-1a 64-bit 哈希
 (`fnv1aCodeHash`)+ `pc` 作为 `(codehash, pc)` 联结键,两侧对齐验证通过。
 
-### 3. Offline joiner (`tests/corpus/headroom/`)
+### 3. Offline joiner (`tests/corpus/analysis/`)
 
-- `headroom_join.py` — 按 `(codehash, pc, opcode)` 联结两路 CSV,产出交叉表:
-  `source_kind × dynamic_u64_rate × analyzer_proved_u64_rate × missed_headroom`,
-  并按 source_kind / opcode / app_class 分组 + 总体 headline 指标。
-- `test_headroom_join.py` — 5 个单测(全过)。
+- `range_gap_join.py` — 按 `(codehash, pc, opcode)` 联结两路 CSV,产出交叉表:
+  `source_kind × dynamic_u64_rate × analyzer_proved_u64_rate × static_gap`,
+  并按 source_kind / opcode / app_class 分组 + 总体缺口指标。
+- `test_range_gap_join.py` — 8 个单测(全过)。
+
+### 4. 统一 runner (`tools/run_real_load_profile.py`)
+
+- `tools/run_real_load_profile.py` — 真实负载 profiling / hit-rate benchmark
+  的统一入口。默认执行 capture + analyze:interpreter 跑 Stream A,
+  multipass 跑 Stream B,再生成 histogram、range-gap、fastpath、occupancy 报告。
+- 支持 `--analyze-only`,直接消费已持久化的
+  `runtime-profile/stream_a_limb.csv`、`stream_b_range.csv` 和
+  `app_class_map.json`,用于快速复算报告。
+- 支持 `--suite smoke`,按 app_class 抽样 fixture,并优先选择 `contract-call`
+  样本,给本地快速验证和未来 CI smoke 使用。
+- 输出固定为 `summary.json` + `reports/` + `logs/`。`summary.json` 包含
+  corpus 分布、Stream 行数、range-gap headline、per-opcode fast-path hit-rate
+  和 limb occupancy 分布,便于后续脚本读取。
 
 ## 复现
 
 语料固定在 `~/dtvm-perf-corpora/mainnet-replay/cancun-suite/`(225 个
 `<txhash>.json`,内部 test 名形如 `replay_0x…`)。对其跑 statetest **不要**加
 `-k fork_Cancun`——该语料 test 名不带 fork 后缀,加了会匹配 0 个 test:
+
+统一入口:
+
+```bash
+# 使用已有 runtime-profile 快速复算报告
+python3 tools/run_real_load_profile.py \
+  --analyze-only \
+  --corpus ~/dtvm-perf-corpora/mainnet-replay/cancun-suite \
+  --profile-dir ~/dtvm-perf-corpora/mainnet-replay/cancun-suite/runtime-profile \
+  --out-dir build/real-load-profile/latest
+
+# 重新 capture + analyze 完整语料
+python3 tools/run_real_load_profile.py \
+  --corpus ~/dtvm-perf-corpora/mainnet-replay/cancun-suite \
+  --out-dir build/real-load-profile/latest
+
+# 快速 smoke:每个 app_class 默认取 4 个 fixture
+python3 tools/run_real_load_profile.py \
+  --suite smoke \
+  --corpus ~/dtvm-perf-corpora/mainnet-replay/cancun-suite \
+  --out-dir build/real-load-profile/smoke
+```
+
+runner 默认允许 `evmone-statetest` 非零退出后继续分析,因为 replay fixture 的
+post/assertion 不是本套件的正确性 gate;只要 profile CSV 成功产出,hit-rate
+分析仍有效。若要把 statetest 退出码作为硬门,加 `--strict-statetest`。
+
+输出结构:
+
+```text
+build/real-load-profile/latest/
+  raw/                  # capture 模式下的 Stream A/B
+  reports/              # manifest + markdown/csv reports
+  logs/                 # 每一步命令日志
+  summary.json          # 机器可读摘要
+```
+
+底层手工命令仍可直接运行:
 
 ```bash
 EVMONE_EXTERNAL_OPTIONS="$(pwd)/build/lib/libdtvmapi.so,mode=multipass,enable_gas_metering=true" \
@@ -83,57 +135,83 @@ EVMONE_EXTERNAL_OPTIONS="$(pwd)/build/lib/libdtvmapi.so,mode=multipass,enable_ga
   --vm external_vm
 ```
 
-headroom 量化另跑双 tap 插桩(`ZEN_EVM_LIMB_PROFILE` / `ZEN_EVM_RANGE_PROFILE`
-env 开启的插桩构建),再用 `tests/corpus/headroom/headroom_join.py` 离线联结两
+分析精度缺口量化另跑双 tap 插桩(`ZEN_EVM_LIMB_PROFILE` / `ZEN_EVM_RANGE_PROFILE`
+env 开启的插桩构建),再用 `tests/corpus/analysis/range_gap_join.py` 离线联结两
 路 CSV。注意:下文「正确性验证」用的是标准 EEST 套件的 Cancun 子集,那里**仍
 需** `-k fork_Cancun`——与本节 replay 语料相反,两者名字都带 "cancun" 但是不同
 套件。
 
 ## 结果
 
-总体 **`runtime_narrow_but_static_unknown_ratio = 0.652`**(2330 个联结操作数槽,
-2205 动态-u64 质量中 1438 被漏证)。
+当前权威口径覆盖算术、比较和位运算 consumer。总体
+**`runtime_narrow_but_static_unknown_ratio = 0.600`**(4652 个联结操作数槽,
+4097.2 动态-u64 质量中 2460.2 被漏证)。首版只覆盖算术 consumer,当时结果为
+0.652 / 2330 槽;该值只保留为历史口径,不作为当前结论。
 
 ### 按操作数来源
 
-| source_kind | slots | dynamic_u64 | proved_u64 | missed |
+| source_kind | slots | dynamic_u64 | proved_u64 | static_gap |
 |---|---:|---:|---:|---:|
-| SLOAD | 9 | 1.000 | 0.000 | 1.000 |
-| MLOAD | 178 | 0.996 | 0.000 | 0.996 |
-| PRIOR_ARITH | 170 | 0.986 | 0.029 | 0.957 |
-| OTHER | 1175 | 0.937 | 0.027 | 0.910 |
-| CALLDATALOAD | 27 | 0.741 | 0.000 | 0.741 |
-| PUSH | 771 | 0.947 | 0.947 | 0.000 |
+| SLOAD | 33 | 1.000 | 0.000 | 1.000 |
+| CALL_RET | 13 | 1.000 | 0.000 | 1.000 |
+| OTHER | 1539 | 0.944 | 0.019 | 0.925 |
+| MLOAD | 284 | 0.884 | 0.000 | 0.884 |
+| PRIOR_ARITH | 343 | 0.915 | 0.035 | 0.880 |
+| SHIFT | 129 | 0.698 | 0.000 | 0.698 |
+| CALLDATALOAD | 200 | 0.676 | 0.000 | 0.676 |
+| ENV | 135 | 0.659 | 0.000 | 0.659 |
+| BITWISE | 47 | 0.489 | 0.000 | 0.489 |
+| AND | 126 | 0.705 | 0.381 | 0.324 |
+| COMPARE | 258 | 1.000 | 0.767 | 0.233 |
+| PUSH | 1539 | 0.877 | 0.877 | 0.000 |
+| KECCAK | 6 | 0.000 | 0.000 | 0.000 |
 
-读法:SLOAD/MLOAD/CALLDATALOAD/PRIOR_ARITH 的操作数运行时几乎全是 u64,但
-静态几乎证不出(proved≈0);PUSH 已被完全证明(缺口 0)。这与 roadmap 假设
-一致:收益在 SOURCE 处,不在结果处。
+读法:SLOAD/CALL_RET/MLOAD/PRIOR_ARITH/CALLDATALOAD 的操作数运行时多为
+u64,但静态几乎证不出(proved≈0);PUSH 已被完全证明(缺口 0)。这与 roadmap
+假设一致:收益在 SOURCE 处,不在结果处。
 
 ### 按 opcode
 
-| opcode | slots | dynamic_u64 | proved_u64 | missed |
+| opcode | slots | dynamic_u64 | proved_u64 | static_gap |
 |---|---:|---:|---:|---:|
+| SGT | 10 | 1.000 | 0.000 | 1.000 |
+| MULMOD | 2 | 1.000 | 0.000 | 1.000 |
+| LT | 264 | 0.914 | 0.170 | 0.744 |
+| SLT | 90 | 1.000 | 0.333 | 0.667 |
 | ADD | 1962 | 0.974 | 0.349 | 0.625 |
+| GT | 268 | 0.959 | 0.351 | 0.608 |
 | DIV | 28 | 0.643 | 0.036 | 0.607 |
 | SUB | 284 | 0.799 | 0.218 | 0.581 |
 | MUL | 54 | 0.870 | 0.352 | 0.519 |
+| ISZERO | 227 | 0.968 | 0.476 | 0.492 |
+| OR | 128 | 0.860 | 0.383 | 0.478 |
+| BYTE | 12 | 0.577 | 0.167 | 0.411 |
+| XOR | 10 | 0.600 | 0.200 | 0.400 |
+| EQ | 506 | 0.869 | 0.486 | 0.383 |
+| AND | 500 | 0.504 | 0.206 | 0.298 |
+| SHL | 192 | 0.969 | 0.693 | 0.276 |
+| SHR | 102 | 0.635 | 0.480 | 0.154 |
+| NOT | 13 | 0.692 | 0.692 | 0.000 |
 
-ADD 槽位最多(1962),缺口 0.625,是 source-tagging 的首要受益 opcode。
+ADD 槽位最多(1962),缺口 0.625。比较路径的 LT/SLT/GT/ISZERO/EQ 也有明确
+缺口,说明 source-tagging 和 compare fast path 都值得进入后续优化队列。
 
 ### 按应用类别
 
-| app_class | slots | dynamic_u64 | proved_u64 | missed |
+| app_class | slots | dynamic_u64 | proved_u64 | static_gap |
 |---|---:|---:|---:|---:|
-| nft | 1144 | 0.963 | 0.303 | 0.660 |
-| infra | 582 | 0.966 | 0.333 | 0.632 |
-| dex | 136 | 0.934 | 0.346 | 0.588 |
-| stablecoin | 426 | 0.894 | 0.387 | 0.507 |
-| lending | 28 | 0.821 | 0.464 | 0.357 |
+| nft | 2104 | 0.912 | 0.303 | 0.608 |
+| infra | 914 | 0.910 | 0.325 | 0.585 |
+| unknown | 53 | 0.868 | 0.340 | 0.528 |
+| dex | 469 | 0.855 | 0.433 | 0.422 |
+| stablecoin | 982 | 0.831 | 0.444 | 0.387 |
+| lending | 130 | 0.646 | 0.346 | 0.300 |
 
-5 类缺口均在 0.36–0.66,缺口是普遍现象。
+5 个 seeded app class 均存在缺口,范围为 0.30–0.61。`unknown` 是 sub-frame
+代码的离线分类残余,不计入 seeded class。
 
-完整报告:`tests/corpus/headroom/headroom_report.md`;原始交叉表:
-`headroom_crosstable.csv`。
+完整报告由 runner 生成在 `build/real-load-profile/latest/reports/`。源码树只
+保留分析脚本与单测,不提交随语料和插桩口径变化的 CSV/Markdown 产物。
 
 ## 正确性验证
 
@@ -144,7 +222,10 @@ C++ 插桩由 compiler-agent 实现并验证(env 全关时):
 - 无 env 时两路 tap 均不产出 CSV,release 构建零影响。
 
 后续 Python(生成器/joiner)与 corpus 数据改动不触及 VM C++,不影响上述结论。
-joiner 单测 5/5;生成器对现有语料做 determinism 回归(两次生成 byte-identical)。
+range-gap joiner 单测 8/8;生成器对现有语料做 determinism 回归(两次生成
+byte-identical)。
+新增统一 runner 的 analyze-only 单测 2/2,并已与 analysis/replay 相关测试合并跑
+通 38/38。
 
 ## 已知限制
 
@@ -162,10 +243,10 @@ joiner 单测 5/5;生成器对现有语料做 determinism 回归(两次生成 by
 
 ## 扩桩(第二轮:覆盖更多 consumer + 拆细 source + occupancy)
 
-首版只在算术 consumer 上量 headroom、producer 只分 6 类(OTHER 占约一半)。
+首版只在算术 consumer 上量静态证明缺口,producer 只分 6 类(OTHER 占约一半)。
 第二轮扩桩:
 
-**consumer 扩展**(新增量 headroom 的算子):比较 LT/GT/SLT/SGT/EQ/ISZERO、
+**consumer 扩展**(新增量缺口的算子):比较 LT/GT/SLT/SGT/EQ/ISZERO、
 位运算 AND/OR/XOR/NOT/BYTE/SHL/SHR/SAR——解锁 roadmap T-R1(比较)/T-R3
 (AND-mask)的缺口测量。
 
@@ -175,11 +256,11 @@ joiner 单测 5/5;生成器对现有语料做 determinism 回归(两次生成 by
 
 **occupancy 掩码**:Stream A 增 `limb_mask`(4-bit,bit i = limb[i]≠0),区分
 high-sparse 与 dense u128(`limb_width` 会把两者压成同一值)。产出完整 16-mask
-分布报告 `tests/corpus/headroom/limb_occupancy_report.md`。
+分布报告由 runner 写到 `reports/limb_occupancy_report.md`。
 
 ### 插桩清单(以落地代码为准)
 
-CONSUMER tap(在该 opcode 上量 headroom):
+CONSUMER tap(在该 opcode 上量静态证明缺口):
 
 | opcode | Stream A(运行时 limb) | Stream B(静态 range+source) |
 |---|:---:|:---:|
@@ -199,7 +280,7 @@ OTHER(默认残差)。DUP/SWAP 按值拷贝 Operand,标签自动传播。无法 
 headline **`runtime_narrow_but_static_unknown_ratio = 0.600`**(4652 联结槽);
 join 覆盖 Stream A 2597 站点 / Stream B 23167 站点 / shared 2446。
 
-按来源(missed_headroom 降序):SLOAD 1.00、CALL_RET 1.00、OTHER 0.925、
+按来源(static_gap 降序):SLOAD 1.00、CALL_RET 1.00、OTHER 0.925、
 MLOAD 0.884、PRIOR_ARITH 0.880、SHIFT 0.698、CALLDATALOAD 0.676、ENV 0.659、
 BITWISE 0.489、AND 0.324、COMPARE 0.233、PUSH 0.000、KECCAK 0.000。
 
@@ -209,7 +290,7 @@ MID-GAP 0.29%/0.34%。high-sparse 主要出现在 SHR(13%)/DIV(23%)/BYTE(32%);
 ADD/MUL/SHL 几乎不产生。
 
 正确性(env 全关):multipass unittests 223/223、interpreter 215/215;插桩单测
-14/14(headroom 8 + occupancy 6)。
+14/14(range-gap 8 + occupancy 6)。
 
 ## runtime 数据持久化(供后续分析)
 
@@ -225,12 +306,17 @@ ADD/MUL/SHL 几乎不产生。
 
 `site_histogram.csv` 是分析就绪形态——已校验能无损还原原始流(total 61498、
 u64 56611/92.05% 双向一致),后续分析只用它即可,不必碰原始流或 VM。聚合脚本
-`tests/corpus/headroom/runtime_histogram.py`,目录自带 `README.md` 记 schema 与
-复现步骤。
+`tests/corpus/analysis/runtime_histogram.py` 记 schema 与复现步骤。
+
+统一 runner 的 analyze-only 验证已复算该目录并生成:
+`/tmp/dtvm-real-load-runner-check/summary.json`。关键值与报告一致:
+fixture_count=225、Stream A=61,498、Stream B=26,984、
+`runtime_narrow_but_static_unknown_ratio=0.600462`、ADD execution-weighted
+fast-hit=0.603207、U64 execution occupancy=0.815376。
 
 ## 后续
 
-headroom 数据已定 source-tagging 的收益上界(0.600)。下一步按本数据驱动
+range-gap 数据已定 source-tagging 的收益上界(0.600)。下一步按本数据驱动
 ValueRange roadmap:T-R2(producer 处对 CALLDATALOAD/SLOAD/MLOAD 标 U64)、
 T-R1(比较路径 range fast path,COMPARE 已能量到 0.233 缺口)、T-R3(AND-mask,
 AND 缺口 0.324),并用本套件复测命中率抬升。OTHER 仍占联结槽 33%,可继续给

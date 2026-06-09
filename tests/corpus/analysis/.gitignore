@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+*.csv
+*_report.md
+*_hitrate.md

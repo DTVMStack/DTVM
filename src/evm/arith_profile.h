@@ -7,8 +7,8 @@
 // Dual-tap analysis-precision instrumentation.
 //
 // This header provides the shared join-key hash and the two env-gated CSV
-// taps used to measure how much narrow-width arithmetic headroom the static
-// value-range analyzer is leaving on the table:
+// taps used to measure the range-precision gap between dynamic operand widths
+// and the static value-range analyzer:
 //
 //   Stream A (ZEN_EVM_LIMB_PROFILE): interpreter dynamic 64-bit limb width per
 //     arithmetic operand, captured before the op mutates the stack.

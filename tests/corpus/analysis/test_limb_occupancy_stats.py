@@ -6,6 +6,8 @@
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 
 import limb_occupancy_stats as los
 
@@ -89,8 +91,9 @@ class EndToEndTest(unittest.TestCase):
         )
         md_path = os.path.join(d, "rep.md")
         csv_path = os.path.join(d, "occ.csv")
-        rc = los.main(["--stream-a", a, "--out-md", md_path,
-                       "--out-csv", csv_path])
+        with redirect_stdout(StringIO()):
+            rc = los.main(["--stream-a", a, "--out-md", md_path,
+                           "--out-csv", csv_path])
         self.assertEqual(rc, 0)
         with open(md_path) as f:
             md = f.read()

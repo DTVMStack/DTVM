@@ -4,24 +4,23 @@
 """Offline joiner for the dual-tap analysis-precision instrumentation.
 
 Stream A (interpreter, ZEN_EVM_LIMB_PROFILE) emits dynamic 64-bit limb widths
-per executed arithmetic operand:
+per executed profiled operand:
 
     codehash,pc,opcode,operand_index,limb_width
 
 Stream B (JIT, ZEN_EVM_RANGE_PROFILE) emits the static value-range and the
-operand source-kind per compiled arithmetic site:
+operand source-kind per compiled profiled site:
 
     codehash,pc,opcode,lhs_range,rhs_range,lhs_source,rhs_source
 
-This script joins the two streams on (codehash, pc, opcode) and reports, per
-source-kind and per opcode, how much narrow-width headroom the static analyzer
-left on the table:
+This script joins the two streams on (codehash, pc, opcode) and reports the
+static range-analysis gap per source-kind and opcode:
 
     dynamic_u64_rate        fraction of Stream A operand rows with limb_width<=1
     analyzer_proved_u64_rate fraction of Stream B operand slots proved U64
-    missed_headroom         dynamic_u64_rate - analyzer_proved_u64_rate
+    static_gap              dynamic_u64_rate - analyzer_proved_u64_rate
 
-A positive missed_headroom means values that are *dynamically* small were not
+A positive static_gap means values that are *dynamically* small were not
 *statically* proven small, i.e. recoverable optimization opportunity.
 """
 
@@ -88,7 +87,7 @@ def read_stream_a(path):
 
 
 def read_stream_b(path):
-    """Return list of dicts for Stream B rows (one per compiled arith site)."""
+    """Return list of dicts for Stream B rows, one per compiled profiled site."""
     rows = []
     with open(path, newline="") as f:
         for r in csv.DictReader(f):
@@ -127,27 +126,6 @@ def histogram_stream_a(rows):
         if r["limb_width"] <= 1:
             cell[0] += 1
     return hist
-
-
-def load_manifest(path):
-    """Optional manifest.json: map code_address -> app_class. The manifest
-    schema is owned by the replay tooling; we read defensively."""
-    if not path or not os.path.exists(path):
-        return {}
-    with open(path) as f:
-        data = json.load(f)
-    mapping = {}
-    entries = data.get("entries", data) if isinstance(data, dict) else data
-    if isinstance(entries, dict):
-        entries = entries.values()
-    for e in entries:
-        if not isinstance(e, dict):
-            continue
-        addr = e.get("code_address") or e.get("address")
-        cls = e.get("app_class") or e.get("class")
-        if addr and cls:
-            mapping[str(addr).lower()] = cls
-    return mapping
 
 
 def load_app_class_map(path):
@@ -211,7 +189,7 @@ def build_cross_table(stream_a, stream_b, app_class_map=None):
 
 
 def aggregate(table, group_field):
-    """Aggregate the cross-table by a single field, producing the headroom
+    """Aggregate the cross-table by a single field, producing the range-gap
     columns. Each operand slot contributes equally."""
     buckets = defaultdict(lambda: {"n": 0, "dyn": 0.0, "proved": 0})
     for row in table:
@@ -231,10 +209,10 @@ def aggregate(table, group_field):
                 "slots": b["n"],
                 "dynamic_u64_rate": dyn_rate,
                 "analyzer_proved_u64_rate": proved_rate,
-                "missed_headroom": dyn_rate - proved_rate,
+                "static_gap": dyn_rate - proved_rate,
             }
         )
-    out.sort(key=lambda r: r["missed_headroom"], reverse=True)
+    out.sort(key=lambda r: r["static_gap"], reverse=True)
     return out
 
 
@@ -244,8 +222,8 @@ def headline_ratio(table):
     Each operand slot carries a dynamic-u64 mass (dynamic_u64_rate, in [0,1]).
     The numerator sums the dynamic-u64 mass sitting on slots the analyzer did
     NOT prove U64; the denominator is the total dynamic-u64 mass. The ratio is
-    therefore "of all arith operand-slot mass that is dynamically u64, the
-    fraction the static analyzer left unproven" -- recoverable headroom.
+    therefore "of all profiled operand-slot mass that is dynamically u64, the
+    fraction the static analyzer left unproven."
 
     Returns (ratio, dyn_u64_mass, unproven_dyn_u64_mass, n_slots). The ratio is
     0.0 when there is no dynamic-u64 mass."""
@@ -269,7 +247,7 @@ def render_markdown(
     by_app_class=None,
 ):
     lines = []
-    lines.append("# Analysis-Precision Headroom Report")
+    lines.append("# Range-Analysis Gap Report")
     lines.append("")
     lines.append(
         "Joins interpreter dynamic limb-width (Stream A) with JIT static "
@@ -298,10 +276,10 @@ def render_markdown(
     lines.append("")
 
     def fmt_table(rows, label):
-        out = ["## Headroom by %s" % label, ""]
+        out = ["## Range-analysis gap by %s" % label, ""]
         out.append(
             "| %s | slots | dynamic_u64_rate | analyzer_proved_u64_rate "
-            "| missed_headroom |" % label
+            "| static_gap |" % label
         )
         out.append("|---|---:|---:|---:|---:|")
         for r in rows:
@@ -316,7 +294,7 @@ def render_markdown(
                     r["slots"],
                     r["dynamic_u64_rate"],
                     r["analyzer_proved_u64_rate"],
-                    r["missed_headroom"],
+                    r["static_gap"],
                 )
             )
         out.append("")
@@ -333,11 +311,10 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stream-a", required=True, help="Stream A limb CSV")
     ap.add_argument("--stream-b", required=True, help="Stream B range CSV")
-    ap.add_argument("--manifest", default=None, help="optional manifest.json")
     ap.add_argument("--app-class-map", default=None,
                     help="optional FNV-1a-codehash -> app_class JSON bridge")
-    ap.add_argument("--out-md", default="headroom_report.md")
-    ap.add_argument("--out-csv", default="headroom_table.csv")
+    ap.add_argument("--out-md", default="range_gap_report.md")
+    ap.add_argument("--out-csv", default="range_gap_table.csv")
     args = ap.parse_args(argv)
 
     a = read_stream_a(args.stream_a)
