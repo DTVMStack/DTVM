@@ -10,7 +10,8 @@ This affects the EVM opcodes whose value is structurally a 64-bit quantity and
 that flow through this helper: `CALLDATASIZE`, `CODESIZE`, `MSIZE`, `PC`,
 `GAS`, `RETURNDATASIZE`.
 
-Single file touched: `src/compiler/evm_frontend/evm_mir_compiler.cpp`.
+The only code change is one line in
+`src/compiler/evm_frontend/evm_mir_compiler.cpp`; this change-doc is the rest.
 
 ## Why
 
