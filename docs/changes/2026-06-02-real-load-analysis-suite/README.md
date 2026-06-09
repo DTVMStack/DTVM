@@ -1,154 +1,183 @@
-# 真实负载测试套件 + 分析精度缺口量化
+# Real-Load U256 Analysis Suite
 
-## 执行摘要
+## Summary
 
-构建了一套基于真实主网交易的 EVM 测试套件,并用它量化了 DTVM multipass JIT
-value-range 分析的精度缺口。核心结论(扩桩后的权威值,覆盖算术+比较+位运算
-consumer):**在真实合约负载下,被静态分析器漏证的动态-u64 操作数质量占比
-60.0%**(`runtime_narrow_but_static_unknown_ratio = 0.600`,4652 个联结操作数
-槽)。该缺口集中在操作数来源(SLOAD/CALL_RET/MLOAD/CALLDATALOAD/PRIOR_ARITH 等
-static_gap≈0.68–1.0)处,而 PUSH 常量已被完全证明(static_gap = 0)——直接为
-ValueRange roadmap 的 source-tagging 类任务(T-R2)定了收益上界。
+This change adds a real-load EVM analysis suite for DTVM. The suite uses
+mainnet replay fixtures to measure three properties:
 
-测量来自 225 笔真实 Cancun 交易,跨 5 个应用类别。同时用 4-bit limb 占用掩码
-做了完整形态分布:真实负载下 u64 占 81.5%(执行加权)、zero 10.5%,而 high-
-sparse(`{0,x,0,0}` 这类低位为零、高位非零)只占 0.69%——即便在非 u64 操作数里
-也只占 8.7%(执行加权),87.6% 是稠密低位。high-sparse 可忽略这一结论得到本语料
-独立确认。
+- how often U256 operands are dynamically narrow;
+- how often the multipass JIT proves those operands narrow at compile time;
+- which lowering paths the JIT emits for those sites.
 
-> 注:首版(仅算术 consumer)headline 为 0.652 / 2330 槽;扩桩加入比较+位运算
-> consumer 后口径变为 0.600 / 4652 槽。下文表格以扩桩后的权威值为准。
+On the persisted Cancun replay profile, **60.0% of dynamic-u64 operand-slot
+mass remains statically unproven**. This is reported as
+`runtime_narrow_but_static_unknown_ratio = 0.600` over 4,652 joined operand
+slots. The largest gaps are associated with non-constant operand sources such
+as `SLOAD`, `CALL_RET`, `MLOAD`, `CALLDATALOAD`, and prior arithmetic results.
+`PUSH` operands have no static gap in this profile.
 
-## 背景
+The same profile also records 4-bit limb occupancy. Execution-weighted operands
+are dominated by `U64` values: `U64` accounts for 81.5%, `ZERO` for 10.5%, and
+high-sparse values for 0.69%. Within non-u64 operands, high-sparse values
+account for 8.7% by execution weight. This supports treating high-sparse
+operands as a low-priority shape in this corpus.
 
-历史测量(见 `2026-05-30-u256-valuerange-precision-roadmap`)已确认 DTVM 的瓶颈
-不是操作数分布(真实合约 99.95% 算术操作数本就是 u64-magnitude),而是**分析
-精度**——`range_u64` 动态快路径命中率 0%。但此前缺少:
+The first arithmetic-only profile produced `0.652` over 2,330 joined operand
+slots. The current reference profile includes arithmetic, comparison, and
+bitwise consumers, and should be used for downstream decisions.
 
-1. 一套可复现、分层、自包含的真实负载语料(此前 fixture 为 ad-hoc 抓取)。
-2. 一个能把「运行时确实窄」与「编译期能否证明窄」对齐量化的工具。
+## Background
 
-本次交付补齐这两块。
+Earlier measurements showed that the performance issue was not the runtime
+operand distribution alone. Real contract workloads frequently use values that
+fit in `u64`, but the static `ValueRange` analysis did not prove enough of
+those values to activate narrow lowering paths.
 
-## 交付物
+Two missing pieces made the evidence hard to use:
 
-### 1. 真实负载 fixture 生成器与语料 (`tests/corpus/replay/`)
+- the real-load corpus was assembled from ad hoc replay fixtures;
+- there was no durable way to join dynamic operand widths with static JIT range
+  facts.
 
-- `replay_to_fixture.py` — 真实交易 → 自包含 EEST `state_test` JSON 生成器。
-  默认 `prestate` 模式(`debug_traceTransaction` prestateTracer + diffMode),
-  从精确 touched-set 推导 `accessList`、补全完整 `env`、记录 post-diff/receipt。
-  保留 `createaccesslist` 作为 debug-free archive 回退。
-- `sample_cancun_txs.py` — 跨 5 个应用类别(stablecoin/dex/lending/nft/infra)
-  经 `eth_getLogs` + curated 合约采样 tx hash。
-- `build_manifest.py` — corpus manifest,含 codehash 双权重(按 tx 频率的
-  logical 视图 + 按 codehash 去重的 unique 视图)与 app_class 分布。
-- `fixture_equal.py` — canonical-semantic-equality 比较器(忽略 JSON key 序、
-  storage map 序、hex 大小写/零填充)。
+This change provides both pieces.
 
-语料:`~/dtvm-perf-corpora/mainnet-replay/cancun-suite/`,225 笔,block 区间
-20,000,000–21,800,125(真 Cancun,Prague 之前),0 blob,5 类均衡。
+## Scope
 
-### 2. 双 tap 插桩 (`src/evm/arith_profile.{h,cpp}` + taps)
+### Replay Corpus Tooling
 
-env-gated、release 构建默认休眠(无 env 时零开销、JIT 汇编不变):
+`tests/corpus/replay/` provides the replay fixture tooling:
 
-- **Stream A**(`ZEN_EVM_LIMB_PROFILE`,interpreter):每个算术操作数的运行时
-  significant-limb 宽度。Tap 点:`opcode_handlers.h`(binary/ternary)、
-  `opcode_handlers.cpp`(EXP/SIGNEXTEND)。
-- **Stream B**(`ZEN_EVM_RANGE_PROFILE`,multipass):每个算术站点的静态
-  value-range + 新增的 operand SOURCE 分类。新增 `Operand::SourceKind`
-  (`evm_mir_compiler.h`),在 producer 处打标(PUSH/CALLDATALOAD/SLOAD/MLOAD/
-  KECCAK/PRIOR_ARITH),tap 在 visitor 算术 handler(`evm_bytecode_visitor.h`)。
+- `replay_to_fixture.py` converts a real transaction into a self-contained
+  EEST `state_test` fixture. Its default path uses `debug_traceTransaction`
+  with `prestateTracer` and `diffMode`. The `createaccesslist` path remains a
+  debug-free archive fallback.
+- `sample_cancun_txs.py` samples transactions across five application classes:
+  `stablecoin`, `dex`, `lending`, `nft`, and `infra`.
+- `build_manifest.py` emits the corpus manifest, including logical transaction
+  counts, unique codehash counts, block range, stratum counts, and app class
+  labels.
+- `fixture_equal.py` compares fixtures by canonical semantic equality. It
+  ignores JSON key order, storage map order, hex casing, and zero padding.
 
-join key:两引擎均无 codehash,故用同一份 bytecode 的 FNV-1a 64-bit 哈希
-(`fnv1aCodeHash`)+ `pc` 作为 `(codehash, pc)` 联结键,两侧对齐验证通过。
+The current external corpus lives outside the repository:
 
-### 3. Offline joiner (`tests/corpus/analysis/`)
+```text
+~/dtvm-perf-corpora/mainnet-replay/cancun-suite/
+```
 
-- `range_gap_join.py` — 按 `(codehash, pc, opcode)` 联结两路 CSV,产出交叉表:
-  `source_kind × dynamic_u64_rate × analyzer_proved_u64_rate × static_gap`,
-  并按 source_kind / opcode / app_class 分组 + 总体缺口指标。
-- `test_range_gap_join.py` — 8 个单测(全过)。
+It contains 225 Cancun-era transactions from blocks 20,000,000 through
+21,800,125. The fixtures have no blob transactions.
 
-### 4. 统一 runner (`tools/run_real_load_profile.py`)
+### Dual Profiling Taps
 
-- `tools/run_real_load_profile.py` — 真实负载 profiling / hit-rate benchmark
-  的统一入口。默认执行 capture + analyze:interpreter 跑 Stream A,
-  multipass 跑 Stream B,再生成 histogram、range-gap、fastpath、occupancy 报告。
-- 支持 `--analyze-only`,直接消费已持久化的
-  `runtime-profile/stream_a_limb.csv`、`stream_b_range.csv` 和
-  `app_class_map.json`,用于快速复算报告。
-- 支持 `--suite smoke`,按 app_class 抽样 fixture,并优先选择 `contract-call`
-  样本,给本地快速验证和未来 CI smoke 使用。
-- 输出固定为 `summary.json` + `reports/` + `logs/`。`summary.json` 包含
-  corpus 分布、Stream 行数、range-gap headline、per-opcode fast-path hit-rate
-  和 limb occupancy 分布,便于后续脚本读取。
+`src/evm/arith_profile.{h,cpp}` defines two environment-gated profiling
+streams. With the environment variables unset, the taps remain dormant.
 
-## 复现
+- Stream A, enabled by `ZEN_EVM_LIMB_PROFILE`, runs in interpreter mode and
+  records dynamic operand limb width and limb occupancy.
+- Stream B, enabled by `ZEN_EVM_RANGE_PROFILE`, runs in multipass JIT mode and
+  records static `ValueRange`, operand source kind, lowering path, and constant
+  flags.
 
-语料固定在 `~/dtvm-perf-corpora/mainnet-replay/cancun-suite/`(225 个
-`<txhash>.json`,内部 test 名形如 `replay_0x…`)。对其跑 statetest **不要**加
-`-k fork_Cancun`——该语料 test 名不带 fork 后缀,加了会匹配 0 个 test:
+Both streams use `(codehash, pc, opcode)` as the join key. The `codehash` field
+is an FNV-1a 64-bit hash over the bytecode buffer, not the manifest's keccak
+codehash. This is sufficient as an offline join key and avoids adding a crypto
+dependency to DTVM.
 
-统一入口:
+### Analysis Tooling
+
+The analysis scripts live under `tests/corpus/analysis/`:
+
+- `range_gap_join.py` joins Stream A and Stream B and reports
+  `dynamic_u64_rate`, `analyzer_proved_u64_rate`, and `static_gap` by source,
+  opcode, and app class.
+- `runtime_histogram.py` converts raw Stream A rows into an analysis-ready
+  per-site histogram.
+- `fastpath_stats.py` reports per-opcode lowering path hit rates.
+- `limb_occupancy_stats.py` reports the 4-bit limb occupancy distribution.
+
+Generated CSV and Markdown reports are intentionally ignored. They depend on
+the local corpus and instrumentation run, so they should not be committed.
+
+### Unified Runner
+
+`tools/run_real_load_profile.py` is the entry point for capture and analysis.
+It supports three workflows:
+
+- full capture and analysis over a corpus;
+- analyze-only mode over an existing `runtime-profile/` directory;
+- smoke mode for local validation.
+
+Smoke mode samples fixtures by app class and prefers `contract-call` fixtures.
+The default sample count is 4 per app class. This avoids selecting only
+`data-to-eoa` fixtures or contracts rejected by the JIT suitability checks,
+which would make Stream B empty.
+
+The runner writes:
+
+```text
+build/real-load-profile/latest/
+  raw/
+  reports/
+  logs/
+  summary.json
+```
+
+Only scripts and tests are tracked. Local report outputs are left under the
+selected output directory.
+
+## Reproduction
+
+Use the external corpus path:
 
 ```bash
-# 使用已有 runtime-profile 快速复算报告
 python3 tools/run_real_load_profile.py \
   --analyze-only \
   --corpus ~/dtvm-perf-corpora/mainnet-replay/cancun-suite \
   --profile-dir ~/dtvm-perf-corpora/mainnet-replay/cancun-suite/runtime-profile \
   --out-dir build/real-load-profile/latest
+```
 
-# 重新 capture + analyze 完整语料
+Run full capture and analysis:
+
+```bash
 python3 tools/run_real_load_profile.py \
   --corpus ~/dtvm-perf-corpora/mainnet-replay/cancun-suite \
   --out-dir build/real-load-profile/latest
+```
 
-# 快速 smoke:每个 app_class 默认取 4 个 fixture
+Run the local smoke suite:
+
+```bash
 python3 tools/run_real_load_profile.py \
   --suite smoke \
   --corpus ~/dtvm-perf-corpora/mainnet-replay/cancun-suite \
   --out-dir build/real-load-profile/smoke
 ```
 
-runner 默认允许 `evmone-statetest` 非零退出后继续分析,因为 replay fixture 的
-post/assertion 不是本套件的正确性 gate;只要 profile CSV 成功产出,hit-rate
-分析仍有效。若要把 statetest 退出码作为硬门,加 `--strict-statetest`。
+The replay fixture names do not include the fork suffix. Do not pass
+`-k fork_Cancun` when running this replay corpus with `evmone-statetest`.
+The standard EEST Cancun subset is different; it still uses fork-qualified
+test names.
 
-输出结构:
+The runner allows a non-zero `evmone-statetest` exit by default. The replay
+fixtures are used as a profiling workload, not as the correctness gate for this
+suite. Add `--strict-statetest` when the statetest exit code should be treated
+as a hard failure.
+
+## Results
+
+The reference profile covers arithmetic, comparison, and bitwise consumers.
+The headline is:
 
 ```text
-build/real-load-profile/latest/
-  raw/                  # capture 模式下的 Stream A/B
-  reports/              # manifest + markdown/csv reports
-  logs/                 # 每一步命令日志
-  summary.json          # 机器可读摘要
+runtime_narrow_but_static_unknown_ratio = 0.600
+joined_operand_slots = 4652
+dynamic_u64_slot_mass = 4097.2
+unproven_dynamic_u64_slot_mass = 2460.2
 ```
 
-底层手工命令仍可直接运行:
-
-```bash
-EVMONE_EXTERNAL_OPTIONS="$(pwd)/build/lib/libdtvmapi.so,mode=multipass,enable_gas_metering=true" \
-  ~/evmone/build/bin/evmone-statetest \
-  ~/dtvm-perf-corpora/mainnet-replay/cancun-suite \
-  --vm external_vm
-```
-
-分析精度缺口量化另跑双 tap 插桩(`ZEN_EVM_LIMB_PROFILE` / `ZEN_EVM_RANGE_PROFILE`
-env 开启的插桩构建),再用 `tests/corpus/analysis/range_gap_join.py` 离线联结两
-路 CSV。注意:下文「正确性验证」用的是标准 EEST 套件的 Cancun 子集,那里**仍
-需** `-k fork_Cancun`——与本节 replay 语料相反,两者名字都带 "cancun" 但是不同
-套件。
-
-## 结果
-
-当前权威口径覆盖算术、比较和位运算 consumer。总体
-**`runtime_narrow_but_static_unknown_ratio = 0.600`**(4652 个联结操作数槽,
-4097.2 动态-u64 质量中 2460.2 被漏证)。首版只覆盖算术 consumer,当时结果为
-0.652 / 2330 槽;该值只保留为历史口径,不作为当前结论。
-
-### 按操作数来源
+### Source-Kind Gap
 
 | source_kind | slots | dynamic_u64 | proved_u64 | static_gap |
 |---|---:|---:|---:|---:|
@@ -166,11 +195,10 @@ env 开启的插桩构建),再用 `tests/corpus/analysis/range_gap_join.py` 离�
 | PUSH | 1539 | 0.877 | 0.877 | 0.000 |
 | KECCAK | 6 | 0.000 | 0.000 | 0.000 |
 
-读法:SLOAD/CALL_RET/MLOAD/PRIOR_ARITH/CALLDATALOAD 的操作数运行时多为
-u64,但静态几乎证不出(proved≈0);PUSH 已被完全证明(缺口 0)。这与 roadmap
-假设一致:收益在 SOURCE 处,不在结果处。
+The largest gaps are in non-constant sources. This points to producer-side
+source tagging and range propagation as the most direct follow-up.
 
-### 按 opcode
+### Opcode Gap
 
 | opcode | slots | dynamic_u64 | proved_u64 | static_gap |
 |---|---:|---:|---:|---:|
@@ -193,10 +221,10 @@ u64,但静态几乎证不出(proved≈0);PUSH 已被完全证明(缺口 0)。这
 | SHR | 102 | 0.635 | 0.480 | 0.154 |
 | NOT | 13 | 0.692 | 0.692 | 0.000 |
 
-ADD 槽位最多(1962),缺口 0.625。比较路径的 LT/SLT/GT/ISZERO/EQ 也有明确
-缺口,说明 source-tagging 和 compare fast path 都值得进入后续优化队列。
+`ADD` has the largest joined population. Comparison and bitwise consumers also
+show measurable gaps, so the profile is not limited to arithmetic-only sites.
 
-### 按应用类别
+### Application-Class Gap
 
 | app_class | slots | dynamic_u64 | proved_u64 | static_gap |
 |---|---:|---:|---:|---:|
@@ -207,117 +235,88 @@ ADD 槽位最多(1962),缺口 0.625。比较路径的 LT/SLT/GT/ISZERO/EQ 也有
 | stablecoin | 982 | 0.831 | 0.444 | 0.387 |
 | lending | 130 | 0.646 | 0.346 | 0.300 |
 
-5 个 seeded app class 均存在缺口,范围为 0.30–0.61。`unknown` 是 sub-frame
-代码的离线分类残余,不计入 seeded class。
+All seeded app classes retain a static gap in this profile. `unknown` is the
+classification residue for sub-frame code and is not a seeded app class.
 
-完整报告由 runner 生成在 `build/real-load-profile/latest/reports/`。源码树只
-保留分析脚本与单测,不提交随语料和插桩口径变化的 CSV/Markdown 产物。
+### Limb Occupancy
 
-## 正确性验证
+| group | execution_weighted | site_weighted |
+|---|---:|---:|
+| ZERO | 10.5% | 10.6% |
+| U64 | 81.5% | 77.4% |
+| U128-dense | 0.63% | 0.85% |
+| U192-U256-dense | 6.3% | 8.7% |
+| HIGH-SPARSE | 0.69% | 2.13% |
+| MID-GAP | 0.29% | 0.34% |
 
-C++ 插桩由 compiler-agent 实现并验证(env 全关时):
-- multipass evmone-unittests 223/223;interpreter 215/215。
-- cancun statetest(`-k fork_Cancun`)multipass 60/60、interpreter 60/60;
-  istanbul 6/6。
-- 无 env 时两路 tap 均不产出 CSV,release 构建零影响。
+High-sparse operands mainly appear in `SHR`, `DIV`, and `BYTE`. They are rare
+for `ADD`, `MUL`, and `SHL` in this corpus.
 
-后续 Python(生成器/joiner)与 corpus 数据改动不触及 VM C++,不影响上述结论。
-range-gap joiner 单测 8/8;生成器对现有语料做 determinism 回归(两次生成
-byte-identical)。
-新增统一 runner 的 analyze-only 单测 2/2,并已与 analysis/replay 相关测试合并跑
-通 38/38。
+## Persisted Runtime Profile
 
-## 已知限制
+The persisted profile is stored outside the repository:
 
-1. **join key 用 FNV-1a 而非真实 codehash**:DTVM 不计算 codehash;FNV-1a 足够
-   作联结键,但与 manifest 的 keccak codehash 不同,app_class 桥接需离线由
-   `pre[to].code` 重算 FNV-1a(24 个 to-合约覆盖全 5 类;sub-frame 代码归
-   `unknown`,占比极小)。
-2. **source_kind 仅来自 JIT**:interpreter 无 Operand 抽象,SOURCE 分类只能从
-   Stream B 取,左联结到 Stream A;未被 JIT 编译的 `(codehash,pc)` 无 source。
-3. **fixture 用 EEST 测试账户签名**:`transaction.sender` 替换为标准测试账户
-   并把其注入 `pre`(nonce 匹配真实 tx + 大余额),真实 sender 仍留在 `pre`。
-   这改变 `tx.origin`/顶层 `msg.sender`,对算术 profiling 可接受。
-4. **插桩为测量用途**:env-gated 常驻 tap,非临时 fprintf;是否随 PR 落地或
-   revert 待定。
+```text
+~/dtvm-perf-corpora/mainnet-replay/cancun-suite/runtime-profile/
+```
 
-## 扩桩(第二轮:覆盖更多 consumer + 拆细 source + occupancy)
-
-首版只在算术 consumer 上量静态证明缺口,producer 只分 6 类(OTHER 占约一半)。
-第二轮扩桩:
-
-**consumer 扩展**(新增量缺口的算子):比较 LT/GT/SLT/SGT/EQ/ISZERO、
-位运算 AND/OR/XOR/NOT/BYTE/SHL/SHR/SAR——解锁 roadmap T-R1(比较)/T-R3
-(AND-mask)的缺口测量。
-
-**producer 拆细**(`SourceKind` 追加,OTHER 联结槽占比 ~50% → 33%):新增
-`AND` / `SHIFT` / `BITWISE` / `COMPARE` / `ENV`(25 个环境 opcode),并接线一直
-空着的 `CALL_RET`(CALL/CALLCODE/DELEGATECALL/STATICCALL 的成功标志)。
-
-**occupancy 掩码**:Stream A 增 `limb_mask`(4-bit,bit i = limb[i]≠0),区分
-high-sparse 与 dense u128(`limb_width` 会把两者压成同一值)。产出完整 16-mask
-分布报告由 runner 写到 `reports/limb_occupancy_report.md`。
-
-### 插桩清单(以落地代码为准)
-
-CONSUMER tap(在该 opcode 上量静态证明缺口):
-
-| opcode | Stream A(运行时 limb) | Stream B(静态 range+source) |
-|---|:---:|:---:|
-| ADD SUB MUL DIV SDIV MOD SMOD ADDMOD MULMOD | ✓ | ✓ |
-| EXP SIGNEXTEND | ✓ | ✗(B 未 tap,不参与联结) |
-| LT GT SLT SGT EQ ISZERO | ✓ | ✓ |
-| AND OR XOR NOT BYTE SHL SHR SAR | ✓ | ✓ |
-
-PRODUCER source tag(operand 来源):PUSH / CALLDATALOAD / SLOAD / MLOAD /
-KECCAK / PRIOR_ARITH(算术结果)/ AND / SHIFT(SHL/SHR/SAR)/ BITWISE
-(OR/XOR/NOT/BYTE)/ COMPARE(比较结果)/ ENV(25 个环境 opcode)/ CALL_RET /
-OTHER(默认残差)。DUP/SWAP 按值拷贝 Operand,标签自动传播。无法 tap:
-`RETURNDATALOAD`(本 evmc 无 EIP-7069)。
-
-### 扩桩后权威结果
-
-headline **`runtime_narrow_but_static_unknown_ratio = 0.600`**(4652 联结槽);
-join 覆盖 Stream A 2597 站点 / Stream B 23167 站点 / shared 2446。
-
-按来源(static_gap 降序):SLOAD 1.00、CALL_RET 1.00、OTHER 0.925、
-MLOAD 0.884、PRIOR_ARITH 0.880、SHIFT 0.698、CALLDATALOAD 0.676、ENV 0.659、
-BITWISE 0.489、AND 0.324、COMPARE 0.233、PUSH 0.000、KECCAK 0.000。
-
-occupancy(执行加权 / 站点加权):ZERO 10.5%/10.6%、U64 81.5%/77.4%、
-U128-dense 0.63%/0.85%、U192-U256-dense 6.3%/8.7%、HIGH-SPARSE 0.69%/2.13%、
-MID-GAP 0.29%/0.34%。high-sparse 主要出现在 SHR(13%)/DIV(23%)/BYTE(32%);
-ADD/MUL/SHL 几乎不产生。
-
-正确性(env 全关):multipass unittests 223/223、interpreter 215/215;插桩单测
-14/14(range-gap 8 + occupancy 6)。
-
-## runtime 数据持久化(供后续分析)
-
-为避免后续分析重跑 VM,把 runtime 测量数据落到语料旁(repo 外)的持久目录
-`~/dtvm-perf-corpora/mainnet-replay/cancun-suite/runtime-profile/`:
-
-| 文件 | 行数 | 内容 |
+| file | rows | contents |
 |---|---:|---|
-| `stream_a_limb.csv` | 61,498 | 原始逐次执行(interpreter,含 limb_width+limb_mask) |
-| `stream_b_range.csv` | 26,984 | 原始逐次编译(JIT,静态 range+source) |
-| `site_histogram.csv` | 4,931 | per-site 聚合直方图(每站点 mask×16 + width×5 + 执行次数) |
-| `app_class_map.json` | 24 | FNV-1a→app_class 桥接 |
+| `stream_a_limb.csv` | 61,498 | Raw interpreter operand rows with `limb_width` and `limb_mask` |
+| `stream_b_range.csv` | 26,984 | Raw JIT range, source, lowering-path, and constant rows |
+| `site_histogram.csv` | 4,931 | Per-site Stream A histogram |
+| `app_class_map.json` | 24 | FNV-1a codehash to app-class bridge |
 
-`site_histogram.csv` 是分析就绪形态——已校验能无损还原原始流(total 61498、
-u64 56611/92.05% 双向一致),后续分析只用它即可,不必碰原始流或 VM。聚合脚本
-`tests/corpus/analysis/runtime_histogram.py` 记 schema 与复现步骤。
+`site_histogram.csv` is the analysis-ready form. It was checked against the raw
+Stream A profile and preserves the total row count and u64 count.
 
-统一 runner 的 analyze-only 验证已复算该目录并生成:
-`/tmp/dtvm-real-load-runner-check/summary.json`。关键值与报告一致:
-fixture_count=225、Stream A=61,498、Stream B=26,984、
-`runtime_narrow_but_static_unknown_ratio=0.600462`、ADD execution-weighted
-fast-hit=0.603207、U64 execution occupancy=0.815376。
+Analyze-only mode reproduced the persisted profile with:
 
-## 后续
+```text
+fixture_count = 225
+stream_a_limb = 61498
+stream_b_range = 26984
+runtime_narrow_but_static_unknown_ratio = 0.600462
+ADD execution-weighted fast-hit = 0.603207
+U64 execution occupancy = 0.815376
+```
 
-range-gap 数据已定 source-tagging 的收益上界(0.600)。下一步按本数据驱动
-ValueRange roadmap:T-R2(producer 处对 CALLDATALOAD/SLOAD/MLOAD 标 U64)、
-T-R1(比较路径 range fast path,COMPARE 已能量到 0.233 缺口)、T-R3(AND-mask,
-AND 缺口 0.324),并用本套件复测命中率抬升。OTHER 仍占联结槽 33%,可继续给
-残余 producer 打标进一步拆细。
+## Validation
+
+The following checks passed for this change:
+
+- `cmake --build build --target dtvmapi -j$(nproc)`
+- `PYTHONPATH=tests/corpus/analysis:tests/corpus/replay python3 -m unittest tests.corpus.analysis.test_real_load_runner tests.corpus.analysis.test_range_gap_join tests.corpus.analysis.test_limb_occupancy_stats tests.corpus.replay.tests.test_build_manifest tests.corpus.replay.tests.test_fixture_equal`
+- `python3 -m py_compile tools/run_real_load_profile.py tests/corpus/analysis/range_gap_join.py tests/corpus/analysis/fastpath_stats.py tests/corpus/analysis/limb_occupancy_stats.py tests/corpus/analysis/runtime_histogram.py tests/corpus/replay/build_manifest.py`
+- `git diff --check`
+- `clang-format --dry-run -Werror src/evm/arith_profile.h src/compiler/evm_frontend/evm_mir_compiler.h`
+- analyze-only runner over the persisted full profile
+- smoke runner over the replay corpus
+
+The full `tools/format.sh check` command currently fails on existing unrelated
+formatting violations in paths outside this change, including `src/singlepass`,
+`src/platform/sgx`, `src/host/wasi`, and `src/common/libcxx`.
+
+## Limitations
+
+- The stream `codehash` is FNV-1a over bytecode bytes. It is not the manifest's
+  keccak codehash.
+- Source-kind classification comes from Stream B. Sites that are not compiled
+  by the JIT do not have source-kind rows.
+- Replay fixtures use the standard EEST test account as `transaction.sender`.
+  The original sender remains in `pre`, but top-level `tx.origin` and
+  `msg.sender` differ from mainnet. This is acceptable for operand-width
+  profiling, but these fixtures are not the correctness gate.
+- The taps are measurement instrumentation. They are dormant without the
+  environment gates and should be treated as profiling support, not as a
+  runtime feature.
+
+## Follow-Up
+
+The profile bounds the recoverable static range gap at 0.600 for the measured
+consumer set. The next optimization work should use this suite to measure
+whether source tagging and range propagation improve fast-path hit rates for
+`CALLDATALOAD`, `SLOAD`, `MLOAD`, comparison results, and `AND`-mask patterns.
+
+`OTHER` still accounts for 1,539 joined operand slots. Further producer tagging
+would make the remaining gap easier to assign.
