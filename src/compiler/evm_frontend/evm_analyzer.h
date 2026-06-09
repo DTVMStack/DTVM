@@ -250,6 +250,23 @@ public:
     return ShapeClassIds.size() == 1 ? ShapeClassIds.front() : 0;
   }
 
+  // Returns the uniform entry-state depth (FullEntryStateDepth) associated
+  // with a dynamic-jump shape class, or -1 if the class is unknown. All
+  // regions sharing a ShapeClassId have the same FullEntryStateDepth by
+  // construction (see finalizeDynamicJumpRegionMetadata's ShapeKey).
+  int32_t getDynamicJumpShapeClassEntryDepth(uint32_t ShapeClassId) const {
+    if (ShapeClassId == 0) {
+      return -1;
+    }
+    for (const auto &[RegionEntryPC, RegionInfo] : DynamicJumpRegions) {
+      (void)RegionEntryPC;
+      if (RegionInfo.ShapeClassId == ShapeClassId) {
+        return RegionInfo.FullEntryStateDepth;
+      }
+    }
+    return -1;
+  }
+
   uint32_t
   getOutgoingCompatibleDynamicJumpShapeClassForBlock(uint64_t BlockPC) const {
     auto It = BlockInfos.find(BlockPC);
@@ -345,8 +362,22 @@ public:
     uint32_t OutgoingShapeClassId =
         getOutgoingCompatibleDynamicJumpShapeClassForBlock(BlockPC);
     if (OutgoingShapeClassId == 0 && It->second.HasDynamicJump) {
-      OutgoingShapeClassId =
+      // Fallback: a block that is itself a dynamic-jump target candidate may
+      // re-dispatch through the same shape class it belongs to. This is only
+      // valid when the block re-dispatches at the depth that class expects on
+      // entry. A block whose dynamic JUMP leaves a different outgoing depth
+      // (e.g. it net-pops part of its entry stack) must NOT propagate its
+      // outgoing stack into that class's targets, or the assigned entry state
+      // would be the wrong size. Gate on the source's resolved exit depth.
+      const uint32_t CandidateShapeClassId =
           getUniqueCompatibleDynamicJumpShapeClassForBlock(BlockPC);
+      const int32_t CandidateEntryDepth =
+          getDynamicJumpShapeClassEntryDepth(CandidateShapeClassId);
+      if (CandidateShapeClassId != 0 &&
+          It->second.ResolvedExitStackDepth >= 0 &&
+          It->second.ResolvedExitStackDepth == CandidateEntryDepth) {
+        OutgoingShapeClassId = CandidateShapeClassId;
+      }
     }
     if (OutgoingShapeClassId != 0) {
       std::vector<uint64_t> TargetBlockPCs;
