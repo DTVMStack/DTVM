@@ -414,13 +414,21 @@ private:
     }
 
     if constexpr (HasGetU256VarComponents<Operand>::value) {
-      const auto &VarComponents = Value.getU256VarComponents();
-      std::string Key = "u256vars";
-      for (const auto *Var : VarComponents) {
-        Key += ':';
-        appendPointerKey(Key, Var);
+      // Only a multi-component U256 operand backed by variables exposes a
+      // stable var-component identity. getU256VarComponents() asserts on
+      // IsU256MultiComponent, so an operand that reaches here without being a
+      // multi-component value (e.g. an empty/deferred operand whose Instr and
+      // Var accessors both returned null) must fall through to an opaque key
+      // rather than dereferencing the var-component array.
+      if (Value.isU256MultiComponent()) {
+        const auto &VarComponents = Value.getU256VarComponents();
+        std::string Key = "u256vars";
+        for (const auto *Var : VarComponents) {
+          Key += ':';
+          appendPointerKey(Key, Var);
+        }
+        return Key;
       }
-      return Key;
     }
 
     std::string Key = "opaque:";
