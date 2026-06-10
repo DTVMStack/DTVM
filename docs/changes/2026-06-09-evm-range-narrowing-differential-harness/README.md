@@ -7,14 +7,27 @@ that runs EVM opcodes through both the interpreter and the multipass JIT on an
 adversarial operand matrix and asserts the multipass result is bit-identical to
 the interpreter (the full-width reference).
 
-Three tests, split by which lowering path the operands actually drive:
+Four tests, split by which lowering path the operands actually drive:
 
-- `BinaryOpsMatchInterpreterOnAdversarialOperands` — 18 binary opcodes (ADD,
-  MUL, SUB, DIV, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, SHL, SHR,
-  SAR) over all pairs of an 11-value operand set. Both operands are dynamic
-  `CALLDATALOAD` values (U256-range), so they do **not** enter the
-  bothFitU64 / AND-narrow fast paths: this test gates the **full-width 4-limb
-  lowering** — the #487-class high-limb-corruption surface.
+- `BinaryOpsMatchInterpreterOnAdversarialOperands` — 20 binary opcodes (ADD,
+  MUL, SUB, DIV, SDIV, MOD, SMOD, SIGNEXTEND, LT, GT, SLT, SGT, EQ, AND, OR,
+  XOR, BYTE, SHL, SHR, SAR) over all pairs of an 11-value operand set. Both
+  operands are dynamic `CALLDATALOAD` values (U256-range), so they do **not**
+  enter the bothFitU64 / AND-narrow fast paths: this test gates the
+  **full-width 4-limb lowering** — the #487-class high-limb-corruption surface.
+  `EXP` is excluded because its gas cost scales with the exponent byte length,
+  so the high-limb operands in this matrix (2^192, 2^255, 2^256-1) would charge
+  enormous dynamic gas and trip out-of-gas before a value-range divergence
+  could show.
+- `ShiftAmountsMatchInterpreterOnLimbBoundaries` — SHL, SHR, SAR swept with
+  shift amounts {2, 7, 8, 31, 63, 64, 65, 127, 128, 129, 136, 191, 192, 200,
+  255} crossed with the 11-value matrix as the shifted value, both fed through
+  `CALLDATALOAD` so the full-width dynamic shift path fires. The 11-value
+  matrix, when used as a shift **amount**, only realizes {0, 1, >=2^64}, so the
+  amounts 2..255 — where the dynamic-shift lowering moves bits across 64-bit
+  limb boundaries (64/128/192) and within a limb (the rest) — are unreachable
+  from the binary-op sweep. This test exercises that cross-limb carry/offset
+  logic directly.
 - `AndU64MaskMatchesInterpreter` — `AND` with a u64 constant (the CONST_U64
   fast path, which tags the result U64 and zeros limbs[1..3]) returned
   **directly**, over the adversarial set. Returning the masked value unconsumed
@@ -24,7 +37,7 @@ Three tests, split by which lowering path the operands actually drive:
   narrow-result **consumer**.
 
 The two `AndU64Mask*` tests gate the actual narrowing fast paths; the binary-op
-sweep gates the full-width path.
+and shift-amount sweeps gate the full-width path.
 
 ## Why
 
@@ -73,10 +86,9 @@ the mutation.
 CI-faithful flags (`ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK=ON`), `SPEC_TEST=ON` for
 the test executables:
 
-- `evmInterpTests --gtest_filter=EVMRangeDifferential.*`: **3 / 3 pass** on the
+- `evmInterpTests --gtest_filter=EVMRangeDifferential.*`: **4 / 4 pass** on the
   current tree (multipass agrees with the interpreter on every adversarial
-  pair).
-- Full `evmInterpTests`: 171 / 171 pass.
+  pair, including all swept shift amounts).
 - Negative control: the deliberate too-narrow AND mutation is caught by the
   direct-return test, then reverted.
 - `tools/format.sh check`: pass.

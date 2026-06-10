@@ -704,7 +704,16 @@ TEST(EVMRegressionTest, Issue488_PCAsAddmodAugend_InterpMatchesMultipass) {
 //   - BinaryOpsMatchInterpreterOnAdversarialOperands feeds two CALLDATALOAD
 //     operands, which are dynamic and U256-range, so they do NOT enter the
 //     bothFitU64 / AND-narrow fast paths: this test gates the FULL-width
-//     4-limb lowering (the #487-class high-limb-corruption surface).
+//     4-limb lowering (the #487-class high-limb-corruption surface). It sweeps
+//     20 binary opcodes (arithmetic, comparison, bitwise, BYTE, SIGNEXTEND,
+//     and the three shifts). EXP is excluded because its gas cost scales with
+//     the exponent byte length, so high-limb operands would trip out-of-gas
+//     instead of exposing a value-range divergence.
+//   - ShiftAmountsMatchInterpreterOnLimbBoundaries sweeps SHL/SHR/SAR with
+//     shift amounts in the limb-crossing region 2..255. The 11-value operand
+//     matrix, used as a shift amount, only realizes {0, 1, >=2^64}, so the
+//     dynamic-shift cross-limb carry/offset logic is unreachable from the
+//     binary-op sweep above; this test covers it.
 //   - The AndU64Mask* tests construct a provably-U64 operand (AND with a u64
 //     constant) and feed it directly / through a bothFitU64 ADD, so they gate
 //     the actual narrowing fast paths.
@@ -866,6 +875,13 @@ static std::vector<uint8_t> rangeDiffBinOp(uint8_t Op) {
 // On the first divergent (op, operand) pair the whole test returns, so a single
 // regression reports one op and skips the rest — intentional output-flood
 // control, not full per-op isolation.
+//
+// EXP (0x0a) is intentionally excluded: its gas cost scales with the byte
+// length of the exponent, so the high-limb operands in this matrix (2^192,
+// 2^255, 2^256-1) would charge enormous dynamic gas and obscure a pure
+// value-range divergence behind out-of-gas noise. Shift amounts, which need
+// the limb-crossing region 2..255, are swept separately by
+// ShiftAmountsMatchInterpreterOnLimbBoundaries below.
 TEST(EVMRangeDifferential, BinaryOpsMatchInterpreterOnAdversarialOperands) {
   struct OpCase {
     uint8_t Op;
@@ -873,10 +889,10 @@ TEST(EVMRangeDifferential, BinaryOpsMatchInterpreterOnAdversarialOperands) {
   };
   const OpCase Cases[] = {
       {0x01, "ADD"},  {0x02, "MUL"}, {0x03, "SUB"},  {0x04, "DIV"},
-      {0x05, "SDIV"}, {0x06, "MOD"}, {0x07, "SMOD"}, {0x10, "LT"},
-      {0x11, "GT"},   {0x12, "SLT"}, {0x13, "SGT"},  {0x14, "EQ"},
-      {0x16, "AND"},  {0x17, "OR"},  {0x18, "XOR"},  {0x1b, "SHL"},
-      {0x1c, "SHR"},  {0x1d, "SAR"},
+      {0x05, "SDIV"}, {0x06, "MOD"}, {0x07, "SMOD"}, {0x0b, "SIGNEXTEND"},
+      {0x10, "LT"},   {0x11, "GT"},  {0x12, "SLT"},  {0x13, "SGT"},
+      {0x14, "EQ"},   {0x16, "AND"}, {0x17, "OR"},   {0x18, "XOR"},
+      {0x1a, "BYTE"}, {0x1b, "SHL"}, {0x1c, "SHR"},  {0x1d, "SAR"},
   };
   const auto Operands = rangeDiffOperands();
   for (const auto &C : Cases) {
@@ -884,6 +900,46 @@ TEST(EVMRangeDifferential, BinaryOpsMatchInterpreterOnAdversarialOperands) {
     for (const auto &A : Operands) {
       for (const auto &B : Operands) {
         if (!rangeDiffAgree(C.Name, Bytecode, rangeDiffCalldata(A, B))) {
+          return; // one divergence is enough; avoid output flood
+        }
+      }
+    }
+  }
+}
+
+// Sweep SHL/SHR/SAR with shift amounts that land inside the limb-crossing
+// region 2..255. The 11-value operand matrix, when fed as a shift amount, only
+// realizes {0, 1, >=2^64}; it never produces an amount in 2..255, so the
+// dynamic-shift lowering's cross-limb carry/offset logic (which moves bits
+// across 64-bit limb boundaries at amounts 64/128/192 and within a limb at the
+// rest) is never exercised by BinaryOpsMatchInterpreterOnAdversarialOperands.
+//
+// rangeDiffBinOp puts the shift amount in slot b (calldata[32:64], the stack
+// top SHL/SHR/SAR pops first) and the shifted value in slot a
+// (calldata[0:32]). Both are CALLDATALOAD, so the full-width dynamic shift path
+// fires. The shifted value sweeps the full adversarial matrix; the amount
+// sweeps the boundary set below, covering both the on-limb-boundary amounts
+// (64, 128, 192) and the in-limb amounts (2, 7, 31, 63, 65, 127, ...).
+TEST(EVMRangeDifferential, ShiftAmountsMatchInterpreterOnLimbBoundaries) {
+  struct OpCase {
+    uint8_t Op;
+    const char *Name;
+  };
+  const OpCase Cases[] = {
+      {0x1b, "SHL"},
+      {0x1c, "SHR"},
+      {0x1d, "SAR"},
+  };
+  const uint64_t Amounts[] = {2,   7,   8,   31,  63,  64,  65, 127,
+                              128, 129, 136, 191, 192, 200, 255};
+  const auto Values = rangeDiffOperands();
+  for (const auto &C : Cases) {
+    const auto Bytecode = rangeDiffBinOp(C.Op);
+    for (const auto &Value : Values) {
+      for (uint64_t Amount : Amounts) {
+        const auto AmountWord = rangeDiffLimb(0, Amount);
+        if (!rangeDiffAgree(C.Name, Bytecode,
+                            rangeDiffCalldata(Value, AmountWord))) {
           return; // one divergence is enough; avoid output flood
         }
       }
