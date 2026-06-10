@@ -1,4 +1,4 @@
-# Change: EVM 常量移位 lowering 的静态 guard 消解与死项剪枝
+# Change: Statically resolve constant-amount EVM shift guards and prune dead source terms
 
 - **Status**: Proposed
 - **Date**: 2026-06-10
@@ -6,95 +6,124 @@
 
 ## Overview
 
-multipass JIT 对常量移位量的 SHL/SHR/SAR 仍发射运行时 `>= 256` guard(每
-limb 一个 Select)与 range 上已证为零的源 limb 计算。本变更在编译期消解这些
-死代码:常量移位量 ≥256 时 SHL/SHR 直接折叠为常量零;<256 时省去整条
-`IsLargeShift` 链与每 limb 的 Select;值操作数已证 U64/U128 时再剪掉死源项。
-**纯生成码精简,不引入新的 range 声明**;两名独立 reviewer 全攻击面 clean,
-全部正确性套件通过,端到端基准中性(无回归)。
+For SHL/SHR/SAR with a constant shift amount, the multipass JIT still emits a
+runtime `>= 256` guard (one Select per limb) and source-limb computations
+already proven zero by the range analysis. This change resolves that dead code
+at compile time. A constant shift amount ≥256 folds SHL/SHR directly to a
+constant zero. A constant amount <256 omits the entire `IsLargeShift` chain
+and the per-limb Selects. When the value operand is proven U64/U128, the dead
+source terms are pruned as well. **This is pure generated-code reduction; no
+new range claims are introduced.** Two independent reviewers found the full
+attack surface clean, all correctness suites pass, and the end-to-end
+benchmark is neutral (no regression).
 
 ## Motivation
 
-真实主网负载上,SHL FULL 执行的 92.5%、SHR 的 99.6% 移位量是编译期常量
-(Solidity 的存储槽/地址打包模式)。现有 const-amount 快路径虽然避免了动态
-移位的逐 limb select 级联,但仍保留:
+On real mainnet load, 92.5% of SHL FULL executions and 99.6% of SHR executions
+use a compile-time-constant shift amount (Solidity storage-slot/address
+packing patterns). The existing const-amount fast path avoids the per-limb
+select cascade of dynamic shifts, but still retains:
 
-1. `isU256GreaterOrEqual(Shift, 256)` 比较链——对完整常量静态可判;
-2. 每个结果 limb 一个 `Select(IsLargeShift, fill, R)` + spill——guard 恒假时
-   是死代码;
-3. 对已证 U64/U128 的被移位值,高位源 limb 的 shl/ushr/or 项——按 Range
-   契约语义为零。
+1. the `isU256GreaterOrEqual(Shift, 256)` comparison chain — statically
+   decidable for a full constant;
+2. one `Select(IsLargeShift, fill, R)` + spill per result limb — dead code
+   when the guard is always false;
+3. for shifted values proven U64/U128, the shl/ushr/or terms on the high
+   source limbs — zero under the Range contract semantics.
 
-`getConstShiftAmount` 只读 limb0,高 limb 非零的常量(如 2^64)历史上依赖
-运行时 guard 兜底——静态消解必须用完整 256-bit 常量判定,这是本变更的核心
-正确性约束。
+`getConstShiftAmount` reads only limb0. Constants with a nonzero high limb
+(such as 2^64) historically relied on the runtime guard as a backstop. Static
+resolution must therefore decide on the full 256-bit constant; this is the
+core correctness constraint of this change.
 
 ## Changes
 
-全部在 `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
+All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
 
-1. **静态大移位消解**(`handleShift`):移位量为常量时用
-   `u256ValueToIntx` 取完整 256-bit 值。≥256:SHL/SHR_U 返回常量零
-   Operand(EVM 语义下结果恒为 0,与既有 Phase-0 双常量折叠一致;常量
-   构造器自动派生 U64 tag,比旧的动态零更精确);SAR 保持原流程(填充值
-   依赖被移位值符号位)。<256:不再构造 `IsLargeShift`,向 helper 传
-   nullptr。
-2. **helper 接受 nullptr guard**:三个 helper 的 const-amount 路径在
-   nullptr 时跳过每 limb 的 Select(SAR 的越界 sign-fill 来自 R 的默认初始
-   值,与被删的 Select 无关,保留不动);动态路径入口加
-   `ZEN_ASSERT(IsLargeShift != nullptr)` 防御。
-3. **range-aware 源 limb 剪枝**(仅 SHL/SHR_U const 路径):新增
-   `LiveLimbs` 参数(U64→1、U128→2、默认 4),源 limb 下标 ≥ LiveLimbs 的
-   shifted/carry 项不发射;双项皆死时该 limb 为共享零常量。SAR 刻意排除
-   (其填充符号相关,剪枝将构成新的 range 声明)。
+1. **Static large-shift resolution** (`handleShift`): when the shift amount is
+   constant, obtain the full 256-bit value via `u256ValueToIntx`. For ≥256,
+   SHL/SHR_U return a constant-zero Operand. The result is always 0 under EVM
+   semantics, consistent with the existing Phase-0 both-constant folding; the
+   constant constructor automatically derives a U64 tag, which is more precise
+   than the previous dynamic zero. SAR keeps the original flow, because its
+   fill value depends on the sign bit of the shifted value. For <256,
+   `IsLargeShift` is no longer constructed and nullptr is passed to the
+   helpers.
+2. **Helpers accept a nullptr guard**: the const-amount path of the three
+   helpers skips the per-limb Select when the guard is nullptr. SAR's
+   out-of-range sign-fill comes from R's default initial value, is independent
+   of the deleted Selects, and is left untouched. The dynamic-path entry gains
+   a defensive `ZEN_ASSERT(IsLargeShift != nullptr)`.
+3. **Range-aware source-limb pruning** (SHL/SHR_U const path only): a new
+   `LiveLimbs` parameter (U64→1, U128→2, default 4). Shifted/carry terms whose
+   source-limb index is ≥ LiveLimbs are not emitted; when both terms are dead,
+   that limb becomes a shared zero constant. SAR is deliberately excluded —
+   its fill is sign-dependent, so pruning would constitute a new range claim.
 
 ## Soundness
 
-- 2^64 陷阱(limb0 小、高 limb 非零的常量):静态判定用完整常量,≥256 即
-  折叠/保留 guard,nullptr 只在完整常量 <256 时传入。
-- 项活性代数(SHL 取 `Value[SrcIdx]`/`Value[SrcIdx-1]`,SHR_U 取
-  `Value[SrcIdx]`/`Value[SrcIdx+1]`):Codex 用参考实现对全部
-  (CompShift × ShiftMod × LiveLimbs ∈ {1,2,4}) × 移位量 0-255 做了穷举
-  对照;Opus 手工核对了 Shifted-dead/Carry-live 等边界(如 U64 值 << 200)。
-- 提前返回发生在两个操作数 pop 之后,EVM 栈操作数纯值无副作用,丢弃未物化
-  的 value 表达式安全。
-- 结果 range tag:SHR_U 保持既有 `ValueOp.getRange()` 透传(剪枝恰好使
-  零 limb 结构化为零,强化而非违反);SHL 保持 U256;唯一变化是 ≥256 折叠
-  产物从动态零变为常量零(tag 更精确,方向安全)。
+- The 2^64 trap (a constant with a small limb0 and a nonzero high limb): the
+  static decision uses the full constant. A constant ≥256 folds or keeps the
+  guard; nullptr is passed only when the full constant is <256.
+- Term-liveness algebra (SHL reads `Value[SrcIdx]`/`Value[SrcIdx-1]`, SHR_U
+  reads `Value[SrcIdx]`/`Value[SrcIdx+1]`): Codex exhaustively cross-checked
+  all (CompShift × ShiftMod × LiveLimbs ∈ {1,2,4}) × shift amounts 0-255
+  against a reference implementation; Opus hand-verified the boundary cases
+  such as Shifted-dead/Carry-live (e.g. a U64 value << 200).
+- The early return occurs after both operands are popped. EVM stack operands
+  are pure values with no side effects, so discarding unmaterialized value
+  expressions is safe.
+- Result range tag: SHR_U keeps the existing `ValueOp.getRange()`
+  pass-through — pruning makes the zero limbs structurally zero, which
+  strengthens rather than violates the tag. SHL stays U256. The only change is
+  that the ≥256 fold product becomes a constant zero instead of a dynamic
+  zero; the tag is more precise, which is the safe direction.
 
 ## Verification
 
-- 新增 12 个差分 fixture(`tests/evm_asm/`)+ `EVMConstShiftDifferentialTest`
-  套件:覆盖跨 limb 进位(<<96)、源剪枝(u64 值 <<200 / >>8)、≥256 折叠、
-  2^64 陷阱、SAR 正负 sign-fill、动态移位量回归对照。12/12 通过,interp 与
-  multipass 输出逐字节一致且 multipass 确实 JIT 编译。
-- multipass evmone-unittests 223/223;multipass evmone-statetest
-  `-k fork_Cancun` 2723/2723;golden 套件无回归;`tools/format.sh check`
-  通过;无新增警告。
-- 双独立 review:Opus(7 攻击面全部 verified-clean,无缺陷)+ Codex
-  (穷举验证,1 个 NIT 即上述更精确的常量零 tag)。
+- 12 new differential fixtures (`tests/evm_asm/`) plus the
+  `EVMConstShiftDifferentialTest` suite: they cover cross-limb carry (<<96),
+  source pruning (a u64 value <<200 / >>8), ≥256 folding, the 2^64 trap, SAR
+  positive/negative sign-fill, and a dynamic-shift-amount regression control.
+  12/12 pass; interpreter and multipass outputs match byte-for-byte, and
+  multipass is confirmed to actually JIT-compile the fixtures.
+- multipass evmone-unittests 223/223; multipass evmone-statetest
+  `-k fork_Cancun` 2723/2723; no regression in the golden suite;
+  `tools/format.sh check` passes; no new warnings.
+- Two independent reviews: Opus (all 7 attack surfaces verified-clean, no
+  defects) and Codex (exhaustive verification; 1 NIT, namely the more precise
+  constant-zero tag described above).
 
 ## Measurements
 
-evmone-bench 27-bench(multipass,vs upstream/main baseline,median of 5):
-median delta **-0.08%**;对移位重点基准与全部 >3% 离群点以 15 reps 复测,
-全部落回各自 cv 噪声带(blake2b_shifts +1.3% @cv 2.4-3.4%、sha1_shifts
-+0.2%、signextend -0.1%、weierstrudel -1.8%)。
+evmone-bench 27-bench (multipass, vs upstream/main baseline, median of 5):
+median delta **-0.08%**. The shift-focused benchmarks and all >3% outliers
+were re-measured at 15 reps; all fall back inside their respective cv noise
+bands (blake2b_shifts +1.3% @cv 2.4-3.4%, sha1_shifts +0.2%, signextend
+-0.1%, weierstrudel -1.8%).
 
-结论:**端到端中性,无回归**。收益形态是每个常量移位站点的生成码缩减
-(4 个 Select + 一条 4-limb 比较链,窄值另省死源项),该缩减在本基准套件的
-热点构成中不可测;在编译产物体积与寄存器压力上的效果未单独量化。
+Conclusion: **end-to-end neutral, no regression**. The benefit takes the form
+of generated-code reduction at each constant-shift site — 4 Selects plus one
+4-limb comparison chain, and for narrow values the dead source terms on top.
+That reduction is not measurable in the hot-spot composition of this benchmark
+suite. The effect on compiled-code size and register pressure has not been
+quantified separately.
 
 ## Known limitations
 
-1. 源 limb 剪枝信任 Range 契约。块内 AND-mask/常量产生的窄值高 limb 物理
-   为零;经 `EntryStackRanges` 跨块导入的窄 tag 依赖 analyzer 的 sound
-   over-approximation(经查 `meetRange=max` 单调、SHL transfer 为 U256,
-   当前成立)。该路径由 `ZEN_ENABLE_EVM_STACK_SSA_LIFT` 门控,默认与 CI
-   均 OFF;若未来默认开启,应先重审 analyzer transfer 的 soundness 并补
-   lift-ON 下跨块窄 tag 的差分 fixture。
-2. 现有差分 fixture 的窄值均来自物理置零的生产者(AND-mask),未覆盖
-   仅靠 analyzer tag 证明的跨块路径(同上,lift 系列后续)。
+1. Source-limb pruning trusts the Range contract. For narrow values produced
+   inside a block by AND-masks or constants, the high limbs are physically
+   zero. Narrow tags imported across blocks via `EntryStackRanges` depend on
+   the analyzer's sound over-approximation; this was checked and currently
+   holds (`meetRange=max` is monotone and the SHL transfer is U256). That path
+   is gated by `ZEN_ENABLE_EVM_STACK_SSA_LIFT`, which is OFF by default and in
+   CI. If it is ever enabled by default, the analyzer transfer soundness
+   should be re-reviewed first, and differential fixtures for cross-block
+   narrow tags under lift-ON should be added.
+2. The narrow values in the existing differential fixtures all come from
+   producers that physically zero the high limbs (AND-masks). The cross-block
+   path proven only by analyzer tags is not covered (same as above; follow-up
+   in the lift series).
 
 ## Checklist
 
