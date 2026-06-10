@@ -203,6 +203,14 @@ public:
     }
   }
 
+  // Update only the incoming block for an edge, leaving the incoming value
+  // unchanged. Used when the CFG edge an incoming block represents is resolved
+  // after the value has already been wired.
+  void setIncomingBlock(size_t Index, MBasicBlock *Block) {
+    ZEN_ASSERT(Index < Blocks.size());
+    Blocks[Index] = Block;
+  }
+
 private:
   friend class DynamicOperandInstruction;
 

@@ -13,6 +13,7 @@
 #include "evm/evm.h"
 #include "evmc/instructions.h"
 #include "intx/intx.hpp"
+#include <algorithm>
 #include <unordered_map>
 #include <vector>
 
@@ -239,6 +240,7 @@ public:
       Result.DeferredValueKind =
           IsNegated ? DeferredKind::ZERO_TEST_NE : DeferredKind::ZERO_TEST_EQ;
       Result.U256Components = BaseComponents;
+      Result.Range = ValueRange::U64;
       return Result;
     }
 
@@ -314,6 +316,16 @@ public:
     // Check whether both operands provably fit in u64
     static bool bothFitU64(const Operand &A, const Operand &B) {
       return A.getRange() == ValueRange::U64 && B.getRange() == ValueRange::U64;
+    }
+
+    static ValueRange maxRange(const Operand &A, const Operand &B) {
+      return std::max(A.getRange(), B.getRange());
+    }
+
+    // One tier wider in the U64<U128<U256 lattice: U64->U128, else U256. Shared
+    // by the u64-const ADD/MUL result ranges (u64+u64 < 2^65, u64*u64 < 2^128).
+    static ValueRange widenOneTier(ValueRange R) {
+      return R == ValueRange::U64 ? ValueRange::U128 : ValueRange::U256;
     }
 
     constexpr bool isReg() { return false; }
@@ -559,6 +571,10 @@ public:
   Operand handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
                        Operand ModulusOp);
   Operand handleExp(Operand BaseOp, Operand ExponentOp);
+  // EIP-160 dynamic gas for a constant-exponent EXP (GasPerByte * significant
+  // exponent bytes). Static + public so the const-fold path and tests share it.
+  static uint64_t constExpDynamicGas(const intx::uint256 &Exponent,
+                                     evmc_revision Rev);
   template <CompareOperator Operator>
   Operand handleCompareOp(Operand LHSOp, Operand RHSOp) {
     resetLoweringPath();
@@ -782,11 +798,10 @@ public:
           false, getMirOpcode(Operator), MirI64Type, LHS[I], RHS[I]);
       Result[I] = protectUnsafeValue(LocalResult, MirI64Type);
     }
-    // OR/XOR are monotone on range: result range = max(LHS, RHS).
     if constexpr (Operator == BinaryOperator::BO_OR ||
                   Operator == BinaryOperator::BO_XOR) {
-      return Operand(Result, EVMType::UINT256,
-                     std::max(LHSOp.getRange(), RHSOp.getRange()));
+      ValueRange ResultRange = Operand::maxRange(LHSOp, RHSOp);
+      return Operand(Result, EVMType::UINT256, ResultRange);
     }
     return Operand(Result, EVMType::UINT256);
   }
@@ -1217,6 +1232,8 @@ private:
   MBasicBlock *
   resolveReachablePhiIncomingPredecessorBB(uint64_t TargetBlockPC,
                                            MBasicBlock *CandidateBB) const;
+  MBasicBlock *resolveReachablePredecessorBB(MBasicBlock *TargetBB,
+                                             MBasicBlock *CandidateBB) const;
 
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;
@@ -1270,6 +1287,17 @@ private:
       DynamicPhiIncomingBlockTable;
   std::map<PhiInstruction *, std::map<uint64_t, size_t>> PhiIncomingSlotMap;
   std::map<VariableIdx, PhiInstruction *> StackMergePhiVarMap;
+
+  // Stack-merge phis and the loop-header block they belong to. A merge phi's
+  // incoming block is resolved eagerly when each predecessor edge's stack
+  // state is assigned (materializeStackMergeOperand / assignStackMergeOperand).
+  // For a loop back-edge this assignment happens before the predecessor's
+  // terminator wires the real CFG edge into the loop header, so the resolved
+  // incoming block can be the predecessor EVM block's entry MIR block rather
+  // than its terminator MIR block. finalizeStackMergePhiIncomingBlocks()
+  // re-resolves every recorded incoming block against the now-complete CFG.
+  std::vector<std::pair<PhiInstruction *, MBasicBlock *>> StackMergePhiBlocks;
+  void finalizeStackMergePhiIncomingBlocks();
 
   struct MemoryCompileStats {
     uint64_t MLoadExpandCount = 0;

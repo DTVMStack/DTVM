@@ -34,8 +34,9 @@ namespace {
 using COMPILER::EVMAnalyzer;
 using COMPILER::EVMValueRange;
 
-EVMAnalyzer analyzeBytecode(const std::vector<uint8_t> &Bytecode) {
-  EVMAnalyzer Analyzer(EVMC_CANCUN);
+EVMAnalyzer analyzeBytecode(const std::vector<uint8_t> &Bytecode,
+                            evmc_revision Revision = EVMC_CANCUN) {
+  EVMAnalyzer Analyzer(Revision);
   const uint8_t *Data = Bytecode.empty() ? nullptr : Bytecode.data();
   Analyzer.analyze(Data, Bytecode.size());
   return Analyzer;
@@ -534,6 +535,20 @@ TEST(EVMRangeAnalyzer, OrTakesMax) {
   EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U256);
 }
 
+TEST(EVMRangeAnalyzer, XorTakesMax) {
+  // PUSH16 a (U128) PUSH32 b (U256) XOR — XOR uses meetRange (max) = U256.
+  std::vector<uint8_t> Code;
+  appendPush(Code, 0x6f, u128MaxLiteralPush16());
+  appendPush(Code, 0x7f, u256MaxLiteralPush32());
+  Code.push_back(0x18); // XOR
+  uint64_t Pc = appendJumpToFreshJumpDest(Code);
+  EVMAnalyzer Analyzer = analyzeBytecode(Code);
+  const auto *JumpDest = findBlock(Analyzer, Pc);
+  ASSERT_NE(JumpDest, nullptr);
+  ASSERT_EQ(JumpDest->EntryStackRanges.size(), 1u);
+  EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U256);
+}
+
 TEST(EVMRangeAnalyzer, ShrPreservesValueRange) {
   // EVM SHR pops shift (top), then value.  Bytecode order: PUSH value, PUSH
   // shift, SHR.  Result = value's range.  PUSH16 value (U128) + PUSH1 shift
@@ -550,6 +565,19 @@ TEST(EVMRangeAnalyzer, ShrPreservesValueRange) {
   ASSERT_NE(JumpDest, nullptr);
   ASSERT_EQ(JumpDest->EntryStackRanges.size(), 1u);
   EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U128);
+}
+
+TEST(EVMRangeAnalyzer, ClzIsU64InOsaka) {
+  // CLZ is Osaka-gated; default Cancun analysis would treat 0x1e as undefined.
+  std::vector<uint8_t> Code;
+  appendPush(Code, 0x7f, u256MaxLiteralPush32());
+  Code.push_back(0x1e); // CLZ
+  uint64_t Pc = appendJumpToFreshJumpDest(Code);
+  EVMAnalyzer Analyzer = analyzeBytecode(Code, EVMC_OSAKA);
+  const auto *JumpDest = findBlock(Analyzer, Pc);
+  ASSERT_NE(JumpDest, nullptr);
+  ASSERT_EQ(JumpDest->EntryStackRanges.size(), 1u);
+  EXPECT_EQ(JumpDest->EntryStackRanges.back(), EVMValueRange::U64);
 }
 
 TEST(EVMRangeAnalyzer, Keccak256IsU256) {
@@ -1010,4 +1038,47 @@ TEST(EVMRangeAnalyzer, UnresolvedBlockSkipped) {
   EVMAnalyzer Analyzer = analyzeBytecode(Code);
   const auto *Jd = findBlock(Analyzer, 1);
   assertNoEntryState(Jd);
+}
+
+// Transfer-rule coverage for opcodes that sit in their own switch case with no
+// pinned sibling (a regression in their range assignment would otherwise be
+// silent). The single stack slot at the JUMPDEST entry is the op's result.
+
+TEST(EVMRangeAnalyzer, ByteResultIsU64) {
+  // PUSH1 5; PUSH1 3; BYTE; PUSH1 9; JUMP; INVALID; JUMPDEST(PC 9)
+  std::vector<uint8_t> Code = {0x60, 0x05, 0x60, 0x03, 0x1a,
+                               0x60, 0x09, 0x56, 0xfe, 0x5b};
+  EVMAnalyzer Analyzer = analyzeBytecode(Code);
+  assertEntryTop(findBlock(Analyzer, 9), EVMValueRange::U64);
+}
+
+TEST(EVMRangeAnalyzer, NotResultIsU256) {
+  // PUSH1 5; NOT; PUSH1 7; JUMP; INVALID; JUMPDEST(PC 7)
+  std::vector<uint8_t> Code = {0x60, 0x05, 0x19, 0x60, 0x07, 0x56, 0xfe, 0x5b};
+  EVMAnalyzer Analyzer = analyzeBytecode(Code);
+  assertEntryTop(findBlock(Analyzer, 7), EVMValueRange::U256);
+}
+
+TEST(EVMRangeAnalyzer, ExpResultIsU256) {
+  // PUSH1 2; PUSH1 3; EXP; PUSH1 9; JUMP; INVALID; JUMPDEST(PC 9)
+  std::vector<uint8_t> Code = {0x60, 0x02, 0x60, 0x03, 0x0a,
+                               0x60, 0x09, 0x56, 0xfe, 0x5b};
+  EVMAnalyzer Analyzer = analyzeBytecode(Code);
+  assertEntryTop(findBlock(Analyzer, 9), EVMValueRange::U256);
+}
+
+TEST(EVMRangeAnalyzer, SignextendResultIsU256) {
+  // PUSH1 0; PUSH1 5; SIGNEXTEND; PUSH1 9; JUMP; INVALID; JUMPDEST(PC 9)
+  std::vector<uint8_t> Code = {0x60, 0x00, 0x60, 0x05, 0x0b,
+                               0x60, 0x09, 0x56, 0xfe, 0x5b};
+  EVMAnalyzer Analyzer = analyzeBytecode(Code);
+  assertEntryTop(findBlock(Analyzer, 9), EVMValueRange::U256);
+}
+
+TEST(EVMRangeAnalyzer, ShlResultIsU256) {
+  // PUSH1 1; PUSH1 5; SHL; PUSH1 9; JUMP; INVALID; JUMPDEST(PC 9)
+  std::vector<uint8_t> Code = {0x60, 0x01, 0x60, 0x05, 0x1b,
+                               0x60, 0x09, 0x56, 0xfe, 0x5b};
+  EVMAnalyzer Analyzer = analyzeBytecode(Code);
+  assertEntryTop(findBlock(Analyzer, 9), EVMValueRange::U256);
 }

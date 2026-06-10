@@ -165,7 +165,21 @@ MBasicBlock *EVMMirBuilder::resolveReachablePhiIncomingPredecessorBB(
     return CandidateBB;
   }
 
-  MBasicBlock *TargetBB = TargetIt->second;
+  return resolveReachablePredecessorBB(TargetIt->second, CandidateBB);
+}
+
+// Resolve CandidateBB to a real predecessor of TargetBB. If CandidateBB is
+// already a predecessor it is returned unchanged; otherwise the CFG is walked
+// forward from CandidateBB to the first reachable block that is a predecessor
+// of TargetBB. Returns CandidateBB when no such block is found, so callers can
+// detect failure by checking predecessor membership of the result.
+MBasicBlock *
+EVMMirBuilder::resolveReachablePredecessorBB(MBasicBlock *TargetBB,
+                                             MBasicBlock *CandidateBB) const {
+  if (TargetBB == nullptr || CandidateBB == nullptr) {
+    return CandidateBB;
+  }
+
   auto PredRange = TargetBB->predecessors();
   if (std::find(PredRange.begin(), PredRange.end(), CandidateBB) !=
       PredRange.end()) {
@@ -194,6 +208,50 @@ MBasicBlock *EVMMirBuilder::resolveReachablePhiIncomingPredecessorBB(
   }
 
   return CandidateBB;
+}
+
+void EVMMirBuilder::finalizeStackMergePhiIncomingBlocks() {
+  // Stack-merge phi incoming blocks are resolved eagerly at the time each
+  // predecessor edge's stack state is assigned. For a loop back-edge that
+  // assignment runs before the predecessor block's terminator wires the real
+  // CFG edge into the loop header, so the recorded incoming block can be the
+  // predecessor EVM block's entry MIR block instead of the MIR block that
+  // actually branches into the loop header. Now that the full CFG is built,
+  // walk forward from each recorded incoming block to the real predecessor of
+  // the phi's owning block. Only the incoming-block pointer is corrected; the
+  // incoming value is preserved.
+  for (const auto &[Phi, OwnerBB] : StackMergePhiBlocks) {
+    if (Phi == nullptr || OwnerBB == nullptr) {
+      continue;
+    }
+    auto PredRange = OwnerBB->predecessors();
+    for (size_t Index = 0; Index < Phi->getNumIncoming(); ++Index) {
+      MBasicBlock *IncomingBB = Phi->getIncomingBlock(Index);
+      if (IncomingBB == nullptr) {
+        continue;
+      }
+      // Already a real predecessor: nothing to fix.
+      if (std::find(PredRange.begin(), PredRange.end(), IncomingBB) !=
+          PredRange.end()) {
+        continue;
+      }
+      // Walk forward from the recorded block to the actual predecessor of the
+      // phi's owning block, reusing the shared reachability resolver.
+      MBasicBlock *ResolvedBB =
+          resolveReachablePredecessorBB(OwnerBB, IncomingBB);
+      // The walk must land on a real predecessor; otherwise the phi would keep
+      // an incoming block that is not a predecessor and the verifier would
+      // reject it. Make that failure explicit in debug builds.
+      ZEN_ASSERT(std::find(PredRange.begin(), PredRange.end(), ResolvedBB) !=
+                     PredRange.end() &&
+                 "stack-merge phi incoming block did not resolve to a real "
+                 "predecessor");
+      if (ResolvedBB != IncomingBB) {
+        // Only the incoming-block pointer changes; the value is preserved.
+        Phi->setIncomingBlock(Index, ResolvedBB);
+      }
+    }
+  }
 }
 
 void EVMMirBuilder::loadEVMInstanceAttr() {
@@ -501,6 +559,10 @@ void EVMMirBuilder::finalizeEVMBase() {
     CurFunc->deleteMBasicBlock(ReturnBB);
     ReturnBB = nullptr;
   }
+
+  // Correct loop back-edge merge phi incoming blocks against the now-complete
+  // CFG. No-op when no stack-merge phis were built (e.g. SSA stack-lift off).
+  finalizeStackMergePhiIncomingBlocks();
 }
 
 LoadInstruction *EVMMirBuilder::getInstanceElement(MType *ValueType,
@@ -1096,6 +1158,10 @@ typename EVMMirBuilder::Operand EVMMirBuilder::materializeStackMergeOperand(
                        IncomingComponents[ComponentIndex]);
     }
     PhiComponents[ComponentIndex] = Phi;
+    // Record the phi against its loop-header block so its incoming blocks can
+    // be re-resolved once the full CFG (including back-edge terminators) is
+    // built. See finalizeStackMergePhiIncomingBlocks().
+    StackMergePhiBlocks.emplace_back(Phi, CurBB);
   }
 
   for (size_t ComponentIndex = 0; ComponentIndex < EVM_ELEMENTS_COUNT;
@@ -1647,8 +1713,9 @@ EVMMirBuilder::handleDivU64Divisor(const Operand &DividendOp,
   MInstruction *Rem1 = createEvmUrem128By64(Div1);
   MInstruction *Div0 = createEvmUdiv128By64(Rem1, A[0], DivConst);
 
+  // DIV(x, d>=1) <= x, so the quotient fits wherever the dividend fits.
   U256Inst Result = {Div0, Div1, Div2, Div3};
-  return Operand(Result, EVMType::UINT256);
+  return Operand(Result, EVMType::UINT256, DividendOp.getRange());
 }
 
 typename EVMMirBuilder::Operand
@@ -1670,8 +1737,9 @@ EVMMirBuilder::handleModU64Divisor(const Operand &DividendOp,
   MInstruction *Div0 = createEvmUdiv128By64(Rem1, A[0], DivConst);
   MInstruction *Rem0 = createEvmUrem128By64(Div0);
 
+  // MOD(x, d) with u64 divisor d: remainder < d <= 2^64-1, so it fits in u64.
   U256Inst Result = {Rem0, Zero, Zero, Zero};
-  return Operand(Result, EVMType::UINT256);
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
 typename EVMMirBuilder::Operand
@@ -1707,8 +1775,9 @@ EVMMirBuilder::handleDivU64Dividend(uint64_t Dividend,
   MInstruction *DivResult = createInstruction<SelectInstruction>(
       false, I64Type, HasUpper, Zero, TmpResult);
 
+  // DIV(u64 dividend, x) <= the u64 dividend, so the quotient fits in u64.
   U256Inst Result = {DivResult, Zero, Zero, Zero};
-  return Operand(Result, EVMType::UINT256);
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
 typename EVMMirBuilder::Operand
@@ -1743,8 +1812,9 @@ EVMMirBuilder::handleModU64Dividend(uint64_t Dividend,
   MInstruction *ModResult = createInstruction<SelectInstruction>(
       false, I64Type, HasUpper, A0, TmpResult);
 
+  // MOD(u64 dividend, x) <= the u64 dividend, so the remainder fits in u64.
   U256Inst Result = {ModResult, Zero, Zero, Zero};
-  return Operand(Result, EVMType::UINT256);
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleDivModGeneral(
@@ -1973,11 +2043,14 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleMul(Operand MultiplicandOp,
     R3 = addTermNoCarry(R3, PLo[3]);
     R3 = addTermNoCarry(R3, C2);
 
+    // u64const * value: if the value fits in u64, the product is < 2^128;
+    // for a u128 value it can reach ~2^192, so only narrow in the u64 case.
+    const ValueRange ResultRange = Operand::widenOneTier(U256Op.getRange());
     U256Inst Result = {R0, R1, R2, R3};
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
     ++MemStats.MulFastConstU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
-    return Operand(Result, EVMType::UINT256);
+    return Operand(Result, EVMType::UINT256, ResultRange);
   }
 
   // General case: use EvmU256MulInstruction for full 4x4 multiplication
@@ -2135,7 +2208,8 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDiv(Operand DividendOp,
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
         ++MemStats.DivFastConstU64Count;
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
-        return Operand(loadResult(), EVMType::UINT256);
+       // DIV(x, d>=1) <= x, so the quotient fits wherever the dividend fits.
+        return Operand(loadResult(), EVMType::UINT256, DividendOp.getRange());
       }
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
       ++MemStats.DivFastConstU64Count;
@@ -2559,11 +2633,13 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
   }
 
   // === After block: load result ===
+  // ADDMOD(a, b, N) < N (or 0 when N == 0), so the result fits wherever the
+  // modulus operand fits.
   setInsertBlock(AfterBB);
   // The nested handleBinaryArithmetic calls above mutate LastLoweringPath;
   // restore FULL so the profiler attributes this ADDMOD site correctly.
   setLoweringPath(LoweringPath::FULL);
-  return Operand(loadResult(), EVMType::UINT256);
+  return Operand(loadResult(), EVMType::UINT256, ModulusOp.getRange());
 }
 
 typename EVMMirBuilder::Operand
@@ -2584,14 +2660,46 @@ EVMMirBuilder::handleMulMod(Operand MultiplicandOp, Operand MultiplierOp,
     return Operand(intxToU256Value(Result));
   }
 
+  // MULMOD(a, b, N) < N (or 0 when N == 0), so the result fits wherever the
+  // modulus operand fits.
   const auto &RuntimeFunctions = getRuntimeFunctionTable();
-  return callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
-                        const intx::uint256 &, const intx::uint256 &>(
+  Operand Result = callRuntimeFor<const intx::uint256 *, const intx::uint256 &,
+                                  const intx::uint256 &, const intx::uint256 &>(
       RuntimeFunctions.GetMulMod, MultiplicandOp, MultiplierOp, ModulusOp);
+  Result.setRange(ModulusOp.getRange());
+  return Result;
+}
+
+uint64_t EVMMirBuilder::constExpDynamicGas(const intx::uint256 &Exponent,
+                                           evmc_revision Rev) {
+  // EIP-160 dynamic gas for EXP: GasPerByte * number of significant bytes of
+  // the exponent.  Uses the same intx::count_significant_bytes helper as the
+  // runtime EXP gas path (evm_imported.cpp) so the const-fold and runtime
+  // charges cannot diverge.
+  const uint64_t GasPerByte = Rev < EVMC_SPURIOUS_DRAGON
+                                  ? zen::evm::EXP_BYTE_GAS_PRE_SPURIOUS_DRAGON
+                                  : zen::evm::EXP_BYTE_GAS;
+  return intx::count_significant_bytes(Exponent) * GasPerByte;
 }
 
 typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
                                                          Operand ExponentOp) {
+  // Constant folding: both base and exponent known at compile time.
+  // EVM EXP is base ** exponent mod 2^256, which intx::exp computes directly,
+  // avoiding the inline square-and-multiply loop for compile-time constants
+  // (e.g. 10 ** 18, 2 ** 96 masks pervasive in Solidity).  The EIP-160 dynamic
+  // gas (GasPerByte * exponent-byte-size) must still be charged here, since the
+  // exponent magnitude is observable in the gas cost.
+  if (BaseOp.isConstant() && ExponentOp.isConstant()) {
+    MType *FoldI64Type =
+        EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+    const intx::uint256 Base = u256ValueToIntx(BaseOp.getConstValue());
+    const intx::uint256 Exponent = u256ValueToIntx(ExponentOp.getConstValue());
+    chargeDynamicGasIR(createIntConstInstruction(
+        FoldI64Type, constExpDynamicGas(Exponent, Ctx.getRevision())));
+    return Operand(intxToU256Value(intx::exp(Base, Exponent)));
+  }
+
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MInstruction *Zero = createIntConstInstruction(I64Type, 0);
   MInstruction *One = createIntConstInstruction(I64Type, 1);
@@ -3053,7 +3161,10 @@ EVMMirBuilder::handleAddU64Const(const Operand &FullOp,
       Result[I] = AdcInst;
     }
   }
-  return Operand(Result, EVMType::UINT256);
+  // u64const + value: if the value fits in u64, the sum is < 2^65 (fits u128);
+  // for wider operands a carry past bit 127 is possible, so stay conservative.
+  const ValueRange ResultRange = Operand::widenOneTier(FullOp.getRange());
+  return Operand(Result, EVMType::UINT256, ResultRange);
 }
 
 typename EVMMirBuilder::Operand
@@ -4011,6 +4122,21 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleByte(Operand IndexOp,
 //   SIGNEXTEND(31, 0x1234) = 0x1234 (no extension when index >= 31)
 typename EVMMirBuilder::Operand
 EVMMirBuilder::handleSignextend(Operand IndexOp, Operand ValueOp) {
+  // Constant folding: both index and value known at compile time.  Mirrors the
+  // inline lowering below: index >= 31 leaves the value untouched (the sign
+  // byte is already the top byte); otherwise sign-extend from bit index*8+7.
+  if (IndexOp.isConstant() && ValueOp.isConstant()) {
+    intx::uint256 Value = u256ValueToIntx(ValueOp.getConstValue());
+    const intx::uint256 Index = u256ValueToIntx(IndexOp.getConstValue());
+    if (Index < 31) {
+      const unsigned SignBit = static_cast<unsigned>(Index) * 8 + 7;
+      const intx::uint256 LowMask = (intx::uint256(1) << (SignBit + 1)) - 1;
+      const bool Negative = (static_cast<uint64_t>(Value >> SignBit) & 1) != 0;
+      Value = Negative ? (Value | ~LowMask) : (Value & LowMask);
+    }
+    return Operand(intxToU256Value(Value));
+  }
+
   U256Inst IndexComponents = extractU256Operand(IndexOp);
   U256Inst ValueComponents = extractU256Operand(ValueOp);
 
@@ -5267,7 +5393,12 @@ EVMMirBuilder::convertSingleInstrToU256Operand(MInstruction *SingleInstr) {
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
     Result[I] = createIntConstInstruction(I64Type, 0);
   }
-  return Operand(Result, EVMType::UINT256);
+  // limbs[1..3] are literal zero and limb[0] is zero-extended, so the value is
+  // structurally in [0, 2^64-1] regardless of caller intent. Tag it U64 so
+  // same-block consumers (e.g. size/bounds arithmetic over CALLDATASIZE / GAS /
+  // PC / MSIZE / CODESIZE / RETURNDATASIZE) hit the u64 fast path at first use
+  // instead of the full 256-bit lowering.
+  return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
 Variable *EVMMirBuilder::storeInstructionInTemp(MInstruction *Value,
@@ -5285,7 +5416,24 @@ MInstruction *EVMMirBuilder::loadVariable(Variable *Var) {
 
 PhiInstruction *EVMMirBuilder::createPendingPhi(MType *Type,
                                                 size_t NumIncoming) {
-  return createInstruction<PhiInstruction>(true, Type, NumIncoming);
+  // Create the phi without appending it to the block end. Phi instructions
+  // must be contiguous at the block start (verified by the MIR verifier).
+  // When merging multiple stack slots, each slot emits phis followed by
+  // non-phi temp-store dassigns; appending at the end would interleave a
+  // later slot's phis after an earlier slot's dassigns and break the
+  // phi-contiguity invariant. Insert the phi right after the existing leading
+  // phis instead so all phis stay grouped at the front.
+  PhiInstruction *Phi =
+      createInstruction<PhiInstruction>(false, Type, NumIncoming);
+  size_t InsertIdx = 0;
+  for (MInstruction *Inst : *CurBB) {
+    if (Inst->getKind() != MInstruction::PHI) {
+      break;
+    }
+    ++InsertIdx;
+  }
+  CurBB->addStatement(InsertIdx, Phi);
+  return Phi;
 }
 
 size_t EVMMirBuilder::getPhiIncomingSlot(PhiInstruction *Phi,
