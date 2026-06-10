@@ -1,6 +1,6 @@
 # Change: Narrow wrap-form lowering for EVM SUB with u64-proven operand pairs
 
-- **Status**: Proposed
+- **Status**: Implemented
 - **Date**: 2026-06-10
 - **Tier**: Light
 
