@@ -8,7 +8,7 @@
 
 The range analysis in the multipass JIT already proves a large number of
 operands to be u64. Several lowering paths do not consume that proof and
-still emit full-width 4-limb sequences. This change makes five lowering
+still emit full-width 4-limb sequences. This change makes four lowering
 categories consume the existing ValueRange tags. On the EEST Cancun suite,
 the site-weighted fast-path hit rate rises from 78.72% to **80.02%** (+364
 sites move to narrow paths, zero reverse regressions), with **ISZERO rising
@@ -36,22 +36,24 @@ of the lowering-side gap:
   side proven u64.
 - **SLT/SGT**: not even a const fast path exists — 22.4% of real-load SLT
   FULL executions take the `slt(x, small constant)` shape.
-- **Environment opcode producers** (PC/GAS/CALLDATASIZE/CODESIZE/MSIZE/
-  RETURNDATASIZE): `convertSingleInstrToU256Operand` structurally
-  zero-fills the high limbs yet returns the default U256, creating a
-  builder/analyzer dual-SSOT divergence — the analyzer already tags U64.
+
+A fifth gap identified by the same analysis — environment opcode producers
+(PC/GAS/CALLDATASIZE/CODESIZE/MSIZE/RETURNDATASIZE) returning the default
+U256 despite structurally zero high limbs — landed upstream separately as
+#532 while this change was in review, and is no longer part of this diff.
 
 ## Changes
 
 All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
 
-1. **ISZERO deferred zero-test carries the range**: `createDeferredZeroTest`
-   gains a `BaseRange` parameter (new member `DeferredBaseRange`), and the
-   deferred operand's own range is tagged U64 — its materialized value is
-   always 0/1, which holds structurally. `handleCompareEQZ` folds 1/2/4
-   limbs according to the base range. All creation and materialization
-   sites are updated in sync, including range propagation through nested
-   ISZERO flips.
+1. **ISZERO deferred zero-test carries the base range**:
+   `createDeferredZeroTest` gains a `BaseRange` parameter (new member
+   `DeferredBaseRange`), and `handleCompareEQZ` folds 1/2/4 limbs according
+   to the base range. All creation and materialization sites are updated in
+   sync, including range propagation through nested ISZERO flips. (The
+   companion result tag — the deferred operand's own U64 range, sound since
+   its materialized value is always 0/1 — landed upstream via #524 during
+   review; this change keeps the base-range plumbing and the narrow fold.)
 2. **JUMPI condition fusion and narrowing**: a deferred zero-test condition
    is no longer materialized; it is folded according to the base range and
    compared against 0 directly, with the EQ/NE predicate chosen by the
@@ -71,18 +73,12 @@ All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
    three-level range tier (U64/U128/default) as the existing
    unsigned-comparison helpers. Both constant sides are covered via the
    `c <s x ⟺ x >s c` swap.
-5. **Environment opcode results tagged U64**: the return value of
-   `convertSingleInstrToU256Operand` now carries `ValueRange::U64` —
-   limbs[1..3] are literal zeros and the value falls in `[0, 2^64-1]` by
-   construction, independent of caller intent. This removes one existing
-   builder/analyzer divergence.
 
 ## Soundness
 
 - Range contract: the `U64` tag only asserts that the high limbs are
   semantically zero. All new paths narrow the read width only where the
-  tag is already proven, and introduce no new tag sources — except change
-  5, whose correctness is guaranteed by the function's structure.
+  tag is already proven, and introduce no new tag sources.
 - SLT/SGT: an operand with limb0 in `[2^63, 2^64-1]` is a positive 256-bit
   value. The new path compares limb0 with unsigned predicates
   (`ICMP_ULT/UGT`); the negative case is short-circuited by the sign bit
@@ -125,14 +121,16 @@ All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
 Measurement method: on a measurement branch carrying the Stream B tap (the
 tap is measurement-only and does not ship with this PR), one capture is
 taken for base and one for base plus this change; 28,109 shared sites are
-paired point by point.
+paired point by point. The measurement predates the upstream merge of #532
+and #524; the treatment side included the environment-opcode tag that has
+since landed as #532 (see the ADD row for its attribution).
 
 | op | base | this change | Δ | migrated sites |
 |---|---:|---:|---:|---|
 | ISZERO | 23.2% | **85.9%** | **+62.7pp** | 316 × FULL→NARROW_U64 |
 | SGT | 80.6% | 95.0% | +14.4pp | 20 × FULL→CONST_U64 |
 | SLT | 61.5% | 66.7% | +5.2pp | 9 × FULL→CONST_U64 |
-| ADD | 75.1% | 75.6% | +0.5pp | 17 × FULL→NARROW_U128 (unlocked by environment-opcode tags) |
+| ADD | 75.1% | 75.6% | +0.5pp | 17 × FULL→NARROW_U128 (unlocked by the environment-opcode tags, since landed upstream as #532) |
 | OR | 98.7% | 98.9% | +0.2pp | 2 × FULL→NARROW_U64 |
 | **Overall** | **78.72%** | **80.02%** | **+1.29pp** | +364 sites, zero reverse migrations |
 
