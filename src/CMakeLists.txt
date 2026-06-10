@@ -77,6 +77,13 @@ if(ZEN_ENABLE_EVM_STACK_SSA_LIFT)
   add_definitions(-DZEN_ENABLE_EVM_STACK_SSA_LIFT)
 endif()
 
+# Hoisted to directory scope: opcode_handlers.h is included by the evm, vm, and
+# runtime targets and the macro changes class EVMResource. A target-private
+# define would give those TUs divergent inline definitions (ODR violation).
+if(ZEN_ENABLE_EVM_ARITH_PROFILE)
+  add_definitions(-DZEN_ENABLE_EVM_ARITH_PROFILE)
+endif()
+
 if(ZEN_ENABLE_CPU_EXCEPTION)
   if(ZEN_ENABLE_SINGLEPASS_JIT OR ZEN_ENABLE_MULTIPASS_JIT)
     add_definitions(-DZEN_ENABLE_CPU_EXCEPTION)

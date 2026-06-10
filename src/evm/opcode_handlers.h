@@ -76,13 +76,23 @@ public:
     CurrentFrame = nullptr;
     CurrentContext = nullptr;
     CurrentMetricsTable = nullptr;
-#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
-    CurrentCodeHash = 0;
-#endif
   }
-  /// Runs clear() on scope exit (including when interpret() throws).
+  /// Runs clear() on scope exit (including when interpret() throws). In
+  /// instrumented builds it also saves the profiler's code-hash join key at
+  /// construction and restores it on exit, so a nested interpret() (CALL,
+  /// DELEGATECALL, ...) cannot strand the outer frame's rows on code hash 0.
+  /// At the top-level frame the saved value is 0, so the thread-local still
+  /// ends at 0 when the outermost run returns.
   struct ClearGuard {
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
+    uint64_t SavedCodeHash = CurrentCodeHash;
+    ~ClearGuard() {
+      clear();
+      CurrentCodeHash = SavedCodeHash;
+    }
+#else
     ~ClearGuard() { clear(); }
+#endif
   };
   static const evmc_instruction_metrics *getMetricsTable() {
     return CurrentMetricsTable;
