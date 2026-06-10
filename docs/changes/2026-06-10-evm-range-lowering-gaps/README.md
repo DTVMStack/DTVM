@@ -1,6 +1,6 @@
 # Change: Consume value-range tags in EVM bool/compare/bitwise lowering
 
-- **Status**: Proposed
+- **Status**: Implemented
 - **Date**: 2026-06-10
 - **Tier**: Light
 
@@ -17,8 +17,9 @@ differential fixtures are added.
 
 ## Motivation
 
-The real-load analysis (see `2026-06-02-real-load-analysis-suite`)
-quantified two gap categories: the analysis-side gap (static proof fails;
+A separate real-load analysis (shipped by the in-flight mainnet-replay
+analysis-suite work, not part of this diff) quantified two gap categories:
+the analysis-side gap (static proof fails;
 the majority) and the lowering-side gap (the proof exists but the builder
 does not consume it). This change closes the immediately harvestable part
 of the lowering-side gap:
@@ -185,8 +186,10 @@ coverage (see the next section).
    should add identity-key handling for deferred operands.
 2. The execution-weighted view of the real-load hit rate is limited by JIT
    coverage (see above). After the stack-lift work lands, the full
-   27-contract view can be re-measured with
-   `tools/run_real_load_profile.py`.
+   27-contract view can be re-measured by replaying the mainnet-replay
+   corpus through the multipass JIT and capturing the per-opcode fast-path
+   hit rate (the profiling tooling ships with the separate mainnet-replay
+   analysis-suite work).
 
 ## Checklist
 
