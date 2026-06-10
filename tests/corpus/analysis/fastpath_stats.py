@@ -72,7 +72,9 @@ OPCODE_NAMES = {
 PATHS = ["FOLDED", "CONST_U64", "NARROW_U64", "NARROW_U128", "FULL"]
 FAST_PATHS = ["CONST_U64", "NARROW_U64", "NARROW_U128"]
 
-STREAM_B_FIELDS = 8  # minimum: path is column index 7; extra trailing cols ok
+# Columns this script reads, looked up by name from the CSV header so a column
+# reorder or insertion does not silently shift the reads.
+STREAM_B_REQUIRED = ["codehash", "pc", "opcode", "path"]
 
 
 def opcode_name(opcode):
@@ -88,9 +90,9 @@ def read_stream_b(path):
     the majority path; ties break toward the path that ranks first in PATHS for
     determinism.
 
-    Guards against a torn final CSV line on process exit: any data row with
-    fewer than STREAM_B_FIELDS fields is dropped and counted. Extra trailing
-    columns are tolerated for CSV compatibility.
+    Guards against a torn final CSV line on process exit: any data row that
+    does not reach the highest required column index is dropped and counted.
+    Extra trailing columns are tolerated for CSV compatibility.
 
     Returns (sites, dropped) where sites maps (codehash, pc) -> (opcode, path).
     """
@@ -101,25 +103,31 @@ def read_stream_b(path):
     with open(path, newline="") as f:
         reader = csv.reader(f)
         header = next(reader, None)
-        if header is None or "path" not in header:
+        if header is None:
+            raise SystemExit("Stream B CSV %r is empty." % path)
+        missing = [c for c in STREAM_B_REQUIRED if c not in header]
+        if missing:
             raise SystemExit(
-                "Stream B CSV %r has no path column; regenerate with the "
-                "instrumented build (ZEN_EVM_RANGE_PROFILE)." % path
+                "Stream B CSV %r missing column(s) %s; regenerate with the "
+                "instrumented build (ZEN_EVM_RANGE_PROFILE)."
+                % (path, ", ".join(missing))
             )
+        col = {name: header.index(name) for name in STREAM_B_REQUIRED}
+        min_fields = max(col.values()) + 1
         for fields in reader:
-            # Need at least the first 8 columns (path is index 7); extra
-            # trailing columns (e.g. lhs_const/rhs_const) are tolerated.
-            if len(fields) < STREAM_B_FIELDS:
+            # Drop torn final lines that do not reach every required column;
+            # extra trailing columns (e.g. lhs_const/rhs_const) are tolerated.
+            if len(fields) < min_fields:
                 dropped += 1
                 continue
-            codehash = fields[0]
+            codehash = fields[col["codehash"]]
             try:
-                pc = int(fields[1])
-                opcode = int(fields[2])
+                pc = int(fields[col["pc"]])
+                opcode = int(fields[col["opcode"]])
             except ValueError:
                 dropped += 1
                 continue
-            p = fields[7]
+            p = fields[col["path"]]
             if p not in rank:
                 dropped += 1
                 continue
