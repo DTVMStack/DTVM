@@ -719,9 +719,9 @@ TEST_P(EVMConstShiftDifferentialTest, InterpMatchesMultipass) {
 INSTANTIATE_TEST_SUITE_P(
     ConstShiftPruning, EVMConstShiftDifferentialTest,
     ::testing::Values("shl_const4_dyn", "shl_const96_dyn",
-                      "shl_const200_u64val", "shl_const256_dyn",
-                      "shl_const_highlimb_dyn", "shr_const4_dyn",
-                      "shr_const72_dyn", "shr_const8_u64val",
+                      "shl_const136_u64val", "shl_const200_u64val",
+                      "shl_const256_dyn", "shl_const_highlimb_dyn",
+                      "shr_const4_dyn", "shr_const72_dyn", "shr_const8_u64val",
                       "shr_const256_dyn", "sar_const8_neg", "sar_const64_pos",
                       "shl_dyn_amount"),
     [](const testing::TestParamInfo<std::string> &Info) { return Info.param; });

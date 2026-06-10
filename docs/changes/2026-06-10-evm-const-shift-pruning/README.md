@@ -83,11 +83,13 @@ All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
 
 ## Verification
 
-- 12 new differential fixtures (`tests/evm_asm/`) plus the
+- 13 new differential fixtures (`tests/evm_asm/`) plus the
   `EVMConstShiftDifferentialTest` suite: they cover cross-limb carry (<<96),
-  source pruning (a u64 value <<200 / >>8), ≥256 folding, the 2^64 trap, SAR
+  source pruning (a u64 value <<200 / >>8), the carry-only emission branch
+  (a u64 value <<136, where the top result limb keeps only the carry term
+  sourced from the live low limb), ≥256 folding, the 2^64 trap, SAR
   positive/negative sign-fill, and a dynamic-shift-amount regression control.
-  12/12 pass; interpreter and multipass outputs match byte-for-byte, and
+  13/13 pass; interpreter and multipass outputs match byte-for-byte, and
   multipass is confirmed to actually JIT-compile the fixtures.
 - multipass evmone-unittests 223/223; multipass evmone-statetest
   `-k fork_Cancun` 2723/2723; no regression in the golden suite;
