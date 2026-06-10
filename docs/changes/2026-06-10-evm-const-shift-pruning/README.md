@@ -1,6 +1,6 @@
 # Change: Statically resolve constant-amount EVM shift guards and prune dead source terms
 
-- **Status**: Proposed
+- **Status**: Implemented
 - **Date**: 2026-06-10
 - **Tier**: Light
 
@@ -66,10 +66,12 @@ All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
   static decision uses the full constant. A constant ≥256 folds or keeps the
   guard; nullptr is passed only when the full constant is <256.
 - Term-liveness algebra (SHL reads `Value[SrcIdx]`/`Value[SrcIdx-1]`, SHR_U
-  reads `Value[SrcIdx]`/`Value[SrcIdx+1]`): Codex exhaustively cross-checked
-  all (CompShift × ShiftMod × LiveLimbs ∈ {1,2,4}) × shift amounts 0-255
-  against a reference implementation; Opus hand-verified the boundary cases
-  such as Shifted-dead/Carry-live (e.g. a U64 value << 200).
+  reads `Value[SrcIdx]`/`Value[SrcIdx+1]`): one review exhaustively
+  cross-checked all (CompShift × ShiftMod × LiveLimbs ∈ {1,2,4}) × shift
+  amounts 0-255 against a reference implementation; a second review
+  hand-verified the boundary cases such as shifted-dead/carry-live (e.g. a
+  U64 value << 136, where the top result limb keeps only the carry term
+  sourced from the live low limb).
 - The early return occurs after both operands are popped. EVM stack operands
   are pure values with no side effects, so discarding unmaterialized value
   expressions is safe.
@@ -90,9 +92,10 @@ All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
 - multipass evmone-unittests 223/223; multipass evmone-statetest
   `-k fork_Cancun` 2723/2723; no regression in the golden suite;
   `tools/format.sh check` passes; no new warnings.
-- Two independent reviews: Opus (all 7 attack surfaces verified-clean, no
-  defects) and Codex (exhaustive verification; 1 NIT, namely the more precise
-  constant-zero tag described above).
+- Two independent adversarial reviews: one verified all seven attack
+  surfaces clean with no defects; the other ran the exhaustive cross-check
+  and raised a single nit, namely the more precise constant-zero tag
+  described above.
 
 ## Measurements
 
