@@ -17,6 +17,13 @@ site-weighted SUB fast-path hit rate **18.4% → 42.1% (+23.8pp)**, 925 sites
 migrated, every other op unchanged; all correctness suites pass, and the
 end-to-end benchmarks are neutral.
 
+The differential coverage for this lowering path now ships separately with
+the consolidated EVM differential suite change
+(`docs/changes/2026-06-11-evm-differential-suite/`). That change carries the
+6 fixtures for this SUB path — including the underflow all-ones-fill and
+wrap-boundary adversarial cases — so this optimization change stays
+code-only.
+
 ## Motivation
 
 On EEST Cancun, SUB has the largest FULL-path site count of any operator
@@ -76,12 +83,13 @@ BO_SUB branch, inserted after ADD Phase-1 and before the constant paths):
 
 ## Verification
 
-- 6 differential fixtures + `EVMSubWrapDifferentialTest` (interp vs
-  multipass byte-for-byte equality + JITCompiled assertion): no underflow,
+- The differential coverage for this path — 6 fixtures plus the interp-vs-
+  multipass byte-for-byte equality test — now ships separately with the
+  consolidated EVM differential suite change
+  (`docs/changes/2026-06-11-evm-differential-suite/`). It covers no underflow,
   **underflow with all-ones fill** (5-7 → 2^256-2), equal operands, wrap
   boundary (0 - (2^64-1), limb0=1 + 48 F digits), dynamic zero RHS, and a
-  single-side-wide control (does not trigger). 6/6 pass; the golden suite
-  shows no regressions.
+  single-side-wide control (does not trigger).
 - multipass evmone-unittests 223/223; multipass evmone-statetest
   `-k fork_Cancun` 2723/2723 (re-run after the review fixes); format check
   passes; no new warnings.
