@@ -12,8 +12,11 @@ still emit full-width 4-limb sequences. This change makes four lowering
 categories consume the existing ValueRange tags. On the EEST Cancun suite,
 the site-weighted fast-path hit rate rises from 78.72% to **80.02%** (+364
 sites move to narrow paths, zero reverse regressions), with **ISZERO rising
-from 23.2% to 85.9%**. All correctness suites pass, and 21 adversarial
-differential fixtures are added.
+from 23.2% to 85.9%**. All correctness suites pass. The adversarial
+differential coverage for these lowering paths now ships separately with the
+consolidated EVM differential suite change
+(`docs/changes/2026-06-11-evm-differential-suite/`), which carries the 21
+fixtures for these paths.
 
 ## Motivation
 
@@ -96,15 +99,16 @@ All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
 
 ## Verification
 
-- **Differential fixtures (new, shipped with the PR)**: 21 `.easm` +
-  `.expected` pairs (`tests/evm_asm/`) cover both the narrow-path trigger
-  side and the full-path preservation side of every new path. Adversarial
-  values include 2^64, 2^128, 2^192, -1, limb0-MSB
+- **Differential fixtures (ship separately)**: the 21 `.easm` + `.expected`
+  pairs and the `EVMRangeNarrowingDifferentialTest` suite for these lowering
+  paths now ship with the consolidated EVM differential suite change
+  (`docs/changes/2026-06-11-evm-differential-suite/`). The fixtures cover both
+  the narrow-path trigger side and the full-path preservation side of every
+  new path, with adversarial values including 2^64, 2^128, 2^192, -1, limb0-MSB
   (`0x8000000000000000`, the hard gate for the unsigned predicate), and
-  high-sparse values. `EVMRangeNarrowingDifferentialTest` asserts that the
-  interp and multipass outputs are byte-identical and that multipass
-  actually JIT-compiles. 21/21 pass; the golden suite shows 178/178 with
-  no regressions.
+  high-sparse values; the suite asserts that the interp and multipass outputs
+  are byte-identical and that multipass actually JIT-compiles. This change
+  carries no test fixtures.
 - **multipass evmone-unittests**: 223/223.
 - **multipass evmone-statetest `-k fork_Cancun`**: 2723/2723.
 - **Full ctest**: 11/11 — solidityContractTests requires copying the

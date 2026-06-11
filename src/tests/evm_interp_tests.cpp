@@ -924,60 +924,6 @@ TEST(EVMRegressionTest, Issue541_AddU64ConstLastAdcCarryChainPreserved) {
   EXPECT_EQ(InterpExec.OutputHex,
             "0000000000000000000000000000000000000000000000000000000000000000");
 }
-
-// Differential regression for the range-narrowed lowering paths added on the
-// perf/evm-range-lowering-gaps branch (narrowed ISZERO/JUMPI folds, U64-tagged
-// OR/XOR, and the signed LT/GT u64-const fast paths). Each fixture feeds a
-// dynamic (analyzer-unprovable) operand so the new paths are actually taken,
-// then asserts the multipass JIT output matches the interpreter (the ground
-// truth) exactly. A divergence here means a narrowed fold produced a wrong
-// value, not merely a slower one.
-class EVMRangeNarrowingDifferentialTest
-    : public ::testing::TestWithParam<std::string> {};
-
-std::string
-GetRangeNarrowingTestName(const testing::TestParamInfo<std::string> &Info) {
-  return Info.param;
-}
-
-TEST_P(EVMRangeNarrowingDifferentialTest, InterpMatchesMultipass) {
-  const std::string Stem = GetParam();
-  const auto FilePath = (getEvmAsmDirPath() / (Stem + ".evm.hex")).string();
-
-  auto InterpExec =
-      executeEvmBytecodeFile(FilePath, common::RunMode::InterpMode);
-  auto MultipassExec =
-      executeEvmBytecodeFile(FilePath, common::RunMode::MultipassMode);
-
-#ifdef ZEN_ENABLE_JIT
-  EXPECT_TRUE(MultipassExec.JITCompiled)
-      << "Multipass JIT should compile " << Stem;
-#endif
-
-  EXPECT_EQ(InterpExec.Status, EVMC_SUCCESS)
-      << "Interpreter did not succeed for " << Stem;
-  EXPECT_EQ(MultipassExec.Status, EVMC_SUCCESS)
-      << "Multipass did not succeed for " << Stem;
-  EXPECT_EQ(MultipassExec.Status, InterpExec.Status)
-      << "Multipass status diverged from interpreter for " << Stem;
-  EXPECT_EQ(MultipassExec.OutputHex, InterpExec.OutputHex)
-      << "Multipass output diverged from interpreter for " << Stem;
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    RangeNarrowingDifferential, EVMRangeNarrowingDifferentialTest,
-    ::testing::Values("iszero_dyn_u64_nonzero", "iszero_dyn_highsparse",
-                      "iszero_calldatasize", "jumpi_iszero_fused_taken",
-                      "jumpi_iszero_fused_nottaken_highsparse",
-                      "jumpi_iszero_iszero_fused", "jumpi_u64_cond_taken",
-                      "jumpi_u64_cond_nottaken", "or_dyn_u64_u64",
-                      "xor_dyn_u64_u64", "or_dyn_u64_wide", "xor_dyn_u64_wide",
-                      "slt_dyn_neg_vs_const", "slt_dyn_highsparse_vs_const",
-                      "slt_dyn_msb64_vs_const", "slt_dyn_eq_const",
-                      "sgt_dyn_neg_vs_const", "sgt_dyn_highsparse_vs_const",
-                      "sgt_dyn_msb64_vs_const", "slt_const_vs_dyn",
-                      "sgt_const_vs_dyn"),
-    GetRangeNarrowingTestName);
 #endif
 
 // Test that chain_id and blob_base_fee can be saved and loaded via state
