@@ -1,8 +1,12 @@
 // Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include "evm/evm.h"
 #include "evm_test_host.hpp"
@@ -126,9 +130,10 @@ runEvmBytecodeFile(const std::string &FilePath, common::RunMode Mode,
   return runEvmBytecode(FilePath, *BytecodeBuf, Mode, CallData);
 }
 
-// Run `Bytecode` through interpreter and multipass, assert the multipass JIT
-// compiled (so the comparison is non-vacuous) and that status + output agree.
-// Returns false on divergence so matrix callers can stop flooding output.
+// Run `Bytecode` through interpreter and multipass, assert the interpreter
+// run succeeds (a shared failure such as out-of-gas would make the comparison
+// vacuous), the multipass JIT compiled, and that status + output agree.
+// Returns false on any violation so matrix callers can stop flooding output.
 bool expectInterpMatchesMultipass(const std::string &Label,
                                   const std::vector<uint8_t> &Bytecode,
                                   const std::vector<uint8_t> &CallData) {
@@ -139,9 +144,12 @@ bool expectInterpMatchesMultipass(const std::string &Label,
 #ifdef ZEN_ENABLE_JIT
   EXPECT_TRUE(Multi.JITCompiled) << "multipass did not JIT-compile: " << Label;
 #endif
+  EXPECT_EQ(Interp.Status, EVMC_SUCCESS)
+      << "interpreter did not succeed: " << Label;
   EXPECT_EQ(Multi.Status, Interp.Status) << "status diverged: " << Label;
   EXPECT_EQ(Multi.OutputHex, Interp.OutputHex) << "output diverged: " << Label;
-  return Multi.Status == Interp.Status && Multi.OutputHex == Interp.OutputHex;
+  return Interp.Status == EVMC_SUCCESS && Multi.Status == Interp.Status &&
+         Multi.OutputHex == Interp.OutputHex;
 }
 
 // Fixture-file variant of the assertion above: load a hex fixture, run both
