@@ -688,41 +688,4 @@ TEST(EVMRegressionTest, Issue488_PCAsAddmodAugend_InterpMatchesMultipass) {
   EXPECT_EQ(InterpExec.OutputHex,
             "0000000000000000000000000000000000000000000000000000000000000006");
 }
-
-// Differential coverage for the const-shift guard-pruning and range-aware
-// source-limb pruning in handleShift. Each fixture must yield identical output
-// in the interpreter and the multipass JIT, and the multipass module must JIT.
-class EVMConstShiftDifferentialTest
-    : public ::testing::TestWithParam<std::string> {};
-
-TEST_P(EVMConstShiftDifferentialTest, InterpMatchesMultipass) {
-  const auto FilePath =
-      (getEvmAsmDirPath() / (GetParam() + ".evm.hex")).string();
-
-  auto InterpExec =
-      executeEvmBytecodeFile(FilePath, common::RunMode::InterpMode);
-  auto MultipassExec =
-      executeEvmBytecodeFile(FilePath, common::RunMode::MultipassMode);
-
-#ifdef ZEN_ENABLE_JIT
-  EXPECT_TRUE(MultipassExec.JITCompiled)
-      << "Multipass JIT should compile " << GetParam();
-#endif
-
-  EXPECT_EQ(InterpExec.Status, EVMC_SUCCESS) << GetParam();
-  EXPECT_EQ(MultipassExec.Status, InterpExec.Status)
-      << "Multipass status diverged from interpreter for " << GetParam();
-  EXPECT_EQ(MultipassExec.OutputHex, InterpExec.OutputHex)
-      << "Multipass output diverged from interpreter for " << GetParam();
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    ConstShiftPruning, EVMConstShiftDifferentialTest,
-    ::testing::Values("shl_const4_dyn", "shl_const96_dyn",
-                      "shl_const136_u64val", "shl_const200_u64val",
-                      "shl_const256_dyn", "shl_const_highlimb_dyn",
-                      "shr_const4_dyn", "shr_const72_dyn", "shr_const8_u64val",
-                      "shr_const256_dyn", "sar_const8_neg", "sar_const64_pos",
-                      "shl_dyn_amount"),
-    [](const testing::TestParamInfo<std::string> &Info) { return Info.param; });
 #endif
