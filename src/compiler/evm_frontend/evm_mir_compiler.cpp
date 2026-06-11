@@ -1826,6 +1826,17 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleDivModGeneral(
   U256Inst A = extractU256Operand(DividendOp);
   U256Inst B = extractU256Operand(DivisorOp);
 
+  // Materialize dividend limbs before branching.  The tree IR for A[i] may
+  // contain sub-expressions (e.g. cascading-division intermediates from a
+  // preceding MOD) that are also referenced inside SingleLimbBB.  Without
+  // materialisation the instruction-selection lowering can place the shared
+  // computations into only one branch, leaving the other branch with undefined
+  // virtual-register uses -- a miscompile observed as issue #525 (SHR after
+  // double MOD producing wrong shift counts).
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    A[I] = protectUnsafeValue(A[I], I64Type);
+  }
+
   // Check if divisor upper limbs are all zero (runtime 1-limb divisor)
   MInstruction *UpperOr = createInstruction<BinaryInstruction>(
       false, OP_or, I64Type, B[1],

@@ -1,0 +1,17 @@
+// Regression test for issue #525: SHR after double MOD with address env opcode
+// ORIGIN returns a 160-bit address.  Two MOD(0, origin) = 0, so
+// SHR(0, origin) = origin >> 0 = origin.
+// Bug: multipass JIT leaked a garbage shift count from the second MOD's
+// register allocation, causing origin to be incorrectly shifted.
+ORIGIN
+DUP1
+DUP1
+PUSH0
+MOD
+MOD
+SHR
+PUSH0
+MSTORE
+PUSH1 0x20
+PUSH0
+RETURN

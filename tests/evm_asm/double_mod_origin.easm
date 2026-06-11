@@ -1,0 +1,18 @@
+// Regression test for issue #525: double MOD with address-width env opcode
+// ORIGIN returns a 160-bit address (> 64 bits).
+// MOD(0, origin) = 0, then MOD(0, origin) = 0 again.
+// Bug: the second MOD leaked a garbage register value instead of 0,
+// because handleDivModGeneral's dividend expression tree shared
+// sub-expressions with SingleLimbBB, causing undefined virtual registers
+// in MultiLimbBB after instruction selection lowering.
+ORIGIN
+DUP1
+DUP1
+PUSH0
+MOD
+MOD
+PUSH0
+MSTORE
+PUSH1 0x20
+PUSH0
+RETURN
