@@ -258,13 +258,8 @@ public:
     if (ShapeClassId == 0) {
       return -1;
     }
-    for (const auto &[RegionEntryPC, RegionInfo] : DynamicJumpRegions) {
-      (void)RegionEntryPC;
-      if (RegionInfo.ShapeClassId == ShapeClassId) {
-        return RegionInfo.FullEntryStateDepth;
-      }
-    }
-    return -1;
+    auto It = ShapeClassEntryDepths.find(ShapeClassId);
+    return It != ShapeClassEntryDepths.end() ? It->second : -1;
   }
 
   uint32_t
@@ -1493,6 +1488,7 @@ private:
   void finalizeDynamicJumpRegionMetadata(
       const std::map<uint64_t, bool> &CompatibleDynamicJumpRegions) {
     DynamicJumpRegions.clear();
+    ShapeClassEntryDepths.clear();
 
     std::map<DynamicJumpShapeClassKey, uint32_t> ShapeClassIds;
     uint32_t NextShapeClassId = 1;
@@ -1538,6 +1534,10 @@ private:
         ++NextShapeClassId;
       }
       RegionInfo.ShapeClassId = It->second;
+      // Regions sharing a ShapeClassId have the same FullEntryStateDepth by
+      // ShapeKey construction, so the first emplace fixes the class depth.
+      ShapeClassEntryDepths.emplace(RegionInfo.ShapeClassId,
+                                    RegionInfo.FullEntryStateDepth);
     }
   }
 
@@ -2055,6 +2055,9 @@ private:
 
   std::map<uint64_t, BlockInfo> BlockInfos;
   std::map<uint64_t, DynamicJumpRegionInfo> DynamicJumpRegions;
+  // ShapeClassId -> FullEntryStateDepth, populated alongside ShapeClassId
+  // assignment in finalizeDynamicJumpRegionMetadata for O(1) lookup.
+  std::unordered_map<uint32_t, int32_t> ShapeClassEntryDepths;
   std::map<uint64_t, uint64_t> JumpDestCanonicalPCs;
   uint64_t EntryBlockPC = 0;
   bool HasUnknownDynamicJump = false;
