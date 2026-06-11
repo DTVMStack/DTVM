@@ -1,0 +1,14 @@
+// dyn value with all four 64-bit limbs nonzero << 96
+// exercises the cross-limb carry terms in the SHL const path
+PUSH32 0x1111111111111111222222222222222233333333333333334444444444444444
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH1 0x60
+SHL
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

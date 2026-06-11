@@ -1,0 +1,13 @@
+// dyn(2^192) -> ISZERO -> 0. 2^192 lives entirely in the top limb (limb3);
+// a wrong limb0-only fold would see 0 and wrongly return 1.
+PUSH32 0x0000000000000001000000000000000000000000000000000000000000000000
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+ISZERO
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

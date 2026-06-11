@@ -1,0 +1,14 @@
+// dyn(-1) >s const 0 -> 0. SGT pops top as LHS (a), so push const RHS (b=0)
+// first, dynamic LHS (a=-1) on top: a >s b = (-1 >s 0) = 0 since a is negative.
+PUSH1 0x00
+PUSH32 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+SGT
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

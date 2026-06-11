@@ -1,0 +1,14 @@
+// dyn(5) <s const 5 -> 0. Equal values are not strictly less -> 0.
+// Boundary check on the limb0 ULT compare (5 < 5 is false).
+PUSH1 0x05
+PUSH32 0x0000000000000000000000000000000000000000000000000000000000000005
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+SLT
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

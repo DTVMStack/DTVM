@@ -1,0 +1,16 @@
+// dyn(0x8000000000000000) <s const 0x9000000000000000 -> 1. Both values are
+// non-negative signed-256 (only limb0 set, bit255 clear), so the helper does
+// an UNSIGNED limb0 compare: 0x8000... < 0x9000... = 1. Hard gate: an
+// erroneous SIGNED i64 limb0 compare would read limb0 as negative.
+PUSH8 0x9000000000000000
+PUSH32 0x0000000000000000000000000000000000000000000000008000000000000000
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+SLT
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

@@ -1,0 +1,24 @@
+// dyn-u64(5) - dyn-u64(7) = 2^256 - 2 (adversarial underflow case)
+// 5 < 7, so borrow = 1: limb0 = wrapping_sub(5, 7) = 2^64 - 2 = 0xFFFFFFFFFFFFFFFE,
+// and the upper 192 bits sign-fill to all-ones (0 - 1 = 0xFFFFFFFFFFFFFFFF).
+// Push b = 7 first, then a = 5; SUB computes a - b.
+PUSH1 0x07
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH8 0xFFFFFFFFFFFFFFFF
+AND
+PUSH1 0x05
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH8 0xFFFFFFFFFFFFFFFF
+AND
+SUB
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

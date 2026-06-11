@@ -1,0 +1,18 @@
+// dyn value << dyn(4): both operands laundered through memory so the shift
+// amount is non-constant, exercising the dynamic-amount path
+PUSH32 0x00000000000000000000000000000000000000000000000000000000DEADBEEF
+PUSH1 0x00
+MSTORE
+PUSH1 0x04
+PUSH1 0x20
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH1 0x20
+MLOAD
+SHL
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

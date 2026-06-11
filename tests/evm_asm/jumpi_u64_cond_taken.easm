@@ -1,0 +1,40 @@
+// dyn(0xAB) AND 0xFF (-> 0xAB, U64-tagged) -> JUMPI taken -> return 0x01.
+// cond carries a U64 range tag, so handleJumpI's non-deferred path ORs only
+// limb0 (FoldLimbs = 1). cond = 0xAB is nonzero -> taken.
+//
+// PC math (PUSH2=3 for the mask):
+// 0x00 PUSH32 (0xAB)     -> 0x21
+// 0x21 PUSH1 0x00        -> 0x23
+// 0x23 MSTORE            -> 0x24
+// 0x24 PUSH1 0x00        -> 0x26
+// 0x26 MLOAD             -> 0x27
+// 0x27 PUSH2 0x00FF      -> 0x2A
+// 0x2A AND               -> 0x2B   ; cond = 0xAB (U64)
+// 0x2B PUSH1 0x38 (dest) -> 0x2D
+// 0x2D JUMPI             -> 0x2E
+// 0x2E..0x37 fallthrough block (return 0xad)
+// 0x38 JUMPDEST (dest)
+PUSH32 0x00000000000000000000000000000000000000000000000000000000000000ab
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH2 0x00FF
+AND
+PUSH1 0x38
+JUMPI
+// fallthrough: return 0xad
+PUSH1 0xad
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN
+// taken target PC = 0x38: return 0x01
+JUMPDEST
+PUSH1 0x01
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

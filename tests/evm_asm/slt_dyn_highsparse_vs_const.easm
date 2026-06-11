@@ -1,0 +1,15 @@
+// dyn(2^192) <s const 5 -> 0. 2^192 is non-negative (bit255 clear) and has an
+// upper limb set, so a > b -> false. Push const RHS (5) first, dynamic LHS on
+// top. Exercises the upper-limb HasUpper select in the SLT helper.
+PUSH1 0x05
+PUSH32 0x0000000000000001000000000000000000000000000000000000000000000000
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+SLT
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

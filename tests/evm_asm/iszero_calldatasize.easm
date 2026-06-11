@@ -1,0 +1,9 @@
+// CALLDATASIZE -> ISZERO -> 1 (harness passes empty calldata, so size = 0).
+// CALLDATASIZE yields a U64-tagged dynamic value.
+CALLDATASIZE
+ISZERO
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

@@ -1,0 +1,23 @@
+// dyn-u64(7) - dyn-u64(7) = 0
+// Equal operands: no borrow, limb0 = 0, upper limbs zero.
+// Push b = 7 first, then a = 7; SUB computes a - b.
+PUSH1 0x07
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH8 0xFFFFFFFFFFFFFFFF
+AND
+PUSH1 0x07
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH8 0xFFFFFFFFFFFFFFFF
+AND
+SUB
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

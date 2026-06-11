@@ -1,0 +1,15 @@
+// const 0 >s dyn(-1) -> 1. Exercises the swapped dispatch: a const LHS routes
+// SGT to the SLT helper (0 >s x  <=>  x <s 0; dyn(-1) <s 0 is true).
+// SGT pops top as LHS, so make the dynamic RHS first, then PUSH 0 on top.
+PUSH32 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH1 0x00
+SGT
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

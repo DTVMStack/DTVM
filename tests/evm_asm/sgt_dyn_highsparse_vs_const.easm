@@ -1,0 +1,15 @@
+// dyn(2^128) >s const 0xFFFFFFFFFFFFFFFF -> 1. 2^128 is non-negative with an
+// upper limb (limb2) set, so a > b regardless of b's limb0 magnitude -> 1.
+// Push const RHS (max u64) first, dynamic LHS (2^128) on top.
+PUSH8 0xFFFFFFFFFFFFFFFF
+PUSH32 0x0000000000000000000000000000000100000000000000000000000000000000
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+SGT
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

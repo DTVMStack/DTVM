@@ -1,0 +1,15 @@
+// dyn(-1) <s const 5 -> 1. SLT pops top as LHS (a), so push const RHS (b=5)
+// first, then the dynamic LHS (a=-1) on top: a <s b = (-1 <s 5) = 1.
+// dyn(-1) is untracked (U256); bit255 set -> negative -> true.
+PUSH1 0x05
+PUSH32 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+SLT
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

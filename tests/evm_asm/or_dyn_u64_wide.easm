@@ -1,0 +1,25 @@
+// dyn(2^192 + 0xDEAD) OR (dyn(0x1234) AND 0xFFFF) -> 2^192 + 0xDEBD.
+// Adversarial for upper-limb passthrough: the wide side is untracked (U256),
+// the other side is U64-tagged. If the one-side-U64 path zeroed the wide
+// upper limbs, the 2^192 bit would vanish. limb0: 0xDEAD | 0x1234 = 0xDEBD.
+// wide = 2^192 + 0xDEAD (top limb set + low limb)
+PUSH32 0x000000000000000100000000000000000000000000000000000000000000dead
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+// narrow = dyn(0x1234) AND 0xFFFF = 0x1234 (U64-tagged)
+PUSH32 0x0000000000000000000000000000000000000000000000000000000000001234
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH2 0xFFFF
+AND
+// OR -> 2^192 + 0xDEBD
+OR
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

@@ -1,0 +1,29 @@
+// dyn(0x100) AND 0xFF (-> 0x00, U64-tagged) -> JUMPI NOT taken -> 0xad.
+// cond carries a U64 range tag (FoldLimbs = 1). 0x100 AND 0xFF = 0 -> not taken
+// -> fallthrough returns 0xad.
+//
+// PC math identical to jumpi_u64_cond_taken; dest = 0x38 (not reached).
+PUSH32 0x0000000000000000000000000000000000000000000000000000000000000100
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH2 0x00FF
+AND
+PUSH1 0x38
+JUMPI
+// fallthrough: return 0xad
+PUSH1 0xad
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN
+// jump target PC = 0x38 (not reached): return 0x01
+JUMPDEST
+PUSH1 0x01
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

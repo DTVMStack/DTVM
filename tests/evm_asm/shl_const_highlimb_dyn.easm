@@ -1,0 +1,15 @@
+// dyn value << 2^64 -> 0
+// the shift amount has limb0 == 0 but an upper limb set, so getConstShiftAmount
+// only sees a zero low limb; the static large-shift fold resolves it to zero
+PUSH32 0x112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH32 0x0000000000000000000000000000000000000000000000010000000000000000
+SHL
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

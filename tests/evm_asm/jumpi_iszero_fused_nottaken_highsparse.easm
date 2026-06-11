@@ -1,0 +1,30 @@
+// dyn(2^192) -> ISZERO (-> 0) -> JUMPI NOT taken -> fallthrough returns 0xad.
+// Adversarial: 2^192 lives entirely in the top limb. A wrong limb0-only fold
+// of the base would see 0, compute ISZERO -> 1, and wrongly take the branch
+// (returning 0x01). The deferred-zero-test fold must OR all four limbs.
+//
+// PC math identical to jumpi_iszero_fused_taken (PUSH32 same size); dest=0x35.
+// 0x27 ISZERO -> cond = 0 (2^192 is nonzero) -> JUMPI not taken -> fallthrough.
+PUSH32 0x0000000000000001000000000000000000000000000000000000000000000000
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+ISZERO
+PUSH1 0x35
+JUMPI
+// fallthrough: return 0xad
+PUSH1 0xad
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN
+// jump target PC = 0x35 (not reached): return 0x01
+JUMPDEST
+PUSH1 0x01
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN

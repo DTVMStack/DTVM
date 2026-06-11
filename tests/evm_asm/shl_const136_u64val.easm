@@ -1,0 +1,19 @@
+// (dyn AND 0xFFFFFFFFFFFFFFFF) << 136
+// the AND mask gives the value a provable U64 range (LiveLimbs=1), so the SHL
+// const path (CompShift=2, ShiftMod=8) drives result limb 3 down the
+// carry-only branch: SrcIdx=1 is a dead shifted term but its carry term reads
+// the live limb Value[0] (Value[0] >> 56), so limb 3 is one shift, no OR.
+PUSH32 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH8 0xFFFFFFFFFFFFFFFF
+AND
+PUSH1 0x88
+SHL
+PUSH1 0x00
+MSTORE
+PUSH1 0x20
+PUSH1 0x00
+RETURN
