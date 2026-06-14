@@ -662,17 +662,16 @@ void BaseInterpreter::interpret() {
         // TARGET_UNDEFINED), so no extra runtime Revision check is needed.
         DISPATCH_UNARY(ClzHandler, intx::clz(A));
 
-      // ---- Stack ops (delegate to NoGas helpers) ----
-      // Pc is only advanced on success so that on error the recorded
-      // Frame->Pc points at the faulting opcode, consistent with the
-      // non-computed-goto interpreter loops.
+      // ---- Stack ops: POP/PUSH0/DUP/SWAP inlined on local sp (logic mirrors
+      // the *NoGas helpers); PUSHX kept on its helper. Pc is only advanced on
+      // success so that on error the Frame->Pc flushed by cgoto_error points at
+      // the faulting opcode.
       TARGET_POP : {
-        Frame->Sp = sp;
-        Frame->Pc = Pc;
-        executePopOpcodeNoGas(Frame, Context);
-        sp = Frame->Sp;
-        if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
+        if (INTX_UNLIKELY(sp < 1)) {
+          Context.setStatus(EVMC_STACK_UNDERFLOW);
           goto cgoto_error;
+        }
+        --sp;
         ++Pc;
         DISPATCH_NEXT;
       }
@@ -681,15 +680,17 @@ void BaseInterpreter::interpret() {
           Context.setStatus(EVMC_UNDEFINED_INSTRUCTION);
           goto cgoto_error;
         }
-        Frame->Sp = sp;
-        Frame->Pc = Pc;
-        executePush0OpcodeNoGas(Frame, Context);
-        sp = Frame->Sp;
-        if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
+        if (INTX_UNLIKELY(sp >= MAXSTACK)) {
+          Context.setStatus(EVMC_STACK_OVERFLOW);
           goto cgoto_error;
+        }
+        Frame->Stack[sp++] = 0;
         ++Pc;
         DISPATCH_NEXT;
       }
+      // PUSHX stays on the helper: inlining its immediate decode + Pc math
+      // grows interpret() enough to regress jump-heavy code (PUSH->JUMP loops)
+      // via worse code layout, with no offsetting gain measured.
       TARGET_PUSHX : {
         Frame->Sp = sp;
         Frame->Pc = Pc;
@@ -702,24 +703,33 @@ void BaseInterpreter::interpret() {
         DISPATCH_NEXT;
       }
       TARGET_DUPX : {
-        Frame->Sp = sp;
-        Frame->Pc = Pc;
-        const uint8_t OpcodeU8 = static_cast<uint8_t>(Code[Pc]);
-        executeDupOpcodeNoGas(Frame, Context, OpcodeU8);
-        sp = Frame->Sp;
-        if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
+        const uint32_t N = static_cast<uint8_t>(Code[Pc]) -
+                           static_cast<uint8_t>(evmc_opcode::OP_DUP1) + 1;
+        if (INTX_UNLIKELY(sp < N)) {
+          Context.setStatus(EVMC_STACK_UNDERFLOW);
           goto cgoto_error;
+        }
+        if (INTX_UNLIKELY(sp >= MAXSTACK)) {
+          Context.setStatus(EVMC_STACK_OVERFLOW);
+          goto cgoto_error;
+        }
+        Frame->Stack[sp] = Frame->Stack[sp - N];
+        ++sp;
         ++Pc;
         DISPATCH_NEXT;
       }
       TARGET_SWAPX : {
-        Frame->Sp = sp;
-        Frame->Pc = Pc;
-        const uint8_t OpcodeU8 = static_cast<uint8_t>(Code[Pc]);
-        executeSwapOpcodeNoGas(Frame, Context, OpcodeU8);
-        sp = Frame->Sp;
-        if (INTX_UNLIKELY(Context.getStatus() != EVMC_SUCCESS))
+        const uint32_t N = static_cast<uint8_t>(Code[Pc]) -
+                           static_cast<uint8_t>(evmc_opcode::OP_SWAP1) + 1;
+        if (INTX_UNLIKELY(sp < N + 1)) {
+          Context.setStatus(EVMC_STACK_UNDERFLOW);
           goto cgoto_error;
+        }
+        intx::uint256 &Top = Frame->Stack[sp - 1];
+        intx::uint256 &Nth = Frame->Stack[sp - 1 - N];
+        const intx::uint256 Tmp = Top;
+        Top = Nth;
+        Nth = Tmp;
         ++Pc;
         DISPATCH_NEXT;
       }
