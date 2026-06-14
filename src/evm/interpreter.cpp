@@ -549,61 +549,118 @@ void BaseInterpreter::interpret() {
     DISPATCH_NEXT;                                                             \
   } while (0)
 
+// Inline a pure stack op (no host call, no frame change) directly on the
+// loop-local sp, skipping HANDLER_CALL's EVMResource TLS write and the
+// Frame->Sp/Pc memory round-trip. Gas is already charged per chunk and these
+// opcodes never touch the host or change the frame, so no setExecutionContext
+// is needed. EXPR is the verbatim DEFINE_*_OP body from opcode_handlers.h with
+// A=top, B=second, C=third; the underflow path matches cgoto_error's contract
+// (it flushes sp/Pc from the locals). Under arith-profiling builds fall back to
+// the handler so the Stream A limb tap still fires.
+#ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
+#define DISPATCH_BINARY(Handler, EXPR) HANDLER_CALL(Handler::doExecute())
+#define DISPATCH_UNARY(Handler, EXPR) HANDLER_CALL(Handler::doExecute())
+#define DISPATCH_TERNARY(Handler, EXPR) HANDLER_CALL(Handler::doExecute())
+#else
+#define DISPATCH_BINARY(Handler, EXPR)                                         \
+  do {                                                                         \
+    if (INTX_UNLIKELY(sp < 2)) {                                               \
+      Context.setStatus(EVMC_STACK_UNDERFLOW);                                 \
+      goto cgoto_error;                                                        \
+    }                                                                          \
+    const intx::uint256 &A = Frame->Stack[sp - 1];                             \
+    const intx::uint256 &B = Frame->Stack[sp - 2];                             \
+    Frame->Stack[sp - 2] = (EXPR);                                             \
+    --sp;                                                                      \
+    ++Pc;                                                                      \
+    DISPATCH_NEXT;                                                             \
+  } while (0)
+#define DISPATCH_UNARY(Handler, EXPR)                                          \
+  do {                                                                         \
+    if (INTX_UNLIKELY(sp < 1)) {                                               \
+      Context.setStatus(EVMC_STACK_UNDERFLOW);                                 \
+      goto cgoto_error;                                                        \
+    }                                                                          \
+    const intx::uint256 &A = Frame->Stack[sp - 1];                             \
+    Frame->Stack[sp - 1] = (EXPR);                                             \
+    ++Pc;                                                                      \
+    DISPATCH_NEXT;                                                             \
+  } while (0)
+#define DISPATCH_TERNARY(Handler, EXPR)                                        \
+  do {                                                                         \
+    if (INTX_UNLIKELY(sp < 3)) {                                               \
+      Context.setStatus(EVMC_STACK_UNDERFLOW);                                 \
+      goto cgoto_error;                                                        \
+    }                                                                          \
+    const intx::uint256 &A = Frame->Stack[sp - 1];                             \
+    const intx::uint256 &B = Frame->Stack[sp - 2];                             \
+    const intx::uint256 &C = Frame->Stack[sp - 3];                             \
+    Frame->Stack[sp - 3] = (EXPR);                                             \
+    sp -= 2;                                                                   \
+    ++Pc;                                                                      \
+    DISPATCH_NEXT;                                                             \
+  } while (0)
+#endif
+
         // Initial dispatch
         goto *cgoto_table[static_cast<uint8_t>(Code[Pc])];
 
-      // ---- Binary arithmetic/logic ops (delegate to doExecute) ----
+      // ---- Binary arithmetic/logic ops (inlined on local sp) ----
       TARGET_ADD:
-        HANDLER_CALL(AddHandler::doExecute());
+        DISPATCH_BINARY(AddHandler, A + B);
       TARGET_MUL:
-        HANDLER_CALL(MulHandler::doExecute());
+        DISPATCH_BINARY(MulHandler, A * B);
       TARGET_SUB:
-        HANDLER_CALL(SubHandler::doExecute());
+        DISPATCH_BINARY(SubHandler, A - B);
       TARGET_DIV:
-        HANDLER_CALL(DivHandler::doExecute());
+        DISPATCH_BINARY(DivHandler, (B == 0) ? intx::uint256(0) : (A / B));
       TARGET_SDIV:
-        HANDLER_CALL(SDivHandler::doExecute());
+        DISPATCH_BINARY(SDivHandler,
+                        (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).quot);
       TARGET_MOD:
-        HANDLER_CALL(ModHandler::doExecute());
+        DISPATCH_BINARY(ModHandler, (B == 0) ? intx::uint256(0) : A % B);
       TARGET_SMOD:
-        HANDLER_CALL(SModHandler::doExecute());
+        DISPATCH_BINARY(SModHandler,
+                        (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).rem);
       TARGET_LT:
-        HANDLER_CALL(LtHandler::doExecute());
+        DISPATCH_BINARY(LtHandler, A < B);
       TARGET_GT:
-        HANDLER_CALL(GtHandler::doExecute());
+        DISPATCH_BINARY(GtHandler, A > B);
       TARGET_SLT:
-        HANDLER_CALL(SltHandler::doExecute());
+        DISPATCH_BINARY(SltHandler, intx::slt(A, B));
       TARGET_SGT:
-        HANDLER_CALL(SgtHandler::doExecute());
+        DISPATCH_BINARY(SgtHandler, intx::slt(B, A));
       TARGET_EQ:
-        HANDLER_CALL(EqHandler::doExecute());
+        DISPATCH_BINARY(EqHandler, A == B);
       TARGET_AND:
-        HANDLER_CALL(AndHandler::doExecute());
+        DISPATCH_BINARY(AndHandler, A & B);
       TARGET_OR:
-        HANDLER_CALL(OrHandler::doExecute());
+        DISPATCH_BINARY(OrHandler, A | B);
       TARGET_XOR:
-        HANDLER_CALL(XorHandler::doExecute());
+        DISPATCH_BINARY(XorHandler, A ^ B);
       TARGET_SHL:
-        HANDLER_CALL(ShlHandler::doExecute());
+        DISPATCH_BINARY(ShlHandler, A < 256 ? B << A : intx::uint256(0));
       TARGET_SHR:
-        HANDLER_CALL(ShrHandler::doExecute());
+        DISPATCH_BINARY(ShrHandler, A < 256 ? B >> A : intx::uint256(0));
 
-      // ---- Ternary ops (delegate to doExecute) ----
+      // ---- Ternary ops (inlined on local sp) ----
       TARGET_ADDMOD:
-        HANDLER_CALL(AddmodHandler::doExecute());
+        DISPATCH_TERNARY(AddmodHandler,
+                         (C == 0) ? intx::uint256(0) : intx::addmod(A, B, C));
       TARGET_MULMOD:
-        HANDLER_CALL(MulmodHandler::doExecute());
+        DISPATCH_TERNARY(MulmodHandler,
+                         (C == 0) ? intx::uint256(0) : intx::mulmod(A, B, C));
 
-      // ---- Unary ops (delegate to doExecute) ----
+      // ---- Unary ops (inlined on local sp) ----
       TARGET_ISZERO:
-        HANDLER_CALL(IsZeroHandler::doExecute());
+        DISPATCH_UNARY(IsZeroHandler, A == 0);
       TARGET_NOT:
-        HANDLER_CALL(NotHandler::doExecute());
+        DISPATCH_UNARY(NotHandler, ~A);
       TARGET_CLZ:
         // Revision gating is already enforced by cgoto_table (opcodes
         // missing from evmc_get_instruction_names_table() map to
         // TARGET_UNDEFINED), so no extra runtime Revision check is needed.
-        HANDLER_CALL(ClzHandler::doExecute());
+        DISPATCH_UNARY(ClzHandler, intx::clz(A));
 
       // ---- Stack ops (delegate to NoGas helpers) ----
       // Pc is only advanced on success so that on error the recorded
@@ -972,6 +1029,9 @@ void BaseInterpreter::interpret() {
 
 #undef DISPATCH_NEXT
 #undef HANDLER_CALL
+#undef DISPATCH_BINARY
+#undef DISPATCH_UNARY
+#undef DISPATCH_TERNARY
       }
     cgoto_continue_outer:
       continue;
