@@ -2667,6 +2667,28 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
     return Operand(intxToU256Value(intx::exp(Base, Exponent)));
   }
 
+  // Strength reduction for a constant exponent with a dynamic base. EXP(base,
+  // 0)
+  // == 1 for all base (0 ** 0 == 1 per the Yellow Paper); EXP(base, 1) == base.
+  // The EIP-160 dynamic gas is GasPerByte * count_significant_bytes(exponent),
+  // i.e. 0 for exponent 0 and GasPerByte for exponent 1, charged explicitly
+  // here to match the general path.
+  if (ExponentOp.isZeroConstant()) {
+    MType *FoldI64Type =
+        EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+    chargeDynamicGasIR(createIntConstInstruction(FoldI64Type, 0));
+    return Operand(intxToU256Value(intx::uint256{1}));
+  }
+  if (ExponentOp.isOneConstant()) {
+    MType *FoldI64Type =
+        EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+    const uint64_t GasPerByte = Ctx.getRevision() < EVMC_SPURIOUS_DRAGON
+                                    ? zen::evm::EXP_BYTE_GAS_PRE_SPURIOUS_DRAGON
+                                    : zen::evm::EXP_BYTE_GAS;
+    chargeDynamicGasIR(createIntConstInstruction(FoldI64Type, GasPerByte));
+    return BaseOp;
+  }
+
   MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
   MInstruction *Zero = createIntConstInstruction(I64Type, 0);
   MInstruction *One = createIntConstInstruction(I64Type, 1);
@@ -2754,6 +2776,44 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
   MInstruction *ExpGas = createInstruction<BinaryInstruction>(
       false, OP_mul, I64Type, ExpByteSize, GasPerByteConst);
   chargeDynamicGasIR(ExpGas);
+
+  // Strength reduction for a constant power-of-two base: EXP(2^k, x) is
+  // 2^(k*x) mod 2^256 == (k*x >= 256) ? 0 : 1 << (k*x). For k == 1 (base 2)
+  // this is 1 << x, and handleShift<BO_SHL> already returns 0 for shift amounts
+  // >= 256 while k*x == x cannot overflow, so no guard is needed. For k >= 2,
+  // k*x wraps modulo 2^256 for large x, so the result is guarded by an explicit
+  // x >= ceil(256/k) -> 0 test rather than relying on handleShift's own >= 256
+  // check (which would see the wrapped product). Below that threshold k*x is
+  // exact and < 256. The EIP-160 dynamic gas above depends only on the exponent
+  // and is charged identically to the general path.
+  if (BaseOp.isConstant()) {
+    const intx::uint256 BaseVal = u256ValueToIntx(BaseOp.getConstValue());
+    if (BaseVal >= 2 && (BaseVal & (BaseVal - 1)) == 0) {
+      unsigned K = 0;
+      for (intx::uint256 B = BaseVal; B > 1; B >>= 1)
+        ++K;
+      Operand OneOp = createU256ConstOperand(intx::uint256{1});
+      if (K == 1) {
+        return handleShift<BinaryOperator::BO_SHL>(ExponentOp, OneOp);
+      }
+      Operand ShiftAmountOp =
+          handleMul(createU256ConstOperand(intx::uint256{K}), ExponentOp);
+      Operand ShiftedOp =
+          handleShift<BinaryOperator::BO_SHL>(ShiftAmountOp, OneOp);
+      const uint64_t Threshold = (256 + K - 1) / K;
+      U256Inst ExpComponents = extractU256Operand(ExponentOp);
+      U256Inst Shifted = extractU256Operand(ShiftedOp);
+      MInstruction *ExpGEThreshold =
+          isU256GreaterOrEqual(ExpComponents, Threshold);
+      MInstruction *ZeroI64 = createIntConstInstruction(I64Type, 0);
+      U256Inst Result = {};
+      for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+        Result[I] = createInstruction<SelectInstruction>(
+            false, I64Type, ExpGEThreshold, ZeroI64, Shifted[I]);
+      }
+      return Operand(Result, EVMType::UINT256);
+    }
+  }
 
   // Initialize loop variables
   U256Var BaseVars = {};
