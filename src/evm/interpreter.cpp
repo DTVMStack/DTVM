@@ -553,49 +553,51 @@ void BaseInterpreter::interpret() {
 // loop-local sp, skipping HANDLER_CALL's EVMResource TLS write and the
 // Frame->Sp/Pc memory round-trip. Gas is already charged per chunk and these
 // opcodes never touch the host or change the frame, so no setExecutionContext
-// is needed. EXPR is the verbatim DEFINE_*_OP body from opcode_handlers.h with
-// A=top, B=second, C=third; the underflow path matches cgoto_error's contract
-// (it flushes sp/Pc from the locals). Under arith-profiling builds fall back to
-// the handler so the Stream A limb tap still fires.
+// is needed. The result value is computed by the opcode's <Name>OP functor from
+// opcode_handlers.h, so the arithmetic semantics are single-sourced with the
+// handler / fallback paths; <Name>OP{} is stateless and inlines to the same
+// code as the raw expression. The surrounding stack discipline (the sp<N
+// underflow / overflow checks, the read/write slots, and the sp/Pc advance) is
+// still hand-mirrored from the handlers and the executeXxxNoGas helpers and
+// must be kept in sync with them by hand. The underflow path matches
+// cgoto_error's contract (it flushes sp/Pc from the locals). Under
+// arith-profiling builds fall back to the handler so the Stream A limb tap
+// still fires.
 #ifdef ZEN_ENABLE_EVM_ARITH_PROFILE
-#define DISPATCH_BINARY(Handler, EXPR) HANDLER_CALL(Handler::doExecute())
-#define DISPATCH_UNARY(Handler, EXPR) HANDLER_CALL(Handler::doExecute())
-#define DISPATCH_TERNARY(Handler, EXPR) HANDLER_CALL(Handler::doExecute())
+#define DISPATCH_BINARY(Name) HANDLER_CALL(Name##Handler::doExecute())
+#define DISPATCH_UNARY(Name) HANDLER_CALL(Name##Handler::doExecute())
+#define DISPATCH_TERNARY(Name) HANDLER_CALL(Name##Handler::doExecute())
 #else
-#define DISPATCH_BINARY(Handler, EXPR)                                         \
+#define DISPATCH_BINARY(Name)                                                  \
   do {                                                                         \
     if (INTX_UNLIKELY(sp < 2)) {                                               \
       Context.setStatus(EVMC_STACK_UNDERFLOW);                                 \
       goto cgoto_error;                                                        \
     }                                                                          \
-    const intx::uint256 &A = Frame->Stack[sp - 1];                             \
-    const intx::uint256 &B = Frame->Stack[sp - 2];                             \
-    Frame->Stack[sp - 2] = (EXPR);                                             \
+    Frame->Stack[sp - 2] =                                                     \
+        Name##OP{}(Frame->Stack[sp - 1], Frame->Stack[sp - 2]);                \
     --sp;                                                                      \
     ++Pc;                                                                      \
     DISPATCH_NEXT;                                                             \
   } while (0)
-#define DISPATCH_UNARY(Handler, EXPR)                                          \
+#define DISPATCH_UNARY(Name)                                                   \
   do {                                                                         \
     if (INTX_UNLIKELY(sp < 1)) {                                               \
       Context.setStatus(EVMC_STACK_UNDERFLOW);                                 \
       goto cgoto_error;                                                        \
     }                                                                          \
-    const intx::uint256 &A = Frame->Stack[sp - 1];                             \
-    Frame->Stack[sp - 1] = (EXPR);                                             \
+    Frame->Stack[sp - 1] = Name##OP{}(Frame->Stack[sp - 1]);                   \
     ++Pc;                                                                      \
     DISPATCH_NEXT;                                                             \
   } while (0)
-#define DISPATCH_TERNARY(Handler, EXPR)                                        \
+#define DISPATCH_TERNARY(Name)                                                 \
   do {                                                                         \
     if (INTX_UNLIKELY(sp < 3)) {                                               \
       Context.setStatus(EVMC_STACK_UNDERFLOW);                                 \
       goto cgoto_error;                                                        \
     }                                                                          \
-    const intx::uint256 &A = Frame->Stack[sp - 1];                             \
-    const intx::uint256 &B = Frame->Stack[sp - 2];                             \
-    const intx::uint256 &C = Frame->Stack[sp - 3];                             \
-    Frame->Stack[sp - 3] = (EXPR);                                             \
+    Frame->Stack[sp - 3] = Name##OP{}(                                         \
+        Frame->Stack[sp - 1], Frame->Stack[sp - 2], Frame->Stack[sp - 3]);     \
     sp -= 2;                                                                   \
     ++Pc;                                                                      \
     DISPATCH_NEXT;                                                             \
@@ -607,60 +609,56 @@ void BaseInterpreter::interpret() {
 
       // ---- Binary arithmetic/logic ops (inlined on local sp) ----
       TARGET_ADD:
-        DISPATCH_BINARY(AddHandler, A + B);
+        DISPATCH_BINARY(Add);
       TARGET_MUL:
-        DISPATCH_BINARY(MulHandler, A * B);
+        DISPATCH_BINARY(Mul);
       TARGET_SUB:
-        DISPATCH_BINARY(SubHandler, A - B);
+        DISPATCH_BINARY(Sub);
       TARGET_DIV:
-        DISPATCH_BINARY(DivHandler, (B == 0) ? intx::uint256(0) : (A / B));
+        DISPATCH_BINARY(Div);
       TARGET_SDIV:
-        DISPATCH_BINARY(SDivHandler,
-                        (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).quot);
+        DISPATCH_BINARY(SDiv);
       TARGET_MOD:
-        DISPATCH_BINARY(ModHandler, (B == 0) ? intx::uint256(0) : A % B);
+        DISPATCH_BINARY(Mod);
       TARGET_SMOD:
-        DISPATCH_BINARY(SModHandler,
-                        (B == 0) ? intx::uint256(0) : intx::sdivrem(A, B).rem);
+        DISPATCH_BINARY(SMod);
       TARGET_LT:
-        DISPATCH_BINARY(LtHandler, A < B);
+        DISPATCH_BINARY(Lt);
       TARGET_GT:
-        DISPATCH_BINARY(GtHandler, A > B);
+        DISPATCH_BINARY(Gt);
       TARGET_SLT:
-        DISPATCH_BINARY(SltHandler, intx::slt(A, B));
+        DISPATCH_BINARY(Slt);
       TARGET_SGT:
-        DISPATCH_BINARY(SgtHandler, intx::slt(B, A));
+        DISPATCH_BINARY(Sgt);
       TARGET_EQ:
-        DISPATCH_BINARY(EqHandler, A == B);
+        DISPATCH_BINARY(Eq);
       TARGET_AND:
-        DISPATCH_BINARY(AndHandler, A & B);
+        DISPATCH_BINARY(And);
       TARGET_OR:
-        DISPATCH_BINARY(OrHandler, A | B);
+        DISPATCH_BINARY(Or);
       TARGET_XOR:
-        DISPATCH_BINARY(XorHandler, A ^ B);
+        DISPATCH_BINARY(Xor);
       TARGET_SHL:
-        DISPATCH_BINARY(ShlHandler, A < 256 ? B << A : intx::uint256(0));
+        DISPATCH_BINARY(Shl);
       TARGET_SHR:
-        DISPATCH_BINARY(ShrHandler, A < 256 ? B >> A : intx::uint256(0));
+        DISPATCH_BINARY(Shr);
 
       // ---- Ternary ops (inlined on local sp) ----
       TARGET_ADDMOD:
-        DISPATCH_TERNARY(AddmodHandler,
-                         (C == 0) ? intx::uint256(0) : intx::addmod(A, B, C));
+        DISPATCH_TERNARY(Addmod);
       TARGET_MULMOD:
-        DISPATCH_TERNARY(MulmodHandler,
-                         (C == 0) ? intx::uint256(0) : intx::mulmod(A, B, C));
+        DISPATCH_TERNARY(Mulmod);
 
       // ---- Unary ops (inlined on local sp) ----
       TARGET_ISZERO:
-        DISPATCH_UNARY(IsZeroHandler, A == 0);
+        DISPATCH_UNARY(IsZero);
       TARGET_NOT:
-        DISPATCH_UNARY(NotHandler, ~A);
+        DISPATCH_UNARY(Not);
       TARGET_CLZ:
         // Revision gating is already enforced by cgoto_table (opcodes
         // missing from evmc_get_instruction_names_table() map to
         // TARGET_UNDEFINED), so no extra runtime Revision check is needed.
-        DISPATCH_UNARY(ClzHandler, intx::clz(A));
+        DISPATCH_UNARY(Clz);
 
       // ---- Stack ops: POP/PUSH0/DUP/SWAP inlined on local sp (logic mirrors
       // the *NoGas helpers); PUSHX kept on its helper. Pc is only advanced on
