@@ -3116,14 +3116,14 @@ EVMMirBuilder::handleAddU64Const(const Operand &FullOp,
   for (size_t I = 1; I < EVM_ELEMENTS_COUNT; ++I) {
     MInstruction *AdcInst = createInstruction<AdcInstruction>(
         false, MirI64Type, LHS[I], RHSZero, Carry);
-    // Last ADC: carry flag is dead after this point, no subsequent ADC
-    // consumes it. The barrier is only needed for intermediate ADCs to
-    // force immediate execution while CF is live.
-    if (I < EVM_ELEMENTS_COUNT - 1) {
-      Result[I] = protectUnsafeValue(AdcInst, MirI64Type);
-    } else {
-      Result[I] = AdcInst;
-    }
+    // Every ADC must be protected (materialized into a variable) to force
+    // immediate evaluation while CF is live. Even the last ADC — while CF
+    // is dead *within* the carry chain after this instruction, the tree-IR
+    // expression for the last ADC may not be lowered immediately.
+    // Subsequent CMP instructions from comparison consumers (e.g. GT/LT)
+    // can clobber EFLAGS before the ADC expression is evaluated, silently
+    // corrupting the carry chain. (See GitHub issue #541.)
+    Result[I] = protectUnsafeValue(AdcInst, MirI64Type);
   }
   // u64const + value: if the value fits in u64, the sum is < 2^65 (fits u128);
   // for wider operands a carry past bit 127 is possible, so stay conservative.

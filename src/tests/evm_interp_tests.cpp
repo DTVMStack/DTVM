@@ -688,4 +688,72 @@ TEST(EVMRegressionTest, Issue488_PCAsAddmodAugend_InterpMatchesMultipass) {
   EXPECT_EQ(InterpExec.OutputHex,
             "0000000000000000000000000000000000000000000000000000000000000006");
 }
+
+// Regression test for issue #541 (and #542): multipass JIT carry chain
+// corruption when the last ADC in handleAddU64Const is not
+// protectUnsafeValue'd.
+//
+// When ADD produces a U256 result via the handleAddU64Const fast path
+// (ADD limb[0] + 3×ADC for carry propagation), the last ADC (limb[3]) was
+// intentionally left as an un-materialized tree-IR expression because the
+// carry flag is "dead" within the carry chain after that instruction.
+// However, if the ADD result is later consumed by a CMP instruction (e.g.
+// from GT/LT comparison), the CMP lowers before the last ADC, clobbering
+// x86 EFLAGS (including CF). The ADC then reads the wrong CF from CMP
+// instead of the correct CF from the preceding ADC, corrupting the carry
+// chain.
+//
+// The test uses a minimal EVM program that triggers the bug:
+//   PUSH24 big_val  -- a 192-bit value with non-zero limbs
+//   PUSH1 0xff      -- a small value (U64 range)
+//   RETURNDATASIZE  -- pushes 0 (U64 range)
+//   ADD             -- ADD(0, 0xff) via handleAddU64Const
+//   GT              -- GT(0xff, big_val) should return 0
+//   PUSH0           -- offset for MSTORE
+//   MSTORE          -- store GT result to memory
+//   PUSH1 32        -- size for RETURN
+//   PUSH0           -- offset for RETURN
+//   RETURN
+//
+// Before the fix: CMP from GT clobbered CF before the last ADC was lowered,
+// ADC computed wrong limb[3], GT incorrectly returned 1 instead of 0.
+// For issue #542: the same root cause also caused a crash.
+TEST(EVMRegressionTest, Issue541_AddU64ConstLastAdcCarryChainPreserved) {
+  // Bytecode: PUSH24 big_val, PUSH1 0xff, RETURNDATASIZE, ADD, GT,
+  //           PUSH0, MSTORE, PUSH1 32, PUSH0, RETURN
+  //
+  // big_val = 0x0000_0000_0000_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF
+  // (3 non-zero limbs to force CMP in GT to set CF=1)
+  const std::string BytecodeHex =
+      "77000000000000ffffffffffffffffffffffffffffffffffff"
+      "60ff3d01115f5260205ff3";
+
+  auto BytecodeBuf = zen::utils::fromHex(BytecodeHex);
+  ASSERT_TRUE(BytecodeBuf) << "Failed to parse bytecode hex";
+
+  // Run interpreter (reference) and multipass JIT, compare outputs.
+  auto InterpExec = executeEvmBytecode("issue541_interp", *BytecodeBuf,
+                                       common::RunMode::InterpMode);
+  ASSERT_EQ(InterpExec.Status, EVMC_SUCCESS) << "Interpreter execution failed";
+
+  auto MultipassExec = executeEvmBytecode("issue541_multipass", *BytecodeBuf,
+                                          common::RunMode::MultipassMode);
+  ASSERT_EQ(MultipassExec.Status, EVMC_SUCCESS)
+      << "Multipass JIT execution failed (crash = issue #542)";
+
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(MultipassExec.JITCompiled)
+      << "Multipass JIT should compile issue541 reproducer";
+#endif
+
+  // GT(0xff, big_val) should return 0. Before the fix, multipass returned 1.
+  EXPECT_EQ(MultipassExec.OutputHex, InterpExec.OutputHex)
+      << "Multipass output diverged from interpreter for issue #541 "
+         "regression";
+
+  // Explicitly verify: GT(0xff, big_val) = 0 (0xff is NOT greater than
+  // a 192-bit value).
+  EXPECT_EQ(InterpExec.OutputHex,
+            "0000000000000000000000000000000000000000000000000000000000000000");
+}
 #endif
