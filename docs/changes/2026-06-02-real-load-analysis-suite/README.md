@@ -127,6 +127,43 @@ build/real-load-profile/latest/
 Only scripts and tests are tracked. Local report outputs are left under the
 selected output directory.
 
+### Synthetic Storage Benchmark Generator
+
+`tools/gen_realistic_benchmarks.py` emits storage-I/O-heavy `evmone-bench`
+fixtures. It is distinct from the replay corpus above: the contracts are
+synthetic but representative of real-load character (storage-bound), not
+captured transactions. It exists because the stock benchmark suite is
+compute- and crypto-heavy with almost no storage operations, while mainnet
+execution time is storage-I/O dominated.
+
+It generates four fixtures:
+
+- `defi_amm_swap` (main) — constant-product AMM swaps interleaving u128 MUL/DIV
+  with reserve and trader-balance SLOAD/SSTORE;
+- `storage_rw_churn` (micro) — adjacent-slot read-modify-write throughput probe;
+- `sstore_hot` / `sload_hot` (micro) — isolated SSTORE / SLOAD throughput probes.
+
+Each contract leaves its storage in a deterministic state before any value is
+read back — by reseeding, or (for `sstore_hot`) by overwriting every slot — so
+behaviour is identical across `evmone-bench` iterations, which reuse one host.
+Each computes a value-sensitive weighted checksum over its storage round-trips
+and `REVERT`s on mismatch, so `EVMC_SUCCESS` is itself the correctness gate
+(the JSON bench path does not check output). Expected checksums come from an
+exact integer simulation in the generator. Correctness was verified by running
+each fixture under both `mode=multipass` and `mode=interpreter` with identical
+`gas_used`, and by confirming that a tampered checksum produces a revert.
+
+Like the rest of this suite, generated outputs are not committed. Materialize
+them on demand into a local evmone checkout:
+
+```bash
+python3 tools/gen_realistic_benchmarks.py <evmone>/test/evm-benchmarks/benchmarks
+python3 tools/gen_realistic_benchmarks.py --selftest   # generator self-check
+```
+
+These fixtures are for local benchmarking only; they are not wired into the CI
+performance gate.
+
 ## Reproduction
 
 Use the external corpus path:
