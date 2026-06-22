@@ -14,8 +14,9 @@ borrow broadcast}`, bit-exact for all inputs. This change lowers such SUB
 sites from "8 `protectUnsafeValue` spills + a SUB/SBB chain" to "1 sub +
 1 compare + 1 negate + borrow reuse". Paired EEST Cancun measurement:
 site-weighted SUB fast-path hit rate **18.4% → 42.1% (+23.8pp)**, 925 sites
-migrated, every other op unchanged; all correctness suites pass, and the
-end-to-end benchmarks are neutral.
+migrated, every other op's per-site classification unchanged; the correctness
+suites pass (unittests 223/223, statetest 2723/2723 — see Verification), and
+the end-to-end benchmarks are neutral.
 
 The differential coverage for this lowering path now ships separately with
 the consolidated EVM differential suite change
@@ -26,8 +27,8 @@ code-only.
 
 ## Motivation
 
-On EEST Cancun, SUB has the largest FULL-path site count of any operator
-(3,893 sites, more than 4x ADD). At 50.2% of those sites both operands are
+On EEST Cancun, SUB has the largest generic-4-limb-path site count of any
+operator (3,893 sites, more than 4x ADD). At 50.2% of those sites both operands are
 already statically proven u64 — loop counters, gas arithmetic, and length
 differences. Yet SUB previously had only a constant-RHS fast path
 (`handleSubU64Const`); dynamic u64 pairs all fell to the generic 4-limb
@@ -46,7 +47,8 @@ borrow broadcast, so no no-underflow proof is needed.
 ## Changes
 
 `src/compiler/evm_frontend/evm_mir_compiler.h` (the `handleBinaryArithmetic`
-BO_SUB branch, inserted after ADD Phase-1 and before the constant paths):
+BO_SUB branch, inserted after the ADD narrow-form branch and before the
+constant-folding paths):
 
 - Gate: `Operand::bothFitU64(LHSOp, RHSOp)` with both sides non-constant.
   Constant cases still take the existing folding / identity /
@@ -60,26 +62,24 @@ BO_SUB branch, inserted after ADD Phase-1 and before the constant paths):
   attached. This is the core soundness constraint of this change; the
   analyzer's SUB transfer (`evm_analyzer.h:1645`, pushTop = U256) remains
   symmetric.
-- Adds a `SubFastRangeU64Count` counter and wires it into the
-  `[EVM-ARITH-SUMMARY]` predicate and log line (a gap found in review).
+- Adds a `SubFastRangeU64Count` counter and wires it into the arithmetic
+  fast-path summary predicate and log line.
 
 ## Soundness
 
 - Wrap algebra: for a,b ∈ [0,2^64), a≥b → `{a₀-b₀,0,0,0}`; a<b →
-  `{(a₀-b₀) mod 2^64, ~0, ~0, ~0}` (= 2^256-(b-a)). Two independent
-  reviewers verified this separately — one with brute-force enumeration
-  over 4 million boundary pairs, one with computation over 442 boundary
-  pairs — with zero mismatches.
-- U64 tag provenance audit (performed independently by two reviewers): on
-  upstream/main, every tag producer (automatic derivation from constants,
-  comparison results, AND-const, analyzer entry import) has structurally
-  zero high limbs. No tag source can carry non-zero high limbs.
+  `{(a₀-b₀) mod 2^64, ~0, ~0, ~0}` (= 2^256-(b-a)). Enumeration over
+  4 million boundary pairs and computation over 442 boundary pairs both
+  match `(a-b) mod 2^256` at every pair.
+- U64 tag provenance audit: on upstream/main, every tag producer (automatic
+  derivation from constants, comparison results, AND-const, analyzer entry
+  import) has structurally zero high limbs. On upstream/main, none of the
+  audited tag producers can carry non-zero high limbs.
 - The dual consumption of a₀/b₀ (by the sub and the compare) is isomorphic
-  to the existing ADD Phase-1; CgIR lowering memoizes by pointer, so there
-  is no duplicate emission.
-- Review correction: removed a redundant `protectUnsafeValue` on Diff
-  (single consumer, no SBB chain — the barrier is unnecessary, consistent
-  with the existing comment in `handleSubU64Const`).
+  to the existing ADD narrow-form branch; CgIR lowering memoizes by pointer,
+  so there is no duplicate emission.
+- Diff carries no `protectUnsafeValue` barrier: single consumer, no SBB
+  chain, consistent with the existing comment in `handleSubU64Const`.
 
 ## Verification
 
@@ -91,48 +91,45 @@ BO_SUB branch, inserted after ADD Phase-1 and before the constant paths):
   boundary (0 - (2^64-1), limb0=1 + 48 F digits), dynamic zero RHS, and a
   single-side-wide control (does not trigger).
 - multipass evmone-unittests 223/223; multipass evmone-statetest
-  `-k fork_Cancun` 2723/2723 (re-run after the review fixes); format check
-  passes; no new warnings.
-- Two independent reviews: Opus (all 7 categories verified clean; 2 quality
-  items adopted/fixed) and Codex (1 MINOR — the counter was not wired into
-  the summary log; fixed).
+  `-k fork_Cancun` 2723/2723; format check passes; no new warnings.
 
 ## Measurements
 
-Paired EEST Cancun measurement (38,808 Stream B rows, 28,109 shared sites,
-site-weighted; the measurement branch carries the tap and is not committed
-with this PR):
+Paired EEST Cancun measurement (38,808 instrumented site rows, 28,109 shared
+sites, site-weighted; the measurement branch carries the tap and is not
+committed with this PR):
 
 | Metric | base | this change | Δ |
 |---|---:|---:|---:|
-| SUB fast-path hit rate | 18.4% | **42.1%** | **+23.8pp** (925 sites FULL→NARROW_U64) |
-| All other ops | — | — | identical per site (clean isolation) |
+| SUB fast-path hit rate | 18.4% | 42.1% | +23.8pp (925 sites moved from the generic 4-limb path to the narrowed u64 path) |
+| All other ops | — | — | identical per site |
 
-The migration is confined to SUB: 925 sites move from FULL to NARROW_U64,
-while every other op's per-site classification is unchanged.
+The migration is confined to SUB: 925 sites move from the generic 4-limb
+path to the narrowed u64 wrap-form path, while every other op's per-site
+classification is unchanged.
 
 Stacking with the open PRs: this measurement uses a base without the
 range-tag-consuming PR (#534). That PR's ENV/comparison tags produce more
-u64 pairs; with both stacked, the sites covered by this path grow from 925
-to about 1,594 (extrapolated from the #534 measurement data) — a
-directional estimate.
+u64 pairs. Measured here: 925 sites. A separate estimate from the #534
+measurement data suggests stacking #534's tags could raise the covered
+sites to about 1,594; this is directional and not measured on this build.
 
 evmone-bench 27-bench (median of 5, with outliers re-measured at 15 reps):
 median +0.62%. All outliers, including bidirectional swings on benchmarks
 unrelated to SUB, returned to their respective cv noise bands on
 re-measurement; the largest and most stable benchmark, snailtracer, shows
-+0.4% (cv 0.9-1.1%). Conclusion: **end-to-end neutral, no regressions**.
++0.4% (cv 0.9-1.1%). Conclusion: end-to-end neutral, no regressions.
 The benefit takes the form of removing 7 spills + an SBB chain of generated
 code per site, and this suite's hot paths do not isolate that pattern.
 
 ## Known limitations
 
 1. On real mainnet loads, cross-block widening leaves dynamic u64 pairs
-   nearly nonexistent at FULL SUB sites (execution-weighted ≈0). The
-   benefit of this path on real loads is unlocked only after the
-   cross-block precision work (the stack-lift series) lands. EEST's
-   in-block pairs (loop/gas patterns) are the currently harvestable
-   portion.
+   nearly nonexistent at generic-4-limb-path SUB sites (execution-weighted
+   ≈0). The benefit of this path on real loads is unlocked only after the
+   cross-block precision work that lifts the EVM stack into SSA values
+   (gated by `ZEN_ENABLE_EVM_STACK_SSA_LIFT`) lands. EEST's in-block pairs
+   (loop/gas patterns) are the portion this path covers today.
 2. As with the existing narrowing paths, tag trust extends to the analyzer
    import path under `ZEN_ENABLE_EVM_STACK_SSA_LIFT=ON` (OFF by default and
    in CI). Before that path is enabled, the transfer soundness should be
