@@ -18,8 +18,8 @@ into the production dMIR rewrite pass:
 - EVM 64x64->128 multiplication helpers
 - EVM 128/64 division helpers
 
-Phase 1 keeps the production DSL at `CgIR/x86`, so every dMIR-side candidate
-rule eventually has to be translated into the instruction families emitted by
+The production rewrite DSL currently lives at `CgIR/x86`, so every dMIR-side
+candidate rule has to be translated into the instruction families emitted by
 `X86CgLowering`.
 
 ## Current Production Status
@@ -53,11 +53,11 @@ proof beyond the current structural pass.
 | `evm_umul128_lo`, `evm_umul128_hi` | `X86CgLowering::lowerEvmUmul128Expr()` and `lowerEvmUmul128HiExpr()` in `src/compiler/target/x86/x86lowering.cpp` | `COPY -> RAX`, `MUL64r`, `COPY RAX`, optional `COPY RDX` | The low half is always materialized from `RAX`. The high half exists only when an `evm_umul128_hi` user is present; lowering pre-scans the function and allocates the extra copy lazily. |
 | `evm_udiv128_by64`, `evm_urem128_by64` | `X86CgLowering::lowerEvmUdiv128By64Expr()` and `lowerEvmUrem128By64Expr()` in `src/compiler/target/x86/x86lowering.cpp` | `COPY -> RDX`, `COPY -> RAX`, `DIV64r`, `COPY RAX`, `COPY RDX` | Quotient and remainder are split across `RAX` and `RDX`. As with `umul128`, the helper pair lowers to one x86 instruction plus explicit register copies. |
 
-## Translation Rules For The Current Seed Set
+## Translation Rules For The Current Candidate Rule File
 
-The current seed dMIR candidate file lives at
-`src/compiler/mir/dmir_rewrite_rules.json`. For Phase 1 option A, these rules
-translate into x86-facing families as follows:
+The current dMIR candidate rule file lives at
+`src/compiler/mir/dmir_rewrite_rules.json`. These rules translate into x86-facing
+families as follows:
 
 | dMIR candidate | x86-facing shape after lowering | Recommended landing layer |
 | --- | --- | --- |

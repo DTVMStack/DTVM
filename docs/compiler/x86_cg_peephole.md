@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ## Scope Decision
 
-Phase 1 keeps the declarative peephole framework at the existing `CgIR/x86`
+This migration keeps the declarative peephole framework at the existing `CgIR/x86`
 layer.
 
 - Rule matching still runs inside `X86CgPeephole`
@@ -141,7 +141,7 @@ python3 tools/update_compiler_pass_timing_budget.py \
   --num-extra-compilations 4
 ```
 
-Phase 1 uses these outputs to set the peephole budget thresholds:
+These outputs set the peephole budget thresholds:
 
 - max share of function compile time
 - max pass wall time
@@ -159,7 +159,7 @@ Current validation coverage is split into two layers:
 - structural rewrite tests in `src/tests/x86_cg_peephole_tests.cpp`
 - semantics fuzzing for compare/setcc folding in the same test target
 
-The first execution-backed harness is now in place for the
+An execution-backed harness covers the
 `cmp/setcc/test/jne -> cmp/jcc` rewrite. It executes both the original and
 rewritten x86 sequences with inline assembly across edge cases and randomized
 inputs, then compares the observed branch result.

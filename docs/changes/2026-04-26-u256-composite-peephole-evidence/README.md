@@ -6,21 +6,19 @@
 
 ## Overview
 
-Promote `u256-xor-self-zero` from a production-only branch extension to a fully
-validated U256 composite rewrite. The rule rewrites each limb result of
-`u256_xor(x, x)` to zero after checking that the corresponding left/right limbs
-are structurally equal.
+`u256-xor-self-zero` rewrites each limb result of `u256_xor(x, x)` to zero
+after checking that the corresponding left/right limbs are structurally equal.
+This change moves the rule from a branch-only extension into the main rule set,
+covered by unit tests and a 256-bit SMT proof. The rule lets the compiler fold
+a self-XOR to a constant zero without a runtime computation.
 
 ## Evidence
 
 - Metadata checker accepts `synthesized-u256` and `smt_256`.
 - `dmirValidationTests` covers the positive rewrite and negative non-matches.
-- `tools/verify_dmir_u256_soundness.py` replays the 256-bit Z3 proof.
+- `tools/verify_dmir_u256_soundness.py` runs a Z3 proof that the rewrite equals
+  zero for all 256-bit inputs.
 - `tools/test_synth_u256_pattern_coverage.py` verifies synthesis rediscovery.
-- CTest and the peephole GitHub Actions job run the same local evidence gate.
-
-## Paper Impact
-
-The paper may report 71 dMIR rules only if it uses the scalar/U256 split: 70
-scalar-limb rules plus one composite U256 rule. Performance claims still need a
-rerun before the U256 rule is included in the performance headline.
+- The change adds one composite U256 rule to the dMIR rule set, bringing the
+  total to 71: 70 scalar-limb rules plus one composite U256 rule.
+- Both CTest and the peephole GitHub Actions job run the checks listed above.

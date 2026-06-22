@@ -1,13 +1,17 @@
-# Change: dMIR synth S3 extension — auto-synthesize all 70 production dMIR rules
+# Change: dMIR synth extended enumeration — auto-synthesize all 70 production dMIR rules
 
 - **Status**: Implemented
 - **Date**: 2026-04-18
 - **Tier**: Light
 
+The dMIR rule synthesizer now reproduces all 70 production rewrite rules
+(69/69 canonical patterns, 70/70 by name); the change is Python-tooling-only,
+with no C++ touched.
+
 ## Overview
 
 Extend the dMIR rule synthesizer (`tools/synthesize_dmir_rules.py`) so that its
-output covers 100% of the 70 hand-written production rewrite rules in
+output covers the 70 hand-written production rewrite rules in
 `src/compiler/mir/dmir_rewrite_rules.json`. The changes are all in the Python
 tooling layer: richer enumeration, a pattern-config import path reusing the
 seed-miner config, always-on Z3 verification for pattern pairs, and canonical
@@ -16,16 +20,17 @@ compiler pipeline is touched.
 
 ## Motivation
 
-The M1-B feasibility study
+The prior feasibility study
 (`docs/research/directions/peephole-optimization/submissions/experiments/m1b-70rules-synth/report.md`)
-found **0/70** alpha-normalized LHS overlap between the 458 synth survivors
+found 0/70 alpha-normalized LHS overlap between the 458 synth survivors
 and the 70 production rules. Root cause was mechanical, not fundamental:
 signature dedup in `ExprBank` discarded structural-equality LHS (`(and x x)`
 collapses to `x`), `CONSTANTS` lacked small integers like `2`, and
 `BINARY_OPS` excluded `not` / `select` / `shl` / `ushr` / `sshr` as LHS tops.
-Each gap is a small, local pipeline addition — Strategy S3 ("Extended
-enumeration") from the report, extended with a pattern-config import path
-for the structural-equality family that the pure enumerator cannot express.
+Each gap is a small, local pipeline addition — the extended-enumeration
+approach from the report (richer LHS tops, depth-2 RHS, expanded constant
+set), extended with a pattern-config import path for the structural-equality
+family that the pure enumerator cannot express.
 
 ## Impact
 
@@ -37,13 +42,13 @@ validator in `tools/test_check_dmir_rewrite_rules.py`.
 ### Scope changed
 
 **Primary files (3)**:
-- `tools/synthesize_dmir_rules.py` (+370 LOC) — expanded LHS tops, depth-2 RHS
+- `tools/synthesize_dmir_rules.py` — expanded LHS tops, depth-2 RHS
   patterns, Z3 select encoder, `expand_pattern_config` integration, always-Z3
   path for pattern pairs, `--no-z3` scope restricted to enumerator, provenance
   `source` field, commute-variant collapse, dedup-against-existing pass.
-- `tools/mine_dmir_seed_rules.py` (+13 LOC) — added `__all__` and docstring so
+- `tools/mine_dmir_seed_rules.py` — added `__all__` and a docstring so
   `synthesize_dmir_rules.py` can import the miner's pattern config as a library.
-- `tools/measure_prod_overlap.py` (+120 LOC, new file) — measures prod-70
+- `tools/measure_prod_overlap.py` (new file) — measures prod-70
   coverage on synth output using `canonicalize_expr` for alpha-normalized LHS
   comparison; counts by unique canonical pattern (69 unique of 70 — one
   commutative twin pair).
@@ -52,25 +57,26 @@ validator in `tools/test_check_dmir_rewrite_rules.py`.
 - `tools/test_synth_pattern_struct_eq.py` — structural-equality LHS
   (`(and x x)`, `(or x x)`, `(xor x x)`) must survive.
 - `tools/test_synth_pattern_coverage.py` — ≥12 specific prod-rule names must
-  be discovered end-to-end (regression pin from Task 7).
+  be discovered end-to-end; pins the discovered rule names as a regression guard.
 - `tools/test_synth_commute_dedup.py` — no commute-variant duplicates in final
   output.
 
 ## Metrics
 
-### Before (M1-B baseline)
+### Before (prior feasibility-study baseline)
 
 - `0/70` alpha-normalized LHS overlap between synth output and production rules.
-- 458 synth candidates, 318 Algorithm-A survivors, none matched a prod rule.
+- 458 synth candidates, 318 survivors after the drop-0-var and subsumption
+  filter, none matched a prod rule.
 
-### After (Task 10 final run)
+### After (final synthesis run)
 
-- **Matched prod unique patterns: 69/69 = 100%**
+- **Matched prod unique patterns: 69/69**
 - **Matched prod names: 70/70** (one commutative-twin pair — `or x y` vs
   `or y x` — collapses to a single canonical pattern, which both rules match).
 - Total synth rules: 1966 (unique canonical LHS keys: 1964, since two pairs
   share canonical form after alpha-normalization).
-- Source split: **1856 enumerator + 110 pattern_config** = 1966.
+- Source split: 1856 enumerator + 110 pattern_config = 1966.
 - Z3 verification: always on for pattern-config pairs. `--no-z3` only skips
   the enumerator's Z3 pass (pattern-config cross-product emits invalid pairs
   that only Z3 can filter, so this path is non-optional).
@@ -94,7 +100,7 @@ All 7 Python unit tests pass:
 
 ## Risk / Rollback
 
-**Risk: Low.**
+Risk: Low.
 
 - All changes live in `tools/` (Python tooling). No C++ source is touched, no
   production compiler pipeline is changed, no header APIs shift.
@@ -116,8 +122,9 @@ All 7 Python unit tests pass:
    the hand-coded `src/compiler/mir/dmir_rewrite.h` C++ switch. That is a
    separate code-generation effort and was never part of this tooling change.
 2. **Not currently needed**: widening `DEFAULT_SEARCH_CONFIG.base_terms`
-   beyond the present set. 100% prod-70 coverage is reached with the current
-   terms; adding more would inflate the search space without adding matches.
+   beyond the present set. Full prod-70 coverage (69/69 canonical patterns) is
+   reached with the current terms; adding more would inflate the search space
+   without adding matches.
 
 ## References
 
@@ -139,15 +146,15 @@ All 7 Python unit tests pass:
 - [x] Build and tests pass (7/7 Python tests pass; `tools/format.sh check`
       clean; no C++ touched so no cmake build required)
 
-## Current Branch Note
+## Coverage across synthesis modes
 
-This change originally covered the 70 scalar-limb dMIR production rules. The
-later `u256-xor-self-zero` production rule extends the branch to 71 dMIR rules
-and is validated through a separate U256 composite lane:
+Synthesis covers 71 dMIR production rules across two modes: the 70 scalar-limb
+rules plus `u256-xor-self-zero`, the latter validated through a separate u256
+composite lane.
 
 - scalar synthesis coverage: 70/70 production names
 - scalar canonical-pattern coverage: 69/69 because one commutative-twin pair
   shares a canonical representative
-- U256 synthesis coverage: 1/1 production names after the U256 lane is added
-- total dMIR production coverage: 71/71 names across two synthesis modes after
-  both coverage tests pass
+- u256 synthesis coverage: 1/1 production names
+- total dMIR production coverage: 71/71 names across the two synthesis modes,
+  with both coverage tests passing
