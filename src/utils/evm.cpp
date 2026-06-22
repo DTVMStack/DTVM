@@ -295,6 +295,14 @@ bool saveState(const evmc::MockedHost &Host, const std::string &FilePath) {
   File << "    \"tx_origin\": ";
   writeJsonString(File, toHex(Host.tx_context.tx_origin.bytes,
                               sizeof(Host.tx_context.tx_origin.bytes)));
+  File << ",\n";
+  File << "    \"chain_id\": ";
+  writeJsonString(File, toHex(Host.tx_context.chain_id.bytes,
+                              sizeof(Host.tx_context.chain_id.bytes)));
+  File << ",\n";
+  File << "    \"blob_base_fee\": ";
+  writeJsonString(File, toHex(Host.tx_context.blob_base_fee.bytes,
+                              sizeof(Host.tx_context.blob_base_fee.bytes)));
   File << "\n";
   File << "  }\n";
 
@@ -448,6 +456,17 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
     if (TxContext.HasMember("tx_origin") && TxContext["tx_origin"].IsString()) {
       Host.tx_context.tx_origin =
           zen::utils::parseAddress(TxContext["tx_origin"].GetString());
+    }
+
+    if (TxContext.HasMember("chain_id") && TxContext["chain_id"].IsString()) {
+      Host.tx_context.chain_id =
+          zen::utils::parseUint256(TxContext["chain_id"].GetString());
+    }
+
+    if (TxContext.HasMember("blob_base_fee") &&
+        TxContext["blob_base_fee"].IsString()) {
+      Host.tx_context.blob_base_fee =
+          zen::utils::parseUint256(TxContext["blob_base_fee"].GetString());
     }
   }
 

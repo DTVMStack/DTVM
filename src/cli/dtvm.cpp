@@ -193,6 +193,8 @@ int main(int argc, char *argv[]) {
   std::string SenderAddress = "1000000000000000000000000000000000000000";
 #ifdef ZEN_ENABLE_EVM
   evmc_revision EvmRevision = zen::evm::DEFAULT_REVISION;
+  std::string ChainId;
+  std::string BlobBaseFee;
 #endif
 
   const std::unordered_map<std::string, InputFormat> FormatMap = {
@@ -299,6 +301,10 @@ int main(int argc, char *argv[]) {
         ->add_option("--evm-revision", EvmRevision,
                      "EVM revision (e.g., cancun, osaka)")
         ->transform(CLI::CheckedTransformer(EvmRevisionMap, CLI::ignore_case));
+    CLIParser->add_option("--chain-id", ChainId,
+                          "Chain ID as hex string (e.g., 0x07)");
+    CLIParser->add_option("--blob-base-fee", BlobBaseFee,
+                          "Blob base fee as hex string (e.g., 0x01)");
 #endif // ZEN_ENABLE_EVM
     CLI11_PARSE(*CLIParser, argc, argv);
   } catch (const std::exception &E) {
@@ -327,6 +333,16 @@ int main(int argc, char *argv[]) {
       ZEN_LOG_ERROR("failed to load state from file: %s",
                     LoadStateFile.c_str());
       return exitMain(EXIT_FAILURE);
+    }
+
+    // Override chain_id and blob_base_fee from CLI if specified
+    // (CLI overrides take precedence over state.json values)
+    if (!ChainId.empty()) {
+      MockedEVMHost->tx_context.chain_id = zen::utils::parseUint256(ChainId);
+    }
+    if (!BlobBaseFee.empty()) {
+      MockedEVMHost->tx_context.blob_base_fee =
+          zen::utils::parseUint256(BlobBaseFee);
     }
 
     // std::unique_ptr<evmc::Host> Host = std::move(MockedEVMHost);

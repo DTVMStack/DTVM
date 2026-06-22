@@ -757,3 +757,106 @@ TEST(EVMRegressionTest, Issue541_AddU64ConstLastAdcCarryChainPreserved) {
             "0000000000000000000000000000000000000000000000000000000000000000");
 }
 #endif
+
+// Test that chain_id and blob_base_fee can be saved and loaded via state
+TEST(EVMStateSaveLoad, ChainIdAndBlobBaseFee) {
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+
+  // Set chain_id and blob_base_fee to non-zero values
+  const std::string ChainIdHex =
+      "0000000000000000000000000000000000000000000000000000000000000007";
+  const std::string BlobBaseFeeHex =
+      "0000000000000000000000000000000000000000000000000000000000000001";
+
+  Host->tx_context.chain_id = zen::utils::parseUint256(ChainIdHex);
+  Host->tx_context.blob_base_fee = zen::utils::parseUint256(BlobBaseFeeHex);
+
+  // Set other tx_context fields to make the state complete
+  Host->tx_context.tx_gas_price = zen::utils::parseUint256(
+      "0000000000000000000000000000000000000000000000000000000000000000");
+  Host->tx_context.block_number = 1;
+  Host->tx_context.block_timestamp = 1;
+  Host->tx_context.block_gas_limit = 10000000;
+  Host->tx_context.tx_origin = evmc::address{};
+  Host->tx_context.block_coinbase = evmc::address{};
+  Host->tx_context.block_prev_randao = zen::utils::parseUint256(
+      "0000000000000000000000000000000000000000000000000000000000000000");
+  Host->tx_context.block_base_fee = zen::utils::parseUint256(
+      "0000000000000000000000000000000000000000000000000000000000000000");
+
+  // Add a simple account
+  evmc::address Addr = evmc::literals::operator""_address(
+      "a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
+  evmc::MockedAccount Account;
+  Account.set_balance(100);
+  Account.code = {0x60, 0x00, 0x50};
+  Host->accounts[Addr] = Account;
+
+  const std::string StateFilePath = "/tmp/dtvm_test_chainid_state.json";
+
+  // Save state
+  ASSERT_TRUE(zen::utils::saveState(*Host, StateFilePath));
+
+  // Load state into a new host
+  auto NewHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  ASSERT_TRUE(zen::utils::loadState(*NewHost, StateFilePath));
+
+  // Verify chain_id was loaded correctly
+  auto ExpectedChainId = zen::utils::parseUint256(ChainIdHex);
+  EXPECT_EQ(std::memcmp(NewHost->tx_context.chain_id.bytes,
+                        ExpectedChainId.bytes, 32),
+            0)
+      << "chain_id not loaded correctly from state file";
+
+  // Verify blob_base_fee was loaded correctly
+  auto ExpectedBlobBaseFee = zen::utils::parseUint256(BlobBaseFeeHex);
+  EXPECT_EQ(std::memcmp(NewHost->tx_context.blob_base_fee.bytes,
+                        ExpectedBlobBaseFee.bytes, 32),
+            0)
+      << "blob_base_fee not loaded correctly from state file";
+
+  // Cleanup
+  std::filesystem::remove(StateFilePath);
+}
+
+// Test that loadState handles missing chain_id and blob_base_fee gracefully
+// (backward compatibility: old state.json without these fields should still
+// work)
+TEST(EVMStateSaveLoad, MissingChainIdAndBlobBaseFee) {
+  const std::string StateFilePath = "/tmp/dtvm_test_missing_chainid_state.json";
+
+  // Create a state.json without chain_id and blob_base_fee
+  {
+    std::ofstream File(StateFilePath);
+    File << "{\n";
+    File << "  \"accounts\": {},\n";
+    File << "  \"tx_context\": {\n";
+    File << "    \"gas_price\": "
+         << "\"0000000000000000000000000000000000000000000000000000000000000000"
+            "\",\n";
+    File << "    \"block_number\": 1,\n";
+    File << "    \"block_timestamp\": 1,\n";
+    File << "    \"block_gas_limit\": 10000000,\n";
+    File << "    \"tx_origin\": "
+         << "\"0000000000000000000000000000000000000000000000000000000000000000"
+            "\"\n";
+    File << "  }\n";
+    File << "}\n";
+  }
+
+  // Load state into a host
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  ASSERT_TRUE(zen::utils::loadState(*Host, StateFilePath));
+
+  // Verify chain_id and blob_base_fee remain default (zero)
+  evmc::uint256be ZeroValue{};
+  EXPECT_EQ(std::memcmp(Host->tx_context.chain_id.bytes, ZeroValue.bytes, 32),
+            0)
+      << "Missing chain_id should default to zero";
+  EXPECT_EQ(
+      std::memcmp(Host->tx_context.blob_base_fee.bytes, ZeroValue.bytes, 32), 0)
+      << "Missing blob_base_fee should default to zero";
+
+  // Cleanup
+  std::filesystem::remove(StateFilePath);
+}
