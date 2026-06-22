@@ -11,8 +11,8 @@ operands to be u64. Several lowering paths do not consume that proof and
 still emit full-width 4-limb sequences. This change makes four lowering
 categories consume the existing ValueRange tags. On the EEST Cancun suite,
 the site-weighted fast-path hit rate rises from 78.72% to **80.02%** (+364
-sites move to narrow paths, zero reverse regressions), with **ISZERO rising
-from 23.2% to 85.9%**. All correctness suites pass. The adversarial
+sites move to narrow paths, zero reverse regressions), with ISZERO rising
+from 23.2% to 85.9%. All correctness suites pass. The adversarial
 differential coverage for these lowering paths now ships separately with the
 consolidated EVM differential suite change
 (`docs/changes/2026-06-11-evm-differential-suite/`), which carries the 21
@@ -24,22 +24,22 @@ A separate real-load analysis (shipped by the in-flight mainnet-replay
 analysis-suite work, not part of this diff) quantified two gap categories:
 the analysis-side gap (static proof fails;
 the majority) and the lowering-side gap (the proof exists but the builder
-does not consume it). This change closes the immediately harvestable part
-of the lowering-side gap:
+does not consume it). This change closes the part of the lowering-side gap
+where the proof already exists and the builder can consume it directly:
 
 - **ISZERO**: the deferred zero-test materialization unconditionally
   OR-folds all 4 limbs, and its 0/1 result loses the U64 tag — on the
-  real-load corpus, 58.5% of ISZERO FULL executed operands are already
+  real-load corpus, 58.5% of ISZERO full-width executed operands are already
   statically proven u64.
 - **JUMPI**: the condition lowering still OR-folds 4 limbs for conditions
   already tagged U64. When an ISZERO result is the condition, it is first
   materialized into 0/1 and then the whole chain is recomputed (the
   `LT;ISZERO;JUMPI` loop-exit pattern pays three layers of redundancy).
 - **OR/XOR**: only a const-u64 fast path exists, with no range narrowing —
-  on the real-load corpus, 51.8% of OR FULL executions have at least one
+  on the real-load corpus, 51.8% of OR full-width executions have at least one
   side proven u64.
 - **SLT/SGT**: not even a const fast path exists — 22.4% of real-load SLT
-  FULL executions take the `slt(x, small constant)` shape.
+  full-width executions take the `slt(x, small constant)` shape.
 
 A fifth gap identified by the same analysis — environment opcode producers
 (PC/GAS/CALLDATASIZE/CODESIZE/MSIZE/RETURNDATASIZE) returning the default
@@ -87,7 +87,7 @@ All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
   value. The new path compares limb0 with unsigned predicates
   (`ICMP_ULT/UGT`); the negative case is short-circuited by the sign bit
   of limb3. The truth table of the three-level tier was verified by
-  boundary enumeration by two independent reviewers (Opus, Codex), covering
+  boundary enumeration over
   2^63, 2^64, 2^128, 2^192, 2^255, -1, equal values, c=0, and c≥2^63.
 - analyzer/builder symmetry: the builder result ranges for ISZERO,
   comparison results, OR/XOR, and environment opcodes match or are wider
@@ -115,16 +115,14 @@ All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
   gitignored `tests/evm_solidity/*/*.json` generated artifacts into the
   worktree, which is environment data, not a regression.
 - `tools/format.sh check` passes; the build produces no new warnings.
-- **Two independent reviews**: Opus (all six attack surfaces CLEAN) and
-  Codex (verified-clean except one pre-existing issue; see Known
-  limitations).
 
 ## Measurements
 
 ### Fast-path hit rate (EEST Cancun, site-weighted, paired measurement)
 
-Measurement method: on a measurement branch carrying the Stream B tap (the
-tap is measurement-only and does not ship with this PR), one capture is
+Measurement method: on a measurement branch carrying a per-opcode
+fast-path-hit-rate counter (measurement-only, does not ship with this PR),
+one capture is
 taken for base and one for base plus this change; 28,109 shared sites are
 paired point by point. The measurement predates the upstream merge of #532
 and #524; the treatment side included the environment-opcode tag that has
@@ -132,15 +130,15 @@ since landed as #532 (see the ADD row for its attribution).
 
 | op | base | this change | Δ | migrated sites |
 |---|---:|---:|---:|---|
-| ISZERO | 23.2% | **85.9%** | **+62.7pp** | 316 × FULL→NARROW_U64 |
-| SGT | 80.6% | 95.0% | +14.4pp | 20 × FULL→CONST_U64 |
-| SLT | 61.5% | 66.7% | +5.2pp | 9 × FULL→CONST_U64 |
-| ADD | 75.1% | 75.6% | +0.5pp | 17 × FULL→NARROW_U128 (unlocked by the environment-opcode tags, since landed upstream as #532) |
-| OR | 98.7% | 98.9% | +0.2pp | 2 × FULL→NARROW_U64 |
-| **Overall** | **78.72%** | **80.02%** | **+1.29pp** | +364 sites, zero reverse migrations |
+| ISZERO | 23.2% | **85.9%** | +62.7pp | 316 sites: full-width → 64-bit narrow path |
+| SGT | 80.6% | 95.0% | +14.4pp | 20 sites: full-width → u64-constant fast path |
+| SLT | 61.5% | 66.7% | +5.2pp | 9 sites: full-width → u64-constant fast path |
+| ADD | 75.1% | 75.6% | +0.5pp | 17 sites: full-width → 128-bit narrow path (unlocked by the environment-opcode tags, since landed upstream as #532) |
+| OR | 98.7% | 98.9% | +0.2pp | 2 sites: full-width → 64-bit narrow path |
+| **Overall** | 78.72% | **80.02%** | +1.29pp | +364 sites, zero reverse migrations |
 
 ISZERO contributes the bulk of the migrated sites, and every migration
-moves toward a narrower path. JUMPI fusion is outside the tap's coverage —
+moves toward a narrower path. JUMPI fusion is outside the counter's coverage —
 JUMPI is not an arithmetic op. Its benefit shows up in generated-code shape
 (the materialize-then-refold round trip and 3 redundant ORs are removed)
 and is not counted in the table above.
@@ -148,11 +146,12 @@ and is not counted in the table above.
 ### Real-load corpus (mainnet replay, 247 transactions)
 
 Under the production configuration with stack-lift disabled by default, the
-deep-entry-risk gate on current upstream/main (`evm_module.cpp:112`,
+gate that rejects contracts with unresolved non-lifted deep stack entries
+on current upstream/main (`evm_module.cpp:112`,
 `hasUnresolvedNonLiftedDeepEntryRisk`) sends 20 of the corpus's 27
 contracts back to the interpreter. The real-load JIT coverage problem
-therefore precedes the lowering quality problem; the stack-lift series of
-work is addressing it. Paired measurement on the slice of 7 contracts that
+therefore precedes the lowering quality problem; the in-progress SSA
+stack-lifting work is addressing it. Paired measurement on the slice of 7 contracts that
 still compile: the overall execution-weighted hit rate rises from 26.7% to
 45.3%, with ISZERO from 0% to 100% (13 sites) and SLT from 0% to 100%.
 This slice carries too little execution volume; it serves only as a
@@ -162,7 +161,7 @@ directional corroboration, not as the headline.
 
 Across the full 27-bench set
 (`--benchmark_filter='^external/total/(main|micro)/'`, median of 5 reps),
-the median delta is **-0.23%**, within the ±2pp multipass run variance on
+the median delta is **-0.23%**, within the ~2% multipass run-to-run variance on
 this machine. The first-round outliers (`narrow_compare_u128/loop` +11.8%,
 `swap_math/received` -12.7%) were re-measured with 15 reps: both are
 sub-microsecond-scale noise, landing at -3.0% and -0.2% respectively after
@@ -179,14 +178,14 @@ coverage (see the next section).
 
 ## Known limitations
 
-1. **Pre-existing interaction with the SSA-lift path** (found in the Codex
-   review; not introduced by this change): with
+1. **Pre-existing interaction with the SSA stack-lifting path** (not
+   introduced by this change): with
    `ZEN_ENABLE_EVM_STACK_SSA_LIFT=ON` (default OFF, CI OFF),
    `getOperandIdentityKey()` in `evm_lifted_stack_lifter.h` does not
    recognize deferred operands, so a live-out deferred zero-test triggers
    an assertion or an incorrect merge. This exposure existed before this
    change — neither the deferred mechanism nor its cross-block lifetime
-   changed. The fix belongs to the stack-lift follow-up series, which
+   changed. The fix belongs to the SSA stack-lifting follow-up work, which
    should add identity-key handling for deferred operands.
 2. The execution-weighted view of the real-load hit rate is limited by JIT
    coverage (see above). After the stack-lift work lands, the full
