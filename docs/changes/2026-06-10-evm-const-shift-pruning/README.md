@@ -12,17 +12,16 @@ already proven zero by the range analysis. This change resolves that dead code
 at compile time. A constant shift amount ≥256 folds SHL/SHR directly to a
 constant zero. A constant amount <256 omits the entire `IsLargeShift` chain
 and the per-limb Selects. When the value operand is proven U64/U128, the dead
-source terms are pruned as well. **This is pure generated-code reduction; no
-new range claims are introduced.** Two independent reviewers found the full
-attack surface clean, all correctness suites pass, and the end-to-end
-benchmark is neutral (no regression).
+source terms are pruned as well. This is pure generated-code reduction; no
+new range claims are introduced. Correctness suites pass and the end-to-end
+benchmark shows no regression.
 
 ## Motivation
 
-On real mainnet load, 92.5% of SHL FULL executions and 99.6% of SHR executions
-use a compile-time-constant shift amount (Solidity storage-slot/address
-packing patterns). The existing const-amount fast path avoids the per-limb
-select cascade of dynamic shifts, but still retains:
+On real mainnet load, 92.5% of full-width SHL executions and 99.6% of SHR
+executions use a compile-time-constant shift amount (Solidity
+storage-slot/address packing patterns). The existing const-amount fast path
+avoids the per-limb select cascade of dynamic shifts, but still retains:
 
 1. the `isU256GreaterOrEqual(Shift, 256)` comparison chain — statically
    decidable for a full constant;
@@ -43,10 +42,10 @@ All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
 1. **Static large-shift resolution** (`handleShift`): when the shift amount is
    constant, obtain the full 256-bit value via `u256ValueToIntx`. For ≥256,
    SHL/SHR_U return a constant-zero Operand. The result is always 0 under EVM
-   semantics, consistent with the existing Phase-0 both-constant folding; the
-   constant constructor automatically derives a U64 tag, which is more precise
-   than the previous dynamic zero. SAR keeps the original flow, because its
-   fill value depends on the sign bit of the shifted value. For <256,
+   semantics, consistent with the existing both-operands-constant folding path;
+   the constant constructor automatically derives a U64 tag, which is more
+   precise than the previous dynamic zero. SAR keeps the original flow, because
+   its fill value depends on the sign bit of the shifted value. For <256,
    `IsLargeShift` is no longer constructed and nullptr is passed to the
    helpers.
 2. **Helpers accept a nullptr guard**: the const-amount path of the three
@@ -66,10 +65,10 @@ All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
   static decision uses the full constant. A constant ≥256 folds or keeps the
   guard; nullptr is passed only when the full constant is <256.
 - Term-liveness algebra (SHL reads `Value[SrcIdx]`/`Value[SrcIdx-1]`, SHR_U
-  reads `Value[SrcIdx]`/`Value[SrcIdx+1]`): one review exhaustively
-  cross-checked all (CompShift × ShiftMod × LiveLimbs ∈ {1,2,4}) × shift
-  amounts 0-255 against a reference implementation; a second review
-  hand-verified the boundary cases such as shifted-dead/carry-live (e.g. a
+  reads `Value[SrcIdx]`/`Value[SrcIdx+1]`): term-liveness was checked across
+  the full parameter space (CompShift × ShiftMod × LiveLimbs ∈ {1,2,4} × shift
+  amounts 0-255) against a reference implementation; the boundary cases such as
+  shifted-dead/carry-live were hand-verified (e.g. a
   U64 value << 136, where the top result limb keeps only the carry term
   sourced from the live low limb).
 - The early return occurs after both operands are popped. EVM stack operands
@@ -88,18 +87,13 @@ All changes are in `src/compiler/evm_frontend/evm_mir_compiler.{h,cpp}`:
   (`docs/changes/2026-06-11-evm-differential-suite/`). That change carries 13
   fixtures plus the `EVMConstShiftDifferentialTest` suite covering cross-limb
   carry (<<96), source pruning (a u64 value <<200 / >>8), the carry-only
-  emission branch (a u64 value <<136, where the top result limb keeps only the
-  carry term sourced from the live low limb), ≥256 folding, the 2^64 trap, SAR
+  emission branch (u64 value <<136), ≥256 folding, the 2^64 trap, SAR
   positive/negative sign-fill, and a dynamic-shift-amount regression control;
   interpreter and multipass outputs match byte-for-byte, and multipass is
   confirmed to actually JIT-compile the fixtures.
 - multipass evmone-unittests 223/223; multipass evmone-statetest
   `-k fork_Cancun` 2723/2723; no regression in the golden suite;
   `tools/format.sh check` passes; no new warnings.
-- Two independent adversarial reviews: one verified all seven attack
-  surfaces clean with no defects; the other ran the exhaustive cross-check
-  and raised a single nit, namely the more precise constant-zero tag
-  described above.
 
 ## Measurements
 
