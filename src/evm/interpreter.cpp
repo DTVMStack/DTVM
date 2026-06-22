@@ -674,10 +674,9 @@ void BaseInterpreter::interpret() {
         DISPATCH_NEXT;
       }
       TARGET_PUSH0 : {
-        if (INTX_UNLIKELY(Revision < EVMC_SHANGHAI)) {
-          Context.setStatus(EVMC_UNDEFINED_INSTRUCTION);
-          goto cgoto_error;
-        }
+        // Revision gating is already enforced by cgoto_table (pre-Shanghai
+        // PUSH0 maps to TARGET_UNDEFINED), so no extra runtime Revision check
+        // is needed here, matching TARGET_CLZ.
         if (INTX_UNLIKELY(sp >= MAXSTACK)) {
           Context.setStatus(EVMC_STACK_OVERFLOW);
           goto cgoto_error;
