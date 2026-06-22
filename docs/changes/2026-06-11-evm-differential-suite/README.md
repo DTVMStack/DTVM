@@ -6,9 +6,11 @@
 
 ## Overview
 
-Add a dedicated gtest target, `evmDifferentialTests`
-(`src/tests/evm_differential_tests.cpp`), that consolidates the
-interpreter-vs-multipass differential tests into a single self-contained file.
+Consolidate the interpreter-vs-multipass differential tests into one test-only
+gtest target, `evmDifferentialTests`
+(`src/tests/evm_differential_tests.cpp`); the suite passes 44/44 on
+upstream/main with no runtime or codegen change. The target collects the tests
+into a single self-contained file.
 
 The suite has two parts:
 
@@ -31,20 +33,19 @@ run that fell back to the interpreter cannot pass vacuously.
 
 ## Motivation
 
-Differential JIT tests do not belong in the interpreter test file. Three
-in-flight optimization PRs each appended a near-identical copy-pasted
+The differential JIT tests previously lived in the interpreter test file. Three
+in-flight optimization PRs each appended a near-identical copy of the
 differential suite plus its fixtures to `src/tests/evm_interp_tests.cpp`, and a
 fourth added the programmatic matrix harness to the same file. Every one of
 these would conflict with the others on merge.
 
-A single dedicated home removes both problems: the copy-pasted suites collapse
+A single target removes both problems: the copied suites collapse
 into one parameterized fixture with one executor, and the shared file no longer
 forces a merge conflict between the optimization PRs.
 
-The differential property — interpreter output equals multipass output, and
-multipass actually JIT-compiles — holds on plain `main`, independent of the
-optimization PRs the fixtures were written alongside. The suite therefore
-guards an invariant that is true before and after those optimizations merge.
+The invariant holds on plain `main`, independent of the optimization PRs the
+fixtures were written alongside, so the suite guards it before and after those
+optimizations merge.
 
 ## Impact
 
@@ -59,9 +60,9 @@ guards an invariant that is true before and after those optimizations merge.
 
 - `evmDifferentialTests`: **44 / 44 pass** (40 fixture + 4 matrix) on
   upstream/main with no optimization PR applied.
-- `ctest` (`SPEC_TESTS_ARGS="-m multipass --format evm --enable-evm-gas"`): all
-  tests pass. `evmInterpTests` now runs the 40 new fixtures through its golden
-  sample test as well.
+- `ctest` (`SPEC_TESTS_ARGS="-m multipass --format evm --enable-evm-gas"`): the
+  suite passes with no new failures. `evmInterpTests` now runs the 40 new
+  fixtures through its golden sample test as well.
 - `tools/format.sh check`: pass.
 - No new compiler warnings for the new file.
 
