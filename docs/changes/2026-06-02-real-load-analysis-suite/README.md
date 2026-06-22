@@ -89,11 +89,11 @@ dependency to DTVM.
 
 The analysis scripts live under `tests/corpus/analysis/`:
 
-- `range_gap_join.py` joins Stream A and Stream B and reports
-  `dynamic_u64_rate`, `analyzer_proved_u64_rate`, and `static_gap` by source,
-  opcode, and app class.
-- `runtime_histogram.py` converts raw Stream A rows into an analysis-ready
-  per-site histogram.
+- `range_gap_join.py` joins the interpreter limb-width stream and the JIT range
+  stream and reports `dynamic_u64_rate`, `analyzer_proved_u64_rate`, and
+  `static_gap` by source, opcode, and app class.
+- `runtime_histogram.py` converts raw interpreter limb-width rows into an
+  analysis-ready per-site histogram.
 - `fastpath_stats.py` reports per-opcode lowering path hit rates.
 - `limb_occupancy_stats.py` reports the 4-bit limb occupancy distribution.
 
@@ -112,7 +112,7 @@ It supports three workflows:
 Smoke mode samples fixtures by app class and prefers `contract-call` fixtures.
 The default sample count is 4 per app class. This avoids selecting only
 `data-to-eoa` fixtures or contracts rejected by the JIT suitability checks,
-which would make Stream B empty.
+which would make the JIT range stream empty.
 
 The runner writes:
 
@@ -316,11 +316,11 @@ The persisted profile is stored outside the repository:
 |---|---:|---|
 | `stream_a_limb.csv` | 61,498 | Raw interpreter operand rows with `limb_width` and `limb_mask` |
 | `stream_b_range.csv` | 26,984 | Raw JIT range, source, lowering-path, and constant rows |
-| `site_histogram.csv` | 4,931 | Per-site Stream A histogram |
+| `site_histogram.csv` | 4,931 | Per-site interpreter limb-width histogram |
 | `app_class_map.json` | 24 | FNV-1a codehash to app-class bridge |
 
 `site_histogram.csv` is the analysis-ready form. It was checked against the raw
-Stream A profile and preserves the total row count and u64 count.
+interpreter limb-width profile and preserves the total row count and u64 count.
 
 Analyze-only mode reproduced the persisted profile with:
 
@@ -353,8 +353,8 @@ formatting violations in paths outside this change, including `src/singlepass`,
 
 - The stream `codehash` is FNV-1a over bytecode bytes. It is not the manifest's
   keccak codehash.
-- Source-kind classification comes from Stream B. Sites that are not compiled
-  by the JIT do not have source-kind rows.
+- Source-kind classification comes from the JIT range stream. Sites that are
+  not compiled by the JIT do not have source-kind rows.
 - Replay fixtures use the standard EEST test account as `transaction.sender`.
   The original sender remains in `pre`, but top-level `tx.origin` and
   `msg.sender` differ from mainnet. This is acceptable for operand-width
