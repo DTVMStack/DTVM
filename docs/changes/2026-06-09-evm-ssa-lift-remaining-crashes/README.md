@@ -1,4 +1,4 @@
-# Change: Fix the remaining EVM SSA stack-lift crashes
+# Change: Fix the remaining EVM stack-lift crashes
 
 - **Status**: Implemented
 - **Date**: 2026-06-09
@@ -7,10 +7,10 @@
 ## Overview
 
 Follow-up to the phi-materialization fixes (PR #530). Fixes the remaining
-crashes in the EVM multipass JIT's SSA stack-lift path
-(`ZEN_ENABLE_EVM_STACK_SSA_LIFT`, default **OFF**). With the flag ON, the JIT
+crashes in the EVM multipass JIT lift path
+(`ZEN_ENABLE_EVM_STACK_SSA_LIFT`, default OFF). With the flag ON, the JIT
 aborted (SIGABRT) on several contracts in the EEST state-test suite and the
-mainnet-replay corpus. After this change, SSA-lift compiles both corpora
+mainnet-replay corpus. After this change, the lift path compiles both corpora
 crash-free and produces results identical to the default build. All edits are
 reachable only on the lift path; the default (flag-off) build is unaffected.
 
@@ -36,7 +36,7 @@ which was previously checked only on the target side.
 When a `JUMP`/`JUMPI` terminator falls through into a `JUMPDEST`, the
 terminator handler begins the fallthrough block and the main loop's `JUMPDEST`
 handler then begins the same block again. With the flag OFF this is benign;
-with SSA-lift ON the second begin (a) records a self-edge
+with the flag ON the second begin (a) records a self-edge
 `PredBlockPC == BlockPC` absent from the predecessor order (→ `getPhiIncomingSlot`
 abort), and (b) re-restores the lifted logical entry state, doubling the logical
 stack (→ entry-depth mismatch abort).
@@ -63,14 +63,14 @@ non-multi-component operands fall through to the opaque-key path.
 
 ## Validation
 
-- **Lift path (flag ON)**:
-  - multipass `evmone-unittests`: **223/223**
-  - multipass `evmone-statetest -k fork_Cancun` (EEST): **2723/2723, 0 failed,
-    no SIGABRT** — matches the default-build baseline exactly
-  - 227-fixture mainnet-replay corpus: no SIGABRT; failing-test set identical to
-    the default build (0 regressions)
-- **Default path (flag OFF, rebuilt from this change)**: multipass
-  `evmone-unittests` **223/223**, `evmone-statetest -k fork_Cancun` **2723/2723**.
+- Lift path (flag ON):
+  - multipass `evmone-unittests`: 223/223
+  - multipass `evmone-statetest -k fork_Cancun` (EEST): **2723/2723**, 0 failed,
+    no SIGABRT — matches the default-build baseline exactly
+  - 227-fixture mainnet-replay corpus: no SIGABRT; the set of pre-existing
+    failures is unchanged from the default build (0 new regressions)
+- Default path (flag OFF, rebuilt from this change): multipass
+  `evmone-unittests` 223/223, `evmone-statetest -k fork_Cancun` 2723/2723.
 - `tools/format.sh check`: passes.
 
 ## Known residual (not a crash)
@@ -78,8 +78,7 @@ non-multi-component operands fall through to the opaque-key path.
 The EEST run still emits five benign `PredBlockPC == BlockPC` self-edge cases on
 single-predecessor blocks (no merge phis, no abort, all tests pass). They point
 to a residual double-begin path not covered by the `CurrentBlockLifted`-gated
-guard; addressing them would require a broader audit of the terminator/JUMPDEST
-begin handshake rather than a surgical change.
+guard.
 
 ## Checklist
 
