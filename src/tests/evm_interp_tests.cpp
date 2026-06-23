@@ -825,26 +825,45 @@ TEST(EVMStateSaveLoad, ChainIdAndBlobBaseFee) {
 TEST(EVMStateSaveLoad, MissingChainIdAndBlobBaseFee) {
   const std::string StateFilePath = "/tmp/dtvm_test_missing_chainid_state.json";
 
-  // Create a state.json without chain_id and blob_base_fee
+  // Use saveState to produce a valid complete JSON, then remove chain_id
+  // and blob_base_fee lines to simulate an old-format state file.
   {
-    std::ofstream File(StateFilePath);
-    File << "{\n";
-    File << "  \"accounts\": {},\n";
-    File << "  \"tx_context\": {\n";
-    File << "    \"gas_price\": "
-         << "\"0000000000000000000000000000000000000000000000000000000000000000"
-            "\",\n";
-    File << "    \"block_number\": 1,\n";
-    File << "    \"block_timestamp\": 1,\n";
-    File << "    \"block_gas_limit\": 10000000,\n";
-    File << "    \"tx_origin\": "
-         << "\"0000000000000000000000000000000000000000000000000000000000000000"
-            "\"\n";
-    File << "  }\n";
-    File << "}\n";
+    auto SaveHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+    SaveHost->tx_context.tx_gas_price = evmc::uint256be{};
+    SaveHost->tx_context.block_number = 1;
+    SaveHost->tx_context.block_timestamp = 1;
+    SaveHost->tx_context.block_gas_limit = 10000000;
+    SaveHost->tx_context.tx_origin = evmc::address{};
+    SaveHost->tx_context.block_coinbase = evmc::address{};
+    SaveHost->tx_context.block_prev_randao = evmc::uint256be{};
+    SaveHost->tx_context.block_base_fee = evmc::uint256be{};
+    ASSERT_TRUE(zen::utils::saveState(*SaveHost, StateFilePath));
+
+    // Read file, remove chain_id and blob_base_fee lines, rewrite
+    std::ifstream InFile(StateFilePath);
+    std::string Line;
+    std::string Result;
+    while (std::getline(InFile, Line)) {
+      if (Line.find("\"chain_id\"") != std::string::npos ||
+          Line.find("\"blob_base_fee\"") != std::string::npos) {
+        continue;
+      }
+      // Remove trailing comma from tx_origin line (now last field)
+      if (Line.find("\"tx_origin\"") != std::string::npos) {
+        auto CommaPos = Line.rfind(",");
+        if (CommaPos != std::string::npos) {
+          Line.erase(CommaPos, 1);
+        }
+      }
+      Result += Line + "\n";
+    }
+    InFile.close();
+
+    std::ofstream OutFile(StateFilePath);
+    OutFile << Result;
   }
 
-  // Load state into a host
+  // Load state into a new host
   auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
   ASSERT_TRUE(zen::utils::loadState(*Host, StateFilePath));
 
