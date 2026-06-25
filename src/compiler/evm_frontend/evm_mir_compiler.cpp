@@ -2444,6 +2444,18 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleAddMod(Operand AugendOp,
   U256Inst Addend = extractU256Operand(AddendOp);
   U256Inst Modulus = extractU256Operand(ModulusOp);
 
+  // Materialize all operand limbs before the fast/slow BrIf below. The raw
+  // tree IR for these limbs is referenced from both FastBB and SlowBB (two
+  // non-dominating successors); without materialization the CgIR lowering can
+  // place a shared computation into only one branch, leaving the sibling path
+  // with undefined virtual-register uses -- the same cross-block hazard
+  // handleDivModGeneral guards against by materializing its dividend limbs.
+  for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
+    Augend[I] = protectUnsafeValue(Augend[I], I64Type);
+    Addend[I] = protectUnsafeValue(Addend[I], I64Type);
+    Modulus[I] = protectUnsafeValue(Modulus[I], I64Type);
+  }
+
   // Fast-path eligibility: mod[3] != 0 && x[3] <= mod[3] && y[3] <= mod[3].
   // Invariant established: x < 2*mod and y < 2*mod, so a single conditional
   // subtraction is sufficient to normalize each operand into [0, mod).
