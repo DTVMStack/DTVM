@@ -879,3 +879,115 @@ TEST(EVMStateSaveLoad, MissingChainIdAndBlobBaseFee) {
   // Cleanup
   std::filesystem::remove(StateFilePath);
 }
+
+// Regression test for https://github.com/DTVMStack/DTVM/issues/545
+// BALANCE should reflect the upfront gas deduction (gas_price * gas_limit)
+// from the sender's balance, per EVM spec (Yellow Paper §6).
+TEST(EVMRegressionTest, Issue545_BalanceReflectsUpfrontGasDeduction) {
+  // Contract: CALLER BALANCE PUSH1 0x00 MSTORE PUSH1 0x20 PUSH1 0x00 RETURN
+  // Returns the caller's balance as 32-byte output.
+  const std::string BytecodeHex = "333160005260206000f3";
+  auto BytecodeBuf = zen::utils::fromHex(BytecodeHex);
+  ASSERT_TRUE(BytecodeBuf) << "Failed to parse bytecode hex";
+
+  RuntimeConfig Config;
+  Config.Mode = common::RunMode::InterpMode;
+
+  const evmc::address ContractAddr = evmc::literals::operator""_address(
+      "00000000000000000000000000000000000000f1");
+  const evmc::address SenderAddr = evmc::literals::operator""_address(
+      "a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
+
+  auto HostPtr = std::make_unique<zen::evm::ZenMockedEVMHost>();
+
+  // Contract account with the CALLER+BALANCE bytecode
+  evmc::MockedAccount ContractAccount;
+  ContractAccount.code = evmc::bytes(BytecodeBuf->data(), BytecodeBuf->size());
+
+  // Sender with initial balance 0xFFFFFFFFFF (1099511627775)
+  evmc::MockedAccount SenderAccount;
+  SenderAccount.set_balance(0xFFFFFFFFFF);
+
+  HostPtr->accounts[ContractAddr] = ContractAccount;
+  HostPtr->accounts[SenderAddr] = SenderAccount;
+
+  // Set gas_price = 16, base_fee = 16 (matching issue reproduction)
+  evmc_tx_context TxCtx{};
+  TxCtx.tx_origin = SenderAddr;
+  TxCtx.tx_gas_price = intx::be::store<evmc::uint256be>(intx::uint256(16));
+  TxCtx.block_base_fee = intx::be::store<evmc::uint256be>(intx::uint256(16));
+  HostPtr->tx_context = TxCtx;
+
+  auto RT = Runtime::newEVMRuntime(Config, HostPtr.get());
+  ASSERT_TRUE(RT != nullptr) << "Failed to create runtime";
+  HostPtr->setRuntime(RT.get());
+
+  auto ModRet = RT->loadEVMModule("issue545_balance_gas", BytecodeBuf->data(),
+                                  BytecodeBuf->size());
+  ASSERT_TRUE(ModRet) << "Failed to load module";
+  EVMModule *Mod = *ModRet;
+
+  Isolation *Iso = RT->createManagedIsolation();
+  ASSERT_TRUE(Iso != nullptr) << "Failed to create isolation";
+
+  constexpr uint64_t GasLimit = 1000000;
+  const int64_t IntrinsicGas =
+      zen::utils::computeIntrinsicGas(EVMC_CANCUN, EVMC_CALL, nullptr, 0);
+  ASSERT_GT(GasLimit, static_cast<uint64_t>(IntrinsicGas));
+  const uint64_t ExecutionGasLimit = GasLimit - IntrinsicGas;
+
+  auto InstRet = Iso->createEVMInstance(*Mod, ExecutionGasLimit);
+  ASSERT_TRUE(InstRet) << "Failed to create instance";
+  EVMInstance *Inst = *InstRet;
+  Inst->setRevision(EVMC_CANCUN);
+
+  // Deduct upfront gas cost from sender's balance before execution,
+  // matching EVM spec and the CLI fix for issue #545.
+  intx::uint256 GasPrice =
+      intx::be::load<intx::uint256>(HostPtr->tx_context.tx_gas_price);
+  intx::uint256 BaseFee =
+      intx::be::load<intx::uint256>(HostPtr->tx_context.block_base_fee);
+  intx::uint256 EffectiveGasPrice = GasPrice > BaseFee ? GasPrice : BaseFee;
+  intx::uint256 UpfrontGasCost = intx::uint256(GasLimit) * EffectiveGasPrice;
+  auto &SenderAcc = HostPtr->accounts[SenderAddr];
+  intx::uint256 SenderBalance =
+      intx::be::load<intx::uint256>(SenderAcc.balance);
+  ASSERT_GE(SenderBalance, UpfrontGasCost)
+      << "Sender balance insufficient for upfront gas cost";
+  SenderBalance -= UpfrontGasCost;
+  SenderAcc.balance = intx::be::store<evmc::bytes32>(SenderBalance);
+
+  evmc_message Msg = {
+      .kind = EVMC_CALL,
+      .flags = 0u,
+      .depth = 0,
+      .gas = static_cast<int64_t>(ExecutionGasLimit),
+      .recipient = ContractAddr,
+      .sender = SenderAddr,
+      .input_data = nullptr,
+      .input_size = 0,
+      .value = {},
+      .create2_salt = {},
+      .code_address = ContractAddr,
+      .code = reinterpret_cast<const uint8_t *>(Mod->Code),
+      .code_size = Mod->CodeSize,
+  };
+
+  evmc::Result RawResult;
+  EXPECT_NO_THROW({ RT->callEVMMain(*Inst, Msg, RawResult); });
+  ASSERT_EQ(RawResult.status_code, EVMC_SUCCESS)
+      << "EVM execution failed with status code "
+      << static_cast<int>(RawResult.status_code);
+
+  // Expected: initial balance - gas_price * gas_limit
+  // 0xFFFFFFFFFF - 16 * 1000000 = 0xFFFF0BDBFF
+  evmc::bytes32 OutputBytes{};
+  std::memcpy(OutputBytes.bytes, RawResult.output_data, 32);
+  intx::uint256 ReturnedBalance = intx::be::load<intx::uint256>(OutputBytes);
+
+  intx::uint256 ExpectedBalance =
+      intx::uint256(0xFFFFFFFFFF) - intx::uint256(16) * intx::uint256(1000000);
+
+  EXPECT_EQ(ReturnedBalance, ExpectedBalance)
+      << "BALANCE should return sender balance after upfront gas deduction";
+}
