@@ -6,7 +6,8 @@
 
 namespace zen::utils {
 
-constexpr size_t StackMemorySize = 9 * 1024 * 1024; // 9MB > dwasm 8MB
+constexpr size_t StackMemorySize = 32 * 1024 * 1024;
+constexpr size_t StackGuardMemorySize = 64 * 1024;
 
 StackMemPool::StackMemPool(size_t ItemSize)
     : EachStackSize(ItemSize), AvailableCount(MAX_STACK_ITEM_NUM) {
@@ -79,10 +80,7 @@ void StackMemPool::deallocate(void *Ptr) {
 }
 
 static StackMemPool *getVirtualStackPool() {
-  // stack allocate 2 * needed size, the first part used as stack, the second
-  // part used to protect read/write by cpu
-  // can't be less, even not enable cpu exception
-  static StackMemPool StackPool(StackMemorySize * 2);
+  static StackMemPool StackPool(StackGuardMemorySize + StackMemorySize);
   return &StackPool;
 }
 
@@ -93,11 +91,11 @@ void VirtualStackInfo::allocate() {
   auto *MemPool = getVirtualStackPool();
   bool IsReused = false;
   AllocatedMem = (uint8_t *)MemPool->allocate(true, &IsReused);
-  AllInfo = AllocatedMem + StackMemorySize;
+  AllInfo = AllocatedMem + StackGuardMemorySize;
   // [AllocatedMem, AllInfo) is disabled visiting
   // [AllInfo, StackMemoryTop) is available stack memory
   if (!IsReused) {
-    platform::mprotect(AllocatedMem, StackMemorySize, PROT_NONE);
+    platform::mprotect(AllocatedMem, StackGuardMemorySize, PROT_NONE);
   }
 
   // when update sp/rsp register, we need copy old frame to new frame, then

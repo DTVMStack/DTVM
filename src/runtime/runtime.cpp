@@ -875,7 +875,7 @@ void Runtime::callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
               static_cast<uint8_t *>(TLS.getTrapState().FaultingAddress);
           auto *VirtualStack = Inst.currentVirtualStack();
           if (FaultingAddress != nullptr && VirtualStack) {
-            if (FaultingAddress >= VirtualStack->AllInfo &&
+            if (FaultingAddress >= VirtualStack->AllocatedMem &&
                 FaultingAddress < VirtualStack->StackMemoryTop) {
               CapturedTapErrCode = ErrorCode::CallStackExhausted;
             }
@@ -1005,7 +1005,7 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
               static_cast<uint8_t *>(TLS.getTrapState().FaultingAddress);
           auto *VirtualStack = Inst.currentVirtualStack();
           if (FaultingAddress != nullptr && VirtualStack) {
-            if (FaultingAddress >= VirtualStack->AllInfo &&
+            if (FaultingAddress >= VirtualStack->AllocatedMem &&
                 FaultingAddress < VirtualStack->StackMemoryTop) {
               CapturedTapErrCode = ErrorCode::CallStackExhausted;
               StatusCode = EVMC_STACK_OVERFLOW;
