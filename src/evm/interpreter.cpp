@@ -9,6 +9,7 @@
 #include "runtime/evm_instance.h"
 
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 
@@ -394,10 +395,13 @@ void BaseInterpreter::interpret() {
     }
     return Value[0];
   };
+  const bool disable_gas_chunk =
+      std::getenv("DTVM_DEBUG_DISABLE_GAS_CHUNK") != nullptr;
 
   while (Frame->Pc < CodeSize) {
     const size_t ChunkStartPc = static_cast<size_t>(Frame->Pc);
-    if (ChunkStartPc < CodeSize && GasChunkEnd[ChunkStartPc] > ChunkStartPc &&
+    if (!disable_gas_chunk && ChunkStartPc < CodeSize &&
+        GasChunkEnd[ChunkStartPc] > ChunkStartPc &&
         (uint64_t)Frame->Msg.gas >= GasChunkCost[ChunkStartPc]) {
       const uint32_t ChunkEnd = GasChunkEnd[ChunkStartPc];
       Frame->Msg.gas -= GasChunkCost[ChunkStartPc];

@@ -93,7 +93,7 @@ public:
 
   void *getJITCode() const {
 #ifdef ZEN_ENABLE_JIT
-    return JITCode;
+    return JITCode.load(std::memory_order_acquire);
 #else
     return nullptr;
 #endif
