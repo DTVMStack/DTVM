@@ -436,6 +436,26 @@ bool isNonCreateOperation(const evmc_message *Msg) {
          Msg->kind != EVMC_CREATE2;
 }
 
+bool shouldUsePersistentModuleCache(const evmc_message *Msg) {
+  // CREATE/CREATE2 initcode must not be cached: the same address can receive
+  // different initcode across transactions, and initcode is one-shot.
+  // Silkworm (and other hosts) run the initcode deployment phase as EVMC_CALL
+  // with code_address left zero-initialized. Caching on the zero address would
+  // alias unrelated initcodes across CREATE transactions.
+  if (Msg == nullptr) {
+    return false;
+  }
+  if (Msg->kind == EVMC_CREATE || Msg->kind == EVMC_CREATE2) {
+    return false;
+  }
+  if (evmc::is_zero(Msg->code_address)) {
+    return false;
+  }
+  // Regular calls at any depth are safe to cache: deployed code at a non-zero
+  // address is immutable. The module is keyed by (code_address, revision).
+  return true;
+}
+
 bool shouldRetryModuleLoadWithFastRA(const DTVM *VM, const Error &Err) {
   return VM->Config.Mode == RunMode::MultipassMode &&
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
@@ -486,7 +506,7 @@ EVMModule *loadTransientModule(DTVM *VM, const uint8_t *Code, size_t CodeSize,
 EVMModule *findModuleCached(DTVM *VM, const uint8_t *Code, size_t CodeSize,
                             evmc_revision Rev, const evmc_message *Msg,
                             bool &IsTransient) {
-  if (!isNonCreateOperation(Msg)) {
+  if (!shouldUsePersistentModuleCache(Msg)) {
     IsTransient = true;
     return loadTransientModule(VM, Code, CodeSize, Rev);
   }
