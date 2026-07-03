@@ -1776,6 +1776,41 @@ EVMMirBuilder::handleModU64Divisor(const Operand &DividendOp,
   return Operand(Result, EVMType::UINT256, ValueRange::U64);
 }
 
+// Build the quotient-segment table for a compile-time-constant dividend A
+// divided by a runtime divisor x in [1, A].  For x in (prev_xhi, xhi] the
+// quotient A/x is the constant q; the number of distinct quotients of A/x is
+// O(sqrt(A)).  Returns false (too many segments -> keep the hardware divide)
+// if the table would exceed MaxSegs.  Used to strength-reduce DIV(smallConst,
+// x) into a short compare/cmov ladder with no hardware DIV64r -- the on-chain
+// "constant numerator" shape and the exact shape the live corpus exercises
+// (DIV(3, loopVar)).
+static bool
+buildConstDividendSegments(uint64_t A, unsigned MaxSegs,
+                           std::vector<std::pair<uint64_t, uint64_t>> &Segs) {
+  if (A == 0)
+    return false;
+  uint64_t X = 1;
+  while (X <= A) {
+    uint64_t Q = A / X;
+    uint64_t Xhi = A / Q; // largest x with A/x == Q
+    Segs.emplace_back(Xhi, Q);
+    if (Segs.size() > MaxSegs)
+      return false;
+    if (Xhi == UINT64_MAX)
+      break;
+    X = Xhi + 1;
+  }
+  return true;
+}
+
+// Maximum ladder length for the DIV quotient segments: A up to ~16 stays at or
+// under this, comfortably cheaper than a ~30-90 cycle hardware divide.
+static constexpr unsigned ConstDividendMaxSegs = 8;
+
+// MOD(A, x) with A <= this is lowered by direct equality-select enumeration
+// (A compares, no multiply); larger A uses the quotient-ladder * x form.
+static constexpr uint64_t ConstDividendMaxEnum = 8;
+
 typename EVMMirBuilder::Operand
 EVMMirBuilder::handleDivU64Dividend(uint64_t Dividend,
                                     const Operand &DivisorOp) {
@@ -1799,9 +1834,32 @@ EVMMirBuilder::handleDivU64Dividend(uint64_t Dividend,
   MInstruction *SafeB0 =
       createInstruction<SelectInstruction>(false, I64Type, IsB0Zero, One, B[0]);
 
-  MInstruction *A0 = createIntConstInstruction(I64Type, Dividend);
-  MInstruction *Q64 =
-      createInstruction<BinaryInstruction>(false, OP_udiv, I64Type, A0, SafeB0);
+  // Constant-dividend strength reduction: DIV(A, x) with A a small compile-time
+  // constant has only O(sqrt(A)) distinct quotient values, so emit a
+  // compare/cmov ladder over B[0] instead of a hardware DIV64r.  Falls back to
+  // OP_udiv when A is too large for a profitable ladder.
+  MInstruction *Q64 = nullptr;
+  std::vector<std::pair<uint64_t, uint64_t>> Segs;
+  if (buildConstDividendSegments(Dividend, ConstDividendMaxSegs, Segs)) {
+    // res = 0 for x > A; then, iterating from the largest segment down to the
+    // smallest, res = (B0 <= Xhi) ? q : res.  The last-written select is the
+    // outermost of the expression tree and tests the smallest Xhi, so the
+    // effective quotient is the one for the first segment whose Xhi covers B0.
+    Q64 = Zero;
+    for (auto It = Segs.rbegin(); It != Segs.rend(); ++It) {
+      uint64_t Xhi = It->first, Q = It->second;
+      MInstruction *XhiConst = createIntConstInstruction(I64Type, Xhi);
+      MInstruction *QConst = createIntConstInstruction(I64Type, Q);
+      MInstruction *Cond = createInstruction<CmpInstruction>(
+          false, CmpInstruction::ICMP_ULE, I64Type, SafeB0, XhiConst);
+      Q64 = createInstruction<SelectInstruction>(false, I64Type, Cond, QConst,
+                                                 Q64);
+    }
+  } else {
+    MInstruction *A0 = createIntConstInstruction(I64Type, Dividend);
+    Q64 = createInstruction<BinaryInstruction>(false, OP_udiv, I64Type, A0,
+                                               SafeB0);
+  }
   // Chain two selects so lowerSelectExpr can fuse each CmpInstruction
   // condition directly into CMP+CMOVcc, avoiding SETcc+OR+TEST overhead.
   MInstruction *TmpResult =
@@ -1837,8 +1895,48 @@ EVMMirBuilder::handleModU64Dividend(uint64_t Dividend,
       createInstruction<SelectInstruction>(false, I64Type, IsB0Zero, One, B[0]);
 
   MInstruction *A0 = createIntConstInstruction(I64Type, Dividend);
-  MInstruction *R64 =
-      createInstruction<BinaryInstruction>(false, OP_urem, I64Type, A0, SafeB0);
+
+  // Constant-dividend strength reduction for MOD(A, x), A a small compile-time
+  // constant.  For x in [1, A] the remainder A%x takes one of A values; for
+  // x > A the remainder is A.  Emit direct equality/cmov selects on B[0] --
+  // res = A (default), then for xv = A..1: res = (B0 == xv) ? A%xv : res.
+  // This avoids both the hardware DIV64r and any multiply.  Falls back to a
+  // quotient-ladder-times-x (still no hardware divide) for A too large to
+  // enumerate, and finally to OP_urem.
+  MInstruction *R64 = nullptr;
+  if (Dividend != 0 && Dividend <= ConstDividendMaxEnum) {
+    R64 = A0; // default remainder = A (covers x > A)
+    for (uint64_t Xv = Dividend; Xv >= 1; --Xv) {
+      MInstruction *XvConst = createIntConstInstruction(I64Type, Xv);
+      MInstruction *RemConst =
+          createIntConstInstruction(I64Type, Dividend % Xv);
+      MInstruction *Cond = createInstruction<CmpInstruction>(
+          false, CmpInstruction::ICMP_EQ, I64Type, SafeB0, XvConst);
+      R64 = createInstruction<SelectInstruction>(false, I64Type, Cond, RemConst,
+                                                 R64);
+    }
+  } else {
+    std::vector<std::pair<uint64_t, uint64_t>> Segs;
+    if (buildConstDividendSegments(Dividend, ConstDividendMaxSegs, Segs)) {
+      MInstruction *QSel = Zero; // quotient A/x (0 when x > A)
+      for (auto It = Segs.rbegin(); It != Segs.rend(); ++It) {
+        uint64_t Xhi = It->first, Q = It->second;
+        MInstruction *XhiConst = createIntConstInstruction(I64Type, Xhi);
+        MInstruction *QConst = createIntConstInstruction(I64Type, Q);
+        MInstruction *Cond = createInstruction<CmpInstruction>(
+            false, CmpInstruction::ICMP_ULE, I64Type, SafeB0, XhiConst);
+        QSel = createInstruction<SelectInstruction>(false, I64Type, Cond,
+                                                    QConst, QSel);
+      }
+      MInstruction *QX = createInstruction<BinaryInstruction>(
+          false, OP_mul, I64Type, QSel, SafeB0);
+      R64 =
+          createInstruction<BinaryInstruction>(false, OP_sub, I64Type, A0, QX);
+    } else {
+      R64 = createInstruction<BinaryInstruction>(false, OP_urem, I64Type, A0,
+                                                 SafeB0);
+    }
+  }
   // Chain two selects: IsB0Zero → 0 (div-by-zero), HasUpper → A0 (divisor >
   // dividend)
   MInstruction *TmpResult =
@@ -2414,6 +2512,32 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleSMod(Operand DividendOp,
     intx::uint256 N = u256ValueToIntx(DividendOp.getConstValue());
     auto Result = intx::sdivrem(N, D);
     return Operand(intxToU256Value(Result.rem));
+  }
+
+  // Positive small constant dividend, variable divisor: SMOD's result takes the
+  // sign of the dividend, so for a positive A the result is non-negative and
+  // equals A mod |x| -- exactly the unsigned MOD ladder (handleModU64Dividend)
+  // applied to |x|.  SMOD(A,0)=0 and A mod large=A fall out of the ladder for
+  // free.  Previously this shape fell through to the GetSMod runtime call.
+  if (DividendOp.isConstU64() &&
+      DividendOp.getConstValue()[0] <= ConstDividendMaxEnum &&
+      DividendOp.getConstValue()[0] != 0) {
+    uint64_t A = DividendOp.getConstValue()[0];
+    MType *I64Type = &Ctx.I64Type;
+    MInstruction *Zero = createIntConstInstruction(I64Type, 0);
+    U256Inst X = extractU256Operand(DivisorOp);
+    MInstruction *SignBit = createInstruction<CmpInstruction>(
+        false, CmpInstruction::ICMP_SLT, I64Type, X[3], Zero);
+    // absX = sign ? (~x + 1) : x
+    Operand NegX = handleNot(DivisorOp);
+    Operand NegX1 = handleAddU64Const(NegX, Operand(U256Value{1, 0, 0, 0}));
+    U256Inst NX = extractU256Operand(NegX1);
+    U256Inst AbsX;
+    for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I)
+      AbsX[I] = createInstruction<SelectInstruction>(false, I64Type, SignBit,
+                                                     NX[I], X[I]);
+    Operand AbsXOp(AbsX, EVMType::UINT256);
+    return handleModU64Dividend(A, AbsXOp);
   }
 
   // u64 divisor (fits in i63): sign of result = sign of dividend
