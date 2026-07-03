@@ -2524,10 +2524,9 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleExp(Operand BaseOp,
     if (ExpBytes == 0) {
       return;
     }
-    const uint64_t GasPerByte =
-        Ctx.getRevision() < EVMC_SPURIOUS_DRAGON
-            ? zen::evm::EXP_BYTE_GAS_PRE_SPURIOUS_DRAGON
-            : zen::evm::EXP_BYTE_GAS;
+    const uint64_t GasPerByte = Ctx.getRevision() < EVMC_SPURIOUS_DRAGON
+                                    ? zen::evm::EXP_BYTE_GAS_PRE_SPURIOUS_DRAGON
+                                    : zen::evm::EXP_BYTE_GAS;
     chargeDynamicGasIR(
         createIntConstInstruction(I64Type, ExpBytes * GasPerByte));
   };
