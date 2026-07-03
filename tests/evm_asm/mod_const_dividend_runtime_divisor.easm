@@ -1,0 +1,77 @@
+// MOD with a compile-time-constant dividend and a RUNTIME divisor.
+// Each divisor goes through an MSTORE/MLOAD round-trip so the frontend
+// cannot constant-fold the op; the dividend stays a bytecode constant,
+// exercising the constant-dividend strength-reduction lowering
+// (handleModU64Dividend): remainder enumeration (A <= 8), quotient-ladder
+// times x (8 < A within segment budget), and the hardware-divide fallback.
+// Each case stores its result into the slot used as the divisor scratch.
+
+// case 1 @0x00: 8 % 3 = 2 (enumeration tier)
+PUSH1 0x03
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH1 0x08
+MOD
+PUSH1 0x00
+MSTORE
+
+// case 2 @0x20: 8 % 9 = 8 (divisor > dividend)
+PUSH1 0x09
+PUSH1 0x20
+MSTORE
+PUSH1 0x20
+MLOAD
+PUSH1 0x08
+MOD
+PUSH1 0x20
+MSTORE
+
+// case 3 @0x40: 8 % 0 = 0 (mod-by-zero guard)
+PUSH1 0x00
+PUSH1 0x40
+MSTORE
+PUSH1 0x40
+MLOAD
+PUSH1 0x08
+MOD
+PUSH1 0x40
+MSTORE
+
+// case 4 @0x60: 16 % 6 = 4 (quotient-ladder-times-x tier)
+PUSH1 0x06
+PUSH1 0x60
+MSTORE
+PUSH1 0x60
+MLOAD
+PUSH1 0x10
+MOD
+PUSH1 0x60
+MSTORE
+
+// case 5 @0x80: 100 % 7 = 2 (fallback tier, hardware divide)
+PUSH1 0x07
+PUSH1 0x80
+MSTORE
+PUSH1 0x80
+MLOAD
+PUSH1 0x64
+MOD
+PUSH1 0x80
+MSTORE
+
+// case 6 @0xA0: 8 % 2^64 = 8 (upper-limb guard: divisor > dividend)
+PUSH9 0x010000000000000000
+PUSH1 0xA0
+MSTORE
+PUSH1 0xA0
+MLOAD
+PUSH1 0x08
+MOD
+PUSH1 0xA0
+MSTORE
+
+PUSH1 0xC0
+PUSH1 0x00
+RETURN

@@ -1,0 +1,88 @@
+// DIV with a compile-time-constant dividend and a RUNTIME divisor.
+// Each divisor goes through an MSTORE/MLOAD round-trip so the frontend
+// cannot constant-fold the op; the dividend stays a bytecode constant,
+// exercising the constant-dividend strength-reduction lowering
+// (handleDivU64Dividend): quotient-segment ladder and its fallbacks.
+// Each case stores its result into the slot used as the divisor scratch,
+// so the final memory is exactly the result sequence.
+
+// case 1 @0x00: 3 / 2 = 1 (enumeration tier, mid segment)
+PUSH1 0x02
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH1 0x03
+DIV
+PUSH1 0x00
+MSTORE
+
+// case 2 @0x20: 3 / 1 = 3 (smallest-divisor segment)
+PUSH1 0x01
+PUSH1 0x20
+MSTORE
+PUSH1 0x20
+MLOAD
+PUSH1 0x03
+DIV
+PUSH1 0x20
+MSTORE
+
+// case 3 @0x40: 3 / 4 = 0 (divisor > dividend)
+PUSH1 0x04
+PUSH1 0x40
+MSTORE
+PUSH1 0x40
+MLOAD
+PUSH1 0x03
+DIV
+PUSH1 0x40
+MSTORE
+
+// case 4 @0x60: 3 / 0 = 0 (div-by-zero guard)
+PUSH1 0x00
+PUSH1 0x60
+MSTORE
+PUSH1 0x60
+MLOAD
+PUSH1 0x03
+DIV
+PUSH1 0x60
+MSTORE
+
+// case 5 @0x80: 16 / 5 = 3 (ladder tier)
+PUSH1 0x05
+PUSH1 0x80
+MSTORE
+PUSH1 0x80
+MLOAD
+PUSH1 0x10
+DIV
+PUSH1 0x80
+MSTORE
+
+// case 6 @0xA0: 100 / 7 = 14 (fallback tier, hardware divide)
+PUSH1 0x07
+PUSH1 0xA0
+MSTORE
+PUSH1 0xA0
+MLOAD
+PUSH1 0x64
+DIV
+PUSH1 0xA0
+MSTORE
+
+// case 7 @0xC0: 3 / 2^64 = 0 (upper-limb guard)
+PUSH9 0x010000000000000000
+PUSH1 0xC0
+MSTORE
+PUSH1 0xC0
+MLOAD
+PUSH1 0x03
+DIV
+PUSH1 0xC0
+MSTORE
+
+PUSH1 0xE0
+PUSH1 0x00
+RETURN

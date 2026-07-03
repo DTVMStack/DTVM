@@ -1,0 +1,78 @@
+// SMOD with a small positive compile-time-constant dividend and a RUNTIME
+// divisor. Each divisor goes through an MSTORE/MLOAD round-trip so the
+// frontend cannot constant-fold the op; the dividend stays a bytecode
+// constant, exercising the constant-dividend SMOD lowering (A mod |x| via
+// handleModU64Dividend), which previously fell through to the GetSMod
+// runtime call. SMOD's result takes the dividend's sign, so all results
+// here are non-negative. Each case stores its result into the slot used
+// as the divisor scratch.
+
+// case 1 @0x00: 7 smod 2 = 1 (positive divisor)
+PUSH1 0x02
+PUSH1 0x00
+MSTORE
+PUSH1 0x00
+MLOAD
+PUSH1 0x07
+SMOD
+PUSH1 0x00
+MSTORE
+
+// case 2 @0x20: 7 smod -2 = 1 (negative divisor, |x| = 2)
+PUSH32 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE
+PUSH1 0x20
+MSTORE
+PUSH1 0x20
+MLOAD
+PUSH1 0x07
+SMOD
+PUSH1 0x20
+MSTORE
+
+// case 3 @0x40: 7 smod -3 = 1 (negative divisor, |x| = 3)
+PUSH32 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFD
+PUSH1 0x40
+MSTORE
+PUSH1 0x40
+MLOAD
+PUSH1 0x07
+SMOD
+PUSH1 0x40
+MSTORE
+
+// case 4 @0x60: 7 smod 0 = 0 (mod-by-zero guard)
+PUSH1 0x00
+PUSH1 0x60
+MSTORE
+PUSH1 0x60
+MLOAD
+PUSH1 0x07
+SMOD
+PUSH1 0x60
+MSTORE
+
+// case 5 @0x80: 7 smod -1 = 0 (|x| = 1)
+PUSH32 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+PUSH1 0x80
+MSTORE
+PUSH1 0x80
+MLOAD
+PUSH1 0x07
+SMOD
+PUSH1 0x80
+MSTORE
+
+// case 6 @0xA0: 7 smod -2^255 = 7 (INT256_MIN divisor, |x| = 2^255 > 7)
+PUSH32 0x8000000000000000000000000000000000000000000000000000000000000000
+PUSH1 0xA0
+MSTORE
+PUSH1 0xA0
+MLOAD
+PUSH1 0x07
+SMOD
+PUSH1 0xA0
+MSTORE
+
+PUSH1 0xC0
+PUSH1 0x00
+RETURN

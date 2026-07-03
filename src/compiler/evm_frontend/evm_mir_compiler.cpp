@@ -1787,6 +1787,7 @@ EVMMirBuilder::handleModU64Divisor(const Operand &DividendOp,
 static bool
 buildConstDividendSegments(uint64_t A, unsigned MaxSegs,
                            std::vector<std::pair<uint64_t, uint64_t>> &Segs) {
+  Segs.clear();
   if (A == 0)
     return false;
   uint64_t X = 1;
@@ -1906,7 +1907,7 @@ EVMMirBuilder::handleModU64Dividend(uint64_t Dividend,
   MInstruction *R64 = nullptr;
   if (Dividend != 0 && Dividend <= ConstDividendMaxEnum) {
     R64 = A0; // default remainder = A (covers x > A)
-    for (uint64_t Xv = Dividend; Xv >= 1; --Xv) {
+    for (uint64_t Xv = Dividend; Xv != 0; --Xv) {
       MInstruction *XvConst = createIntConstInstruction(I64Type, Xv);
       MInstruction *RemConst =
           createIntConstInstruction(I64Type, Dividend % Xv);
