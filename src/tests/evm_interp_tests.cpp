@@ -1159,3 +1159,166 @@ TEST(EVMRegressionTest, Issue545_BalanceReflectsUpfrontGasDeduction) {
   EXPECT_EQ(ReturnedBalance, ExpectedBalance)
       << "BALANCE should return sender balance after upfront gas deduction";
 }
+
+// ---------------------------------------------------------------------------
+// Regression tests for Issue #563 / #564:
+//   loadState() must clamp int64_t fields (block_gas_limit, block_number,
+//   block_timestamp) to INT64_MAX when JSON values exceed INT64_MAX, rather
+//   than silently wrapping them to negative values.
+// ---------------------------------------------------------------------------
+
+// Helper: write a minimal state JSON with a specific tx_context field set to
+// the given numeric value. All other tx_context fields use safe defaults.
+static void writeInt64OverflowStateJson(const std::string &FilePath,
+                                        const std::string &FieldName,
+                                        const std::string &NumericValue) {
+  // clang-format off
+  const std::string DefaultJson = R"({
+  "accounts": {
+    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+      "balance": "000000000000000000000000000000000000000000000000000000ffffffffff",
+      "nonce": 0, "code": "", "codehash": "0000000000000000000000000000000000000000000000000000000000000000", "storage": {}
+    }
+  },
+  "tx_context": {
+    "gas_price": "0000000000000000000000000000000000000000000000000000000000000010",
+    "block_number": 1,
+    "block_timestamp": 1000,
+    "block_coinbase": "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+    "block_prev_randao": "0000000000000000000000000000000000000000000000000000000000200000",
+    "block_gas_limit": 30000000,
+    "block_base_fee": "0000000000000000000000000000000000000000000000000000000000000010"
+  }
+})";
+  // clang-format on
+
+  // Map each field name to its default value in the template above.
+  std::string DefaultKeyValue;
+  if (FieldName == "block_gas_limit") {
+    DefaultKeyValue = "\"block_gas_limit\": 30000000";
+  } else if (FieldName == "block_number") {
+    DefaultKeyValue = "\"block_number\": 1";
+  } else if (FieldName == "block_timestamp") {
+    DefaultKeyValue = "\"block_timestamp\": 1000";
+  } else {
+    FAIL() << "Unsupported field name: " << FieldName;
+  }
+
+  std::string Content = DefaultJson;
+  auto Pos = Content.find(DefaultKeyValue);
+  ASSERT_NE(Pos, std::string::npos) << "Could not find default value for "
+                                    << FieldName << " in template JSON";
+  Content.replace(Pos, DefaultKeyValue.size(),
+                  "\"" + FieldName + "\": " + NumericValue);
+
+  std::ofstream OutFile(FilePath);
+  OutFile << Content;
+  OutFile.close();
+}
+
+// block_gas_limit = 2^63  →  clamped to INT64_MAX (no negative wrap)
+TEST(EVMStateSaveLoad, BlockGasLimitOverflowInt64) {
+  const std::string FilePath = "/tmp/dtvm_test_gas_limit_overflow_int64.json";
+  writeInt64OverflowStateJson(FilePath, "block_gas_limit",
+                              "9223372036854775808"); // 2^63
+
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  ASSERT_TRUE(zen::utils::loadState(*Host, FilePath));
+  EXPECT_EQ(Host->tx_context.block_gas_limit,
+            std::numeric_limits<int64_t>::max());
+  EXPECT_GT(Host->tx_context.block_gas_limit, 0)
+      << "block_gas_limit must not be negative after clamp";
+
+  std::filesystem::remove(FilePath);
+}
+
+// block_gas_limit = 2^64 - 1  →  clamped to INT64_MAX
+TEST(EVMStateSaveLoad, BlockGasLimitOverflowUint64Max) {
+  const std::string FilePath =
+      "/tmp/dtvm_test_gas_limit_overflow_uint64max.json";
+  writeInt64OverflowStateJson(FilePath, "block_gas_limit",
+                              "18446744073709551615"); // 2^64 - 1
+
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  ASSERT_TRUE(zen::utils::loadState(*Host, FilePath));
+  EXPECT_EQ(Host->tx_context.block_gas_limit,
+            std::numeric_limits<int64_t>::max());
+  EXPECT_GT(Host->tx_context.block_gas_limit, 0)
+      << "block_gas_limit must not be negative after clamp";
+
+  std::filesystem::remove(FilePath);
+}
+
+// block_gas_limit = INT64_MAX  →  exact value preserved (boundary)
+TEST(EVMStateSaveLoad, BlockGasLimitAtInt64Max) {
+  const std::string FilePath = "/tmp/dtvm_test_gas_limit_int64max.json";
+  writeInt64OverflowStateJson(FilePath, "block_gas_limit",
+                              "9223372036854775807"); // INT64_MAX
+
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  ASSERT_TRUE(zen::utils::loadState(*Host, FilePath));
+  EXPECT_EQ(Host->tx_context.block_gas_limit,
+            std::numeric_limits<int64_t>::max());
+
+  std::filesystem::remove(FilePath);
+}
+
+// block_number = 2^63  →  clamped to INT64_MAX
+TEST(EVMStateSaveLoad, BlockNumberOverflowInt64) {
+  const std::string FilePath =
+      "/tmp/dtvm_test_block_number_overflow_int64.json";
+  writeInt64OverflowStateJson(FilePath, "block_number",
+                              "9223372036854775808"); // 2^63
+
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  ASSERT_TRUE(zen::utils::loadState(*Host, FilePath));
+  EXPECT_EQ(Host->tx_context.block_number, std::numeric_limits<int64_t>::max());
+  EXPECT_GT(Host->tx_context.block_number, 0)
+      << "block_number must not be negative after clamp";
+
+  std::filesystem::remove(FilePath);
+}
+
+// block_number = INT64_MAX  →  exact value preserved
+TEST(EVMStateSaveLoad, BlockNumberAtInt64Max) {
+  const std::string FilePath = "/tmp/dtvm_test_block_number_int64max.json";
+  writeInt64OverflowStateJson(FilePath, "block_number",
+                              "9223372036854775807"); // INT64_MAX
+
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  ASSERT_TRUE(zen::utils::loadState(*Host, FilePath));
+  EXPECT_EQ(Host->tx_context.block_number, std::numeric_limits<int64_t>::max());
+
+  std::filesystem::remove(FilePath);
+}
+
+// block_timestamp = 2^63  →  clamped to INT64_MAX
+TEST(EVMStateSaveLoad, BlockTimestampOverflowInt64) {
+  const std::string FilePath =
+      "/tmp/dtvm_test_block_timestamp_overflow_int64.json";
+  writeInt64OverflowStateJson(FilePath, "block_timestamp",
+                              "9223372036854775808"); // 2^63
+
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  ASSERT_TRUE(zen::utils::loadState(*Host, FilePath));
+  EXPECT_EQ(Host->tx_context.block_timestamp,
+            std::numeric_limits<int64_t>::max());
+  EXPECT_GT(Host->tx_context.block_timestamp, 0)
+      << "block_timestamp must not be negative after clamp";
+
+  std::filesystem::remove(FilePath);
+}
+
+// block_timestamp = INT64_MAX  →  exact value preserved
+TEST(EVMStateSaveLoad, BlockTimestampAtInt64Max) {
+  const std::string FilePath = "/tmp/dtvm_test_block_timestamp_int64max.json";
+  writeInt64OverflowStateJson(FilePath, "block_timestamp",
+                              "9223372036854775807"); // INT64_MAX
+
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  ASSERT_TRUE(zen::utils::loadState(*Host, FilePath));
+  EXPECT_EQ(Host->tx_context.block_timestamp,
+            std::numeric_limits<int64_t>::max());
+
+  std::filesystem::remove(FilePath);
+}

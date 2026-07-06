@@ -9,6 +9,7 @@
 #include "utils/rlp_encoding.h"
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 
@@ -420,13 +421,20 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
 
     if (TxContext.HasMember("block_number") &&
         TxContext["block_number"].IsUint64()) {
-      Host.tx_context.block_number = TxContext["block_number"].GetUint64();
+      auto Val = TxContext["block_number"].GetUint64();
+      if (Val > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+        Val = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+      }
+      Host.tx_context.block_number = static_cast<int64_t>(Val);
     }
 
     if (TxContext.HasMember("block_timestamp") &&
         TxContext["block_timestamp"].IsUint64()) {
-      Host.tx_context.block_timestamp =
-          TxContext["block_timestamp"].GetUint64();
+      auto Val = TxContext["block_timestamp"].GetUint64();
+      if (Val > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+        Val = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+      }
+      Host.tx_context.block_timestamp = static_cast<int64_t>(Val);
     }
 
     if (TxContext.HasMember("block_coinbase") &&
@@ -443,8 +451,11 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
 
     if (TxContext.HasMember("block_gas_limit") &&
         TxContext["block_gas_limit"].IsUint64()) {
-      Host.tx_context.block_gas_limit =
-          TxContext["block_gas_limit"].GetUint64();
+      auto Val = TxContext["block_gas_limit"].GetUint64();
+      if (Val > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+        Val = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+      }
+      Host.tx_context.block_gas_limit = static_cast<int64_t>(Val);
     }
 
     if (TxContext.HasMember("block_base_fee") &&
