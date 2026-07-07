@@ -52,6 +52,17 @@ applied on both sides):
 
 Gas is byte-identical to the baseline and to evmone on every opcode.
 
+![Constant-dividend DIV/MOD/SMOD throughput before and after strength reduction, with evmone as an external reference](figures/throughput.svg)
+
+*Figure: constant-dividend throughput, before → after (higher is better). DIV,
+MOD, and SMOD improve 1.75×/2.13×/2.53×; on this corpus DIV and MOD exceed
+evmone (110%, 106%) and SMOD reaches 89% — DTVM's constant-dividend fast path
+against evmone's general 256-bit division (no equivalent transform), not a
+like-for-like opcode race. SDIV is untouched and serves as a no-regression
+control (unchanged). Median of 30 runs after 5 warmups; gas byte-identical to
+baseline and to evmone. Absolute Mgas/s is environment-sensitive (CPU/governor
+not recorded); read within-figure comparisons.*
+
 ## Impact
 
 - Module: `src/compiler/evm_frontend` (`evm_mir_compiler.cpp` only):
