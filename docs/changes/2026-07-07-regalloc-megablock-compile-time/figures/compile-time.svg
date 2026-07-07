@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 426" role="img" aria-label="Per-test JIT compile time on worst-case megablock contracts" class="fig" width="100%">
+  <style>
+  .fig {
+    --f-surface: #fcfcfb;
+    --f-ink: #0b0b0b;
+    --f-ink2: #52514e;
+    --f-muted: #898781;
+    --f-grid: #e1e0d9;
+    --f-axis: #c3c2b7;
+    --f-before: #898781;
+    --f-after: #2a78d6;
+    --f-ref: #1baf7a;
+    --f-ctrl: #898781;
+    --f-good: #006300;
+    --f-warm: #e34948;
+    --f-warmink: #b3201f;
+    --f-fs: 13px;
+  }
+  @media (prefers-color-scheme: dark) {
+    .fig {
+      --f-surface: #1a1a19;
+      --f-ink: #ffffff;
+      --f-ink2: #c3c2b7;
+      --f-muted: #898781;
+      --f-grid: #2c2c2a;
+      --f-axis: #383835;
+      --f-before: #a8a7a1;
+      --f-after: #3987e5;
+      --f-ref: #199e70;
+      --f-ctrl: #a8a7a1;
+      --f-good: #0ca30c;
+      --f-warm: #e66767;
+      --f-warmink: #e66767;
+    }
+  }
+  .fig text { font-family: system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .fig .tnum { font-variant-numeric: tabular-nums; }
+  </style>
+<rect x="0" y="0" width="720" height="426" fill="var(--f-surface)"/>
+<text x="118" y="30" fill="var(--f-ink)" font-size="16" font-weight="600">Per-test JIT compile time on worst-case megablock contracts</text>
+<text x="118" y="50" fill="var(--f-ink2)" font-size="12.5">before → after bounded regalloc; two constant-modulus megablocks vs three controls</text>
+<circle cx="125" cy="68" r="6" fill="none" stroke="var(--f-before)" stroke-width="2"/>
+<text x="138" y="72" fill="var(--f-ink2)" font-size="12">before</text>
+<circle cx="207.0" cy="68" r="6" fill="var(--f-after)"/>
+<text x="220.0" y="72" fill="var(--f-ink2)" font-size="12">after — target case</text>
+<circle cx="380.0" cy="68" r="6" fill="var(--f-ctrl)"/>
+<text x="393.0" y="72" fill="var(--f-ink2)" font-size="12">after — control case</text>
+<line x1="118.0" y1="92" x2="118.0" y2="380" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="118.0" y="398" fill="var(--f-muted)" font-size="11" text-anchor="middle" class="tnum">0</text>
+<line x1="231.0" y1="92" x2="231.0" y2="380" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="231.0" y="398" fill="var(--f-muted)" font-size="11" text-anchor="middle" class="tnum">10</text>
+<line x1="344.0" y1="92" x2="344.0" y2="380" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="344.0" y="398" fill="var(--f-muted)" font-size="11" text-anchor="middle" class="tnum">20</text>
+<line x1="457.0" y1="92" x2="457.0" y2="380" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="457.0" y="398" fill="var(--f-muted)" font-size="11" text-anchor="middle" class="tnum">30</text>
+<line x1="570.0" y1="92" x2="570.0" y2="380" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="570.0" y="398" fill="var(--f-muted)" font-size="11" text-anchor="middle" class="tnum">40</text>
+<line x1="118" y1="380" x2="570" y2="380" stroke="var(--f-axis)" stroke-width="1"/>
+<text x="118" y="418" fill="var(--f-muted)" font-size="11.5">compile time (s)</text>
+<text x="570" y="418" fill="var(--f-muted)" font-size="11.5" text-anchor="end">← lower is better</text>
+<text x="104" y="124.0" fill="var(--f-ink)" font-size="13" text-anchor="end">SMOD</text>
+<line x1="525.9" y1="120.0" x2="184.3" y2="120.0" stroke="var(--f-after)" stroke-width="3" stroke-linecap="round"/>
+<circle cx="525.9" cy="120.0" r="8.5" fill="var(--f-surface)"/>
+<circle cx="525.9" cy="120.0" r="6.2" fill="var(--f-surface)" stroke="var(--f-before)" stroke-width="2.2"><title>SMOD — before: 36.1 s</title></circle>
+<circle cx="184.3" cy="120.0" r="8.5" fill="var(--f-surface)"/>
+<circle cx="184.3" cy="120.0" r="6.2" fill="var(--f-after)"><title>SMOD — after: 5.87 s (6.1×)</title></circle>
+<text x="184.3" y="108.0" fill="var(--f-ink)" font-size="12" font-weight="600" text-anchor="middle" class="tnum">5.87 s</text>
+<text x="525.9" y="139.0" fill="var(--f-ink2)" font-size="11" text-anchor="middle" class="tnum">36.1 s</text>
+<text x="706" y="124.0" fill="var(--f-good)" font-size="12.5" font-weight="600" text-anchor="end" class="tnum">6.1×</text>
+<text x="104" y="180.0" fill="var(--f-ink)" font-size="13" text-anchor="end">MOD</text>
+<line x1="230.8" y1="176.0" x2="179.5" y2="176.0" stroke="var(--f-after)" stroke-width="3" stroke-linecap="round"/>
+<circle cx="230.8" cy="176.0" r="8.5" fill="var(--f-surface)"/>
+<circle cx="230.8" cy="176.0" r="6.2" fill="var(--f-surface)" stroke="var(--f-before)" stroke-width="2.2"><title>MOD — before: 9.98 s</title></circle>
+<circle cx="179.5" cy="176.0" r="8.5" fill="var(--f-surface)"/>
+<circle cx="179.5" cy="176.0" r="6.2" fill="var(--f-after)"><title>MOD — after: 5.44 s (1.8×)</title></circle>
+<text x="179.5" y="164.0" fill="var(--f-ink)" font-size="12" font-weight="600" text-anchor="middle" class="tnum">5.44 s</text>
+<text x="230.8" y="195.0" fill="var(--f-ink2)" font-size="11" text-anchor="middle" class="tnum">9.98 s</text>
+<text x="706" y="180.0" fill="var(--f-good)" font-size="12.5" font-weight="600" text-anchor="end" class="tnum">1.8×</text>
+<text x="104" y="236.0" fill="var(--f-ink)" font-size="13" text-anchor="end">DIV-0</text>
+<line x1="168.3" y1="232.0" x2="169.1" y2="232.0" stroke="var(--f-ctrl)" stroke-width="3" stroke-linecap="round"/>
+<circle cx="168.3" cy="232.0" r="8.5" fill="var(--f-surface)"/>
+<circle cx="168.3" cy="232.0" r="6.2" fill="var(--f-surface)" stroke="var(--f-before)" stroke-width="2.2"><title>DIV-0 — before: 4.45 s</title></circle>
+<circle cx="169.1" cy="232.0" r="8.5" fill="var(--f-surface)"/>
+<circle cx="169.1" cy="232.0" r="6.2" fill="var(--f-ctrl)"><title>DIV-0 — after: 4.52 s (+1.6%)</title></circle>
+<text x="169.1" y="220.0" fill="var(--f-ink)" font-size="12" font-weight="600" text-anchor="middle" class="tnum">4.52 s</text>
+<text x="168.3" y="251.0" fill="var(--f-ink2)" font-size="11" text-anchor="middle" class="tnum">4.45 s</text>
+<text x="706" y="236.0" fill="var(--f-muted)" font-size="12.5" font-weight="600" text-anchor="end" class="tnum">+1.6%</text>
+<text x="104" y="292.0" fill="var(--f-ink)" font-size="13" text-anchor="end">ADDMOD</text>
+<line x1="376.8" y1="288.0" x2="382.4" y2="288.0" stroke="var(--f-ctrl)" stroke-width="3" stroke-linecap="round"/>
+<circle cx="376.8" cy="288.0" r="8.5" fill="var(--f-surface)"/>
+<circle cx="376.8" cy="288.0" r="6.2" fill="var(--f-surface)" stroke="var(--f-before)" stroke-width="2.2"><title>ADDMOD — before: 22.9 s</title></circle>
+<circle cx="382.4" cy="288.0" r="8.5" fill="var(--f-surface)"/>
+<circle cx="382.4" cy="288.0" r="6.2" fill="var(--f-ctrl)"><title>ADDMOD — after: 23.4 s (+2.2%)</title></circle>
+<text x="382.4" y="276.0" fill="var(--f-ink)" font-size="12" font-weight="600" text-anchor="middle" class="tnum">23.4 s</text>
+<text x="376.8" y="307.0" fill="var(--f-ink2)" font-size="11" text-anchor="middle" class="tnum">22.9 s</text>
+<text x="706" y="292.0" fill="var(--f-muted)" font-size="12.5" font-weight="600" text-anchor="end" class="tnum">+2.2%</text>
+<text x="104" y="348.0" fill="var(--f-ink)" font-size="13" text-anchor="end">ADDMOD·666</text>
+<line x1="133.1" y1="344.0" x2="133.1" y2="344.0" stroke="var(--f-ctrl)" stroke-width="3" stroke-linecap="round"/>
+<circle cx="133.1" cy="344.0" r="8.5" fill="var(--f-surface)"/>
+<circle cx="133.1" cy="344.0" r="6.2" fill="var(--f-surface)" stroke="var(--f-before)" stroke-width="2.2"><title>ADDMOD·666 — before: 1.34 s</title></circle>
+<circle cx="133.1" cy="344.0" r="8.5" fill="var(--f-surface)"/>
+<circle cx="133.1" cy="344.0" r="6.2" fill="var(--f-ctrl)"><title>ADDMOD·666 — after: 1.34 s (±0%)</title></circle>
+<text x="133.1" y="332.0" fill="var(--f-ink)" font-size="12" font-weight="600" text-anchor="middle" class="tnum">1.34 s</text>
+<text x="133.1" y="363.0" fill="var(--f-ink2)" font-size="11" text-anchor="middle" class="tnum">1.34 s</text>
+<text x="706" y="348.0" fill="var(--f-muted)" font-size="12.5" font-weight="600" text-anchor="end" class="tnum">±0%</text>
+</svg>

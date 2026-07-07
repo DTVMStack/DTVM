@@ -53,6 +53,15 @@ merge base:
 | arithmetic.json ADDMOD, 8 184 sites | 22.9 s | 23.4 s | 1.0× |
 | mod_arithmetic.json ADDMOD, 127-bit modulus, 666 sites (control) | 1.34 s | 1.34 s | 1.0× |
 
+![Per-test JIT compile time before and after bounded regalloc; two constant-modulus megablocks collapse while three controls stay flat](figures/compile-time.svg)
+
+*Figure: per-test JIT compile time, before → after (lower is better). The two
+constant-modulus megablocks collapse (SMOD 6.1×, MOD 1.8×); the three controls
+stay within run-to-run variance (DIV-0 +1.6%, ADDMOD +2.2%, 666-site ADDMOD
+±0%), their near-zero connectors showing the bounds are targeted, not blanket.
+Mean of 2 reps (n=2); the target effects are an order of magnitude larger than
+any control drift. Every case passes its post-state hash.*
+
 Median of two reps per case, 1M-gas tier, taskset CPU6, performance governor;
 every case passes its post-state hash. On a clean upstream base only the
 mod.json constant-modulus megablocks trigger the coalescer/split quadratic — a
@@ -61,7 +70,8 @@ density the bounds target (SMOD 3.14 → 0.51 ms/site; MOD 0.88 → 0.48 ms/site
 The other two large cases are not register-allocation pathologies and the
 bounds are a no-op on them: DIV-0 already compiles linearly (0.36 ms/site), and
 arithmetic.json ADDMOD's cost is `intx` inline expansion (2.8 ms/site),
-untouched here. The ≤2% drift on those two is run-to-run build variance.
+untouched here. The ≤2.2% drift on those two (DIV-0 +1.6%, ADDMOD +2.2%) is run-to-run build
+variance — an order of magnitude below the megablock effects.
 
 The same contracts under the in-flight EVM u64-narrowing change add dense
 per-site register pressure that pushes DIV-0 to ~152 s and MULMOD to ~475 s;
