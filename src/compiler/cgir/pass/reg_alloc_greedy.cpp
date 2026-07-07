@@ -94,6 +94,12 @@ static unsigned CSRFirstTimeCost = 0;
 
 static unsigned long GrowRegionComplexityBudget = 10000;
 
+// Upper bound on the number of use gaps tryLocalSplit's best-window search
+// handles. A local interval with more gaps than this is split into uniform
+// chunks of half this many uses in a single SplitEditor pass instead; see
+// the comment in tryLocalSplit.
+static unsigned LocalSplitGapsCutoff = 512;
+
 static bool GreedyRegClassPriorityTrumpsGlobalness = 0;
 
 static bool GreedyReverseLocalAssignment = 0;
@@ -1299,6 +1305,36 @@ unsigned CgRAGreedy::tryLocalSplit(const CgLiveInterval &VirtReg,
   if (Uses.size() <= 2)
     return 0;
   const unsigned NumGaps = Uses.size() - 1;
+
+  // A use-dense local interval (EVM-style megablocks can give one virtual
+  // register thousands of uses inside a single basic block) makes the
+  // best-window search below pathological: every round pays O(uses) in use
+  // analysis, operand rewriting and spill-weight recomputation, may peel off
+  // only a tiny window, and re-enqueues a barely smaller interval — quadratic
+  // overall. Split such an interval into uniform chunks in one SplitEditor
+  // pass instead: every chunk comes out small enough for the regular
+  // allocation path, and the connector segments stay in the use-free
+  // complement, which is trivially cheap to allocate or spill.
+  if (NumGaps > LocalSplitGapsCutoff) {
+    LLVM_DEBUG(dbgs() << "tryLocalSplit: " << Uses.size()
+                      << " uses exceed the gap cutoff, chunking uniformly.\n");
+    CgLiveRangeEdit LREdit(&VirtReg, NewVRegs, *MF, *LIS, VRM, this,
+                           &DeadRemats);
+    SE->reset(LREdit);
+    const unsigned ChunkUses = LocalSplitGapsCutoff / 2;
+    for (unsigned Begin = 0, End = Uses.size(); Begin < End;
+         Begin += ChunkUses) {
+      const unsigned Last = std::min(Begin + ChunkUses, End) - 1;
+      SE->openIntv();
+      CgSlotIndex SegStart = SE->enterIntvBefore(Uses[Begin]);
+      CgSlotIndex SegStop = SE->leaveIntvAfter(Uses[Last]);
+      SE->useIntv(SegStart, SegStop);
+    }
+    SmallVector<unsigned, 8> IntvMap;
+    SE->finish(&IntvMap);
+    ++NumLocalSplits;
+    return 0;
+  }
 
   LLVM_DEBUG({
     dbgs() << "tryLocalSplit: ";

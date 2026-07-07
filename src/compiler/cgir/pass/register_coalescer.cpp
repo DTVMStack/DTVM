@@ -927,6 +927,19 @@ bool CgRegisterCoalescer::removePartialRedundancy(const CgCoalescerPair &CP,
 
 /// Returns true if @p MI defines the full vreg @p Reg, as opposed to just
 /// defining a subregister.
+// Count the def/use instructions of Reg, stopping at Limit. Bounded so the
+// use-density flip check in joinCopy stays O(1) per copy.
+static unsigned countRegInstrsUpTo(CgRegisterInfo &MRI, CgRegister Reg,
+                                   unsigned Limit) {
+  unsigned N = 0;
+  for (auto I = MRI.reg_instr_begin(Reg), E = MRI.reg_instr_end(); I != E;
+       ++I) {
+    if (++N >= Limit)
+      break;
+  }
+  return N;
+}
+
 static bool definesFullReg(const CgInstruction &MI, CgRegister Reg) {
   assert(!Reg.isPhysical() && "This code cannot handle physreg aliasing");
 
@@ -1683,6 +1696,22 @@ bool CgRegisterCoalescer::joinCopy(CgInstruction *CopyMI, bool &Again) {
     if (!CP.isPartial() && LIS->getInterval(CP.getSrcReg()).size() >
                                LIS->getInterval(CP.getDstReg()).size())
       CP.flip();
+
+    // The segment-count flip above cannot see use density: a value kept live
+    // across an EVM-style megablock has one segment but thousands of use
+    // instructions. updateRegDefsUses rewrites every use of SrcReg after a
+    // join, so renaming the dense register once per site-local copy makes
+    // coalescing quadratic in the block size. Rename the sparse side instead
+    // when the imbalance is clear; the bounded scans keep this O(1) per copy.
+    if (!CP.isPartial() && CP.getSrcIdx() == 0 && CP.getDstIdx() == 0) {
+      constexpr unsigned DenseRegScanCap = 256;
+      const unsigned SrcInstrs =
+          countRegInstrsUpTo(*MRI, CP.getSrcReg(), DenseRegScanCap);
+      const unsigned DstInstrs =
+          countRegInstrsUpTo(*MRI, CP.getDstReg(), DenseRegScanCap);
+      if (SrcInstrs >= 64 && SrcInstrs > 4 * DstInstrs)
+        CP.flip();
+    }
 
     LLVM_DEBUG({
       dbgs() << "\tConsidering merging to "

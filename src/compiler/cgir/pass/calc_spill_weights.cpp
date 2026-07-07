@@ -28,6 +28,11 @@
 using namespace llvm;
 using namespace COMPILER;
 
+// Longest split-copy chain isRematerializable follows before giving up and
+// treating the interval as not rematerializable (forfeiting only the spill
+// weight discount, not the spiller's actual rematerialization).
+static unsigned RematCopyChainCutoff = 8;
+
 #define DEBUG_TYPE "calcspillweights"
 
 void CgVirtRegAuxInfo::calculateSpillWeightsAndHints() {
@@ -97,8 +102,15 @@ bool CgVirtRegAuxInfo::isRematerializable(const CgLiveInterval &LI,
 
     // Trace copies introduced by live range splitting.  The inline
     // spiller can rematerialize through these copies, so the spill
-    // weight must reflect this.
+    // weight must reflect this. Bound the walk: repeated splitting of a
+    // use-dense megablock interval builds copy chains whose length grows
+    // with the split generation, and tracing every chain end-to-end makes
+    // the weight recomputation quadratic across the split family. Giving
+    // up merely costs the remat weight discount for that interval.
+    unsigned Hops = 0;
     while (MI->isFullCopy()) {
+      if (++Hops > RematCopyChainCutoff)
+        return false;
       // The copy destination must match the interval register.
       if (MI->getOperand(0).getReg() != Reg)
         return false;
