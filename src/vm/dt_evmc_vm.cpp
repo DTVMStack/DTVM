@@ -246,7 +246,13 @@ struct DTVM : evmc_vm {
   bool EnableStrictAddrCacheValidation = true;
 
   // Maximum number of modules in the address-based LRU cache (configurable)
-  size_t MaxModuleCacheSize = 4096;
+  // Keep the cache much smaller than the old 4096-module default.
+  // In multipass eager-JIT mode each resident EVMModule retains a dedicated
+  // CodeMemPool reservation; on mainnet block sync, thousands of unique
+  // contracts can accumulate and eventually abort in platform::mmap() while
+  // compiling a newly loaded module. A smaller LRU cap preserves the eager-JIT
+  // execution path for cached modules while bounding concurrent reservations.
+  size_t MaxModuleCacheSize = 256;
 
   // ---- Module & instance cache (shared by interpreter and multipass) ----
   // L0: pointer-based inline cache (fastest, 2 integer comparisons)
@@ -1043,6 +1049,28 @@ DTVM::DTVM()
       Config.EnableEvmGasMetering = ParsedEnableGas;
     } else {
       ZEN_LOG_WARN("ignore invalid DTVM_EVM_ENABLE_GAS_METERING=%s", EnableGas);
+    }
+  }
+
+  if (const char *EnablePGJ = std::getenv("DTVM_EVM_PROFILE_GUIDED_JIT");
+      EnablePGJ != nullptr) {
+    bool ParsedEnablePGJ = false;
+    if (parseBoolEnvValue(EnablePGJ, ParsedEnablePGJ)) {
+      Config.EnableProfileGuidedJIT = ParsedEnablePGJ;
+    } else {
+      ZEN_LOG_WARN("ignore invalid DTVM_EVM_PROFILE_GUIDED_JIT=%s",
+                   EnablePGJ);
+    }
+  }
+
+  if (const char *MaxModules = std::getenv("DTVM_EVM_MAX_MODULE_CACHE_SIZE");
+      MaxModules != nullptr) {
+    int ParsedMaxModules = std::atoi(MaxModules);
+    if (ParsedMaxModules > 0) {
+      MaxModuleCacheSize = static_cast<size_t>(ParsedMaxModules);
+    } else {
+      ZEN_LOG_WARN("ignore invalid DTVM_EVM_MAX_MODULE_CACHE_SIZE=%s",
+                   MaxModules);
     }
   }
 

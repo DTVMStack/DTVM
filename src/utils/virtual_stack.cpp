@@ -3,6 +3,7 @@
 #include "utils/virtual_stack.h"
 #include "common/mem_pool.h"
 #include "runtime/instance.h"
+#include "utils/logging.h"
 
 namespace zen::utils {
 
@@ -92,8 +93,8 @@ void VirtualStackInfo::allocate() {
   bool IsReused = false;
   AllocatedMem = (uint8_t *)MemPool->allocate(true, &IsReused);
   AllInfo = AllocatedMem + StackGuardMemorySize;
-  // [AllocatedMem, AllInfo) is disabled visiting
-  // [AllInfo, StackMemoryTop) is available stack memory
+  // [AllocatedMem, AllInfo) is the guard page.
+  // [AllInfo, StackMemoryTop) is available stack memory.
   if (!IsReused) {
     platform::mprotect(AllocatedMem, StackGuardMemorySize, PROT_NONE);
   }
@@ -101,13 +102,15 @@ void VirtualStackInfo::allocate() {
   // when update sp/rsp register, we need copy old frame to new frame, then
   // the new frame rsp should have enough frame to store
   size_t FrameSizeForBackup = 100 * 1024;
-  NewRspPtr = (uint64_t *)(AllInfo);
-  NewRbpPtr = (uint64_t *)(AllInfo + 8);
-  OldRspPtr = (uint64_t *)(AllInfo + 16);
+  NewRspPtr = &SavedNewRsp;
+  NewRbpPtr = &SavedNewRbp;
+  OldRspPtr = &SavedOldRsp;
   // -128(<-16) to leave enough memory to store prev frame info. use -128 to
   // make the addr aligned
   StackMemoryTop = (uint8_t *)AllInfo + StackMemorySize - FrameSizeForBackup;
-  *((uint64_t *)NewRbpPtr) = (uint64_t)StackMemoryTop;
+  *NewRspPtr = reinterpret_cast<uint64_t>(StackMemoryTop);
+  *NewRbpPtr = reinterpret_cast<uint64_t>(StackMemoryTop);
+  *OldRspPtr = 0;
 }
 
 void VirtualStackInfo::deallocate() {
@@ -141,8 +144,27 @@ void VirtualStackInfo::runInVirtualStack(InVirtualStackFuncPtr Func) {
 }
 
 void VirtualStackInfo::rollbackStack() {
-  auto *ResultJmpBuf = (jmp_buf *)rollbackWasmVirtualStack(
-      this, *(uint64_t *)(OldRspPtr), &JmpBufBefore);
+  const uint64_t OldRsp = *OldRspPtr;
+  if (OldRsp < 0x10000000000ULL || (OldRsp & 0xf) != 0) {
+#ifdef ZEN_ENABLE_EVM
+    ZEN_LOG_ERROR(
+        "virtual stack rollback rejected: this=%p allocated=%p all=%p top=%p "
+        "old_rsp_ptr=%p old_rsp=0x%llx saved_inst=%p saved1=%p saved2=%p "
+        "saved3=%p",
+        this, AllocatedMem, AllInfo, StackMemoryTop, OldRspPtr,
+        static_cast<unsigned long long>(OldRsp), SavedInst, SavedPtr1,
+        SavedPtr2, SavedPtr3);
+#else
+    ZEN_LOG_ERROR(
+        "virtual stack rollback rejected: this=%p allocated=%p all=%p top=%p "
+        "old_rsp_ptr=%p old_rsp=0x%llx saved_inst=%p",
+        this, AllocatedMem, AllInfo, StackMemoryTop, OldRspPtr,
+        static_cast<unsigned long long>(OldRsp), SavedInst);
+#endif
+    ZEN_ABORT();
+  }
+  auto *ResultJmpBuf =
+      (jmp_buf *)rollbackWasmVirtualStack(this, OldRsp, &JmpBufBefore);
 #if defined(ZEN_ENABLE_STACK_CHECK_CPU) and defined(ZEN_ENABLE_VIRTUAL_STACK)
   SavedInst->popVirtualStack();
 #endif

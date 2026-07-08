@@ -2028,14 +2028,18 @@ private:
 
         const size_t SuccDepth =
             static_cast<size_t>(SuccInfo.ResolvedEntryStackDepth);
-        // seedRangeEntryVectors already sizes every block with
-        // ResolvedEntryStackDepth >= 0 correctly; this branch is unreachable.
-        ZEN_ASSERT(SuccInfo.EntryStackRanges.size() == SuccDepth);
-
-        // Producer's exit depth and successor's entry depth are linked by
-        // resolveEntryDepths and must match for every block pair reaching this
-        // point (both have ResolvedEntryStackDepth >= 0 and consistent depth).
-        ZEN_ASSERT(ExitStack.size() == SuccDepth);
+        // Range analysis is an optimization aid only. If a CFG edge violates
+        // the analyzer's depth assumptions, conservatively widen the
+        // successor's entry state to full-width U256 values and skip
+        // propagating this edge rather than aborting module construction.
+        if (SuccInfo.EntryStackRanges.size() != SuccDepth) {
+          SuccInfo.EntryStackRanges.assign(SuccDepth, EVMValueRange::U256);
+        }
+        if (ExitStack.size() != SuccDepth) {
+          std::fill(SuccInfo.EntryStackRanges.begin(),
+                    SuccInfo.EntryStackRanges.end(), EVMValueRange::U256);
+          continue;
+        }
         // Meet the producer's exit stack into the successor's entry stack.
         bool Changed = false;
         for (size_t I = 0; I < SuccDepth; ++I) {
