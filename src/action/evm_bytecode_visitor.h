@@ -1226,6 +1226,116 @@ private:
            Opcode == OP_STOP || Opcode == OP_INVALID || Opcode == OP_REVERT ||
            Opcode == OP_SELFDESTRUCT;
   }
+  // Stack effect for opcodes that the const-precheck simulator does not
+  // hand-model. `Pops`/`Pushes` describe the EVM stack delta; setting `Pops`
+  // to `kPrecheckBailSentinel` rejects the plan when the opcode is
+  // encountered (used for memory mutators or anything that would invalidate
+  // the abstract memory model).
+  struct PrecheckOpaqueStackEffect {
+    uint8_t Pops;
+    uint8_t Pushes;
+  };
+
+  static constexpr uint8_t kPrecheckBailSentinel = 0xFF;
+
+  // Build a 256-entry lookup table from EVM opcode byte to its stack effect
+  // for the const-precheck simulator's `default:` fallback. Opcodes that are
+  // hand-modeled in the switch (PUSH*/DUP*/SWAP*/POP/ADD/SUB/MLOAD/MSTORE/
+  // MSTORE8/MSIZE) and block terminators are still routed through their
+  // dedicated arms; entries here are only consulted when the switch falls
+  // through. Opcodes left at the bail sentinel reject the plan (e.g. MCOPY,
+  // unallocated opcode bytes). Helper-sensitive opcodes are already filtered
+  // out earlier by `isHelperSensitiveOpcode`.
+  static constexpr std::array<PrecheckOpaqueStackEffect, 256>
+  buildPrecheckOpaqueStackEffectTable() {
+    std::array<PrecheckOpaqueStackEffect, 256> Table{};
+    for (auto &Entry : Table) {
+      Entry = {kPrecheckBailSentinel, 0};
+    }
+
+    // Arithmetic (binary, push 1).
+    Table[OP_MUL] = {2, 1};
+    Table[OP_DIV] = {2, 1};
+    Table[OP_SDIV] = {2, 1};
+    Table[OP_MOD] = {2, 1};
+    Table[OP_SMOD] = {2, 1};
+    // OP_EXP is intentionally LEFT at the bail sentinel: its dynamic gas cost
+    // depends on the exponent byte length and is sensitive to the same gas
+    // accounting issue described below for storage opcodes
+    // (stEIP150singleCodeGasPrices.gasCostExp).
+    Table[OP_SIGNEXTEND] = {2, 1};
+    // Ternary modular arithmetic.
+    Table[OP_ADDMOD] = {3, 1};
+    Table[OP_MULMOD] = {3, 1};
+
+    // Comparison / bitwise (binary, push 1).
+    Table[OP_LT] = {2, 1};
+    Table[OP_GT] = {2, 1};
+    Table[OP_SLT] = {2, 1};
+    Table[OP_SGT] = {2, 1};
+    Table[OP_EQ] = {2, 1};
+    Table[OP_AND] = {2, 1};
+    Table[OP_OR] = {2, 1};
+    Table[OP_XOR] = {2, 1};
+    Table[OP_BYTE] = {2, 1};
+    Table[OP_SHL] = {2, 1};
+    Table[OP_SHR] = {2, 1};
+    Table[OP_SAR] = {2, 1};
+
+    // Unary.
+    Table[OP_ISZERO] = {1, 1};
+    Table[OP_NOT] = {1, 1};
+    Table[OP_CLZ] = {1, 1};
+
+    // Environment / context reads (push 1, no pops).
+    Table[OP_ADDRESS] = {0, 1};
+    Table[OP_ORIGIN] = {0, 1};
+    Table[OP_CALLER] = {0, 1};
+    Table[OP_CALLVALUE] = {0, 1};
+    Table[OP_CALLDATASIZE] = {0, 1};
+    Table[OP_CODESIZE] = {0, 1};
+    Table[OP_GASPRICE] = {0, 1};
+    Table[OP_RETURNDATASIZE] = {0, 1};
+    Table[OP_COINBASE] = {0, 1};
+    Table[OP_TIMESTAMP] = {0, 1};
+    Table[OP_NUMBER] = {0, 1};
+    Table[OP_PREVRANDAO] = {0, 1};
+    Table[OP_GASLIMIT] = {0, 1};
+    Table[OP_CHAINID] = {0, 1};
+    Table[OP_SELFBALANCE] = {0, 1};
+    Table[OP_BASEFEE] = {0, 1};
+    Table[OP_BLOBBASEFEE] = {0, 1};
+    Table[OP_PC] = {0, 1};
+    // OP_GAS reads the precise remaining-gas balance. Hoisting expandMemoryIR
+    // to the BB entry charges memory-expansion gas ahead of OP_GAS, polluting
+    // its observed value (state root mismatch in stEIP150singleCodeGasPrices.
+    // gasCostExp). Left at bail sentinel.
+
+    // Environment reads that consume one stack input and have STATIC gas.
+    // EIP-2929-affected opcodes (BALANCE / EXTCODESIZE / EXTCODEHASH) are
+    // intentionally NOT listed here: their cold/warm gas accounting depends
+    // on the exact remaining-gas balance at execution time, which hoisted
+    // memory-expansion gas would perturb.
+    Table[OP_CALLDATALOAD] = {1, 1};
+    Table[OP_BLOCKHASH] = {1, 1};
+    Table[OP_BLOBHASH] = {1, 1};
+
+    // Storage / transient storage are LEFT at the bail sentinel:
+    //   * SLOAD / SSTORE / TLOAD / TSTORE charge dynamic gas whose cold/warm
+    //     classification (EIP-2929) and SSTORE refund logic depend on the
+    //     exact remaining-gas balance at execution time. Hoisting memory-
+    //     expansion gas ahead of these opcodes shifts the balance and
+    //     produces wrong state roots (stEIP2930.variedContext failures).
+    //   * SSTORE additionally invokes a host helper that may observe gas.
+    //
+    // OP_EXP is also LEFT at the bail sentinel: its dynamic gas depends on
+    // the exponent byte length and is sensitive to the same accounting issue
+    // (stEIP150singleCodeGasPrices.gasCostExp).
+    //
+    // MCOPY mutates linear memory with non-tracked semantics; also bails.
+
+    return Table;
+  }
 
   static AbstractConstU64 makeUnknownConstU64() { return {}; }
 
@@ -2159,14 +2269,34 @@ private:
         break;
       }
       case OP_MSIZE:
-        SimStack.push_back(makeUnknownConstU64());
-        break;
-      default:
+        // MSIZE observes the precise memory size at the moment it executes.
+        // Hoisting expandMemoryIR to the BB entry would expand memory ahead
+        // of MSIZE and pollute its observed value, breaking EVM semantics
+        // (state root mismatch in vmIOandFlowOperations.msize). Hard-bail.
+        return {};
+      default: {
         if (isBlockTerminatorOpcode(Opcode)) {
           ScanPC = BytecodeSize;
           break;
         }
-        return {};
+        static constexpr auto OpaqueEffects =
+            buildPrecheckOpaqueStackEffectTable();
+        const PrecheckOpaqueStackEffect &Eff =
+            OpaqueEffects[static_cast<uint8_t>(Opcode)];
+        if (Eff.Pops == kPrecheckBailSentinel) {
+          return {};
+        }
+        if (SimStack.size() < Eff.Pops) {
+          return {};
+        }
+        for (uint8_t I = 0; I < Eff.Pops; ++I) {
+          SimStack.pop_back();
+        }
+        for (uint8_t I = 0; I < Eff.Pushes; ++I) {
+          SimStack.push_back(makeUnknownConstU64());
+        }
+        break;
+      }
       }
     }
 
