@@ -6,6 +6,11 @@ target_link_libraries(dtvm PRIVATE dtvmcore CLI11::CLI11)
 
 if(ZEN_ENABLE_EVM)
   target_link_libraries(dtvm PUBLIC evmc::evmc evmc::instructions)
+  add_executable(dtvm_evm_code_cache_bench evm_code_cache_bench.cpp)
+  target_link_libraries(
+    dtvm_evm_code_cache_bench
+    PRIVATE dtvmcore CLI11::CLI11 rapidjson evmc::evmc evmc::instructions
+  )
 endif()
 
 if(ZEN_ENABLE_PROFILER)

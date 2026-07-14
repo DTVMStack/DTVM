@@ -19,6 +19,7 @@
 #include "evm/evm.h"
 #include "evm/interpreter.h"
 #include "evm/opcode_handlers.h"
+#include "host/evm/crypto.h"
 #include "runtime/evm_instance.h"
 #include "utils/evm.h"
 #include <evmc/hex.hpp>
@@ -71,6 +72,27 @@ bool shouldFallbackEVMCompilationToInterpreter(const Runtime &RT,
          Err.getPhase() == ErrorPhase::Compilation;
 }
 
+#ifdef ZEN_ENABLE_EVM
+template <typename T> void hashCombine(size_t &Seed, const T &Value) {
+  Seed ^= std::hash<T>{}(Value) + 0x9e3779b97f4a7c15ULL + (Seed << 6) +
+          (Seed >> 2);
+}
+
+void hashBytes(size_t &Seed, const uint8_t *Data, size_t Size) {
+  for (size_t I = 0; I < Size; ++I) {
+    hashCombine(Seed, Data[I]);
+  }
+}
+
+bool memoryProfileEqual(const EVMMemorySpecializationProfile &LHS,
+                        const EVMMemorySpecializationProfile &RHS) {
+  return LHS.SkipLeadingZeroLimbStores == RHS.SkipLeadingZeroLimbStores &&
+         LHS.HasFullCallDataLoad0Window == RHS.HasFullCallDataLoad0Window &&
+         LHS.HasKnownCallDataLoad0Low64 == RHS.HasKnownCallDataLoad0Low64 &&
+         LHS.KnownCallDataLoad0Low64 == RHS.KnownCallDataLoad0Low64;
+}
+#endif // ZEN_ENABLE_EVM
+
 } // namespace
 
 void Runtime::cleanRuntime() {
@@ -82,6 +104,7 @@ void Runtime::cleanRuntime() {
   ModulePool.clear();
 
 #ifdef ZEN_ENABLE_EVM
+  EVMCodeCache.clear();
   EVMModulePool.clear();
 #endif // ZEN_ENABLE_EVM
 
@@ -259,6 +282,33 @@ Module *Runtime::loadModule(WASMSymbol Name, CodeHolderUniquePtr CodeHolder,
 }
 
 #ifdef ZEN_ENABLE_EVM
+size_t Runtime::EVMCodeCacheKeyHash::operator()(
+    const EVMCodeCacheKey &Key) const noexcept {
+  size_t H = 0;
+  hashBytes(H, Key.CodeHash.bytes, sizeof(Key.CodeHash.bytes));
+  hashCombine(H, Key.CodeSize);
+  hashCombine(H, static_cast<int>(Key.Revision));
+  hashCombine(H, static_cast<int>(Key.Mode));
+  hashCombine(H, Key.EnableEvmGasMetering);
+  hashCombine(H, Key.DisableMultipassGreedyRA);
+  hashCombine(H, Key.EnableMultipassLazy);
+  hashCombine(H, Key.MemoryProfile.SkipLeadingZeroLimbStores);
+  hashCombine(H, Key.MemoryProfile.HasFullCallDataLoad0Window);
+  hashCombine(H, Key.MemoryProfile.HasKnownCallDataLoad0Low64);
+  hashCombine(H, Key.MemoryProfile.KnownCallDataLoad0Low64);
+  return H;
+}
+
+bool Runtime::EVMCodeCacheKeyEqual::operator()(
+    const EVMCodeCacheKey &LHS, const EVMCodeCacheKey &RHS) const noexcept {
+  return LHS.CodeHash == RHS.CodeHash && LHS.CodeSize == RHS.CodeSize &&
+         LHS.Revision == RHS.Revision && LHS.Mode == RHS.Mode &&
+         LHS.EnableEvmGasMetering == RHS.EnableEvmGasMetering &&
+         LHS.DisableMultipassGreedyRA == RHS.DisableMultipassGreedyRA &&
+         LHS.EnableMultipassLazy == RHS.EnableMultipassLazy &&
+         memoryProfileEqual(LHS.MemoryProfile, RHS.MemoryProfile);
+}
+
 MayBe<EVMModule *>
 Runtime::loadEVMModule(const std::string &Filename, evmc_revision Rev,
                        EVMMemorySpecializationProfile MemoryProfile) noexcept {
@@ -273,8 +323,10 @@ Runtime::loadEVMModule(const std::string &Filename, evmc_revision Rev,
 
   try {
     // Read hex content from file
+    auto ReadTimer = Stats.startRecord(utils::StatisticPhase::BytecodeRead);
     std::ifstream File(Filename);
     if (!File.is_open()) {
+      Stats.revertRecord(ReadTimer);
       return getError(ErrorCode::FileAccessFailed);
     }
 
@@ -283,16 +335,23 @@ Runtime::loadEVMModule(const std::string &Filename, evmc_revision Rev,
     File.close();
     // trim HexContent
     utils::trimString(HexContent);
+    Stats.stopRecord(ReadTimer);
 
     // Decode hex string to bytes
+    auto DecodeTimer = Stats.startRecord(utils::StatisticPhase::BytecodeDecode);
     auto DecodedBytes = utils::fromHex(std::string_view(HexContent));
     if (!DecodedBytes.has_value()) {
+      Stats.revertRecord(DecodeTimer);
       return getError(ErrorCode::InvalidRawData);
     }
+    Stats.stopRecord(DecodeTimer);
 
     // Create CodeHolder with decoded bytes
+    auto CodeHolderTimer =
+        Stats.startRecord(utils::StatisticPhase::CodeHolderCreate);
     auto Code = CodeHolder::newRawDataCodeHolder(*this, DecodedBytes->data(),
                                                  DecodedBytes->size());
+    Stats.stopRecord(CodeHolderTimer);
     return loadEVMModule(Name, std::move(Code), Rev, MemoryProfile);
   } catch (const Error &Err) {
     Stats.clearAllTimers();
@@ -320,11 +379,79 @@ Runtime::loadEVMModule(const std::string &ModName, const void *Data,
   }
 
   try {
+    auto CodeHolderTimer =
+        Stats.startRecord(utils::StatisticPhase::CodeHolderCreate);
     auto Code = CodeHolder::newRawDataCodeHolder(*this, Data, Size);
+    Stats.stopRecord(CodeHolderTimer);
     return loadEVMModule(Name, std::move(Code), Rev, MemoryProfile);
   } catch (const Error &Err) {
     Stats.clearAllTimers();
     freeSymbol(Name);
+    return Err;
+  }
+}
+
+MayBe<EVMModule *> Runtime::getOrCompileCachedEVMModule(
+    const void *Data, size_t Size, evmc_revision Rev,
+    EVMMemorySpecializationProfile MemoryProfile,
+    EVMCodeCacheLookupInfo *LookupInfo) noexcept {
+  if (Size != 0 && Data == nullptr) {
+    return getError(ErrorCode::InvalidRawData);
+  }
+
+  EVMCodeCacheKey Key;
+  Key.CodeSize = Size;
+  Key.Revision = Rev;
+  Key.Mode = Config.Mode;
+  Key.EnableEvmGasMetering = Config.EnableEvmGasMetering;
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+  Key.DisableMultipassGreedyRA = Config.DisableMultipassGreedyRA;
+  Key.EnableMultipassLazy = Config.EnableMultipassLazy;
+#endif // ZEN_ENABLE_MULTIPASS_JIT
+  Key.MemoryProfile = MemoryProfile;
+  zen::host::evm::crypto::keccak256(static_cast<const uint8_t *>(Data), Size,
+                                    Key.CodeHash.bytes);
+
+  const std::string CodeHashHex =
+      "0x" + zen::utils::toHex(Key.CodeHash.bytes, sizeof(Key.CodeHash.bytes));
+  if (LookupInfo) {
+    LookupInfo->CacheHit = false;
+    LookupInfo->CodeHashHex = CodeHashHex;
+    LookupInfo->EntryCount = EVMCodeCache.size();
+    LookupInfo->BytecodeSize = Size;
+  }
+
+  auto It = EVMCodeCache.find(Key);
+  if (It != EVMCodeCache.end()) {
+    if (LookupInfo) {
+      LookupInfo->CacheHit = true;
+      LookupInfo->EntryCount = EVMCodeCache.size();
+      LookupInfo->FallbackToInterpreter = It->second->ShouldFallbackToInterp;
+      LookupInfo->HasJITCode = It->second->getJITCode() != nullptr;
+      LookupInfo->JITCodeSize = It->second->getJITCodeSize();
+    }
+    return It->second.get();
+  }
+
+  try {
+    auto CodeHolderTimer =
+        Stats.startRecord(utils::StatisticPhase::CodeHolderCreate);
+    auto Code = CodeHolder::newRawDataCodeHolder(*this, Data, Size);
+    Stats.stopRecord(CodeHolderTimer);
+
+    const std::string ModName = "evm_code_cache_" + CodeHashHex;
+    EVMSymbol Name = newSymbol(ModName.c_str(), ModName.size());
+    EVMModule *Mod = loadCachedEVMModule(Key, Name, std::move(Code), Rev,
+                                         MemoryProfile);
+    if (LookupInfo) {
+      LookupInfo->EntryCount = EVMCodeCache.size();
+      LookupInfo->FallbackToInterpreter = Mod->ShouldFallbackToInterp;
+      LookupInfo->HasJITCode = Mod->getJITCode() != nullptr;
+      LookupInfo->JITCodeSize = Mod->getJITCodeSize();
+    }
+    return Mod;
+  } catch (const Error &Err) {
+    Stats.clearAllTimers();
     return Err;
   }
 }
@@ -339,22 +466,33 @@ Runtime::loadEVMModule(EVMSymbol Name, CodeHolderUniquePtr CodeHolder,
 
   CodeHolderUniquePtr RetryCode;
   if (getConfig().Mode != RunMode::InterpMode) {
+    auto RetryCloneTimer =
+        Stats.startRecord(utils::StatisticPhase::EVMRetryCodeClone);
     RetryCode = CodeHolder::newRawDataCodeHolder(*this, CodeHolder->getData(),
                                                  CodeHolder->getSize());
+    Stats.stopRecord(RetryCloneTimer);
   }
   EVMModuleUniquePtr Mod;
+  auto ModuleCreateTimer = static_cast<uint32_t>(-1u);
   try {
+    ModuleCreateTimer =
+        Stats.startRecord(utils::StatisticPhase::EVMModuleCreate);
     Mod = EVMModule::newEVMModule(*this, std::move(CodeHolder), Rev,
-                                  MemoryProfile);
+                                  dumpSymbolString(Name), MemoryProfile);
+    Stats.stopRecord(ModuleCreateTimer);
   } catch (const Error &Err) {
+    Stats.revertRecord(ModuleCreateTimer);
     if (!shouldFallbackEVMCompilationToInterpreter(*this, Err)) {
       throw;
     }
     RuntimeConfig RetryConfig = getConfig();
     RetryConfig.Mode = RunMode::InterpMode;
     ScopedRuntimeConfig Retry(this, RetryConfig);
+    ModuleCreateTimer =
+        Stats.startRecord(utils::StatisticPhase::EVMModuleCreate);
     Mod = EVMModule::newEVMModule(*this, std::move(RetryCode), Rev,
-                                  MemoryProfile);
+                                  dumpSymbolString(Name), MemoryProfile);
+    Stats.stopRecord(ModuleCreateTimer);
   }
   // All errors in Module::newModule are thrown as exceptions, so the return
   // value must be valid when the following line is executed
@@ -363,8 +501,63 @@ Runtime::loadEVMModule(EVMSymbol Name, CodeHolderUniquePtr CodeHolder,
   ModulePtr->setName(Name);
 
   // Ignore the return value, because the name is unique(checked in above)
+  auto PoolTimer = Stats.startRecord(utils::StatisticPhase::EVMModulePoolInsert);
   auto EmplaceRet =
       EVMModulePool.emplace(Name, std::forward<EVMModuleUniquePtr>(Mod));
+  Stats.stopRecord(PoolTimer);
+  if (EmplaceRet.second) {
+    return EmplaceRet.first->second.get();
+  }
+
+  return ModulePtr;
+}
+
+EVMModule *Runtime::loadCachedEVMModule(
+    const EVMCodeCacheKey &Key, EVMSymbol Name, CodeHolderUniquePtr CodeHolder,
+    evmc_revision Rev, EVMMemorySpecializationProfile MemoryProfile) {
+  ZEN_ASSERT(Name);
+  ZEN_ASSERT(CodeHolder);
+
+  CodeHolderUniquePtr RetryCode;
+  if (getConfig().Mode != RunMode::InterpMode) {
+    auto RetryCloneTimer =
+        Stats.startRecord(utils::StatisticPhase::EVMRetryCodeClone);
+    RetryCode = CodeHolder::newRawDataCodeHolder(*this, CodeHolder->getData(),
+                                                 CodeHolder->getSize());
+    Stats.stopRecord(RetryCloneTimer);
+  }
+
+  EVMModuleUniquePtr Mod;
+  auto ModuleCreateTimer = static_cast<uint32_t>(-1u);
+  try {
+    ModuleCreateTimer =
+        Stats.startRecord(utils::StatisticPhase::EVMModuleCreate);
+    Mod = EVMModule::newEVMModule(*this, std::move(CodeHolder), Rev,
+                                  dumpSymbolString(Name), MemoryProfile);
+    Stats.stopRecord(ModuleCreateTimer);
+  } catch (const Error &Err) {
+    Stats.revertRecord(ModuleCreateTimer);
+    if (!shouldFallbackEVMCompilationToInterpreter(*this, Err)) {
+      freeSymbol(Name);
+      throw;
+    }
+    RuntimeConfig RetryConfig = getConfig();
+    RetryConfig.Mode = RunMode::InterpMode;
+    ScopedRuntimeConfig Retry(this, RetryConfig);
+    ModuleCreateTimer =
+        Stats.startRecord(utils::StatisticPhase::EVMModuleCreate);
+    Mod = EVMModule::newEVMModule(*this, std::move(RetryCode), Rev,
+                                  dumpSymbolString(Name), MemoryProfile);
+    Stats.stopRecord(ModuleCreateTimer);
+  }
+
+  ZEN_ASSERT(Mod);
+  auto *ModulePtr = Mod.get();
+  ModulePtr->setName(Name);
+
+  auto PoolTimer = Stats.startRecord(utils::StatisticPhase::EVMModulePoolInsert);
+  auto EmplaceRet = EVMCodeCache.emplace(Key, std::move(Mod));
+  Stats.stopRecord(PoolTimer);
   if (EmplaceRet.second) {
     return EmplaceRet.first->second.get();
   }
@@ -774,10 +967,15 @@ void Runtime::callEVMMainOnPhysStack(EVMInstance &Inst, evmc_message &Msg,
   bool ShouldFallbackToInterp = Module->ShouldFallbackToInterp;
   if (getConfig().Mode == RunMode::InterpMode || ShouldFallbackToInterp ||
       Module->getJITCode() == nullptr) {
+    auto ExecTimer =
+        Stats.startRecord(utils::StatisticPhase::EVMInterpreterExecution);
     callEVMInInterpMode(Inst, MsgWithCode, Result);
+    Stats.stopRecord(ExecTimer);
   } else {
 #ifdef ZEN_ENABLE_JIT
+    auto ExecTimer = Stats.startRecord(utils::StatisticPhase::EVMJITExecution);
     callEVMInJITMode(Inst, MsgWithCode, Result);
+    Stats.stopRecord(ExecTimer);
 #else
     ZEN_UNREACHABLE();
 #endif
@@ -787,9 +985,10 @@ void Runtime::callEVMMainOnPhysStack(EVMInstance &Inst, evmc_message &Msg,
 
 void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
                           evmc::Result &Result) {
-#ifdef ZEN_ENABLE_LINUX_PERF
-  auto Timer = Stats.startRecord(utils::StatisticPhase::Execution);
-#endif
+  const bool IsTopLevelMessage = Msg.depth == 0;
+  auto Timer = IsTopLevelMessage
+                   ? Stats.startRecord(utils::StatisticPhase::Execution)
+                   : static_cast<uint32_t>(-1u);
 
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
   // Interpreter mode does not need a virtual stack: CALL/CREATE re-enter
@@ -816,9 +1015,9 @@ void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
   callEVMMainOnPhysStack(Inst, Msg, Result);
 #endif // ZEN_ENABLE_VIRTUAL_STACK
 
-#ifdef ZEN_ENABLE_LINUX_PERF
-  Stats.stopRecord(Timer);
-#endif
+  if (IsTopLevelMessage) {
+    Stats.stopRecord(Timer);
+  }
 }
 #endif // ZEN_ENABLE_EVM
 

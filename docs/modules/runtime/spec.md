@@ -26,7 +26,13 @@ The runtime module is DTVM's **core runtime**, responsible for:
 
 - **Module**: Parsed WASM bytecode; type table, import/export table, code segment, data segment, JIT metadata
 - **HostModule**: Native host module; described by `BuiltinModuleDesc`; load/unload functions via VNMI
-- **EVMModule**: EVM bytecode module; Code, CodeSize, evmc::Host, JIT code (optional)
+- **EVMModule**: EVM bytecode module; Code, CodeSize, evmc::Host, diagnostic
+  module name/codehash identity, JIT code (optional)
+- **EVM codehash cache**: Runtime-owned in-process cache that maps EVM
+  runtime bytecode identity and JIT-relevant config to an `EVMModule`, allowing
+  compile-once/execute-many benchmark flows to reuse analyzer results,
+  bytecode cache, fallback decision, and JIT code without changing the existing
+  filename-based module pool.
 - **Instance**: Instantiated Module; function table, tables, memory, globals, etc.
 - **EVMInstance**: EVM-specific instance; EVM stack, memory, message stack, execution cache, etc.
 
@@ -97,6 +103,23 @@ runtime propagates errors via `common::Error` / `common::ErrorCode`; common runt
 1. **Config**: `RuntimeConfig` controls RunMode (Interp / Singlepass / Multipass), WASI, statistics, JIT thread count; changes require `validate()`
 2. **Compile options**: Behavior controlled by `ZEN_ENABLE_EVM`, `ZEN_ENABLE_JIT`, `ZEN_ENABLE_SINGLEPASS_JIT`, `ZEN_ENABLE_MULTIPASS_JIT`, `ZEN_ENABLE_BUILTIN_WASI`, `ZEN_ENABLE_CPU_EXCEPTION`, `ZEN_ENABLE_VIRTUAL_STACK`, `ZEN_ENABLE_DWASM`, etc.
 3. **ABI**: entrypoint assembly depends on `Instance`, `MemoryInstance` layout; layout changes require offset updates in assembly
+4. **Statistics coverage**: EVM replay timing may include bytecode source read/decode, module-load diagnostics, top-level EVM execution timing, JIT/interpreter execution bodies, and coarse host account/storage/call diagnostics in addition to JIT compilation, instantiation, and CLI-scoped phases. Nested EVM CALL/CREATE re-entry does not add separate top-level `Execution` records, but diagnostic host-call and module-create phases may include nested work.
+5. **EVM diagnostic identity**: EVMModule records the loader-provided module
+   name and bytecode keccak256 codehash for diagnostics such as
+   `JIT_MODULE_PROFILE`. These fields are observational only and must not drive
+   execution semantics or fallback decisions.
+6. **EVM codehash cache scope**: `getOrCompileCachedEVMModule()` is
+   Runtime-local and not thread-safe. Its key includes bytecode Keccak-256,
+   code size, EVM revision, run mode, JIT-relevant config flags, and memory
+   specialization profile. Cached modules are owned until Runtime teardown and
+   are not removed by `unloadEVMModule()`, which continues to operate on the
+   filename/module-name pool. Lookup metadata reports hit/miss, codehash,
+   bytecode size, cache entry count, fallback-to-interpreter state, whether the
+   cached module has native JIT code, and JIT code size when available.
+7. **EVM nested call reuse**: Mocked EVM host internal CALL module lookup uses
+   the Runtime codehash cache before storing the per-transaction local module
+   pointer. This keeps account/state isolation unchanged while allowing nested
+   calls to reuse compiled code across transactions in the same Runtime.
 
 ## Cross-References
 

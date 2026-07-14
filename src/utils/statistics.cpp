@@ -45,6 +45,15 @@ void Statistics::revertRecord(StatisticTimer Timer) {
   Timers.erase(Timer);
 }
 
+void Statistics::recordDuration(StatisticPhase Phase, float TimeCostMs) {
+  if (!Enabled) {
+    return;
+  }
+
+  common::LockGuard<common::Mutex> Lock(Mtx);
+  Records.emplace_back(Phase, TimeCostMs);
+}
+
 void Statistics::clearAllTimers() {
   if (!Enabled) {
     return;
@@ -103,24 +112,81 @@ void Statistics::report() const {
       "================  [Begin] ZetaEngine Statistics  ================");
 
   static constexpr const char *StatLogPrefixs[] = {
-      "Load:\t\t\t",
-      "Runtime Setup:\t\t",
-      "State File Read:\t",
-      "State JSON Parse:\t",
-      "State Materialization:\t",
-      "State Access Warmup:\t",
-      "Input Decode:\t\t",
-      "Message Setup:\t\t",
-      "Pre Execution Checks:\t",
-      "JIT Compilation:\t\t",
-      "JIT Lazy Precompilation:\t",
-      "JIT Lazy Compilation(Fg):\t",
-      "JIT Lazy Compilation(Bg):\t",
-      "JIT Lazy Release Delay:\t",
-      "Memory Bucket Map:\t",
-      "Instantiation:\t\t",
-      "Execution:\t\t",
-      "Post Execution Cleanup:\t",
+      "Load:			",
+      "Process To Report:	",
+      "Process Bootstrap:	",
+      "CLI Parse:		",
+      "Logger Setup:		",
+      "Runtime Create:	",
+      "Host Setup:		",
+      "Runtime Setup:		",
+      "Bytecode Read:		",
+      "Bytecode Decode:	",
+      "State File Read:	",
+      "State JSON Parse:	",
+      "State Materialization:	",
+      "State Access Warmup:	",
+      "Input Decode:		",
+      "Memory Profile Derive:	",
+      "EVM Module Load:	",
+      "CodeHolder Create:	",
+      "EVM Retry Code Clone:	",
+      "EVM Module Create:	",
+      "EVM Module Pool Insert:	",
+      "EVM Analyzer:		",
+      "EVM Fallback Decision:	",
+      "State Accounts Materialize:	",
+      "State Storage Materialize:	",
+      "State Code Materialize:	",
+      "State TxContext Materialize:	",
+      "Message Setup:		",
+      "EVM Message Create:	",
+      "Isolation Create:	",
+      "Pre Execution Checks:	",
+      "JIT Compilation:		",
+      "JIT EVM Frontend:	",
+      "JIT MIR To CgIR:	",
+      "JIT Machine Code Lowering:	",
+      "JIT Object Emission:	",
+      "JIT Code Finalization:	",
+      "JIT Lazy Precompilation:	",
+      "JIT Lazy Compilation(Fg):	",
+      "JIT Lazy Compilation(Bg):	",
+      "JIT Lazy Release Delay:	",
+      "Memory Bucket Map:	",
+      "Instantiation:		",
+      "Execution:		",
+      "EVM Interpreter Execution:	",
+      "EVM JIT Execution:	",
+      "EVM Host Account Ops:	",
+      "EVM Host Storage Ops:	",
+      "EVM Host Call:	",
+      "EVM Memory Ops:	",
+      "EVM Gas Accounting:	",
+      "Benchmark Hooks:	",
+      "Post Execution Cleanup:	",
+      "JIT MIR Verify:	",
+      "JIT MIR DCE:		",
+      "JIT Cg Lowering:	",
+      "JIT Cg Peephole:	",
+      "JIT Cg Phi Elimination:	",
+      "JIT Fast RA:		",
+      "JIT Cg DCE:		",
+      "JIT Cg Dominator Tree:	",
+      "JIT Cg Loop Info:	",
+      "JIT Cg Slot Indexes:	",
+      "JIT Cg Live Intervals:	",
+      "JIT Cg Live Stacks:	",
+      "JIT Cg Block Frequency:	",
+      "JIT Cg Register Coalescer:	",
+      "JIT Cg VirtReg Map:	",
+      "JIT Cg LiveReg Matrix:	",
+      "JIT Cg Edge Bundles:	",
+      "JIT Cg Spill Placement:	",
+      "JIT Cg Greedy RA:	",
+      "JIT Cg VirtReg Rewrite:	",
+      "JIT Prolog Epilog:	",
+      "JIT Post-RA Pseudos:	",
   };
 
   for (uint32_t I = 0; I < NumStatPhases; ++I) {

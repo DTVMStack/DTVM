@@ -102,6 +102,8 @@ private:
       PrewarmStorageKeys;
   std::unordered_set<evmc::address> CreatedInTx;
   std::unordered_set<evmc::address> PendingSelfdestructs;
+  uint64_t RuntimeCodeCacheInternalHits = 0;
+  uint64_t RuntimeCodeCacheInternalMisses = 0;
   uint64_t CallStipendRefund = 0; // track CALL stipend refunds for prepaid fees
   bool FeesPrepaidInTx = false;
 
@@ -151,6 +153,12 @@ public:
   Runtime *getRuntime() const { return RT; }
   size_t getInternalCallModuleCacheSize() const {
     return InternalCallModuleCache.size();
+  }
+  uint64_t getRuntimeCodeCacheInternalHits() const {
+    return RuntimeCodeCacheInternalHits;
+  }
+  uint64_t getRuntimeCodeCacheInternalMisses() const {
+    return RuntimeCodeCacheInternalMisses;
   }
   void clearInternalCallModuleCache() { InternalCallModuleCache.clear(); }
 
@@ -949,15 +957,17 @@ private:
       return Cached->second;
     }
 
-    const uint64_t Counter = ModuleCounter++;
-    const std::string ModName =
-        "evm_model_" + evmc::hex(evmc::bytes_view(CodeAddr.bytes, 20)) + "_" +
-        std::to_string(Counter);
-    auto ModRet =
-        RT->loadEVMModule(ModName, ContractCode.data(), ContractCode.size(),
-                          Revision, MemoryProfile);
+    runtime::EVMCodeCacheLookupInfo LookupInfo;
+    auto ModRet = RT->getOrCompileCachedEVMModule(
+        ContractCode.data(), ContractCode.size(), Revision, MemoryProfile,
+        &LookupInfo);
     if (!ModRet) {
       return nullptr;
+    }
+    if (LookupInfo.CacheHit) {
+      ++RuntimeCodeCacheInternalHits;
+    } else {
+      ++RuntimeCodeCacheInternalMisses;
     }
     EVMModule *Mod = *ModRet;
     InternalCallModuleCache.emplace(Key, Mod);

@@ -33,6 +33,18 @@ class Instance;
 class Runtime;
 class Isolation;
 
+#ifdef ZEN_ENABLE_EVM
+struct EVMCodeCacheLookupInfo {
+  bool CacheHit = false;
+  bool FallbackToInterpreter = false;
+  bool HasJITCode = false;
+  std::string CodeHashHex;
+  size_t EntryCount = 0;
+  size_t BytecodeSize = 0;
+  size_t JITCodeSize = 0;
+};
+#endif // ZEN_ENABLE_EVM
+
 typedef struct VNMIEnvInternal_ {
   VNMIEnv _env;
   Runtime *_runtime;
@@ -168,6 +180,13 @@ public:
   loadEVMModule(const std::string &ModName, const void *Data, size_t DataSize,
                 evmc_revision Rev = zen::evm::DEFAULT_REVISION,
                 EVMMemorySpecializationProfile MemoryProfile = {}) noexcept;
+
+  /// \warning not thread-safe
+  common::MayBe<EVMModule *> getOrCompileCachedEVMModule(
+      const void *Data, size_t DataSize,
+      evmc_revision Rev = zen::evm::DEFAULT_REVISION,
+      EVMMemorySpecializationProfile MemoryProfile = {},
+      EVMCodeCacheLookupInfo *LookupInfo = nullptr) noexcept;
 #endif // ZEN_ENABLE_EVM
 
   /// \warning not thread-safe
@@ -392,6 +411,35 @@ private:
 
 #ifdef ZEN_ENABLE_EVM
   std::unordered_map<EVMSymbol, EVMModuleUniquePtr> EVMModulePool;
+
+  struct EVMCodeCacheKey {
+    evmc::bytes32 CodeHash{};
+    size_t CodeSize = 0;
+    evmc_revision Revision = zen::evm::DEFAULT_REVISION;
+    common::RunMode Mode = common::RunMode::InterpMode;
+    bool EnableEvmGasMetering = false;
+    bool DisableMultipassGreedyRA = false;
+    bool EnableMultipassLazy = false;
+    EVMMemorySpecializationProfile MemoryProfile = {};
+  };
+
+  struct EVMCodeCacheKeyHash {
+    size_t operator()(const EVMCodeCacheKey &Key) const noexcept;
+  };
+
+  struct EVMCodeCacheKeyEqual {
+    bool operator()(const EVMCodeCacheKey &LHS,
+                    const EVMCodeCacheKey &RHS) const noexcept;
+  };
+
+  EVMModule *
+  loadCachedEVMModule(const EVMCodeCacheKey &Key, EVMSymbol ModName,
+                      CodeHolderUniquePtr CodeHolder, evmc_revision Rev,
+                      EVMMemorySpecializationProfile MemoryProfile = {});
+
+  std::unordered_map<EVMCodeCacheKey, EVMModuleUniquePtr, EVMCodeCacheKeyHash,
+                     EVMCodeCacheKeyEqual>
+      EVMCodeCache;
 #endif // ZEN_ENABLE_EVM
 
   std::unordered_map<Isolation *, IsolationUniquePtr> Isolations;

@@ -14,12 +14,20 @@ The cli module is DTVM's **command-line entry point**, providing single-process,
 - **Host module assembly**: Optionally load built-in host modules such as WASI, env, evmabimock
 - **State persistence (EVM)**: Support `--load-state` / `--save-state` for EVM MockedHost state read/write
 - **Benchmarking**: Support `--num-extra-compilations` / `--num-extra-executions` for extra compilation/execution to measure performance
+- **Cold-start timing attribution (EVM)**: Records process bootstrap, CLI parse, logger setup, runtime creation, isolation creation, top-level execution, and surrounding replay phases into `Statistics`
+- **EVM code-cache benchmarking**: Provides `dtvm_evm_code_cache_bench`, an
+  in-process prepared-transaction replay harness that exercises Runtime's
+  codehash cache for compile-once/execute-many measurements. It can run one
+  mode or `--compare-jit-interpreter` to produce interpreter/multipass A/B
+  output and per-codehash break-even estimates.
 
 **Excluded from scope**:
 
 - Implementation details of the parsing library (CLI11)
 - `Runtime`, `Module`, `Instance` etc. defined by the runtime module
 - EVM Host implementation provided by `tests/evm_test_host.hpp` and the evm module
+- Production persistent code-cache policy; the code-cache benchmark harness is
+  an experimental measurement tool, not a general node service.
 
 ## Core Concepts
 
@@ -31,6 +39,7 @@ The cli module is DTVM's **command-line entry point**, providing single-process,
 | **Entry invocation** | If `--function` specified, invoke that function; otherwise WASM main; EVM mode: contract deploy or call |
 | **EVM message** | `--deploy` uses `EVMC_CREATE`; otherwise `EVMC_CALL`; `--contract-address`, `--sender`, `--calldata` used to construct `evmc_message` |
 | **exitMain** | Unified exit logic: output statistics, stop Profiler (if enabled), return exit code |
+| **Code-cache benchmark** | `dtvm_evm_code_cache_bench --prepared-root ...` reads prepared EVM transactions, reuses cached `EVMModule` objects by codehash in one Runtime, and writes `runs.jsonl` plus `summary.json`. With `--compare-jit-interpreter`, it writes `runs_interpreter.jsonl`, `runs_multipass.jsonl`, and break-even fields in `summary.json` |
 
 ## External Contracts
 
@@ -92,6 +101,16 @@ void printTypedValueArray(std::vector<TypedValue> const&);
 - **EVM mode restriction**: EVM runtime does not support `singlepass`; `Config.Mode != RunMode::SinglepassMode`
 - **Isolation and instance lifecycle**: `createManagedIsolation` → `createInstance` / `createEVMInstance` → invoke → `deleteInstance` / `deleteEVMInstance` → `deleteManagedIsolation`
 - **Benchmark mode**: Under `--benchmark` and `NDEBUG`, use `_exit()` or `::exit()` for early termination to avoid releasing resources and shorten measurement time
+- **Code-cache benchmark state isolation**: `dtvm_evm_code_cache_bench` may
+  reuse code modules, but it reloads per-transaction state and creates a fresh
+  EVM instance for each replay. It must not cache calldata, account state, warm
+  slot state, transient storage, logs, or refunds.
+- **Code-cache benchmark output contract**: JSONL rows include mode, codehash,
+  top-level cache hit/miss, fallback-to-interpreter state, JIT-code presence and
+  size, nested internal-call cache hit/miss counters, compile/lookup time,
+  execution time, return code, and error text. Summary JSON groups results by
+  mode and codehash and, when both interpreter and multipass are present,
+  estimates break-even execution counts and fixed-N total-time speedups.
 
 ## Error Codes
 

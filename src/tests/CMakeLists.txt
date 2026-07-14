@@ -61,6 +61,7 @@ if(ZEN_ENABLE_SPEC_TEST)
     add_subdirectory(mpt)
     add_executable(evmInterpTests evm_interp_tests.cpp)
     add_executable(evmCacheTests evm_cache_tests.cpp)
+    add_executable(evmCodeCacheTests evm_code_cache_tests.cpp)
     # Build-only target: never receives ASan even in ASan builds so its
     # wall-clock measurement is not distorted by sanitizer overhead.
     add_executable(evmCacheComplexityDemo evm_cache_complexity_demo.cpp)
@@ -106,6 +107,7 @@ if(ZEN_ENABLE_SPEC_TEST)
     if(ZEN_ENABLE_EVM)
       target_compile_options(evmInterpTests PRIVATE -fsanitize=address)
       target_compile_options(evmCacheTests PRIVATE -fsanitize=address)
+      target_compile_options(evmCodeCacheTests PRIVATE -fsanitize=address)
       if(ZEN_ENABLE_MULTIPASS_JIT)
         target_compile_options(evmJitFrontendTests PRIVATE -fsanitize=address)
         target_compile_options(evmRangeAnalyzerTests PRIVATE -fsanitize=address)
@@ -134,6 +136,11 @@ if(ZEN_ENABLE_SPEC_TEST)
         )
         target_link_libraries(
           evmCacheTests
+          PRIVATE dtvmcore gtest_main -fsanitize=address
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          evmCodeCacheTests
           PRIVATE dtvmcore gtest_main -fsanitize=address
           PUBLIC ${GTEST_BOTH_LIBRARIES}
         )
@@ -200,6 +207,11 @@ if(ZEN_ENABLE_SPEC_TEST)
         )
         target_link_libraries(
           evmCacheTests
+          PRIVATE dtvmcore gtest_main -fsanitize=address -static-libasan
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+        target_link_libraries(
+          evmCodeCacheTests
           PRIVATE dtvmcore gtest_main -fsanitize=address -static-libasan
           PUBLIC ${GTEST_BOTH_LIBRARIES}
         )
@@ -279,6 +291,11 @@ if(ZEN_ENABLE_SPEC_TEST)
         PRIVATE dtvmcore gtest_main
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
+      target_link_libraries(
+        evmCodeCacheTests
+        PRIVATE dtvmcore gtest_main
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
       if(ZEN_ENABLE_MULTIPASS_JIT)
         target_link_libraries(
           evmJitFrontendTests
@@ -332,6 +349,7 @@ if(ZEN_ENABLE_SPEC_TEST)
   if(ZEN_ENABLE_EVM)
     add_test(NAME evmInterpTests COMMAND evmInterpTests)
     add_test(NAME evmCacheTests COMMAND evmCacheTests)
+    add_test(NAME evmCodeCacheTests COMMAND evmCodeCacheTests)
     if(ZEN_ENABLE_MULTIPASS_JIT)
       add_test(NAME evmJitFrontendTests COMMAND evmJitFrontendTests)
       add_test(NAME evmRangeAnalyzerTests COMMAND evmRangeAnalyzerTests)
