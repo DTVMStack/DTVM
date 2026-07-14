@@ -9,9 +9,11 @@
 #include "evmc/instructions.h"
 #include "host/evm/crypto.h"
 #include "runtime/evm_instance.h"
+#include <cstdio>
+#include <cstdlib>
 
 #include <algorithm>
-#include <cstdio>
+#include <string>
 
 thread_local zen::evm::EVMFrame *zen::evm::EVMResource::CurrentFrame = nullptr;
 thread_local zen::evm::InterpreterExecContext
@@ -74,6 +76,17 @@ bool resolveDelegatedCallCodeAddress(EVMFrame *Frame, evmc::address Dest,
   }
   Frame->Msg.gas -= static_cast<int64_t>(DelegateAccessCost);
   return true;
+}
+
+std::string bytes32Hex(const evmc::bytes32 &v) {
+  static constexpr char kHex[] = "0123456789abcdef";
+  std::string out;
+  out.resize(64);
+  for (size_t i = 0; i < 32; ++i) {
+    out[2 * i] = kHex[(v.bytes[i] >> 4) & 0x0f];
+    out[2 * i + 1] = kHex[v.bytes[i] & 0x0f];
+  }
+  return out;
 }
 
 } // namespace
@@ -803,14 +816,30 @@ void SLoadHandler::doExecute() {
   intx::uint256 Key = Frame->pop();
   const auto KeyAddr = intx::be::store<evmc::bytes32>(Key);
   const auto Rev = currentRevision();
+  const bool debug_storage_gas =
+      std::getenv("DTVM_DEBUG_STORAGE_GAS") != nullptr;
+  const bool disable_cold_sload_cost =
+      std::getenv("DTVM_DEBUG_DISABLE_COLD_SLOAD_COST") != nullptr;
   if (Rev >= EVMC_BERLIN &&
       Frame->Host->access_storage(Frame->Msg.recipient, KeyAddr) ==
           EVMC_ACCESS_COLD) {
+    if (disable_cold_sload_cost) {
+      // keep warming side-effect from access_storage() but skip charging
+    } else {
     if (Frame->Msg.gas < ADDITIONAL_COLD_SLOAD_COST) {
       Context->setStatus(EVMC_OUT_OF_GAS);
       return;
     }
     Frame->Msg.gas -= ADDITIONAL_COLD_SLOAD_COST;
+    }
+    if (debug_storage_gas) {
+      const auto key_hex = bytes32Hex(KeyAddr);
+      std::fprintf(stderr,
+                   "[dtvm-sload-gas] rev=%d depth=%d cold_extra=%u key=0x%s\n",
+                   static_cast<int>(Rev), static_cast<int>(Frame->Msg.depth),
+                   static_cast<unsigned>(ADDITIONAL_COLD_SLOAD_COST),
+                   key_hex.c_str());
+    }
   }
   intx::uint256 Value = intx::be::load<intx::uint256>(
       Frame->Host->get_storage(Frame->Msg.recipient, KeyAddr));
@@ -823,6 +852,8 @@ void SStoreHandler::doExecute() {
   EVM_SET_EXCEPTION_UNLESS(!Frame->isStaticMode(), EVMC_STATIC_MODE_VIOLATION);
 
   const auto Rev = currentRevision();
+  const bool debug_storage_gas =
+      std::getenv("DTVM_DEBUG_STORAGE_GAS") != nullptr;
   if (Rev >= EVMC_ISTANBUL && Frame->Msg.gas <= SSTORE_REQUIRED_ISTANBUL) {
     getContext()->setStatus(EVMC_OUT_OF_GAS);
     return;
@@ -846,6 +877,16 @@ void SStoreHandler::doExecute() {
   if (!chargeGas(Frame, GasCost)) {
     getContext()->setStatus(EVMC_OUT_OF_GAS);
     return;
+  }
+  if (debug_storage_gas) {
+    const auto key_hex = bytes32Hex(Key);
+    std::fprintf(stderr,
+                 "[dtvm-sstore-gas] rev=%d depth=%d status=%d cold=%u warm=%u total=%u refund=%d key=0x%s\n",
+                 static_cast<int>(Rev), static_cast<int>(Frame->Msg.depth),
+                 static_cast<int>(Status), static_cast<unsigned>(GasCostCold),
+                 static_cast<unsigned>(GasCostWarm),
+                 static_cast<unsigned>(GasCost),
+                 static_cast<int>(GasReFund), key_hex.c_str());
   }
 
   // Track refund at Instance level (consolidate all gas refund tracking there)
@@ -1288,7 +1329,11 @@ void CallHandler::doExecute() {
   // Note: The base gas cost (WARM_STORAGE_READ_COST = 100) is already charged
   // in execute(). We only need to charge the ADDITIONAL cost for cold access.
   const auto Rev = currentRevision();
-  if (Rev >= EVMC_BERLIN &&
+  const bool debug_call_gas = std::getenv("DTVM_DEBUG_CALL_GAS") != nullptr;
+  const bool disable_cold_call_cost =
+      std::getenv("DTVM_DEBUG_DISABLE_COLD_CALL_COST") != nullptr;
+  const uint64_t parent_gas_before = static_cast<uint64_t>(Frame->Msg.gas);
+  if (!disable_cold_call_cost && Rev >= EVMC_BERLIN &&
       Frame->Host->access_account(Dest) == EVMC_ACCESS_COLD) {
     // Charge additional cold access cost (2600 - 100 = 2500)
     if (!chargeGas(Frame, ADDITIONAL_COLD_ACCOUNT_ACCESS_COST)) {
@@ -1361,8 +1406,10 @@ void CallHandler::doExecute() {
     return;
   }
 
+  int64_t CallStipend = 0;
   if (HasValueArgs) {
     if (HasValue) {
+      CallStipend = CALL_GAS_STIPEND;
       Frame->Msg.gas += CALL_GAS_STIPEND;
       CallGas += CALL_GAS_STIPEND;
       const auto CallerBalance = intx::be::load<intx::uint256>(
@@ -1440,6 +1487,20 @@ void CallHandler::doExecute() {
     return;
   }
 
+  if (debug_call_gas) {
+    std::fprintf(stderr,
+                 "[dtvm-call-gas] rev=%d depth=%d op=0x%02x has_value=%d stipend=%lld "
+                 "parent_gas_before=%llu call_gas_sent=%llu result_gas_left=%lld paid_gas_used=%llu status=%d\n",
+                 static_cast<int>(Rev), static_cast<int>(Frame->Msg.depth),
+                 static_cast<unsigned>(OpCode), HasValue ? 1 : 0,
+                 static_cast<long long>(CallStipend),
+                 static_cast<unsigned long long>(parent_gas_before),
+                 static_cast<unsigned long long>(CallGas),
+                 static_cast<long long>(Result.gas_left),
+                 static_cast<unsigned long long>(GasUsed),
+                 static_cast<int>(Result.status_code));
+  }
+
   // Track subcall refund at Instance level (may be negative)
   Context->getInstance()->addGasRefund(Result.gas_refund);
   Context->setStatus(EVMC_SUCCESS);
@@ -1475,9 +1536,13 @@ void LogHandler::doExecute() {
 
   // Charge additional gas for log data (8 gas per byte)
   uint64_t LogDataCost = 8 * Size;
-  if (!chargeGas(Frame, LogDataCost)) {
-    Context->setStatus(EVMC_OUT_OF_GAS);
-    return;
+  const bool disable_log_data_cost =
+      std::getenv("DTVM_DEBUG_DISABLE_LOG_DATA_COST") != nullptr;
+  if (!disable_log_data_cost) {
+    if (!chargeGas(Frame, LogDataCost)) {
+      Context->setStatus(EVMC_OUT_OF_GAS);
+      return;
+    }
   }
 
   evmc::bytes32 Topics[4];

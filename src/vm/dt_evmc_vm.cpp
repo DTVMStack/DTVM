@@ -163,7 +163,8 @@ deriveMemorySpecializationProfile(const evmc_message *Msg) {
 /// Strict mode performs full-bytecode comparison for hostile/non-standard hosts
 /// that may reuse the same code address for different bytecode.
 /// Relaxed mode checks head/tail windows (fast path for trusted immutable-code
-/// hosts). EIP-170 caps contract code size at 24 KiB.
+/// hosts). EIP-170 caps contract code at 24 KiB, so strict validation remains
+/// practical when correctness matters more than lookup cost.
 bool validateCodeMatch(const uint8_t *Code, size_t CodeSize,
                        const EVMModule *Mod, bool StrictValidation) {
   if (CodeSize != Mod->CodeSize)
@@ -245,7 +246,13 @@ struct DTVM : evmc_vm {
   bool EnableStrictAddrCacheValidation = true;
 
   // Maximum number of modules in the address-based LRU cache (configurable)
-  size_t MaxModuleCacheSize = 4096;
+  // Keep the cache much smaller than the old 4096-module default.
+  // In multipass eager-JIT mode each resident EVMModule retains a dedicated
+  // CodeMemPool reservation; on mainnet block sync, thousands of unique
+  // contracts can accumulate and eventually abort in platform::mmap() while
+  // compiling a newly loaded module. A smaller LRU cap preserves the eager-JIT
+  // execution path for cached modules while bounding concurrent reservations.
+  size_t MaxModuleCacheSize = 256;
 
   // ---- Module & instance cache (shared by interpreter and multipass) ----
   // L0: pointer-based inline cache (fastest, 2 integer comparisons)
@@ -435,6 +442,26 @@ bool isNonCreateOperation(const evmc_message *Msg) {
          Msg->kind != EVMC_CREATE2;
 }
 
+bool shouldUsePersistentModuleCache(const evmc_message *Msg) {
+  // CREATE/CREATE2 initcode must not be cached: the same address can receive
+  // different initcode across transactions, and initcode is one-shot.
+  // Silkworm (and other hosts) run the initcode deployment phase as EVMC_CALL
+  // with code_address left zero-initialized. Caching on the zero address would
+  // alias unrelated initcodes across CREATE transactions.
+  if (Msg == nullptr) {
+    return false;
+  }
+  if (Msg->kind == EVMC_CREATE || Msg->kind == EVMC_CREATE2) {
+    return false;
+  }
+  if (evmc::is_zero(Msg->code_address)) {
+    return false;
+  }
+  // Regular calls at any depth are safe to cache: deployed code at a non-zero
+  // address is immutable. The module is keyed by (code_address, revision).
+  return true;
+}
+
 bool shouldRetryModuleLoadWithFastRA(const DTVM *VM, const Error &Err) {
   return VM->Config.Mode == RunMode::MultipassMode &&
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
@@ -485,7 +512,7 @@ EVMModule *loadTransientModule(DTVM *VM, const uint8_t *Code, size_t CodeSize,
 EVMModule *findModuleCached(DTVM *VM, const uint8_t *Code, size_t CodeSize,
                             evmc_revision Rev, const evmc_message *Msg,
                             bool &IsTransient) {
-  if (!isNonCreateOperation(Msg)) {
+  if (!shouldUsePersistentModuleCache(Msg)) {
     IsTransient = true;
     return loadTransientModule(VM, Code, CodeSize, Rev);
   }
@@ -710,7 +737,7 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
 
   // Ensure runtime and isolation exist
   if (!ensureRuntimeAndIsolation(VM)) {
-    return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
+    return evmc_make_result(EVMC_FAILURE, 0, 0, 0, nullptr, 0);
   }
 
   // Module lookup: L1 address-based cache -> Cold load
@@ -718,14 +745,14 @@ evmc_result executeInterpreterFastPath(DTVM *VM,
   EVMModule *Mod =
       findModuleCached(VM, Code, CodeSize, Rev, Msg, IsTransientMod);
   if (!Mod) {
-    return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
+    return evmc_make_result(EVMC_FAILURE, 0, 0, 0, nullptr, 0);
   }
   ModuleGuard ModGuard(VM, Mod, IsTransientMod);
 
   // Instance reuse (shared only for cacheable top-level calls)
   EVMInstance *TheInst = getOrCreateInstance(VM, Mod, Rev, Msg->depth);
   if (!TheInst) {
-    return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
+    return evmc_make_result(EVMC_FAILURE, 0, 0, 0, nullptr, 0);
   }
 
   return runInterpreterOnResolvedInstance(VM, Mod, TheInst, Msg,
@@ -989,7 +1016,7 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
     return Result.release_raw();
   }
 #else
-  return evmc_make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
+    return evmc_make_result(EVMC_FAILURE, 0, 0, 0, nullptr, 0);
 #endif // ZEN_ENABLE_JIT
 }
 
@@ -1022,6 +1049,28 @@ DTVM::DTVM()
       Config.EnableEvmGasMetering = ParsedEnableGas;
     } else {
       ZEN_LOG_WARN("ignore invalid DTVM_EVM_ENABLE_GAS_METERING=%s", EnableGas);
+    }
+  }
+
+  if (const char *EnablePGJ = std::getenv("DTVM_EVM_PROFILE_GUIDED_JIT");
+      EnablePGJ != nullptr) {
+    bool ParsedEnablePGJ = false;
+    if (parseBoolEnvValue(EnablePGJ, ParsedEnablePGJ)) {
+      Config.EnableProfileGuidedJIT = ParsedEnablePGJ;
+    } else {
+      ZEN_LOG_WARN("ignore invalid DTVM_EVM_PROFILE_GUIDED_JIT=%s",
+                   EnablePGJ);
+    }
+  }
+
+  if (const char *MaxModules = std::getenv("DTVM_EVM_MAX_MODULE_CACHE_SIZE");
+      MaxModules != nullptr) {
+    int ParsedMaxModules = std::atoi(MaxModules);
+    if (ParsedMaxModules > 0) {
+      MaxModuleCacheSize = static_cast<size_t>(ParsedMaxModules);
+    } else {
+      ZEN_LOG_WARN("ignore invalid DTVM_EVM_MAX_MODULE_CACHE_SIZE=%s",
+                   MaxModules);
     }
   }
 

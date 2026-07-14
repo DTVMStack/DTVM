@@ -64,15 +64,20 @@ typedef void (*InVirtualStackFuncPtr)(zen::utils::VirtualStackInfo *StackInfo);
  * StackInfo.runInVirtualStack(logicFunc)
  */
 struct VirtualStackInfo {
-  // all stack infos put into bytes pointed by AllInfo
+  // AllInfo points to the first usable byte of the virtual stack.
   uint8_t *AllInfo = nullptr;
   uint8_t *AllocatedMem = nullptr;
   uint8_t *StackMemoryTop = nullptr;
-  // pointed to the offset in AllInfo[0:8)
+
+  // Keep stack-switch metadata in the host object, not inside the virtual
+  // stack region itself. Otherwise a deep virtual-stack frame can overwrite
+  // OldRsp before the guard page is reached, corrupting rollback.
+  uint64_t SavedNewRsp = 0;
+  uint64_t SavedNewRbp = 0;
+  uint64_t SavedOldRsp = 0;
+
   uint64_t *NewRspPtr = nullptr;
-  // pointed to the offset in AllInfo[8:16)
   uint64_t *NewRbpPtr = nullptr;
-  // pointed to the offset in AllInfo[16:24)
   uint64_t *OldRspPtr = nullptr;
 
   // arguments backed up to call in virtual stack (WASM)
