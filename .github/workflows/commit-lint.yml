@@ -77,4 +77,21 @@ jobs:
                 exit 0
               fi
             fi
-          fi 
+          fi
+
+  change-document:
+    name: Validate Change Document Declaration
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Test change-document validator
+        run: python3 -m unittest discover -s tools/tests -p 'test_check_change_doc.py'
+
+      - name: Validate pull request declaration
+        run: python3 tools/check_change_doc.py --event-path "$GITHUB_EVENT_PATH"

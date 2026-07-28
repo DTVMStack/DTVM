@@ -80,7 +80,22 @@ test cases https://github.com/XXX/pull/44
 benchmark stats: time XXX ms
 -->
 
-#### 6. Release note
+#### 6. Change document
+
+<!--
+Keep exactly one declaration below.
+
+For a governed change:
+Change doc: docs/changes/YYYY-MM-DD-<slug>/README.md
+
+Only for typo-only, comment-only, test-only, or clearly behavior-preserving
+trivial fixes, replace the declaration with:
+N/A: <specific reason>
+-->
+
+Change doc:
+
+#### 7. Release note
 
 <!-- compatibility change, improvement, bugfix, and new feature need a release note -->
 

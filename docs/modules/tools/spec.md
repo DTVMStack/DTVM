@@ -10,6 +10,8 @@ The tools module provides **development helper scripts**, responsible for:
 - **EVM test tools**: EVM assembly to bytecode, EVM test runner, state root/MPT comparison
 - **Solidity compilation**: Batch compile Solidity contracts to JSON
 - **Static analysis**: Parallel clang-tidy, performance regression checks
+- **Contribution validation**: Change-document declaration checks for local
+  preparation and pull request CI
 - **Debugging aids**: GDB trace, CPU trace collection
 
 This module does not include: Build system (CMake), test framework (gtest/ctest), core runtime logic.
@@ -58,7 +60,21 @@ This module does not include: Build system (CMake), test framework (gtest/ctest)
 | collect_cpu_trace.py | Collect CPU trace data |
 | bug_finder.py | Binary search for `GREEDY_FUNC_IDX_*` range that triggers exception (experimental) |
 
-### 7. Miscellaneous
+### 7. Contribution Validation
+
+`check_change_doc.py` requires exactly one declaration:
+
+- `Change doc: docs/changes/YYYY-MM-DD-<slug>/README.md`
+- `N/A: <specific reason>`
+
+For a change-document path, the tool validates the naming convention and file
+existence at the checked head revision. For an exemption, it rejects empty and
+placeholder reasons. Local callers provide a literal declaration and base
+revision. GitHub Actions provides the pull request event payload. The tool does
+not infer documentation requirements from changed paths; semantic exemption
+review remains a reviewer responsibility.
+
+### 8. Miscellaneous
 
 | Script | Responsibility |
 |--------|----------------|
@@ -76,10 +92,13 @@ This module does not include: Build system (CMake), test framework (gtest/ctest)
 | dtvm | EVM/WASM execution (run_evm_tests, bug_finder) |
 | gdb | Debug tracing |
 | Python 3 | pycryptodome, eth-hash, trie, rlp |
+| Git | Revision and change-document path validation |
 
 ## Invariants and Permissions
 
 - **Read-only preference**: Format scripts default to check; format writes
+- **Contribution checks are read-only**: Declaration validation never modifies
+  the worktree or Git index
 - **Paths**: Project root as working dir; relative paths to `tests/`, `build/`
 - **Idempotent**: easm2bytecode, solc_batch_compile may be run repeatedly
 

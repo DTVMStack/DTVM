@@ -2,7 +2,7 @@
 
 # dev-workflow
 
-**Description**: Feature development workflow. Propose a change, plan implementation, execute with gates, and verify.
+**Description**: Development workflow for features, enhancements, refactors, optimizations, and bug fixes. Classify change-document requirements, plan implementation, execute with gates, and verify.
 
 ## Source of Truth
 

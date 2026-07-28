@@ -14,7 +14,7 @@ python3 .agents/tooling/generate_skill_mirrors.py
 
 | Skill | Description |
 |-------|-------------|
-| `dev-workflow` | End-to-end feature development: propose, plan, execute, verify, archive |
+| `dev-workflow` | Classify and execute features, enhancements, refactors, optimizations, and bug fixes |
 | `archive` | Archive completed change proposals to `docs/_archive/` |
 | `dtvm-perf-profile` | Performance profiling with hardware counters |
 | `dmir-compiler-analysis` | DMIR compiler analysis and cost model reference |
