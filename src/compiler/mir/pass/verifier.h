@@ -3,6 +3,7 @@
 #pragma once
 
 #include "compiler/mir/pass/visitor.h"
+#include "llvm/ADT/DenseMap.h"
 
 namespace COMPILER {
 
@@ -22,6 +23,12 @@ public:
     Broken = false;
     visit();
     return !Broken;
+  }
+
+  void visit() override {
+    InstructionVisitStates.clear();
+    InstructionVisitStates.reserve(CurFunc->getNumInstructions());
+    MVisitor::visit();
   }
 
   void visitBasicBlock(MBasicBlock &BB) override {
@@ -79,6 +86,21 @@ public:
       WasmOverflowI128BinaryInstruction &I) override;
 
 private:
+  enum class VisitState : uint8_t { Active, Completed };
+
+  void visitInstruction(MInstruction &I) override {
+    auto [It, Inserted] =
+        InstructionVisitStates.try_emplace(&I, VisitState::Active);
+    if (!Inserted) {
+      if (It->second == VisitState::Active) {
+        CheckFailed("The MIR instruction operand graph must be acyclic");
+      }
+      return;
+    }
+    MVisitor::visitInstruction(I);
+    InstructionVisitStates[&I] = VisitState::Completed;
+  }
+
   void visitIntExtInstruction(MType *OperandType, MType *ResultType);
   void visitTruncInstruction(MType *OperandType, MType *ResultType);
   void visitBitcastInstruction(MType *OperandType, MType *ResultType);
@@ -90,6 +112,7 @@ private:
   bool Broken = false;
   llvm::raw_ostream &OS;
   uint32_t FailedCount = 0;
+  llvm::DenseMap<const MInstruction *, VisitState> InstructionVisitStates;
 };
 
 } // namespace COMPILER

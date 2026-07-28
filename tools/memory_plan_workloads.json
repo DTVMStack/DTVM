@@ -1,0 +1,75 @@
+{
+  "description": "Curated workloads for MemoryExpansionPlan framework validation. The priorities are derived from the 200 transaction benchmark after merging upstream PR560/561/562.",
+  "source_benchmark": "Phase 3.5 200-transaction MemoryExpansionPlan benchmark after merging upstream PR560/561/562",
+  "acceptance_metrics": [
+    "completed_no_jit must remain 0 for completed rows",
+    "required_size_max must stay below MemoryExpansionPlan::MaxRequiredMemorySize",
+    "rejected_too_large and rejected_unprofitable must be reported when candidates are filtered",
+    "estimated_reduced_expansions per accepted plan should improve or stay flat",
+    "paired-valid median jit_delta_ms should not regress versus the Phase 3.5 baseline"
+  ],
+  "workloads": [
+    {
+      "dataset": "erc20_transfer",
+      "priority": 1,
+      "role": "primary profitability target",
+      "phase_3_5_hit_rate_pct": 9.104469730971301,
+      "phase_3_5_plan_count": 3391,
+      "phase_3_5_estimated_reduced_expansions": 3506,
+      "representative_txs": [
+        {
+          "tx_hash": "0x223cd73f8806675144a609939b3cfbbd78b91ab78cd5eb37afd460d122fab95a",
+          "reason": "highest observed per-block coverage: 7 covered MSTORE ops, 6 estimated reduced expansions"
+        }
+      ]
+    },
+    {
+      "dataset": "uniswap_v3_swap",
+      "priority": 2,
+      "role": "complex memory/codegen target",
+      "phase_3_5_hit_rate_pct": 6.787679589651652,
+      "phase_3_5_plan_count": 2612,
+      "phase_3_5_estimated_reduced_expansions": 2840,
+      "representative_txs": [
+        {
+          "tx_hash": "0x9b571c654646d3668675a1792df716c86b94bcfd620d1f49483ed9ba4851b9fd",
+          "reason": "multiple high-coverage grouped store blocks"
+        },
+        {
+          "tx_hash": "0x9c132f5a1480482f4b0b10000c27cbb1a0dd2f4a8b622db570cc82d082ac48c2",
+          "reason": "high-coverage grouped load block and prior ON timeout row"
+        }
+      ]
+    },
+    {
+      "dataset": "erc4337_bundle",
+      "priority": 3,
+      "role": "proof guardrail target",
+      "phase_3_5_hit_rate_pct": 4.868644621618089,
+      "phase_3_5_plan_count": 1073,
+      "phase_3_5_estimated_reduced_expansions": 1162,
+      "phase_3_5_required_size_max": 562949953426401,
+      "representative_txs": [],
+      "reason": "largest abnormal required_size; use full dataset until a smaller reproducer is isolated"
+    },
+    {
+      "dataset": "cow_settlement",
+      "priority": 4,
+      "role": "low-overhead regression target",
+      "phase_3_5_hit_rate_pct": 4.315750645518259,
+      "phase_3_5_plan_count": 402,
+      "phase_3_5_estimated_reduced_expansions": 417,
+      "representative_txs": []
+    },
+    {
+      "dataset": "uniswapx_reactor",
+      "priority": 5,
+      "role": "low-hit regression target",
+      "phase_3_5_hit_rate_pct": 0.03298334341157715,
+      "phase_3_5_plan_count": 3,
+      "phase_3_5_estimated_reduced_expansions": 3,
+      "representative_txs": [],
+      "reason": "not a Phase 3.6 optimization target; retain as a no-regression guard"
+    }
+  ]
+}

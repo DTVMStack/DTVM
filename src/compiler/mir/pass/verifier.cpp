@@ -254,7 +254,7 @@ void MVerifier::visitLoadInstruction(LoadInstruction &I) {
     MType *IndexType = Index->getType();
     CHECK(IndexType->isI32() || IndexType->isI64(),
           "The index of load instruction must be i32 or i64");
-    MVisitor::visitInstruction(*const_cast<MInstruction *>(Index));
+    visitInstruction(*const_cast<MInstruction *>(Index));
   }
   MVisitor::visitLoadInstruction(I);
 }
@@ -278,7 +278,7 @@ void MVerifier::visitStoreInstruction(StoreInstruction &I) {
     MType *IndexType = Index->getType();
     CHECK(IndexType->isI32() || IndexType->isI64(),
           "The index of load instruction must be i32 or i64");
-    MVisitor::visitInstruction(*const_cast<MInstruction *>(Index));
+    visitInstruction(*const_cast<MInstruction *>(Index));
   }
   MVisitor::visitStoreInstruction(I);
 }
@@ -528,7 +528,7 @@ void MVerifier::visitWasmCheckMemoryAccessInstruction(
     MType *FromType = Base->getType();
     CHECK(FromType->isI32(), "The from type of wasm_check_memory_access "
                              "instruction result must be i32");
-    MVisitor::visitInstruction(*const_cast<MInstruction *>(Base));
+    visitInstruction(*const_cast<MInstruction *>(Base));
   }
 
   MType *BoundaryType = I.getBoundary()->getType();

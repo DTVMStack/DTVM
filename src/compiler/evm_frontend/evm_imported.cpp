@@ -250,14 +250,21 @@ const RuntimeFunctions &getRuntimeFunctionTable() {
       .EmitLog2 = &evmEmitLog2,
       .EmitLog3 = &evmEmitLog3,
       .EmitLog4 = &evmEmitLog4,
+      .EmitLog0NoExpand = &evmEmitLog0NoExpand,
+      .EmitLog1NoExpand = &evmEmitLog1NoExpand,
+      .EmitLog2NoExpand = &evmEmitLog2NoExpand,
+      .EmitLog3NoExpand = &evmEmitLog3NoExpand,
+      .EmitLog4NoExpand = &evmEmitLog4NoExpand,
       .HandleCreate = &evmHandleCreate,
       .HandleCreate2 = &evmHandleCreate2,
       .HandleCall = &evmHandleCall,
       .HandleCallCode = &evmHandleCallCode,
       .SetReturn = &evmSetReturn,
+      .SetReturnNoExpand = &evmSetReturnNoExpand,
       .HandleDelegateCall = &evmHandleDelegateCall,
       .HandleStaticCall = &evmHandleStaticCall,
       .SetRevert = &evmSetRevert,
+      .SetRevertNoExpand = &evmSetRevertNoExpand,
       .HandleInvalid = &evmHandleInvalid,
       .HandleUndefined = &evmHandleUndefined,
       .HandleSelfDestruct = &evmHandleSelfDestruct,
@@ -644,11 +651,18 @@ const intx::uint256 *evmGetBlobBaseFee(zen::runtime::EVMInstance *Instance) {
 
 void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                   uint64_t Len) {
-  std::vector<uint8_t> ReturnData;
   if (Len > 0) {
     if (!Instance->expandMemoryChecked(Offset, Len)) {
       return;
     }
+  }
+  evmSetReturnNoExpand(Instance, Offset, Len);
+}
+
+void evmSetReturnNoExpand(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                          uint64_t Len) {
+  std::vector<uint8_t> ReturnData;
+  if (Len > 0) {
     uint8_t *MemoryBase = Instance->getMemoryBase();
     ReturnData =
         std::vector<uint8_t>(MemoryBase + Offset, MemoryBase + Offset + Len);
@@ -660,9 +674,9 @@ void evmSetReturn(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                          Instance ? Instance->getGasRefund() : 0,
                          ReturnData.data(), ReturnData.size());
   Instance->setExeResult(std::move(ExeResult));
-  // Immediately terminate the execution and return the success code (0)
   Instance->exit(0);
 }
+
 void evmSetCallDataCopy(zen::runtime::EVMInstance *Instance,
                         uint64_t DestOffset, uint64_t Offset, uint64_t Size) {
   // When Size is 0, no memory operations are needed
@@ -824,31 +838,17 @@ uint64_t evmGetReturnDataSize(zen::runtime::EVMInstance *Instance) {
 }
 
 template <size_t MaxTopics>
-static void evmEmitLogGeneric(zen::runtime::EVMInstance *Instance,
-                              uint64_t Offset, uint64_t Size,
-                              const uint8_t *TopicsData[]) {
+static void evmEmitLogNoExpandGeneric(zen::runtime::EVMInstance *Instance,
+                                      uint64_t Offset, uint64_t Size,
+                                      const uint8_t *TopicsData[]) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
-  if (Instance->isStaticMode()) {
-    triggerStaticModeViolation(Instance);
-    return;
-  }
 
-  // Only expand memory if we actually need to access it (Size > 0)
   const uint8_t *Data = nullptr;
   if (Size > 0) {
-    if (!Instance->expandMemoryChecked(Offset, Size)) {
-      return;
-    }
-    const uint64_t LogDataCost = 8 * Size;
-    if (LogDataCost != 0) {
-      if (!Instance->chargeGas(LogDataCost)) {
-        return;
-      }
-    }
     uint8_t *MemoryBase = Instance->getMemoryBase();
     Data = MemoryBase + Offset;
   }
@@ -867,6 +867,29 @@ static void evmEmitLogGeneric(zen::runtime::EVMInstance *Instance,
   Module->Host->emit_log(Msg->recipient, Data, Size,
                          ActualNumTopics > 0 ? Topics : nullptr,
                          ActualNumTopics);
+}
+
+template <size_t MaxTopics>
+static void evmEmitLogGeneric(zen::runtime::EVMInstance *Instance,
+                              uint64_t Offset, uint64_t Size,
+                              const uint8_t *TopicsData[]) {
+  if (Instance->isStaticMode()) {
+    triggerStaticModeViolation(Instance);
+    return;
+  }
+
+  // Only expand memory if we actually need to access it (Size > 0)
+  if (Size > 0) {
+    if (!Instance->expandMemoryChecked(Offset, Size)) {
+      return;
+    }
+    const uint64_t LogDataCost = 8 * Size;
+    if (LogDataCost != 0 && !Instance->chargeGas(LogDataCost)) {
+      return;
+    }
+  }
+
+  evmEmitLogNoExpandGeneric<MaxTopics>(Instance, Offset, Size, TopicsData);
 }
 
 void evmEmitLog0(zen::runtime::EVMInstance *Instance, uint64_t Offset,
@@ -899,6 +922,40 @@ void evmEmitLog4(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                  const uint8_t *Topic3, const uint8_t *Topic4) {
   const uint8_t *Topics[4] = {Topic1, Topic2, Topic3, Topic4};
   evmEmitLogGeneric<4>(Instance, Offset, Size, Topics);
+}
+
+void evmEmitLog0NoExpand(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                         uint64_t Size) {
+  const uint8_t *Topics[0] = {};
+  evmEmitLogNoExpandGeneric<0>(Instance, Offset, Size, Topics);
+}
+
+void evmEmitLog1NoExpand(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                         uint64_t Size, const uint8_t *Topic1) {
+  const uint8_t *Topics[1] = {Topic1};
+  evmEmitLogNoExpandGeneric<1>(Instance, Offset, Size, Topics);
+}
+
+void evmEmitLog2NoExpand(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                         uint64_t Size, const uint8_t *Topic1,
+                         const uint8_t *Topic2) {
+  const uint8_t *Topics[2] = {Topic1, Topic2};
+  evmEmitLogNoExpandGeneric<2>(Instance, Offset, Size, Topics);
+}
+
+void evmEmitLog3NoExpand(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                         uint64_t Size, const uint8_t *Topic1,
+                         const uint8_t *Topic2, const uint8_t *Topic3) {
+  const uint8_t *Topics[3] = {Topic1, Topic2, Topic3};
+  evmEmitLogNoExpandGeneric<3>(Instance, Offset, Size, Topics);
+}
+
+void evmEmitLog4NoExpand(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                         uint64_t Size, const uint8_t *Topic1,
+                         const uint8_t *Topic2, const uint8_t *Topic3,
+                         const uint8_t *Topic4) {
+  const uint8_t *Topics[4] = {Topic1, Topic2, Topic3, Topic4};
+  evmEmitLogNoExpandGeneric<4>(Instance, Offset, Size, Topics);
 }
 
 const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
@@ -1272,11 +1329,18 @@ uint64_t evmHandleStaticCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
 
 void evmSetRevert(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                   uint64_t Size) {
-  std::vector<uint8_t> ReturnData;
   if (Size > 0) {
     if (!Instance->expandMemoryChecked(Offset, Size)) {
       return;
     }
+  }
+  evmSetRevertNoExpand(Instance, Offset, Size);
+}
+
+void evmSetRevertNoExpand(zen::runtime::EVMInstance *Instance, uint64_t Offset,
+                          uint64_t Size) {
+  std::vector<uint8_t> ReturnData;
+  if (Size > 0) {
     uint8_t *MemoryBase = Instance->getMemoryBase();
     ReturnData =
         std::vector<uint8_t>(MemoryBase + Offset, MemoryBase + Offset + Size);
@@ -1285,7 +1349,6 @@ void evmSetRevert(zen::runtime::EVMInstance *Instance, uint64_t Offset,
   Instance->setReturnData(std::move(ReturnData));
   const int64_t GasLeft =
       Instance ? static_cast<int64_t>(Instance->getGas()) : 0;
-  // Immediately terminate the execution and return the revert code (2)
   evmc::Result ExeResult(
       EVMC_REVERT, GasLeft, Instance ? Instance->getGasRefund() : 0,
       Instance->getReturnData().data(), Instance->getReturnData().size());

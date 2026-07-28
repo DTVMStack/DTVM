@@ -55,6 +55,9 @@ option(ZEN_ENABLE_EVM_STACK_SSA_LIFT
 option(ZEN_ENABLE_EVM_MEM_LARGE_STATIC_WORKSPACE_LOWERING
        "Enable experimental EVM large static workspace memory lowering" OFF
 )
+option(ZEN_ENABLE_EVM_MEMORY_PLAN_FRAMEWORK
+       "Enable EVM memory expansion plan framework in multipass frontend" ON
+)
 
 # Blockchain options
 option(ZEN_ENABLE_CHECKED_ARITHMETIC "Enable checked arithmetic" OFF)

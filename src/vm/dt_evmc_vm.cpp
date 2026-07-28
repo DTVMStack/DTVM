@@ -901,8 +901,8 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
     ModuleGuard ModGuard(VM, Mod, IsTransientMod);
     Mod->ModuleExecuteCount++;
 
-    // O(1) flag check replaces per-call O(n) EVMAnalyzer scan.
-    // The flag was set once at module creation in EVMModule::newEVMModule().
+    // O(1) flag check replaces per-call O(n) EVMAnalyzer scans and remains
+    // sticky if a later JIT compilation attempt fails.
     if (Mod->ShouldFallbackToInterp) {
       return executeInterpreterFastPath(VM, Host, Context, Rev, Msg, Code,
                                         CodeSize);

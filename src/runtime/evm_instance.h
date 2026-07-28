@@ -221,6 +221,13 @@ public:
     return static_cast<int32_t>(offsetof(evmc_message, gas));
   }
 
+  static constexpr int32_t getMessageFlagsOffset() {
+    static_assert(offsetof(evmc_message, flags) <=
+                      std::numeric_limits<int32_t>::max(),
+                  "evmc_message offsets should fit in 32-bit signed range");
+    return static_cast<int32_t>(offsetof(evmc_message, flags));
+  }
+
   static constexpr int32_t getMessageRecipientOffset() {
     static_assert(offsetof(evmc_message, recipient) <=
                       std::numeric_limits<int32_t>::max(),

@@ -27,6 +27,16 @@ inline void PrintTo(EVMValueRange R, std::ostream *Os) {
   }
   *Os << "UNKNOWN(" << static_cast<int>(R) << ")";
 }
+
+struct EVMAnalyzerRangeTestAccess {
+  static void forceStaticEdgeShapeMismatch(EVMAnalyzer &Analyzer,
+                                           uint64_t TargetPC,
+                                           const uint8_t *Bytecode,
+                                           size_t BytecodeSize) {
+    ++Analyzer.BlockInfos.at(TargetPC).ResolvedEntryStackDepth;
+    Analyzer.runRangeAnalysis(Bytecode, BytecodeSize);
+  }
+};
 } // namespace COMPILER
 
 namespace {
@@ -1038,6 +1048,44 @@ TEST(EVMRangeAnalyzer, UnresolvedBlockSkipped) {
   EVMAnalyzer Analyzer = analyzeBytecode(Code);
   const auto *Jd = findBlock(Analyzer, 1);
   assertNoEntryState(Jd);
+}
+
+TEST(EVMRangeAnalyzer, ShapeMismatchDisablesLiftingAndResetsRangesToU256) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0x01, // PC0 PUSH1 1 (residual entry value)
+      0x60, 0x06, // PC2 PUSH1 6 (jump target)
+      0x56,       // PC4 JUMP
+      0xfe,       // PC5 INVALID padding
+      0x5b,       // PC6 JUMPDEST
+      0x00,       // PC7 STOP
+  };
+  EVMAnalyzer Analyzer = analyzeBytecode(Bytecode);
+  const auto *EntryBeforeFallback = findBlock(Analyzer, 0);
+  const auto *TargetBeforeFallback = findBlock(Analyzer, 6);
+  ASSERT_NE(EntryBeforeFallback, nullptr);
+  ASSERT_NE(TargetBeforeFallback, nullptr);
+  ASSERT_TRUE(EntryBeforeFallback->CanLiftStack);
+  ASSERT_TRUE(TargetBeforeFallback->CanLiftStack);
+
+  COMPILER::EVMAnalyzerRangeTestAccess::forceStaticEdgeShapeMismatch(
+      Analyzer, 6, Bytecode.data(), Bytecode.size());
+
+  const auto *Target = findBlock(Analyzer, 6);
+  ASSERT_NE(Target, nullptr);
+  ASSERT_EQ(Target->EntryStackRanges.size(), 2u);
+  for (const auto &[BlockPC, Info] : Analyzer.getBlockInfos()) {
+    (void)BlockPC;
+    EXPECT_FALSE(Info.CanLiftStack);
+    if (Info.ResolvedEntryStackDepth < 0 || Info.HasInconsistentEntryDepth) {
+      EXPECT_TRUE(Info.EntryStackRanges.empty());
+      continue;
+    }
+    ASSERT_EQ(Info.EntryStackRanges.size(),
+              static_cast<size_t>(Info.ResolvedEntryStackDepth));
+    for (EVMValueRange Range : Info.EntryStackRanges) {
+      EXPECT_EQ(Range, EVMValueRange::U256);
+    }
+  }
 }
 
 // Transfer-rule coverage for opcodes that sit in their own switch case with no

@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 396" role="img" aria-label="MIR-verifier compile time vs dependent-chain depth (DIV)" class="fig" width="100%">
+  <style>
+  .fig {
+    --f-surface: #fcfcfb;
+    --f-ink: #0b0b0b;
+    --f-ink2: #52514e;
+    --f-muted: #898781;
+    --f-grid: #e1e0d9;
+    --f-axis: #c3c2b7;
+    --f-before: #898781;
+    --f-after: #2a78d6;
+    --f-ref: #1baf7a;
+    --f-ctrl: #898781;
+    --f-good: #006300;
+    --f-warm: #e34948;
+    --f-warmink: #b3201f;
+    --f-fs: 13px;
+  }
+  @media (prefers-color-scheme: dark) {
+    .fig {
+      --f-surface: #1a1a19;
+      --f-ink: #ffffff;
+      --f-ink2: #c3c2b7;
+      --f-muted: #898781;
+      --f-grid: #2c2c2a;
+      --f-axis: #383835;
+      --f-before: #a8a7a1;
+      --f-after: #3987e5;
+      --f-ref: #199e70;
+      --f-ctrl: #a8a7a1;
+      --f-good: #0ca30c;
+      --f-warm: #e66767;
+      --f-warmink: #e66767;
+    }
+  }
+  .fig text { font-family: system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .fig .tnum { font-variant-numeric: tabular-nums; }
+  </style>
+<rect x="0" y="0" width="720" height="396" fill="var(--f-surface)"/>
+<text x="66" y="30" fill="var(--f-ink)" font-size="15.5" font-weight="600">MIR-verifier compile time vs dependent-chain depth (DIV)</text>
+<text x="66" y="49" fill="var(--f-ink2)" font-size="12">before: super-linear (verifier re-walks a shared DAG) · after: bounded, single-digit ms</text>
+<line x1="66" y1="66" x2="84" y2="66" stroke="var(--f-warm)" stroke-width="2.5"/>
+<circle cx="75" cy="66" r="3.2" fill="var(--f-warm)"/>
+<text x="90" y="70" fill="var(--f-ink2)" font-size="11.5">DIV before (unmemoized)</text>
+<line x1="266.4" y1="66" x2="284.4" y2="66" stroke="var(--f-after)" stroke-width="2.5"/>
+<circle cx="275.4" cy="66" r="3.2" fill="var(--f-after)"/>
+<text x="290.4" y="70" fill="var(--f-ink2)" font-size="11.5">DIV after (this PR)</text>
+<path d="M 448.59999999999997 60 L 455.59999999999997 66 L 448.59999999999997 72 L 441.59999999999997 66 Z" fill="var(--f-before)"/>
+<text x="463.59999999999997" y="70" fill="var(--f-ink2)" font-size="11.5">SDIV control</text>
+<line x1="66" y1="300.0" x2="510" y2="300.0" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="58" y="304.0" fill="var(--f-muted)" font-size="10.5" text-anchor="end" class="tnum">1 ms</text>
+<line x1="66" y1="230.7" x2="510" y2="230.7" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="58" y="234.7" fill="var(--f-muted)" font-size="10.5" text-anchor="end" class="tnum">10 ms</text>
+<line x1="66" y1="161.3" x2="510" y2="161.3" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="58" y="165.3" fill="var(--f-muted)" font-size="10.5" text-anchor="end" class="tnum">100 ms</text>
+<line x1="66" y1="92.0" x2="510" y2="92.0" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="58" y="96.0" fill="var(--f-muted)" font-size="10.5" text-anchor="end" class="tnum">1,000 ms</text>
+<line x1="66.0" y1="300" x2="66.0" y2="305" stroke="var(--f-axis)" stroke-width="1"/>
+<text x="66.0" y="319.0" fill="var(--f-muted)" font-size="11" text-anchor="middle" class="tnum">8</text>
+<line x1="140.0" y1="300" x2="140.0" y2="305" stroke="var(--f-axis)" stroke-width="1"/>
+<text x="140.0" y="319.0" fill="var(--f-muted)" font-size="11" text-anchor="middle" class="tnum">12</text>
+<line x1="214.0" y1="300" x2="214.0" y2="305" stroke="var(--f-axis)" stroke-width="1"/>
+<text x="214.0" y="319.0" fill="var(--f-muted)" font-size="11" text-anchor="middle" class="tnum">16</text>
+<line x1="288.0" y1="300" x2="288.0" y2="305" stroke="var(--f-axis)" stroke-width="1"/>
+<text x="288.0" y="319.0" fill="var(--f-muted)" font-size="11" text-anchor="middle" class="tnum">20</text>
+<line x1="510.0" y1="300" x2="510.0" y2="305" stroke="var(--f-axis)" stroke-width="1"/>
+<text x="510.0" y="319.0" fill="var(--f-muted)" font-size="11" text-anchor="middle" class="tnum">32</text>
+<text x="288.0" y="338.0" fill="var(--f-muted)" font-size="11.5" text-anchor="middle">dependent-chain depth (number of chained DIV ops)</text>
+<line x1="66" y1="86" x2="66" y2="300" stroke="var(--f-axis)" stroke-width="1"/>
+<line x1="66" y1="300" x2="510" y2="300" stroke="var(--f-axis)" stroke-width="1"/>
+<rect x="66" y="86" width="444" height="10" fill="var(--f-warm)" fill-opacity="0.10"/>
+<text x="322" y="100" fill="var(--f-warmink)" font-size="9.5">beyond depth 16 (no finite value recorded):</text>
+<text x="322" y="112" fill="var(--f-muted)" font-size="9.5">20 → multi-second · 32 → impractical</text>
+<path d="M 66.0 265.0 L 140.0 256.1 L 214.0 249.2 L 288.0 243.6 L 510.0 230.7" fill="none" stroke="var(--f-after)" stroke-width="2.5" stroke-linejoin="round"/>
+<circle cx="66.0" cy="265.0" r="3.6" fill="var(--f-after)"><title>DIV after, depth 8: 3.2 ms</title></circle>
+<circle cx="140.0" cy="256.1" r="3.6" fill="var(--f-after)"><title>DIV after, depth 12: 4.3 ms</title></circle>
+<circle cx="214.0" cy="249.2" r="3.6" fill="var(--f-after)"><title>DIV after, depth 16: 5.4 ms</title></circle>
+<circle cx="288.0" cy="243.6" r="3.6" fill="var(--f-after)"><title>DIV after, depth 20: 6.5 ms</title></circle>
+<circle cx="510.0" cy="230.7" r="3.6" fill="var(--f-after)"><title>DIV after, depth 32: 10.0 ms</title></circle>
+<path d="M 66.0 264.0 L 140.0 213.5 L 214.0 99.0" fill="none" stroke="var(--f-warm)" stroke-width="2.5" stroke-linejoin="round"/>
+<circle cx="66.0" cy="264.0" r="3.6" fill="var(--f-warm)"><title>DIV before, depth 8: 3.3 ms</title></circle>
+<circle cx="140.0" cy="213.5" r="3.6" fill="var(--f-warm)"><title>DIV before, depth 12: 17.7 ms</title></circle>
+<circle cx="214.0" cy="99.0" r="3.6" fill="var(--f-warm)"><title>DIV before, depth 16: 791.6 ms</title></circle>
+<path d="M 214.0 99.0 C 232.0 69.0, 244.0 122.0, 248.0 108.0" fill="none" stroke="var(--f-warm)" stroke-width="2" stroke-dasharray="1 3"/>
+<path d="M 248.0 108.0 l -5 6 l 9 -1 z" fill="var(--f-warm)"/>
+<path d="M 214.0 228.2 L 220.0 234.2 L 214.0 240.2 L 208.0 234.2 Z" fill="var(--f-before)"><title>SDIV control, depth 16: 8.9 ms</title></path>
+<text x="214.0" y="90.0" fill="var(--f-warmink)" font-size="11" font-weight="600" text-anchor="middle" class="tnum">791.6 ms</text>
+<text x="516.0" y="234.7" fill="var(--f-ink2)" font-size="11" font-weight="600" text-anchor="start" class="tnum">10.0 ms</text>
+<text x="66.0" y="281.0" fill="var(--f-muted)" font-size="10" text-anchor="middle" class="tnum">≈3.2 ms (curves meet)</text>
+<rect x="524" y="92" width="180" height="128" rx="8" fill="var(--f-surface)" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="534" y="109" fill="var(--f-ink2)" font-size="10.5" font-weight="600">Inset · linear axes</text>
+<text x="534" y="122" fill="var(--f-muted)" font-size="9.5">after-curve is linear in depth</text>
+<line x1="558" y1="198.0" x2="692" y2="198.0" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="554" y="201.0" fill="var(--f-muted)" font-size="8.5" text-anchor="end" class="tnum">0</text>
+<line x1="558" y1="168.0" x2="692" y2="168.0" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="554" y="171.0" fill="var(--f-muted)" font-size="8.5" text-anchor="end" class="tnum">5</text>
+<line x1="558" y1="138.0" x2="692" y2="138.0" stroke="var(--f-grid)" stroke-width="1"/>
+<text x="554" y="141.0" fill="var(--f-muted)" font-size="8.5" text-anchor="end" class="tnum">10</text>
+<path d="M 558.0 178.8 L 580.3 172.2 L 602.7 165.6 L 625.0 159.0 L 692.0 138.0" fill="none" stroke="var(--f-after)" stroke-width="2"/>
+<circle cx="558.0" cy="178.8" r="2.6" fill="var(--f-after)"/>
+<circle cx="580.3" cy="172.2" r="2.6" fill="var(--f-after)"/>
+<circle cx="602.7" cy="165.6" r="2.6" fill="var(--f-after)"/>
+<circle cx="625.0" cy="159.0" r="2.6" fill="var(--f-after)"/>
+<circle cx="692.0" cy="138.0" r="2.6" fill="var(--f-after)"/>
+<path d="M 602.7 140.6 L 606.7 144.6 L 602.7 148.6 L 598.7 144.6 Z" fill="var(--f-before)"/>
+<text x="558.0" y="210.0" fill="var(--f-muted)" font-size="8.5" text-anchor="middle" class="tnum">8</text>
+<text x="692.0" y="210.0" fill="var(--f-muted)" font-size="8.5" text-anchor="middle" class="tnum">32</text>
+<text x="625.0" y="217.0" fill="var(--f-muted)" font-size="8.5" text-anchor="middle">depth · ms</text>
+</svg>

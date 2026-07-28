@@ -158,6 +158,12 @@ public:
     int32_t ResolvedEntryStackDepth = -1;
     int32_t ResolvedExitStackDepth = -1;
     int32_t FullEntryStateDepth = -1;
+    // True when this block may be entered with a runtime stack depth supplied
+    // by an indirect jump. The analyzer's statically resolved depth may then
+    // under-count a caller's hidden frame, so tainted blocks are never lifted.
+    // The taint starts at every JUMPDEST once a reachable dynamic source exists
+    // and follows static successors. See markDynamicDispatchEntryDepthTaint().
+    bool EntryDepthMayComeFromDynamicDispatch = false;
     int32_t HiddenLiveInPrefixDepth = 0;
     bool HasInconsistentEntryDepth = false;
     bool IsEntryStateCompatible = false;
@@ -194,6 +200,8 @@ public:
     return BlockInfos;
   }
 
+  evmc_revision getRevision() const { return Revision; }
+
   struct DynamicJumpRegionInfo {
     uint64_t RegionEntryPC = 0;
     std::vector<uint64_t> SourceBlocks;
@@ -205,6 +213,11 @@ public:
     bool HasUniformEntryDepth = false;
     bool HasCompatibleTargetShape = false;
     uint32_t ShapeClassId = 0;
+  };
+
+  struct DynamicJumpDispatchCandidateSet {
+    bool SafeForRuntimeDispatch = false;
+    std::vector<uint64_t> TargetBlocks;
   };
 
   const std::map<uint64_t, DynamicJumpRegionInfo> &
@@ -400,62 +413,52 @@ public:
     return RegionInfo->TargetBlocks;
   }
 
+  DynamicJumpDispatchCandidateSet
+  getRuntimeDispatchCandidateTargetsForSourceBlock(uint64_t BlockPC) const {
+    DynamicJumpDispatchCandidateSet Result;
+    const auto It = BlockInfos.find(BlockPC);
+    if (It == BlockInfos.end() || !It->second.HasDynamicJump) {
+      return Result;
+    }
+
+    Result.TargetBlocks =
+        getCompatibleDynamicJumpTargetBlocksForSourceBlock(BlockPC);
+    if (Result.TargetBlocks.empty()) {
+      return Result;
+    }
+
+    // Compatible target sets are currently a stack-state transfer aid.  They
+    // are safe to use for runtime dispatch shrinking only when they still cover
+    // every valid JUMPDEST for this source; otherwise an otherwise-valid
+    // computed jump could be rejected.
+    std::vector<uint64_t> RequiredJumpDests;
+    for (const auto &[EntryPC, Info] : BlockInfos) {
+      if (Info.IsJumpDest) {
+        appendUniqueBlockPC(RequiredJumpDests, EntryPC);
+      }
+    }
+
+    Result.SafeForRuntimeDispatch =
+        !RequiredJumpDests.empty() &&
+        std::all_of(RequiredJumpDests.begin(), RequiredJumpDests.end(),
+                    [&Result](uint64_t TargetPC) {
+                      return std::find(Result.TargetBlocks.begin(),
+                                       Result.TargetBlocks.end(),
+                                       TargetPC) != Result.TargetBlocks.end();
+                    });
+    if (!Result.SafeForRuntimeDispatch) {
+      Result.TargetBlocks.clear();
+    }
+    return Result;
+  }
+
   bool hasDeferredLiftedEntryMerge(uint64_t BlockPC) const {
     auto It = BlockInfos.find(BlockPC);
     return It != BlockInfos.end() && It->second.CanLiftStack &&
            It->second.HasDeferredEntryMerge;
   }
 
-  bool canTransferLiftedEntryStateWithoutRuntimeMaterialization(
-      uint64_t BlockPC) const {
-    auto It = BlockInfos.find(BlockPC);
-    return It != BlockInfos.end() && It->second.CanLiftStack;
-  }
-
-  bool canTransferCompatibleDynamicJumpTargetsWithoutRuntimeMaterialization(
-      uint64_t BlockPC) const {
-    const std::vector<uint64_t> TargetBlockPCs =
-        getCompatibleDynamicJumpTargetBlocksForSourceBlock(BlockPC);
-    return !TargetBlockPCs.empty() &&
-           std::all_of(
-               TargetBlockPCs.begin(), TargetBlockPCs.end(),
-               [this](uint64_t TargetBlockPC) {
-                 return canTransferLiftedEntryStateWithoutRuntimeMaterialization(
-                     TargetBlockPC);
-               });
-  }
-
   const JITSuitabilityResult &getJITSuitability() const { return JITResult; }
-
-  bool hasUnresolvedNonLiftedDeepEntryRisk() const {
-    for (const auto &[BlockPC, Info] : BlockInfos) {
-      (void)BlockPC;
-      if (Info.CanLiftStack || Info.ResolvedEntryStackDepth >= 0) {
-        continue;
-      }
-
-      const int32_t RequiredEntryDepth = -Info.MinStackHeight;
-      if (RequiredEntryDepth <= 1) {
-        continue;
-      }
-
-      for (uint64_t PredBlockPC : Info.Predecessors) {
-        auto PredIt = BlockInfos.find(PredBlockPC);
-        if (PredIt == BlockInfos.end()) {
-          continue;
-        }
-
-        const BlockInfo &PredInfo = PredIt->second;
-        if (PredInfo.CanLiftStack || PredInfo.ResolvedEntryStackDepth >= 0) {
-          continue;
-        }
-
-        return true;
-      }
-    }
-
-    return false;
-  }
 
   bool hasCanonicalJumpDest(uint64_t PC) const {
     return JumpDestCanonicalPCs.count(PC) != 0;
@@ -487,7 +490,9 @@ public:
     linkPredecessors();
     resolveEntryDepths();
     markDynamicJumpTargetCandidates();
+    markDynamicDispatchEntryDepthTaint();
     resolveDynamicJumpTargetEntryDepths();
+    invalidateUnderResolvedEntryDepths();
     finalizeEntryShapeMetadata();
     finalizeLiftability();
     runRangeAnalysis(Bytecode, BytecodeSize);
@@ -495,6 +500,78 @@ public:
   }
 
 private:
+  friend struct EVMAnalyzerRangeTestAccess;
+
+  bool isMultiOpcodeCanonicalJumpDest(uint64_t PC) const {
+    if (PC == 0 || getCanonicalJumpDestPC(PC) != PC) {
+      return false;
+    }
+    auto PrevIt = JumpDestCanonicalPCs.find(PC - 1);
+    return PrevIt != JumpDestCanonicalPCs.end() && PrevIt->second == PC;
+  }
+
+  void markDynamicDispatchEntryDepthTaint() {
+    // Dead dynamic sources cannot execute, so first prove that at least one
+    // dynamic jump is reachable from the function entry in the conservative
+    // analyzer CFG. This deliberately does not prune JUMPI edges by proving
+    // their runtime condition constant.
+    std::unordered_set<uint64_t> Visited;
+    std::queue<uint64_t> WorkList;
+    Visited.insert(EntryBlockPC);
+    WorkList.push(EntryBlockPC);
+    bool HasReachableDynamicJump = false;
+    while (!WorkList.empty()) {
+      const uint64_t BlockPC = WorkList.front();
+      WorkList.pop();
+      auto It = BlockInfos.find(BlockPC);
+      if (It == BlockInfos.end()) {
+        continue;
+      }
+      if (It->second.HasDynamicJump) {
+        HasReachableDynamicJump = true;
+        break;
+      }
+      for (uint64_t SuccPC : It->second.Successors) {
+        if (Visited.insert(SuccPC).second) {
+          WorkList.push(SuccPC);
+        }
+      }
+    }
+    if (!HasReachableDynamicJump) {
+      return;
+    }
+
+    // Runtime indirect dispatch can land on any canonical JUMPDEST, including
+    // backward targets outside the analyzer's forward dynamic-region
+    // heuristic. The unknown absolute depth remains unknown along every static
+    // successor edge until execution terminates, so taint the full closure.
+    Visited.clear();
+    WorkList = {};
+    for (auto &[BlockPC, Info] : BlockInfos) {
+      if (!Info.IsJumpDest || !Visited.insert(BlockPC).second) {
+        continue;
+      }
+      Info.EntryDepthMayComeFromDynamicDispatch = true;
+      WorkList.push(BlockPC);
+    }
+    while (!WorkList.empty()) {
+      const uint64_t BlockPC = WorkList.front();
+      WorkList.pop();
+      auto It = BlockInfos.find(BlockPC);
+      if (It == BlockInfos.end()) {
+        continue;
+      }
+      for (uint64_t SuccPC : It->second.Successors) {
+        auto SuccIt = BlockInfos.find(SuccPC);
+        if (SuccIt == BlockInfos.end() || !Visited.insert(SuccPC).second) {
+          continue;
+        }
+        SuccIt->second.EntryDepthMayComeFromDynamicDispatch = true;
+        WorkList.push(SuccPC);
+      }
+    }
+  }
+
   // Fallback: look up pre-resolved jump target from the shared cache.
   // Used when local abstract stack analysis cannot resolve the jump.
   // The shared map stores raw (non-canonicalized) PCs; we canonicalize here
@@ -773,10 +850,12 @@ private:
         Stack.pop_back();
         updateHeights();
 
-        if (Dest.KnownConst && Dest.FitsU64 && hasCanonicalJumpDest(Dest.Low)) {
-          Info.HasConstantJump = true;
-          Info.ConstantJumpTargetPC = getCanonicalJumpDestPC(Dest.Low);
-          Info.Successors.push_back(Info.ConstantJumpTargetPC);
+        if (Dest.KnownConst) {
+          if (Dest.FitsU64 && hasCanonicalJumpDest(Dest.Low)) {
+            Info.HasConstantJump = true;
+            Info.ConstantJumpTargetPC = getCanonicalJumpDestPC(Dest.Low);
+            Info.Successors.push_back(Info.ConstantJumpTargetPC);
+          }
         } else if (tryResolveFromSharedMap(ScanPC - 1, Info)) {
           // Resolved via shared cache (covers patterns like SWAPn→JUMP).
         } else {
@@ -809,13 +888,15 @@ private:
 
         Info.HasConditionalJump = true;
         Info.Successors.push_back(FallthroughEntryPC);
-        if (Dest.KnownConst && Dest.FitsU64 && hasCanonicalJumpDest(Dest.Low)) {
-          Info.HasConstantJump = true;
-          Info.ConstantJumpTargetPC = getCanonicalJumpDestPC(Dest.Low);
-          if (Info.ConstantJumpTargetPC != FallthroughEntryPC) {
-            Info.Successors.push_back(Info.ConstantJumpTargetPC);
+        if (Dest.KnownConst) {
+          if (Dest.FitsU64 && hasCanonicalJumpDest(Dest.Low)) {
+            Info.HasConstantJump = true;
+            Info.ConstantJumpTargetPC = getCanonicalJumpDestPC(Dest.Low);
+            if (Info.ConstantJumpTargetPC != FallthroughEntryPC) {
+              Info.Successors.push_back(Info.ConstantJumpTargetPC);
+            }
           }
-        } else if (!Dest.KnownConst || !Dest.FitsU64) {
+        } else {
           if (tryResolveFromSharedMap(ScanPC - 1, Info, FallthroughEntryPC)) {
             // Resolved via shared cache.
           } else {
@@ -824,10 +905,9 @@ private:
             Info.DynamicJumpTargetRegionEntryPC = FallthroughEntryPC;
           }
         }
-        // Note: the implicit else (KnownConst && FitsU64 but NOT a valid
-        // JUMPDEST) is intentionally left without a successor for the taken
-        // branch — at runtime that path traps with BAD_JUMP_DESTINATION,
-        // so it is effectively dead. Only the fallthrough is reachable.
+        // A known constant that is not a valid JUMPDEST is intentionally left
+        // without a successor for the taken branch: that path traps with
+        // BAD_JUMP_DESTINATION, so only the fallthrough is reachable.
         NextEntryPC = FallthroughEntryPC;
         NextBodyStartPC = FallthroughBodyStartPC;
         HasNextBlock = true;
@@ -1031,6 +1111,12 @@ private:
         }
         if (SuccInfo.ResolvedEntryStackDepth < 0) {
           SuccInfo.ResolvedEntryStackDepth = ExitDepth;
+          // A successor inherits both this predecessor's resolved depth and the
+          // fact that runtime indirect dispatch may supply a different absolute
+          // depth. The separate dispatch-closure walk also marks successors
+          // whose static depth was resolved earlier from a trusted predecessor.
+          SuccInfo.EntryDepthMayComeFromDynamicDispatch =
+              Info.EntryDepthMayComeFromDynamicDispatch;
           WorkList.push(Succ);
         } else if (SuccInfo.ResolvedEntryStackDepth != ExitDepth) {
           invalidateReachableEntryDepths(Succ);
@@ -1305,6 +1391,11 @@ private:
         }
         if (Info.ResolvedEntryStackDepth < 0) {
           Info.ResolvedEntryStackDepth = DynamicJumpEntryDepth;
+          // Taint origin: this depth is the region uniform-entry heuristic's
+          // guess, not a static propagation from the function entry. Mark it so
+          // finalizeLiftability keeps this block (and every static successor
+          // that inherits the depth) out of lifting.
+          Info.EntryDepthMayComeFromDynamicDispatch = true;
           WorkList.push(Info.EntryPC);
           continue;
         }
@@ -1314,6 +1405,17 @@ private:
       }
 
       propagateEntryDepths(WorkList);
+    }
+  }
+
+  void invalidateUnderResolvedEntryDepths() {
+    for (const auto &[EntryPC, Info] : BlockInfos) {
+      if (Info.ResolvedEntryStackDepth >= 0 &&
+          Info.ResolvedEntryStackDepth + Info.MinStackHeight < 0) {
+        // The absolute entry depth cannot satisfy this block's own pops, so
+        // neither it nor depths propagated from its exit are trustworthy.
+        invalidateReachableEntryDepths(EntryPC);
+      }
     }
   }
 
@@ -1398,6 +1500,28 @@ private:
     return false;
   }
 
+  // Mirrors the visitor's runtime-stack materialization decision at a block's
+  // jump exit (evm_bytecode_visitor.h handleJumpOpcode / handleJumpIOpcode).
+  // Codegen writes the runtime stack whenever the taken jump edge is not a
+  // statically known constant JUMPDEST successor:
+  //   - HasDynamicJump: an unresolved dynamic jump dispatches through the
+  //     runtime jump table (JUMP and JUMPI alike).
+  //   - HasConditionalJump && !HasConstantJump: a JUMPI whose constant
+  //     destination is not a valid JUMPDEST. The analyzer records no taken
+  //     successor for it (see the OP_JUMPI handler's implicit else), so the
+  //     static successor loop cannot observe the exit, yet the visitor still
+  //     forces materialization (tryGetConstantJumpSuccessorPC returns false ->
+  //     NeedsRuntimeMaterialization). HasDynamicJump alone misses this shape.
+  // Invariant: blockExitMaterializesRuntimeStack(Info) is true exactly when
+  // codegen emits a runtime stack write at Info's terminator independent of
+  // successor liftability. A hidden-prefix block with such an exit reconciles
+  // its hidden prefix slots against the runtime stack and must be treated as a
+  // materialization boundary in the hidden-prefix fixpoint below.
+  static bool blockExitMaterializesRuntimeStack(const BlockInfo &Info) {
+    return Info.HasDynamicJump ||
+           (Info.HasConditionalJump && !Info.HasConstantJump);
+  }
+
   void finalizeLiftability() {
     // Computed once and reused across blocks; independent of the per-block
     // loop.
@@ -1415,6 +1539,31 @@ private:
       Info.CanLiftStack = EntryKnown && !Info.HasUndefinedInstr &&
                           !Info.HasInconsistentEntryDepth &&
                           !DynamicJumpDestConflict && !NonLiftableDynamicSource;
+      // Consecutive JUMPDEST opcodes share one canonical analyzer block, but
+      // codegen retains an entry thunk for every raw destination so each alias
+      // can charge its own skipped JUMPDEST gas. Those alias thunks are extra
+      // MIR predecessors that do not appear in the analyzer's logical
+      // predecessor list. A canonical block with a non-empty logical merge
+      // must therefore stay on the runtime-stack path rather than build a phi
+      // from a smaller predecessor model. Empty entry states do not build
+      // phis, so the extra thunks are harmless there.
+      if (Info.CanLiftStack && Info.IsJumpDest &&
+          Info.RequiresEntryMergeState && Info.FullEntryStateDepth > 0 &&
+          isMultiOpcodeCanonicalJumpDest(EntryPC)) {
+        Info.CanLiftStack = false;
+      }
+      // Never lift a block that may inherit its absolute entry depth from
+      // runtime indirect dispatch. This includes every JUMPDEST and its static
+      // successor closure once a reachable dynamic source exists, not only the
+      // analyzer's forward dynamic region. Lifting bakes the statically modeled
+      // depth into its materializing exit spill
+      // (spillTrackedStackPreservingPrefix sets StackSize absolutely to the
+      // modeled depth), so an under-counted caller frame would be truncated and
+      // silently diverge from the interpreter. The non-lifted path keeps using
+      // the runtime stack and does not require an absolute entry depth.
+      if (Info.CanLiftStack && Info.EntryDepthMayComeFromDynamicDispatch) {
+        Info.CanLiftStack = false;
+      }
       if (Info.CanLiftStack && Info.IsDynamicJumpTargetCandidate &&
           Info.HasDeferredEntryMerge && Info.HiddenLiveInPrefixDepth > 0 &&
           getDynamicJumpSourceBlocksForBlock(EntryPC).empty()) {
@@ -1436,7 +1585,125 @@ private:
                                    EntryPC, DispatchSources)) {
         Info.CanLiftStack = false;
       }
+      // A JUMPDEST reachable through the runtime jump table must never lift.
+      // markDynamicJumpTargetCandidates() forces every JUMPDEST to
+      // IsDynamicJumpTargetCandidate whenever the module contains any dynamic
+      // jump (HasDynamicJump is only ever set together with
+      // HasUnknownDynamicJump), so this exclusion equals codegen's indirect
+      // switch-emission reachability: the dispatch wires an edge from every
+      // dynamic jump to every JUMPDEST, and the runtime stack such an edge
+      // carries is not modeled by lifted SSA entry state. This unconditional
+      // rule supersedes the partial dispatch-coverage revocations above.
+      if (Info.IsDynamicJumpTargetCandidate) {
+        Info.CanLiftStack = false;
+      }
+      // Never lift a block any of whose static predecessors has an unresolved
+      // exit depth. Such an edge's runtime-entry assignment is silently skipped
+      // (canAssignLiftedEntryStateFromRuntime bails when ResolvedExitStackDepth
+      // < 0), which would leave the lifted successor with an undefined entry
+      // slot.
+      if (Info.CanLiftStack) {
+        for (uint64_t PredBlockPC : Info.Predecessors) {
+          auto PredIt = BlockInfos.find(PredBlockPC);
+          if (PredIt == BlockInfos.end() ||
+              PredIt->second.ResolvedExitStackDepth < 0) {
+            Info.CanLiftStack = false;
+            break;
+          }
+        }
+      }
     }
+
+    // A block with a hidden live-in prefix (absolute entry depth exceeds the
+    // block's local entry depth) can only be lifted soundly when it never
+    // reconciles its hidden prefix slots with the runtime stack. The lifter
+    // mishandles that reconciliation at a lifted/non-lifted materialization
+    // boundary: a hidden-prefix block that is entered from, or exits to, the
+    // runtime stack miscompiles its stack depth. Such a block is therefore
+    // unlifted when any static predecessor or successor is not lifted, or when
+    // it exits via a dynamic jump (which materializes at runtime). Unlifting a
+    // block turns a hidden-prefix neighbor into a boundary as well, so iterate
+    // to a fixpoint. A hidden-prefix block whose whole static neighborhood
+    // stays lifted keeps its zero-reload SSA entry (pure-SSA island). This is
+    // sound because unlifting only forces additive runtime materialization,
+    // which is always valid, at the cost of cross-boundary SSA residency.
+    std::queue<uint64_t> HiddenBoundaryWorkList;
+    for (auto &[BlockPC, Info] : BlockInfos) {
+      if (!Info.CanLiftStack || Info.HiddenLiveInPrefixDepth <= 0) {
+        continue;
+      }
+      bool TouchesRuntime = blockExitMaterializesRuntimeStack(Info);
+      if (!TouchesRuntime) {
+        for (uint64_t PredBlockPC : Info.Predecessors) {
+          auto It = BlockInfos.find(PredBlockPC);
+          if (It == BlockInfos.end() || !It->second.CanLiftStack) {
+            TouchesRuntime = true;
+            break;
+          }
+        }
+      }
+      if (!TouchesRuntime) {
+        for (uint64_t SuccBlockPC : Info.Successors) {
+          auto It = BlockInfos.find(SuccBlockPC);
+          if (It == BlockInfos.end() || !It->second.CanLiftStack) {
+            TouchesRuntime = true;
+            break;
+          }
+        }
+      }
+      if (TouchesRuntime) {
+        Info.CanLiftStack = false;
+        HiddenBoundaryWorkList.push(BlockPC);
+      }
+    }
+
+    while (!HiddenBoundaryWorkList.empty()) {
+      const uint64_t BlockPC = HiddenBoundaryWorkList.front();
+      HiddenBoundaryWorkList.pop();
+      const auto It = BlockInfos.find(BlockPC);
+      if (It == BlockInfos.end()) {
+        continue;
+      }
+      auto UnliftHiddenNeighbor = [&](uint64_t NeighborPC) {
+        auto NeighborIt = BlockInfos.find(NeighborPC);
+        if (NeighborIt == BlockInfos.end() ||
+            !NeighborIt->second.CanLiftStack ||
+            NeighborIt->second.HiddenLiveInPrefixDepth <= 0) {
+          return;
+        }
+        NeighborIt->second.CanLiftStack = false;
+        HiddenBoundaryWorkList.push(NeighborPC);
+      };
+      for (uint64_t PredBlockPC : It->second.Predecessors) {
+        UnliftHiddenNeighbor(PredBlockPC);
+      }
+      for (uint64_t SuccBlockPC : It->second.Successors) {
+        UnliftHiddenNeighbor(SuccBlockPC);
+      }
+    }
+
+#ifndef NDEBUG
+    // Structural invariants over every compiled module (debug builds only; no
+    // release side effects). (a) A lifted block is never an indirect-dispatch
+    // landing. (b) Every static predecessor of a lifted block has a resolved
+    // exit depth equal to the successor's full entry-state depth.
+    for (const auto &Entry : BlockInfos) {
+      const BlockInfo &Info = Entry.second;
+      if (!Info.CanLiftStack) {
+        continue;
+      }
+      ZEN_ASSERT(!Info.IsDynamicJumpTargetCandidate &&
+                 "lifted block is a dynamic-jump target candidate");
+      for (uint64_t PredBlockPC : Info.Predecessors) {
+        auto PredIt = BlockInfos.find(PredBlockPC);
+        ZEN_ASSERT(PredIt != BlockInfos.end() &&
+                   PredIt->second.ResolvedExitStackDepth >= 0 &&
+                   PredIt->second.ResolvedExitStackDepth ==
+                       Info.FullEntryStateDepth &&
+                   "lifted block static predecessor exit depth mismatch");
+      }
+    }
+#endif
   }
 
   void finalizeEntryShapeMetadata() {
@@ -1620,9 +1887,8 @@ private:
     return EVMValueRange::U64;
   }
 
-  // Pop `Count` entries from `Stack`, padding with U256 if the stack is
-  // shallower than expected (under-approximated entry stack should never
-  // happen after `resolveEntryDepths` succeeded, but guard defensively).
+  // Pop up to `Count` existing entries. Missing operands stay unrepresented;
+  // propagation validates producer and successor shapes before meeting them.
   static void popStackRanges(std::vector<EVMValueRange> &Stack, size_t Count) {
     while (Count > 0 && !Stack.empty()) {
       Stack.pop_back();
@@ -1983,6 +2249,20 @@ private:
   // successor's entry state.  A successor whose entry vector changed is
   // requeued.  Convergence: lattice height is 3, so each slot can change at
   // most twice.
+  void resetRangeAnalysisToConservativeState() {
+    for (auto &[EntryPC, Info] : BlockInfos) {
+      (void)EntryPC;
+      Info.CanLiftStack = false;
+      Info.EntryStackRanges.clear();
+      if (Info.ResolvedEntryStackDepth >= 0 &&
+          !Info.HasInconsistentEntryDepth) {
+        Info.EntryStackRanges.assign(
+            static_cast<size_t>(Info.ResolvedEntryStackDepth),
+            EVMValueRange::U256);
+      }
+    }
+  }
+
   void runRangeAnalysis(const uint8_t *Bytecode, size_t BytecodeSize) {
     seedRangeEntryVectors();
 
@@ -2028,14 +2308,15 @@ private:
 
         const size_t SuccDepth =
             static_cast<size_t>(SuccInfo.ResolvedEntryStackDepth);
-        // seedRangeEntryVectors already sizes every block with
-        // ResolvedEntryStackDepth >= 0 correctly; this branch is unreachable.
-        ZEN_ASSERT(SuccInfo.EntryStackRanges.size() == SuccDepth);
-
-        // Producer's exit depth and successor's entry depth are linked by
-        // resolveEntryDepths and must match for every block pair reaching this
-        // point (both have ResolvedEntryStackDepth >= 0 and consistent depth).
-        ZEN_ASSERT(ExitStack.size() == SuccDepth);
+        if (SuccInfo.EntryStackRanges.size() != SuccDepth ||
+            ExitStack.size() != SuccDepth) {
+          // Slot indices are bottom-to-top, so resizing either vector could
+          // align unrelated values and unsafely enable a narrow-value path.
+          // Discard every inferred range and disable lifting, which also
+          // depends on the absolute stack shape whose invariant just failed.
+          resetRangeAnalysisToConservativeState();
+          return;
+        }
         // Meet the producer's exit stack into the successor's entry stack.
         bool Changed = false;
         for (size_t I = 0; I < SuccDepth; ++I) {

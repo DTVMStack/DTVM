@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "compiler/evm_frontend/evm_analyzer.h"
 #include "evm/evm.h"
 #include "evm_test_host.hpp"
 #include "runtime/evm_module.h"
@@ -27,9 +28,43 @@ std::filesystem::path getEvmAsmDirPath() {
          std::filesystem::path("../../tests/evm_asm");
 }
 
+void appendHexByte(std::string &Out, uint8_t Byte) {
+  constexpr char Hex[] = "0123456789abcdef";
+  Out.push_back(Hex[Byte >> 4]);
+  Out.push_back(Hex[Byte & 0x0f]);
+}
+
+std::string
+logsSignature(const std::vector<evmc::MockedHost::log_record> &Logs) {
+  std::string Out;
+  Out += std::to_string(Logs.size());
+  Out.push_back('|');
+  for (const auto &Log : Logs) {
+    for (uint8_t Byte : Log.creator.bytes) {
+      appendHexByte(Out, Byte);
+    }
+    Out.push_back(':');
+    for (const auto &Topic : Log.topics) {
+      for (uint8_t Byte : Topic.bytes) {
+        appendHexByte(Out, Byte);
+      }
+      Out.push_back(',');
+    }
+    Out.push_back(':');
+    for (uint8_t Byte : Log.data) {
+      appendHexByte(Out, Byte);
+    }
+    Out.push_back('|');
+  }
+  return Out;
+}
+
 struct EVMExecutionResult {
   evmc_status_code Status = EVMC_INTERNAL_ERROR;
+  int64_t GasLeft = 0;
   std::string OutputHex;
+  std::string LogsSignature;
+  size_t LogCount = 0;
   bool JITCompiled = false;
 };
 
@@ -38,15 +73,16 @@ struct EVMExecutionResult {
 // config can fall back to the interpreter for a single call, which would make
 // a differential test vacuous; DisableMultipassMultithread compiles before the
 // run so the JIT side is non-vacuous.
-EVMExecutionResult runEvmBytecode(const std::string &Label,
-                                  const std::vector<uint8_t> &Bytecode,
-                                  common::RunMode Mode,
-                                  const std::vector<uint8_t> &CallData = {}) {
+EVMExecutionResult
+runEvmBytecode(const std::string &Label, const std::vector<uint8_t> &Bytecode,
+               common::RunMode Mode, const std::vector<uint8_t> &CallData = {},
+               uint32_t MessageFlags = 0u, bool EnableGasMetering = false) {
   EVMExecutionResult Empty;
 
   RuntimeConfig Config;
   Config.Mode = Mode;
   Config.DisableMultipassMultithread = true; // compile before run -> JIT used
+  Config.EnableEvmGasMetering = EnableGasMetering;
 
   auto MockedHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
   MockedHost->tx_context.tx_origin = zen::evm::DEFAULT_DEPLOYER_ADDRESS;
@@ -81,7 +117,7 @@ EVMExecutionResult runEvmBytecode(const std::string &Label,
 
   evmc_message Msg = {
       .kind = EVMC_CALL,
-      .flags = 0u,
+      .flags = MessageFlags,
       .depth = 0,
       .gas = static_cast<int64_t>(GasLimit),
       .recipient = {},
@@ -102,8 +138,11 @@ EVMExecutionResult runEvmBytecode(const std::string &Label,
 #endif
   EXPECT_NO_THROW({ RT->callEVMMain(*Inst, Msg, RawResult); });
   Exec.Status = RawResult.status_code;
+  Exec.GasLeft = RawResult.gas_left;
   Exec.OutputHex =
       zen::utils::toHex(RawResult.output_data, RawResult.output_size);
+  Exec.LogCount = MockedHost->recorded_logs.size();
+  Exec.LogsSignature = logsSignature(MockedHost->recorded_logs);
   return Exec;
 }
 
@@ -148,8 +187,52 @@ bool expectInterpMatchesMultipass(const std::string &Label,
       << "interpreter did not succeed: " << Label;
   EXPECT_EQ(Multi.Status, Interp.Status) << "status diverged: " << Label;
   EXPECT_EQ(Multi.OutputHex, Interp.OutputHex) << "output diverged: " << Label;
+  EXPECT_EQ(Multi.LogCount, Interp.LogCount) << "log count diverged: " << Label;
+  EXPECT_EQ(Multi.LogsSignature, Interp.LogsSignature)
+      << "logs diverged: " << Label;
   return Interp.Status == EVMC_SUCCESS && Multi.Status == Interp.Status &&
+         Multi.OutputHex == Interp.OutputHex &&
+         Multi.LogCount == Interp.LogCount &&
+         Multi.LogsSignature == Interp.LogsSignature;
+}
+
+bool expectInterpStatusMatchesMultipass(const std::string &Label,
+                                        const std::vector<uint8_t> &Bytecode,
+                                        evmc_status_code ExpectedStatus) {
+  auto Interp =
+      runEvmBytecode(Label + "_interp", Bytecode, common::RunMode::InterpMode);
+  auto Multi = runEvmBytecode(Label + "_multipass", Bytecode,
+                              common::RunMode::MultipassMode);
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(Multi.JITCompiled) << "multipass did not JIT-compile: " << Label;
+#endif
+  EXPECT_EQ(Interp.Status, ExpectedStatus)
+      << "interpreter status mismatch: " << Label;
+  EXPECT_EQ(Multi.Status, Interp.Status) << "status diverged: " << Label;
+  EXPECT_EQ(Multi.OutputHex, Interp.OutputHex) << "output diverged: " << Label;
+  return Interp.Status == ExpectedStatus && Multi.Status == Interp.Status &&
          Multi.OutputHex == Interp.OutputHex;
+}
+
+std::string
+expectInterpMatchesMultipassWithGas(const std::string &Label,
+                                    const std::vector<uint8_t> &Bytecode,
+                                    const std::vector<uint8_t> &CallData) {
+  const auto Interp =
+      runEvmBytecode(Label + "_interp", Bytecode, common::RunMode::InterpMode,
+                     CallData, 0u, true);
+  const auto Multi =
+      runEvmBytecode(Label + "_multipass", Bytecode,
+                     common::RunMode::MultipassMode, CallData, 0u, true);
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(Multi.JITCompiled) << "multipass did not JIT-compile: " << Label;
+#endif
+  EXPECT_EQ(Interp.Status, EVMC_SUCCESS)
+      << "interpreter did not succeed: " << Label;
+  EXPECT_EQ(Multi.Status, Interp.Status) << "status diverged: " << Label;
+  EXPECT_EQ(Multi.GasLeft, Interp.GasLeft) << "gas diverged: " << Label;
+  EXPECT_EQ(Multi.OutputHex, Interp.OutputHex) << "output diverged: " << Label;
+  return Interp.OutputHex;
 }
 
 // Fixture-file variant of the assertion above: load a hex fixture, run both
@@ -195,6 +278,76 @@ class EVMFixtureDifferentialTest
 
 TEST_P(EVMFixtureDifferentialTest, InterpMatchesMultipass) {
   expectFixtureInterpMatchesMultipass(GetParam());
+}
+
+TEST(EVMMemoryTerminationDifferential, ReturnLargeRangeMatchesInterpreter) {
+  const std::vector<uint8_t> Bytecode = {0x60, 0x20, // PUSH1 32: return length
+                                         0x61, 0x10,
+                                         0x00,  // PUSH2 0x1000: return offset
+                                         0xf3}; // RETURN
+  ASSERT_TRUE(expectInterpStatusMatchesMultipass("return_large_range", Bytecode,
+                                                 EVMC_SUCCESS));
+}
+
+TEST(EVMMemoryTerminationDifferential, RevertLargeRangeMatchesInterpreter) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0x20,       // PUSH1 32: revert data length
+      0x61, 0x10, 0x00, // PUSH2 0x1000: revert data offset
+      0xfd};            // REVERT
+  ASSERT_TRUE(expectInterpStatusMatchesMultipass("revert_large_range", Bytecode,
+                                                 EVMC_REVERT));
+}
+
+TEST(EVMMemoryTerminationDifferential, EmptyReturnIgnoresHighOffset) {
+  std::vector<uint8_t> Bytecode = {
+      0x5f, // PUSH0: return length
+      0x7f, // PUSH32: high offset must be ignored when length is zero
+  };
+  Bytecode.push_back(0x01);
+  Bytecode.insert(Bytecode.end(), 31, 0x00);
+  Bytecode.push_back(0xf3); // RETURN
+
+  ASSERT_TRUE(expectInterpStatusMatchesMultipass("empty_return_high_offset",
+                                                 Bytecode, EVMC_SUCCESS));
+}
+
+TEST(EVMMemoryTerminationDifferential, EmptyRevertIgnoresHighOffset) {
+  std::vector<uint8_t> Bytecode = {
+      0x5f, // PUSH0: revert data length
+      0x7f, // PUSH32: high offset must be ignored when length is zero
+  };
+  Bytecode.push_back(0x01);
+  Bytecode.insert(Bytecode.end(), 31, 0x00);
+  Bytecode.push_back(0xfd); // REVERT
+
+  ASSERT_TRUE(expectInterpStatusMatchesMultipass("empty_revert_high_offset",
+                                                 Bytecode, EVMC_REVERT));
+}
+
+TEST(EVMMemoryTerminationDifferential, DynamicEmptyReturnIgnoresHighOffset) {
+  std::vector<uint8_t> Bytecode = {
+      0x36, // CALLDATASIZE: dynamic zero return length
+      0x7f, // PUSH32: high offset must be ignored when length is zero
+  };
+  Bytecode.push_back(0x01);
+  Bytecode.insert(Bytecode.end(), 31, 0x00);
+  Bytecode.push_back(0xf3); // RETURN
+
+  ASSERT_TRUE(expectInterpStatusMatchesMultipass(
+      "dynamic_empty_return_high_offset", Bytecode, EVMC_SUCCESS));
+}
+
+TEST(EVMMemoryTerminationDifferential, DynamicEmptyRevertIgnoresHighOffset) {
+  std::vector<uint8_t> Bytecode = {
+      0x36, // CALLDATASIZE: dynamic zero revert data length
+      0x7f, // PUSH32: high offset must be ignored when length is zero
+  };
+  Bytecode.push_back(0x01);
+  Bytecode.insert(Bytecode.end(), 31, 0x00);
+  Bytecode.push_back(0xfd); // REVERT
+
+  ASSERT_TRUE(expectInterpStatusMatchesMultipass(
+      "dynamic_empty_revert_high_offset", Bytecode, EVMC_REVERT));
 }
 
 // Range-narrowed lowering paths: the range-narrowed ISZERO/JUMPI folds,
@@ -373,6 +526,42 @@ TEST(EVMRangeDifferential, BinaryOpsMatchInterpreterOnAdversarialOperands) {
   }
 }
 
+TEST(EVMRangeDifferential, DynamicExpDivisorMatchesInterpreter) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0x20, 0x35,              // exponent = CALLDATALOAD(32)
+      0x61, 0x01, 0x00, 0x0a,        // divisor = 256**exponent
+      0x60, 0x00, 0x35,              // dividend = CALLDATALOAD(0)
+      0x04,                          // DIV
+      0x60, 0x00, 0x52,              // MSTORE(0, quotient)
+      0x60, 0x20, 0x60, 0x00, 0xf3}; // RETURN(0, 32)
+  std::vector<uint8_t> CallData(64, 0);
+  CallData[0] = 0x06;  // dividend = 6 * 2**248
+  CallData[63] = 0x1f; // exponent = 31, divisor = 2**248
+
+  const auto Output = expectInterpMatchesMultipassWithGas("dynamic_exp_divisor",
+                                                          Bytecode, CallData);
+  EXPECT_EQ(Output,
+            "0000000000000000000000000000000000000000000000000000000000000006");
+}
+
+TEST(EVMRangeDifferential,
+     DynamicExpDividendWithConstU64DivisorMatchesInterpreter) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0x03,                    // divisor = 3
+      0x60, 0x00, 0x35,              // exponent = CALLDATALOAD(0)
+      0x61, 0x01, 0x00, 0x0a,        // dividend = 256**exponent
+      0x04,                          // DIV
+      0x60, 0x00, 0x52,              // MSTORE(0, quotient)
+      0x60, 0x20, 0x60, 0x00, 0xf3}; // RETURN(0, 32)
+  std::vector<uint8_t> CallData(32, 0);
+  CallData.back() = 0x08;
+
+  const auto Output = expectInterpMatchesMultipassWithGas(
+      "constant_u64_divisor", Bytecode, CallData);
+  EXPECT_EQ(Output,
+            "0000000000000000000000000000000000000000000000005555555555555555");
+}
+
 // Sweep SHL/SHR/SAR with shift amounts that land inside the limb-crossing
 // region 2..255. The 11-value operand matrix, when fed as a shift amount, only
 // realizes {0, 1, >=2^64}; it never produces an amount in 2..255, so the
@@ -454,6 +643,537 @@ TEST(EVMRangeDifferential, AndU64MaskThenNarrowAddMatchesInterpreter) {
       return;
     }
   }
+}
+
+TEST(EVMRangeDifferential, DeadUnderResolvedFallthroughMatchesInterpreter) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0x01, // PC0 PUSH1 0x01 (take JUMPI)
+      0x60, 0x0b, // PC2 PUSH1 0x0b
+      0x57,       // PC4 JUMPI
+      0x01,       // PC5 ADD (dead under-resolved fallthrough)
+      0x60, 0x00, // PC6 PUSH1 0x00
+      0x60, 0x0b, // PC8 PUSH1 0x0b
+      0x56,       // PC10 JUMP
+      0x5b,       // PC11 JUMPDEST
+      0x00,       // PC12 STOP
+  };
+
+  EXPECT_TRUE(expectInterpMatchesMultipass("dead_under_resolved_fallthrough",
+                                           Bytecode, {}));
+}
+
+TEST(EVMLiftedStackMerge,
+     JumpiFallthroughSharedJumpDestMatchesInterpreterOnBothEdges) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0xaa, // PC0  PUSH1 0xaa (first incoming value)
+      0x5f,       // PC2  PUSH0 (first condition offset)
+      0x35,       // PC3  CALLDATALOAD
+      0x60, 0x10, // PC4  PUSH1 16 (shared merge target)
+      0x57,       // PC6  JUMPI
+      0x50,       // PC7  POP
+      0x60, 0xbb, // PC8  PUSH1 0xbb (second incoming value)
+      0x60, 0x20, // PC10 PUSH1 32 (independent second condition offset)
+      0x35,       // PC12 CALLDATALOAD
+      0x60, 0x17, // PC13 PUSH1 23 (unused taken target)
+      0x57,       // PC15 JUMPI (fallthrough = shared target)
+      0x5b,       // PC16 JUMPDEST (shared merge target)
+      0x5f,       // PC17 PUSH0
+      0x52,       // PC18 MSTORE (store merged 0xaa/0xbb)
+      0x60, 0x20, // PC19 PUSH1 32
+      0x5f,       // PC21 PUSH0
+      0xf3,       // PC22 RETURN
+      0x5b,       // PC23 JUMPDEST (unused taken target)
+      0x00,       // PC24 STOP
+  };
+
+  std::vector<uint8_t> SecondIncomingCallData(64, 0);
+  const std::string SecondIncomingOutput = expectInterpMatchesMultipassWithGas(
+      "jumpi_fallthrough_shared_jumpdest_second_incoming", Bytecode,
+      SecondIncomingCallData);
+
+  std::vector<uint8_t> FirstIncomingCallData = SecondIncomingCallData;
+  FirstIncomingCallData[31] = 1;
+  const std::string FirstIncomingOutput = expectInterpMatchesMultipassWithGas(
+      "jumpi_fallthrough_shared_jumpdest_first_incoming", Bytecode,
+      FirstIncomingCallData);
+
+  EXPECT_EQ(FirstIncomingOutput,
+            "00000000000000000000000000000000000000000000000000000000000000AA");
+  EXPECT_EQ(SecondIncomingOutput,
+            "00000000000000000000000000000000000000000000000000000000000000BB");
+}
+
+TEST(EVMLiftedStackMerge,
+     TerminatingBlockBeforeSharedJumpDestDoesNotAddDeadPredecessor) {
+  const std::vector<uint8_t> BaseBytecode = {
+      0x5f,       // PC0  PUSH0 (error-path selector offset)
+      0x35,       // PC1  CALLDATALOAD
+      0x60, 0x13, // PC2  PUSH1 19 (terminating error block)
+      0x57,       // PC4  JUMPI
+      0x60, 0xaa, // PC5  PUSH1 0xaa (first incoming value)
+      0x60, 0x20, // PC7  PUSH1 32 (merge-path selector offset)
+      0x35,       // PC9  CALLDATALOAD
+      0x60, 0x17, // PC10 PUSH1 23 (shared merge target)
+      0x57,       // PC12 JUMPI
+      0x50,       // PC13 POP
+      0x60, 0xbb, // PC14 PUSH1 0xbb (second incoming value)
+      0x60, 0x17, // PC16 PUSH1 23 (shared merge target)
+      0x56,       // PC18 JUMP
+      0x5b,       // PC19 JUMPDEST (error block)
+      0x5f,       // PC20 PUSH0
+      0x5f,       // PC21 PUSH0
+      0xfd,       // PC22 REVERT (replaced with RETURN in the second case)
+      0x5b,       // PC23 JUMPDEST (shared merge target)
+      0x5f,       // PC24 PUSH0
+      0x52,       // PC25 MSTORE
+      0x60, 0x20, // PC26 PUSH1 32
+      0x5f,       // PC28 PUSH0
+      0xf3,       // PC29 RETURN
+  };
+
+  COMPILER::EVMAnalyzer Analyzer(EVMC_CANCUN);
+  Analyzer.analyze(BaseBytecode.data(), BaseBytecode.size());
+  const auto MergeIt = Analyzer.getBlockInfos().find(23);
+  ASSERT_NE(MergeIt, Analyzer.getBlockInfos().end());
+  EXPECT_TRUE(MergeIt->second.CanLiftStack);
+  EXPECT_TRUE(MergeIt->second.RequiresEntryMergeState);
+
+  for (const auto &[Name, Terminator] :
+       std::vector<std::pair<const char *, uint8_t>>{
+           {"revert", 0xfd},
+           {"return", 0xf3},
+       }) {
+    std::vector<uint8_t> Bytecode = BaseBytecode;
+    Bytecode[22] = Terminator;
+
+    std::vector<uint8_t> SecondIncomingCallData(64, 0);
+    const std::string SecondIncomingOutput =
+        expectInterpMatchesMultipassWithGas(
+            std::string(Name) + "_before_shared_jumpdest_second_incoming",
+            Bytecode, SecondIncomingCallData);
+
+    std::vector<uint8_t> FirstIncomingCallData = SecondIncomingCallData;
+    FirstIncomingCallData[63] = 1;
+    const std::string FirstIncomingOutput = expectInterpMatchesMultipassWithGas(
+        std::string(Name) + "_before_shared_jumpdest_first_incoming", Bytecode,
+        FirstIncomingCallData);
+
+    EXPECT_EQ(
+        FirstIncomingOutput,
+        "00000000000000000000000000000000000000000000000000000000000000AA");
+    EXPECT_EQ(
+        SecondIncomingOutput,
+        "00000000000000000000000000000000000000000000000000000000000000BB");
+
+    std::vector<uint8_t> TerminatorCallData(64, 0);
+    TerminatorCallData[31] = 1;
+    const auto Interp = runEvmBytecode(std::string(Name) + "_terminator_interp",
+                                       Bytecode, common::RunMode::InterpMode,
+                                       TerminatorCallData, 0u, true);
+    const auto Multi = runEvmBytecode(
+        std::string(Name) + "_terminator_multipass", Bytecode,
+        common::RunMode::MultipassMode, TerminatorCallData, 0u, true);
+#ifdef ZEN_ENABLE_JIT
+    EXPECT_TRUE(Multi.JITCompiled);
+#endif
+    EXPECT_EQ(Multi.Status, Interp.Status);
+    EXPECT_EQ(Multi.GasLeft, Interp.GasLeft);
+    EXPECT_EQ(Multi.OutputHex, Interp.OutputHex);
+    EXPECT_EQ(Interp.Status, Terminator == 0xfd ? EVMC_REVERT : EVMC_SUCCESS);
+    EXPECT_TRUE(Interp.OutputHex.empty());
+  }
+}
+
+TEST(EVMLiftedStackMerge,
+     ConsecutiveJumpDestSharedMergeMatchesInterpreterOnBothEdges) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0xaa, // PC0  PUSH1 0xaa (first incoming value)
+      0x5f,       // PC2  PUSH0 (first condition offset)
+      0x35,       // PC3  CALLDATALOAD
+      0x60, 0x11, // PC4  PUSH1 17 (canonical shared merge target)
+      0x57,       // PC6  JUMPI
+      0x50,       // PC7  POP
+      0x60, 0xbb, // PC8  PUSH1 0xbb (second incoming value)
+      0x60, 0x20, // PC10 PUSH1 32 (independent second condition offset)
+      0x35,       // PC12 CALLDATALOAD
+      0x60, 0x18, // PC13 PUSH1 24 (unused taken target)
+      0x57,       // PC15 JUMPI (fallthrough begins JUMPDEST run)
+      0x5b,       // PC16 JUMPDEST (alias of PC17)
+      0x5b,       // PC17 JUMPDEST (canonical shared merge target)
+      0x5f,       // PC18 PUSH0
+      0x52,       // PC19 MSTORE (store merged 0xaa/0xbb)
+      0x60, 0x20, // PC20 PUSH1 32
+      0x5f,       // PC22 PUSH0
+      0xf3,       // PC23 RETURN
+      0x5b,       // PC24 JUMPDEST (unused taken target)
+      0x00,       // PC25 STOP
+  };
+
+  std::vector<uint8_t> SecondIncomingCallData(64, 0);
+  const std::string SecondIncomingOutput = expectInterpMatchesMultipassWithGas(
+      "consecutive_jumpdest_shared_merge_second_incoming", Bytecode,
+      SecondIncomingCallData);
+
+  std::vector<uint8_t> FirstIncomingCallData = SecondIncomingCallData;
+  FirstIncomingCallData[31] = 1;
+  const std::string FirstIncomingOutput = expectInterpMatchesMultipassWithGas(
+      "consecutive_jumpdest_shared_merge_first_incoming", Bytecode,
+      FirstIncomingCallData);
+
+  EXPECT_EQ(FirstIncomingOutput,
+            "00000000000000000000000000000000000000000000000000000000000000AA");
+  EXPECT_EQ(SecondIncomingOutput,
+            "00000000000000000000000000000000000000000000000000000000000000BB");
+}
+
+TEST(EVMLiftedStackMerge,
+     DistinctInstructionBackedValuesMaterializeAtSharedEntry) {
+  const std::vector<uint8_t> Bytecode = {
+      0x5f,       // PC0  PUSH0 (condition offset)
+      0x35,       // PC1  CALLDATALOAD
+      0x60, 0x0e, // PC2  PUSH1 14 (taken branch)
+      0x57,       // PC4  JUMPI
+      0x60, 0x20, // PC5  PUSH1 32 (first value offset)
+      0x35,       // PC7  CALLDATALOAD
+      0x60, 0x01, // PC8  PUSH1 1
+      0x01,       // PC10 ADD (first instruction-backed value)
+      0x60, 0x18, // PC11 PUSH1 24 (merge)
+      0x56,       // PC13 JUMP
+      0x5b,       // PC14 JUMPDEST (taken branch)
+      0x60, 0x40, // PC15 PUSH1 64 (second value offset)
+      0x35,       // PC17 CALLDATALOAD
+      0x60, 0x01, // PC18 PUSH1 1
+      0x01,       // PC20 ADD (second instruction-backed value)
+      0x60, 0x18, // PC21 PUSH1 24 (merge)
+      0x56,       // PC23 JUMP
+      0x5b,       // PC24 JUMPDEST (merge)
+      0x5f,       // PC25 PUSH0
+      0x52,       // PC26 MSTORE
+      0x60, 0x20, // PC27 PUSH1 32
+      0x5f,       // PC29 PUSH0
+      0xf3,       // PC30 RETURN
+  };
+
+  COMPILER::EVMAnalyzer Analyzer(EVMC_CANCUN);
+  Analyzer.analyze(Bytecode.data(), Bytecode.size());
+  const auto MergeIt = Analyzer.getBlockInfos().find(24);
+  ASSERT_NE(MergeIt, Analyzer.getBlockInfos().end());
+  EXPECT_TRUE(MergeIt->second.CanLiftStack);
+  EXPECT_TRUE(MergeIt->second.RequiresEntryMergeState);
+
+  std::vector<uint8_t> FirstEdgeCallData(96, 0);
+  FirstEdgeCallData[63] = 0x11;
+  FirstEdgeCallData[95] = 0x22;
+  const std::string FirstEdgeOutput = expectInterpMatchesMultipassWithGas(
+      "distinct_instruction_merge_first_edge", Bytecode, FirstEdgeCallData);
+
+  std::vector<uint8_t> SecondEdgeCallData = FirstEdgeCallData;
+  SecondEdgeCallData[31] = 1;
+  const std::string SecondEdgeOutput = expectInterpMatchesMultipassWithGas(
+      "distinct_instruction_merge_second_edge", Bytecode, SecondEdgeCallData);
+
+  EXPECT_NE(FirstEdgeOutput, SecondEdgeOutput)
+      << "both paths returned the same value";
+}
+
+TEST(EVMDeepEntry, DeadCfgDoesNotBlockJITAndMatchesInterpreter) {
+  const std::vector<uint8_t> Bytecode = {
+      0x00, // PC0 STOP
+      0x5b, // PC1 JUMPDEST (dead dynamic source)
+      0x5f, // PC2 PUSH0
+      0x35, // PC3 CALLDATALOAD
+      0x56, // PC4 JUMP (unreachable dynamic jump)
+      0x5b, // PC5 JUMPDEST (dead predecessor)
+      0x50, // PC6 POP
+      0x5b, // PC7 JUMPDEST (dead, requires two entry slots)
+      0x01, // PC8 ADD
+      0x00, // PC9 STOP
+  };
+  const auto Interp = runEvmBytecode("dead_deep_entry_interp", Bytecode,
+                                     common::RunMode::InterpMode);
+  const auto Multi = runEvmBytecode("dead_deep_entry_multipass", Bytecode,
+                                    common::RunMode::MultipassMode);
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(Multi.JITCompiled) << "dead CFG blocked JIT compilation";
+#endif
+  EXPECT_EQ(Multi.Status, Interp.Status);
+  EXPECT_EQ(Multi.OutputHex, Interp.OutputHex);
+}
+
+TEST(EVMDeepEntry, InvalidConstantJumpJITsAndTraps) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0xff, // PC0 PUSH1 0xff (invalid jump destination)
+      0x56,       // PC2 JUMP
+      0x5b,       // PC3 JUMPDEST (dead predecessor)
+      0x50,       // PC4 POP
+      0x5b,       // PC5 JUMPDEST (dead, requires two entry slots)
+      0x01,       // PC6 ADD
+      0x00,       // PC7 STOP
+  };
+  COMPILER::EVMAnalyzer Analyzer(EVMC_CANCUN);
+  ASSERT_TRUE(Analyzer.analyze(Bytecode.data(), Bytecode.size()));
+  const auto &Blocks = Analyzer.getBlockInfos();
+  const auto SourceIt = Blocks.find(0);
+  ASSERT_NE(SourceIt, Blocks.end());
+  EXPECT_FALSE(Analyzer.hasUnknownDynamicJumpTargets());
+  EXPECT_FALSE(SourceIt->second.HasDynamicJump);
+  const auto Interp = runEvmBytecode("invalid_constant_jump_interp", Bytecode,
+                                     common::RunMode::InterpMode);
+  const auto Multi = runEvmBytecode("invalid_constant_jump_multipass", Bytecode,
+                                    common::RunMode::MultipassMode);
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(Multi.JITCompiled) << "constant-invalid jump did not JIT";
+#endif
+  EXPECT_NE(Interp.Status, EVMC_SUCCESS);
+  EXPECT_EQ(Interp.Status, EVMC_BAD_JUMP_DESTINATION);
+  EXPECT_EQ(Multi.Status, Interp.Status);
+  EXPECT_EQ(Multi.OutputHex, Interp.OutputHex);
+}
+
+// Regression: a lifted block with a hidden live-in prefix (HiddenLiveInPrefix
+// Depth > 0) that takes a materializing exit must spill its logical stack from
+// the stack bottom, not from byte offset Hidden*32. The lifted logical stack
+// already spans the full absolute entry depth, so an offset spill writes the
+// stack Hidden slots too high and inflates the recorded StackSize by Hidden.
+// The inflated depth suppresses a runtime underflow check in a later block,
+// diverging from the interpreter.
+//
+// Shape (confirmed by analysis): block S at PC12 is lifted with Hidden=1 and
+// exits via a constant JUMP to the non-lifted block T at PC16, which pops two
+// slots while only the single prefix slot is live. The interpreter underflows
+// at the second POP; before the fix the JIT's inflated StackSize lets the
+// underflow check pass and the block runs to STOP, so status diverges.
+TEST(EVMLiftedStackDepth, HiddenPrefixMaterializingExitMatchesInterp) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0xAA, // PC0  PUSH1 0xAA  (live-in prefix)
+      0x60, 0x01, // PC2  PUSH1 0x01  (cond = 1, jump taken)
+      0x60, 0x0C, // PC4  PUSH1 0x0C  (S entry = 12)
+      0x57,       // PC6  JUMPI
+      0x60, 0xBB, // PC7  PUSH1 0xBB  (F: second, depth-2 predecessor of T)
+      0x60, 0x10, // PC9  PUSH1 0x10  (T = 16)
+      0x56,       // PC11 JUMP        (F -> T at depth 2)
+      0x5b,       // PC12 JUMPDEST    (S: lifted, Hidden = 1)
+      0x60, 0x10, // PC13 PUSH1 0x10  (T = 16)
+      0x56,       // PC15 JUMP        (S -> T at depth 1, materializing)
+      0x5b,       // PC16 JUMPDEST    (T: non-lifted, pops 2)
+      0x50,       // PC17 POP
+      0x50,       // PC18 POP         (underflow: only 1 slot present)
+      0x00,       // PC19 STOP
+  };
+  const std::vector<uint8_t> CallData;
+  auto Interp = runEvmBytecode("hidden_prefix_interp", Bytecode,
+                               common::RunMode::InterpMode, CallData);
+  auto Multi = runEvmBytecode("hidden_prefix_multipass", Bytecode,
+                              common::RunMode::MultipassMode, CallData);
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(Multi.JITCompiled) << "multipass did not JIT-compile";
+#endif
+  // The interpreter is the reference: the second POP underflows, so the run
+  // must not report success. If this ever succeeds the test has stopped
+  // exercising the underflow boundary and must be revisited.
+  EXPECT_NE(Interp.Status, EVMC_SUCCESS)
+      << "interpreter unexpectedly succeeded; test no longer exercises the "
+         "underflow boundary";
+  EXPECT_EQ(Multi.Status, Interp.Status) << "status diverged";
+  EXPECT_EQ(Multi.OutputHex, Interp.OutputHex) << "output diverged";
+}
+
+TEST(EVMLiftedStackDepth, BackwardDynamicEntryMatchesInterpreter) {
+  // A reachable indirect jump can target PC3 backward with a hidden stack
+  // value. PC3 also has a statically resolved depth-0 entry, but that depth
+  // must not allow its plain successor PC8 to lift and discard the hidden
+  // value before PC11 consumes it.
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0x0e, // PC0  PUSH1 14
+      0x56,       // PC2  JUMP
+      0x5b,       // PC3  JUMPDEST (backward dynamic target)
+      0x5f,       // PC4  PUSH0 (condition false)
+      0x60, 0x0b, // PC5  PUSH1 11
+      0x57,       // PC7  JUMPI
+      0x60, 0x0b, // PC8  PUSH1 11 (plain static successor)
+      0x56,       // PC10 JUMP
+      0x5b,       // PC11 JUMPDEST
+      0x50,       // PC12 POP (consumes hidden 0xaa)
+      0x00,       // PC13 STOP
+      0x5b,       // PC14 JUMPDEST
+      0x5f,       // PC15 PUSH0 (condition false)
+      0x60, 0x03, // PC16 PUSH1 3
+      0x57,       // PC18 JUMPI (static depth-0 edge to PC3)
+      0x60, 0xaa, // PC19 PUSH1 0xaa (hidden caller-frame value)
+      0x5f,       // PC21 PUSH0 (CALLDATALOAD offset)
+      0x35,       // PC22 CALLDATALOAD
+      0x56,       // PC23 dynamic backward JUMP to PC3
+  };
+  std::vector<uint8_t> CallData(32, 0);
+  CallData.back() = 0x03;
+
+  expectInterpMatchesMultipassWithGas("backward_dynamic_entry", Bytecode,
+                                      CallData);
+}
+
+// Deep-entry risk shape: block PC33 is a shared "increment-and-return"
+// subroutine that returns via a stack-passed return PC (SWAP1 then dynamic
+// JUMP), so per-block abstract-stack analysis cannot resolve its return
+// continuations. Their ResolvedEntryStackDepth stays < 0 and the invalidation
+// cascades along the static CFG.
+//
+// One continuation (PC18) falls through to PC22, whose ADD reads two stack
+// slots -- a static successor of an unresolved-depth block that reads 2 slots.
+// The non-lifted path reads its required values from the runtime stack and does
+// not need a statically resolved absolute entry depth.
+//
+// Execution: two calls into PC33 turn the initial 0x05 into 0x08 (0x05+1 in the
+// outer frame, 0x07+1 in the inner frame), which is MSTOREd and RETURNed as a
+// single 32-byte word.
+TEST(EVMDeepEntry, ReachableInternalCallJITsAndMatchesInterpreter) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0x08, // PC0  PUSH1 0x08
+      0x60, 0x05, // PC2  PUSH1 0x05  (value threaded through the subroutine)
+      0x60, 0x21, // PC4  PUSH1 0x21  (return PC = 33)
+      0x56,       // PC6  JUMP        (call subroutine at PC33)
+      0xfe,       // PC7  INVALID
+      0x5b,       // PC8  JUMPDEST    (outer return continuation)
+      0x60, 0x00, // PC9  PUSH1 0x00
+      0x60, 0x12, // PC11 PUSH1 0x12  (return PC = 18)
+      0x60, 0x07, // PC13 PUSH1 0x07
+      0x60, 0x21, // PC15 PUSH1 0x21  (call subroutine at PC33)
+      0x56,       // PC17 JUMP
+      0x5b,       // PC18 JUMPDEST    (inner return continuation)
+      0x60, 0x00, // PC19 PUSH1 0x00
+      0x50,       // PC21 POP
+      0x5b,       // PC22 JUMPDEST    (static successor: ADD reads 2 slots)
+      0x01,       // PC23 ADD
+      0x60, 0x00, // PC24 PUSH1 0x00
+      0x52,       // PC26 MSTORE
+      0x60, 0x20, // PC27 PUSH1 0x20
+      0x60, 0x00, // PC29 PUSH1 0x00
+      0xf3,       // PC31 RETURN
+      0xfe,       // PC32 INVALID
+      0x5b,       // PC33 JUMPDEST    (increment-and-return subroutine)
+      0x60, 0x01, // PC34 PUSH1 0x01
+      0x01,       // PC36 ADD
+      0x90,       // PC37 SWAP1
+      0x56,       // PC38 JUMP        (dynamic return via stack PC)
+  };
+  COMPILER::EVMAnalyzer Analyzer(EVMC_CANCUN);
+  ASSERT_TRUE(Analyzer.analyze(Bytecode.data(), Bytecode.size()));
+  const auto DeepEntryIt = Analyzer.getBlockInfos().find(22);
+  ASSERT_NE(DeepEntryIt, Analyzer.getBlockInfos().end());
+  EXPECT_LT(DeepEntryIt->second.ResolvedEntryStackDepth, 0);
+  EXPECT_FALSE(DeepEntryIt->second.CanLiftStack);
+
+  const std::vector<uint8_t> CallData;
+  auto Interp = runEvmBytecode("deep_entry_interp", Bytecode,
+                               common::RunMode::InterpMode, CallData);
+  auto Multi = runEvmBytecode("deep_entry_multipass", Bytecode,
+                              common::RunMode::MultipassMode, CallData);
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(Multi.JITCompiled) << "deep-entry module did not JIT-compile";
+#endif
+  EXPECT_EQ(Interp.Status, EVMC_SUCCESS) << "interpreter did not succeed";
+  EXPECT_EQ(Multi.Status, Interp.Status) << "status diverged";
+  EXPECT_EQ(Multi.OutputHex, Interp.OutputHex) << "output diverged";
+  // Ground truth: 32-byte word holding 0x08, guarding against both engines
+  // agreeing on a wrong value.
+  EXPECT_EQ(Interp.OutputHex,
+            "0000000000000000000000000000000000000000000000000000000000000008");
+}
+
+namespace {
+
+void appendPush2(std::vector<uint8_t> &Code, uint16_t Value) {
+  Code.push_back(0x61);
+  Code.push_back(static_cast<uint8_t>(Value >> 8));
+  Code.push_back(static_cast<uint8_t>(Value));
+}
+
+void appendPush32Pattern(std::vector<uint8_t> &Code, uint8_t Seed) {
+  Code.push_back(0x7f);
+  for (uint8_t I = 0; I < 32; ++I) {
+    Code.push_back(static_cast<uint8_t>(Seed + I));
+  }
+}
+
+void appendPush32HighOffset(std::vector<uint8_t> &Code) {
+  Code.push_back(0x7f);
+  Code.push_back(0x01);
+  Code.insert(Code.end(), 31, 0x00);
+}
+
+std::vector<uint8_t> log0LargeRangeBytecode() {
+  std::vector<uint8_t> Code;
+  appendPush32Pattern(Code, 0x11);
+  appendPush2(Code, 0x1000);
+  Code.push_back(0x52); // MSTORE(0x1000, pattern)
+  Code.push_back(0x60);
+  Code.push_back(0x20);
+  appendPush2(Code, 0x1000);
+  Code.push_back(0xa0); // LOG0(0x1000, 32)
+  return Code;
+}
+
+std::vector<uint8_t> log4LargeRangeBytecode() {
+  std::vector<uint8_t> Code;
+  appendPush32Pattern(Code, 0x41);
+  appendPush2(Code, 0x2000);
+  Code.push_back(0x52); // MSTORE(0x2000, pattern)
+  Code.insert(Code.end(), {0x60, 0x01, 0x60, 0x02, 0x60, 0x03, 0x60, 0x04});
+  Code.push_back(0x60);
+  Code.push_back(0x20);
+  appendPush2(Code, 0x2000);
+  Code.push_back(0xa4); // LOG4(0x2000, 32, topics)
+  return Code;
+}
+
+std::vector<uint8_t> log0DynamicEmptyHighOffsetBytecode() {
+  std::vector<uint8_t> Code;
+  Code.push_back(0x36); // CALLDATASIZE, zero in this test
+  appendPush32HighOffset(Code);
+  Code.push_back(0xa0); // LOG0(high_offset, calldata_size)
+  return Code;
+}
+
+std::vector<uint8_t> log0StaticHighOffsetBytecode() {
+  std::vector<uint8_t> Code;
+  Code.push_back(0x60);
+  Code.push_back(0x20);
+  appendPush32HighOffset(Code);
+  Code.push_back(0xa0); // must fail as static-mode violation, not OOG
+  return Code;
+}
+
+} // namespace
+
+TEST(EVMLogMemoryPreexpandDifferential, LogDataMatchesInterpreter) {
+  EXPECT_TRUE(expectInterpMatchesMultipass("log0_large_range",
+                                           log0LargeRangeBytecode(), {}));
+  EXPECT_TRUE(expectInterpMatchesMultipass("log4_large_range",
+                                           log4LargeRangeBytecode(), {}));
+}
+
+TEST(EVMLogMemoryPreexpandDifferential, EmptyDynamicRangeIgnoresHighOffset) {
+  EXPECT_TRUE(expectInterpMatchesMultipass("log0_dynamic_empty_high_offset",
+                                           log0DynamicEmptyHighOffsetBytecode(),
+                                           {}));
+}
+
+TEST(EVMLogMemoryPreexpandDifferential, StaticModePrecedesMemoryExpansion) {
+  const auto Bytecode = log0StaticHighOffsetBytecode();
+  auto Interp = runEvmBytecode("log0_static_high_offset_interp", Bytecode,
+                               common::RunMode::InterpMode, {},
+                               static_cast<uint32_t>(EVMC_STATIC));
+  auto Multi = runEvmBytecode("log0_static_high_offset_multipass", Bytecode,
+                              common::RunMode::MultipassMode, {},
+                              static_cast<uint32_t>(EVMC_STATIC));
+#ifdef ZEN_ENABLE_JIT
+  EXPECT_TRUE(Multi.JITCompiled)
+      << "multipass did not JIT-compile static LOG test";
+#endif
+  EXPECT_EQ(Interp.Status, EVMC_STATIC_MODE_VIOLATION);
+  EXPECT_EQ(Multi.Status, Interp.Status);
+  EXPECT_EQ(Interp.LogCount, size_t{0});
+  EXPECT_EQ(Multi.LogCount, size_t{0});
+  EXPECT_EQ(Multi.LogsSignature, Interp.LogsSignature);
 }
 
 #endif

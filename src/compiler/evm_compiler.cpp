@@ -149,8 +149,10 @@ void EagerEVMJITCompiler::compile() {
     Committed = true;
   } catch (const std::exception &E) {
     ZEN_LOG_ERROR("EVM JIT compilation failed: %s", E.what());
+    EVMMod->ShouldFallbackToInterp = true;
   } catch (...) {
     ZEN_LOG_ERROR("EVM JIT compilation failed");
+    EVMMod->ShouldFallbackToInterp = true;
   }
 }
 } // namespace COMPILER

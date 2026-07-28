@@ -336,17 +336,19 @@ private:
       T, std::void_t<decltype(std::declval<const T &>().getInstr())>>
       : std::true_type {};
 
-  template <typename T, typename = void> struct HasGetVar : std::false_type {};
+  template <typename T, typename = void>
+  struct HasGetU256Components : std::false_type {};
   template <typename T>
-  struct HasGetVar<T, std::void_t<decltype(std::declval<const T &>().getVar())>>
+  struct HasGetU256Components<
+      T, std::void_t<decltype(std::declval<const T &>().getU256Components())>>
       : std::true_type {};
 
   template <typename T, typename = void>
-  struct HasGetU256VarComponents : std::false_type {};
+  struct HasIsU256InstructionBacked : std::false_type {};
   template <typename T>
-  struct HasGetU256VarComponents<
-      T,
-      std::void_t<decltype(std::declval<const T &>().getU256VarComponents())>>
+  struct HasIsU256InstructionBacked<
+      T, std::void_t<
+             decltype(std::declval<const T &>().isU256InstructionBacked())>>
       : std::true_type {};
 
   template <typename T, typename = void>
@@ -405,29 +407,26 @@ private:
       }
     }
 
-    if constexpr (HasGetVar<Operand>::value) {
-      if (auto *Var = Value.getVar()) {
-        std::string Key = "var:";
-        appendPointerKey(Key, Var);
-        return Key;
-      }
-    }
-
-    if constexpr (HasGetU256VarComponents<Operand>::value) {
-      // Only a multi-component U256 operand backed by variables exposes a
-      // stable var-component identity. getU256VarComponents() asserts on
-      // IsU256MultiComponent, so an operand that reaches here without being a
-      // multi-component value (e.g. an empty/deferred operand whose Instr and
-      // Var accessors both returned null) must fall through to an opaque key
-      // rather than dereferencing the var-component array.
-      if (Value.isU256MultiComponent()) {
-        const auto &VarComponents = Value.getU256VarComponents();
-        std::string Key = "u256vars";
-        for (const auto *Var : VarComponents) {
+    if constexpr (HasGetU256Components<Operand>::value &&
+                  HasIsU256InstructionBacked<Operand>::value) {
+      // MIR instruction definitions are immutable and may be folded when the
+      // exact same four definitions reach every predecessor. Variable-backed
+      // and deferred operands are deliberately opaque because the same
+      // storage identity can hold different values on different edges.
+      if (Value.isU256InstructionBacked()) {
+        const auto &Components = Value.getU256Components();
+        std::string Key = "u256insts";
+        for (const auto *Instr : Components) {
+          if (Instr == nullptr) {
+            Key.clear();
+            break;
+          }
           Key += ':';
-          appendPointerKey(Key, Var);
+          appendPointerKey(Key, Instr);
         }
-        return Key;
+        if (!Key.empty()) {
+          return Key;
+        }
       }
     }
 

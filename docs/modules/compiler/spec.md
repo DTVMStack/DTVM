@@ -129,6 +129,50 @@ From `common/errors.h`, used by the compiler module:
 
 **RA-expensive opcode classification**: SHL (0x1b), SHR (0x1c), SAR (0x1d), MUL (0x02), SIGNEXTEND (0x0b).
 
+### EVM Memory Plan Framework
+
+When `ZEN_ENABLE_EVM_MEMORY_PLAN_FRAMEWORK` is enabled, the EVM frontend builds
+block-aware `MemoryFacts` from `EVMAnalyzer` block ranges. A conservative
+const-only CFG pass may propagate stack-entry memory addresses and compute the
+minimum memory size guaranteed at each block entry. Lowering may use that entry
+guarantee only to elide redundant constant-address `MLOAD`, `MSTORE`, and
+`MSTORE8` expansion checks.
+
+The memory plan framework may also build one conservative Linear Region
+precheck for a single-entry, single-successor straight-line CFG chain. The
+region head emits the expansion precheck at the first covered direct memory
+operation, and successor blocks may reuse that guarantee only through the
+existing block-entry guaranteed-byte query. Linear Region planning must not
+cross branches, merges, backedges, `MSIZE`, `GAS`, host, escape, or
+unknown-effect barriers. Existing block-local memory expansion plans remain
+valid and are still consumed through the existing per-block lowering path.
+The planner may skip a straight-line prefix of blocks with no memory facts and
+select the first direct-memory block as the region head. This selection uses
+only local unique-successor and unique-predecessor checks; it does not perform
+dominator analysis. The precheck remains in the selected head and is never
+hoisted into the skipped prefix.
+
+Memory intervals support exact constants and conservative bounded offsets over
+the same abstract stack-value base. Alias queries distinguish `NoAlias`,
+`MustAlias`, `PartialAlias`, and `MayAlias`; unknown bases and overflow always
+fall back. Ordered clobber queries are currently block-local and stop at every
+hard barrier or CFG boundary.
+
+Block prechecks select one maximal safe window with at least two proven direct
+memory operations. The plan records explicit operation IDs, is emitted at the
+first covered operation, and may cover gaps or overlapping intervals because
+expansion grouping does not transform memory values. Per-operation guaranteed
+bytes include proven earlier expansion in the same block, but stop learning
+new guarantees after a hard barrier.
+
+The framework may eliminate only the write of an exact, fully overwritten
+`MSTORE` or `MSTORE8`, and may forward an exact 32-byte `MSTORE` value to a
+later `MLOAD`. Both transformations are block-local, require strict
+must-alias/no-clobber proofs, and preserve each original opcode's gas and
+expansion behavior. Constant nonzero `MCOPY` uses the checked maximum of source
+and destination ends for expansion elision while retaining the original
+`memmove` lowering. Zero-length `MCOPY` never expands memory.
+
 ### EVM Frontend Context and Gas
 
 - Enable/disable Gas metering based on runtime config (`setGasMeteringEnabled`)

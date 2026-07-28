@@ -6,6 +6,8 @@
 
 #include "compiler/evm_frontend/evm_analyzer.h"
 #include "compiler/evm_frontend/evm_lifted_stack_lifter.h"
+#include "compiler/evm_frontend/evm_memory_analysis.h"
+#include "compiler/evm_frontend/evm_memory_facts.h"
 #include "compiler/evm_frontend/evm_mir_compiler.h"
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
@@ -50,6 +52,7 @@ private:
     bool Eligible = false;
     uint64_t MaxRequiredSize = 0;
     uint64_t CoveredDirectOps = 0;
+    std::vector<uint64_t> WordStoreOffsets;
   };
 
   struct BlockLinearPrecheckPlan {
@@ -117,6 +120,83 @@ private:
           std::declval<const std::vector<std::pair<uint64_t, Operand>> &>()))>>
       : std::true_type {};
 
+  template <typename T, typename = void>
+  struct HasSetMemoryFacts : std::false_type {};
+  template <typename T>
+  struct HasSetMemoryFacts<
+      T, std::void_t<decltype(std::declval<T &>().setMemoryFacts(
+             std::declval<const MemoryFacts &>()))>> : std::true_type {};
+
+  template <typename T, typename = void>
+  struct HasBeginMemoryCompileBlockWithBodyEnd : std::false_type {};
+  template <typename T>
+  struct HasBeginMemoryCompileBlockWithBodyEnd<
+      T, std::void_t<decltype(std::declval<T &>().beginMemoryCompileBlock(
+             uint64_t{}, uint64_t{}))>> : std::true_type {};
+
+  void setMemoryFactsCompat() {
+    if constexpr (HasSetMemoryFacts<IRBuilder>::value) {
+      Builder.setMemoryFacts(MemoryFacts.getFacts());
+    }
+  }
+
+  void buildMemoryFacts(const EVMAnalyzer &Analyzer, const uint8_t *Bytecode,
+                        size_t BytecodeSize) {
+    MemoryFacts.reset();
+    MemoryEntryAddressAnalysis EntryAddresses(Analyzer, Bytecode, BytecodeSize);
+    const auto &BlockInfos = Analyzer.getBlockInfos();
+
+    for (const auto &[EntryPC, BlockInfo] : BlockInfos) {
+      const int32_t EntryDepth = std::max(BlockInfo.ResolvedEntryStackDepth, 0);
+      std::vector<MemoryEntryValue> EntryValues = EntryAddresses.getEntryValues(
+          EntryPC, static_cast<uint32_t>(EntryDepth));
+      MemoryFacts.beginBlock(EntryPC, BlockInfo.BodyStartPC,
+                             BlockInfo.BodyEndPC, EntryValues,
+                             BlockInfo.Successors, BlockInfo.Predecessors);
+
+      size_t ScanPC = static_cast<size_t>(BlockInfo.BodyStartPC);
+      const size_t EndPC = std::min<size_t>(BlockInfo.BodyEndPC, BytecodeSize);
+      while (ScanPC < EndPC) {
+        evmc_opcode Opcode = static_cast<evmc_opcode>(Bytecode[ScanPC]);
+        MemoryFacts.observeOpcode(Opcode, static_cast<uint64_t>(ScanPC),
+                                  Bytecode, BytecodeSize);
+        ++ScanPC;
+        if (Opcode >= OP_PUSH0 && Opcode <= OP_PUSH32) {
+          ScanPC +=
+              static_cast<uint8_t>(Opcode) - static_cast<uint8_t>(OP_PUSH0);
+        }
+      }
+    }
+    MemoryFacts.endBlock();
+  }
+
+  void beginMemoryCompileBlockCompat(uint64_t EntryPC, uint64_t BodyEndPC) {
+    if constexpr (HasBeginMemoryCompileBlockWithBodyEnd<IRBuilder>::value) {
+      Builder.beginMemoryCompileBlock(EntryPC, BodyEndPC);
+    } else {
+      (void)BodyEndPC;
+      Builder.beginMemoryCompileBlock(EntryPC);
+    }
+  }
+
+  template <typename T, typename = void>
+  struct HasHandleJumpWithCandidates : std::false_type {};
+  template <typename T>
+  struct HasHandleJumpWithCandidates<
+      T, std::void_t<decltype(std::declval<T &>().handleJump(
+             std::declval<Operand>(),
+             std::declval<const std::vector<uint64_t> *>()))>>
+      : std::true_type {};
+
+  template <typename T, typename = void>
+  struct HasHandleJumpIWithCandidates : std::false_type {};
+  template <typename T>
+  struct HasHandleJumpIWithCandidates<
+      T, std::void_t<decltype(std::declval<T &>().handleJumpI(
+             std::declval<Operand>(), std::declval<Operand>(),
+             std::declval<const std::vector<uint64_t> *>()))>>
+      : std::true_type {};
+
   void registerCurrentBlockPC(uint64_t BlockPC) {
     if constexpr (HasRegisterCurrentBlockPC<IRBuilder>::value) {
       Builder.registerCurrentBlockPC(BlockPC);
@@ -150,6 +230,26 @@ private:
     }
   }
 
+  void handleJumpCompat(Operand Dest,
+                        const std::vector<uint64_t> *CandidateTargets) {
+    if constexpr (HasHandleJumpWithCandidates<IRBuilder>::value) {
+      Builder.handleJump(Dest, CandidateTargets);
+    } else {
+      (void)CandidateTargets;
+      Builder.handleJump(Dest);
+    }
+  }
+
+  void handleJumpICompat(Operand Dest, Operand Cond,
+                         const std::vector<uint64_t> *CandidateTargets) {
+    if constexpr (HasHandleJumpIWithCandidates<IRBuilder>::value) {
+      Builder.handleJumpI(Dest, Cond, CandidateTargets);
+    } else {
+      (void)CandidateTargets;
+      Builder.handleJumpI(Dest, Cond);
+    }
+  }
+
   void push(const Operand &Opnd) { Stack.push(Opnd); }
 
   void requireLogicalStackDepth(uint32_t Depth) {
@@ -174,6 +274,10 @@ private:
         Analyzer.setResolvedJumpTargets(Ctx->getResolvedJumpTargets());
       }
       Analyzer.analyze(Bytecode, BytecodeSize);
+      if constexpr (HasSetMemoryFacts<IRBuilder>::value) {
+        buildMemoryFacts(Analyzer, Bytecode, BytecodeSize);
+        setMemoryFactsCompat();
+      }
       initializeLiftedBlocks(Analyzer);
 
       const uint8_t *Ip = Bytecode;
@@ -237,7 +341,6 @@ private:
           }
           Builder.meterOpcode(Opcode, PC);
         }
-
         switch (Opcode) {
         case OP_STOP:
           handleEndBlock();
@@ -741,7 +844,10 @@ private:
           // Consecutive JUMPDEST opcodes share one body BB in multipass.
           // Charge all skipped metering points before jumping to the shared
           // destination at the end of the run.
-          bool HasLiveFallthrough = !InDeadCode;
+          const bool HasDeferredLiftedFallthrough =
+              DeferredLiftedJumpDestFallthrough;
+          DeferredLiftedJumpDestFallthrough = false;
+          bool HasLiveFallthrough = !InDeadCode || HasDeferredLiftedFallthrough;
           uint64_t RunStartPC = PC;
           while (Ip < IpEnd && static_cast<evmc_opcode>(*Ip) == OP_JUMPDEST) {
             Ip++;
@@ -750,24 +856,20 @@ private:
           if (PC > RunStartPC && HasLiveFallthrough) {
             Builder.meterOpcodeRange(RunStartPC, PC);
           }
-          // When a JUMP/JUMPI terminator falls through into a JUMPDEST, the
-          // terminator handler already called handleBeginBlock for the
-          // fallthrough target before the JUMPDEST opcode is decoded, so the
-          // block currently being decoded IS this JUMPDEST's block
-          // (CurrentBlockEntryPC == RunStartPC). Its incoming entry edge was
-          // already assigned by the predecessor terminator. Re-running the
-          // fallthrough-edge assignment here would record a spurious self-edge
-          // (PredBlockPC == BlockPC) that is absent from the block's
-          // predecessor order, corrupting phi incoming-slot bookkeeping. Skip
-          // the redundant edge assignment in that case (gated on
-          // CurrentBlockLifted so the flag-OFF path is unchanged);
-          // handleJumpDest + the re-begin below still run to wire the body
-          // branch and re-materialize the lifted entry state in the canonical
-          // JUMPDEST body block.
+          // A lifted JUMPI fallthrough that starts at this JUMPDEST has already
+          // assigned its entry state and finalized the predecessor block, but
+          // deliberately deferred handleBeginBlock until handleJumpDest wires
+          // the staging fallthrough BB to the canonical body. Materializing a
+          // shared-entry phi in that staging BB would give it the analyzer's
+          // full predecessor count even though the BB has only the single
+          // JUMPI fallthrough predecessor.
           bool AlreadyBegunLiftedEntry = HasLiveFallthrough &&
                                          CurrentBlockLifted &&
                                          RunStartPC == CurrentBlockEntryPC;
-          if (AlreadyBegunLiftedEntry) {
+          if (HasDeferredLiftedFallthrough) {
+            // Entry edge assignment and predecessor finalization are complete.
+            // Begin the target once below, after entering its canonical body.
+          } else if (AlreadyBegunLiftedEntry) {
             // Entry edge already assigned by the predecessor terminator; do not
             // reassign. The predecessor's handleBeginBlock already restored
             // this block's lifted logical entry state onto the logical stack.
@@ -790,7 +892,7 @@ private:
               }
             }
           }
-          Builder.handleJumpDest(PC);
+          Builder.handleJumpDest(PC, HasLiveFallthrough);
           handleBeginBlock(Analyzer);
           Builder.meterOpcode(Opcode, PC);
           break;
@@ -843,9 +945,8 @@ private:
         handleEndBlock();
         handleStop();
       }
-    } catch (const common::Error &E) {
-      ZEN_UNREACHABLE();
-      return false;
+    } catch (const common::Error &) {
+      throw;
     }
     return true;
   }
@@ -901,8 +1002,13 @@ private:
     CurBlockLinearPrecheckPlan = BlockLinearPrecheckPlan();
     if (Materialize) {
       if (CurrentBlockLifted) {
-        spillTrackedStackPreservingPrefix(Values,
-                                          CurrentBlockHiddenLiveInPrefixDepth);
+        // The lifted logical stack spans the full absolute entry depth
+        // (FullEntryStateDepth), including any hidden live-in prefix slots, so
+        // the spill base is the stack bottom: prefix 0. Spilling at Hidden*32
+        // would write the stack above its bottom and inflate the recorded
+        // StackSize by the prefix depth, causing spurious overflow traps and
+        // missed underflow traps in later blocks.
+        spillTrackedStackPreservingPrefix(Values, /*PrefixDepth=*/0);
       } else {
         for (const Operand &Opnd : Values) {
           Builder.stackPush(Opnd);
@@ -911,7 +1017,6 @@ private:
     }
     InDeadCode = true;
     CurrentBlockLifted = false;
-    CurrentBlockHiddenLiveInPrefixDepth = 0;
   }
 
   bool tryGetConstantJumpSuccessorPC(const EVMAnalyzer &Analyzer,
@@ -1051,7 +1156,8 @@ private:
   void handleBeginBlock(EVMAnalyzer &Analyzer) {
     const auto &BlockInfos = Analyzer.getBlockInfos();
     ZEN_ASSERT(BlockInfos.count(PC) > 0 && "Block info not found");
-    Builder.beginMemoryCompileBlock(PC);
+    const auto &BlockInfo = BlockInfos.at(PC);
+    beginMemoryCompileBlockCompat(PC, BlockInfo.BodyEndPC);
     CurBlockLinearPrecheckPlan = BlockLinearPrecheckPlan();
     const Byte *Bytecode = Ctx->getBytecode();
     size_t BytecodeSize = Ctx->getBytecodeSize();
@@ -1102,9 +1208,7 @@ private:
           LargeStaticWorkspace.LoweringCoveredMStore8Ops);
     }
 #endif // ZEN_ENABLE_EVM_MEM_LARGE_STATIC_WORKSPACE_LOWERING
-    const auto &BlockInfo = BlockInfos.at(PC);
     CurrentBlockEntryPC = PC;
-    CurrentBlockHiddenLiveInPrefixDepth = 0;
     registerCurrentBlockPC(PC);
     bool LiftedBlock = isLiftedBlock(PC);
     if (LiftedBlock && !validateLiftedBlockStackBounds(BlockInfo)) {
@@ -1131,10 +1235,29 @@ private:
 
     if (LiftedBlock) {
       CurrentBlockLifted = true;
-      CurrentBlockHiddenLiveInPrefixDepth =
-          static_cast<uint32_t>(std::max(BlockInfo.HiddenLiveInPrefixDepth, 0));
       materializeLiftedBlockMergeRequests(PC, BlockInfo);
       restoreLiftedBlockLogicalEntryState(PC);
+#ifndef NDEBUG
+      // Debug invariant: a lifted block's logical entry state must be fully
+      // materialized before its body is compiled. StackLifter.hasCompleteEntry-
+      // State() cannot be a hard assertion here: on a single linear pass a
+      // lifted loop header is begun before its back-edge predecessor is
+      // visited, and a lifted JUMPDEST reached only from dead code is never
+      // assigned, so ExpectedIncomingCount legitimately exceeds the arrived
+      // edges. The sound begin-time property is that the entry stack the body
+      // consumes has the resolved full depth with every slot defined.
+      {
+        const std::vector<Operand> LogicalEntry =
+            StackLifter.getLogicalEntryState(PC);
+        ZEN_ASSERT(static_cast<int32_t>(LogicalEntry.size()) ==
+                       std::max(BlockInfo.FullEntryStateDepth, 0) &&
+                   "lifted block entry-state depth mismatch at block begin");
+        for (const Operand &Slot : LogicalEntry) {
+          ZEN_ASSERT(!Slot.isEmpty() && "lifted block entry-state slot is "
+                                        "undefined at block begin");
+        }
+      }
+#endif
       return;
     }
 
@@ -1457,6 +1580,42 @@ private:
     }
     return analyzeLinearMstore8DirectMemoryBlockPrecheck(Bytecode, BytecodeSize,
                                                          EntryPC);
+  }
+
+  static bool isConstTwoWordKeccakHashPrepTail(
+      const std::vector<AbstractConstU64> &SimStack,
+      const BlockConstPrecheckPlan &Plan) {
+    // This only gates the direct-memory precheck. KECCAK itself still runs
+    // through the normal helper path.
+    if (Plan.CoveredDirectOps < 2 || SimStack.size() < 2) {
+      return false;
+    }
+
+    const AbstractConstU64 &Offset = SimStack.back();
+    const AbstractConstU64 &Length = SimStack[SimStack.size() - 2];
+    if (!Offset.Known || !Length.Known || Length.Value != 64) {
+      return false;
+    }
+
+    uint64_t RequiredSize = 0;
+    if (!addConstU64(Offset.Value, Length.Value, RequiredSize)) {
+      return false;
+    }
+
+    uint64_t SecondWordOffset = 0;
+    if (!addConstU64(Offset.Value, 32, SecondWordOffset)) {
+      return false;
+    }
+
+    bool HasFirstWordStore = false;
+    bool HasSecondWordStore = false;
+    for (uint64_t StoreOffset : Plan.WordStoreOffsets) {
+      HasFirstWordStore |= StoreOffset == Offset.Value;
+      HasSecondWordStore |= StoreOffset == SecondWordOffset;
+    }
+
+    return HasFirstWordStore && HasSecondWordStore &&
+           RequiredSize <= Plan.MaxRequiredSize;
   }
 
   void maybePrepareLinearBlockMemoryPrecheck(evmc_opcode Opcode) {
@@ -1952,6 +2111,13 @@ private:
       if (ScanPC != EntryPC && Opcode == OP_JUMPDEST) {
         break;
       }
+      if (Opcode == OP_KECCAK256) {
+        if (isConstTwoWordKeccakHashPrepTail(SimStack, Plan)) {
+          Plan.Eligible = true;
+          return Plan;
+        }
+        return {};
+      }
       if (isHelperSensitiveOpcode(Opcode)) {
         return {};
       }
@@ -2136,6 +2302,7 @@ private:
         }
         Plan.MaxRequiredSize = std::max(Plan.MaxRequiredSize, RequiredSize);
         Plan.CoveredDirectOps++;
+        Plan.WordStoreOffsets.push_back(Addr.Value);
         SawDirectMemory = true;
         break;
       }
@@ -2275,6 +2442,33 @@ private:
     push(Result);
   }
 
+  // Analyzer/codegen dispatch-consistency guard. Codegen emits the all-JUMPDEST
+  // indirect switch exactly when the JUMP/JUMPI dest operand is non-constant
+  // (evm_mir_compiler.cpp handleJump/handleJumpI else-branch). Soundness of
+  // Stage 2 lifting relies on that direction implying the analyzer marked this
+  // block dynamic (HasDynamicJump), which forces every JUMPDEST out of lifting.
+  // If the visitor hands a non-constant dest while the analyzer resolved the
+  // jump statically, the exclusion would not have fired and lifted JUMPDESTs
+  // could be miscompiled: fail the compile loudly instead. This is a hard
+  // check in every build configuration, not a debug-only assertion. It throws
+  // a Compilation-phase Error rather than aborting: evm_compiler.cpp's compile
+  // path catches std::exception and degrades to interpreter fallback, so a
+  // constant-tracking mismatch logs and falls back instead of killing the
+  // loading process. The invariant is config-independent and the check is
+  // cheap, so it stays active in every build.
+  void assertDynamicJumpConsistency(const EVMAnalyzer &Analyzer,
+                                    const Operand &Dest) const {
+    if (Dest.isConstant()) {
+      return;
+    }
+    const auto &BlockInfos = Analyzer.getBlockInfos();
+    auto It = BlockInfos.find(CurrentBlockEntryPC);
+    if (It == BlockInfos.end() || !It->second.HasDynamicJump) {
+      throw common::getError(
+          common::ErrorCode::EVMDynamicJumpConsistencyFailed);
+    }
+  }
+
   void handleJumpOpcode(EVMAnalyzer &Analyzer, Operand Dest) {
     uint64_t SuccPC = 0;
     bool HasLiftedSucc = tryAssignConstantJumpEntryState(Analyzer, Dest);
@@ -2288,17 +2482,20 @@ private:
           assignLiftedEntryState(SuccPC, OutgoingStack);
         }
         if (!HasKnownSucc) {
+          // SSA entry-state assignment is additive to materialization: lifted
+          // compatible targets keep their zero-reload SSA entry, while the
+          // materialized runtime stack backs non-lifted and out-of-model
+          // targets.
           assignCompatibleDynamicJumpRegionEntryStates(Analyzer, OutgoingStack);
         }
-        const bool HasCompatibleDynamicTargets =
-            !HasKnownSucc &&
-            !Analyzer
-                 .getCompatibleDynamicJumpTargetBlocksForSourceBlock(
-                     CurrentBlockEntryPC)
-                 .empty();
-        const bool NeedsRuntimeMaterialization =
-            (HasKnownSucc && !HasKnownLiftedSucc) ||
-            (!HasKnownSucc && !HasCompatibleDynamicTargets);
+        // A dynamic dispatch can land on any JUMPDEST via the jump table, so
+        // the runtime stack must be valid at every dynamic exit; a dynamic dest
+        // (!HasKnownSucc) therefore always materializes. Since
+        // HasKnownLiftedSucc == HasKnownSucc && isLiftedBlock(SuccPC), the
+        // condition (HasKnownSucc && !HasKnownLiftedSucc) || !HasKnownSucc
+        // reduces to !HasKnownLiftedSucc: materialize unless the dest is a
+        // known lifted successor.
+        const bool NeedsRuntimeMaterialization = !HasKnownLiftedSucc;
         finalizeBlockExit(std::move(OutgoingStack),
                           NeedsRuntimeMaterialization);
       } else {
@@ -2312,16 +2509,26 @@ private:
         assignLiftedEntryStateFromRuntime(Analyzer, SuccPC);
       }
     }
-    Builder.handleJump(Dest);
+    const auto DispatchCandidates =
+        Analyzer.getRuntimeDispatchCandidateTargetsForSourceBlock(
+            CurrentBlockEntryPC);
+    const auto *DispatchTargetPCs = DispatchCandidates.SafeForRuntimeDispatch
+                                        ? &DispatchCandidates.TargetBlocks
+                                        : nullptr;
+    assertDynamicJumpConsistency(Analyzer, Dest);
+    handleJumpCompat(Dest, DispatchTargetPCs);
   }
 
   void handleJumpIOpcode(EVMAnalyzer &Analyzer, Operand Dest, Operand Cond) {
     uint64_t JumpSuccPC = 0;
     bool HasJumpSucc =
         tryGetConstantJumpSuccessorPC(Analyzer, Dest, JumpSuccPC);
-    uint64_t FallthroughPC = PC + 1;
-    if (Analyzer.hasCanonicalJumpDest(FallthroughPC)) {
-      FallthroughPC = Analyzer.getCanonicalJumpDestPC(FallthroughPC);
+    const uint64_t RawFallthroughPC = PC + 1;
+    const bool FallthroughStartsAtJumpDest =
+        Analyzer.hasCanonicalJumpDest(RawFallthroughPC);
+    uint64_t FallthroughPC = RawFallthroughPC;
+    if (FallthroughStartsAtJumpDest) {
+      FallthroughPC = Analyzer.getCanonicalJumpDestPC(RawFallthroughPC);
     }
     bool CanLiftFallthrough =
         CurrentBlockLifted && isLiftedBlock(FallthroughPC);
@@ -2352,7 +2559,13 @@ private:
           assignCompatibleDynamicJumpRegionEntryStates(Analyzer, OutgoingStack);
         }
         bool NeedsRuntimeMaterialization = !CanPreassignFallthrough;
-        if (!NeedsRuntimeMaterialization && HasJumpSucc) {
+        if (!HasJumpSucc) {
+          // A dynamic dispatch can land on any JUMPDEST via the jump table, so
+          // the runtime stack must be valid at every dynamic exit. The taken
+          // edge of a dynamic-dest JUMPI forces materialization regardless of
+          // fallthrough liftability; SSA assignment above stays additive.
+          NeedsRuntimeMaterialization = true;
+        } else if (!NeedsRuntimeMaterialization) {
           NeedsRuntimeMaterialization = !CanPreassignJump;
         }
         finalizeBlockExit(std::move(OutgoingStack),
@@ -2371,9 +2584,24 @@ private:
         }
       }
     }
-    Builder.handleJumpI(Dest, Cond);
+    const auto DispatchCandidates =
+        Analyzer.getRuntimeDispatchCandidateTargetsForSourceBlock(
+            CurrentBlockEntryPC);
+    const auto *DispatchTargetPCs = DispatchCandidates.SafeForRuntimeDispatch
+                                        ? &DispatchCandidates.TargetBlocks
+                                        : nullptr;
+    assertDynamicJumpConsistency(Analyzer, Dest);
+    handleJumpICompat(Dest, Cond, DispatchTargetPCs);
     PC = FallthroughPC;
-    handleBeginBlock(Analyzer);
+    if (FallthroughStartsAtJumpDest && isLiftedBlock(FallthroughPC)) {
+      // handleJumpI leaves the builder in a one-predecessor staging BB. A
+      // lifted shared JUMPDEST must materialize its merge state in the
+      // canonical body instead, after the next decode iteration wires this
+      // fallthrough edge through handleJumpDest.
+      DeferredLiftedJumpDestFallthrough = true;
+    } else {
+      handleBeginBlock(Analyzer);
+    }
   }
 
   template <CompareOperator Opr> void handleCompare() {
@@ -3022,11 +3250,12 @@ private:
   EvalStack Stack;
   BlockLinearPrecheckPlan CurBlockLinearPrecheckPlan;
   StackLifterType StackLifter;
+  MemoryFactsBuilder MemoryFacts;
   bool InDeadCode = false;
   uint64_t PC = 0;
   uint64_t CurrentBlockEntryPC = 0;
   bool CurrentBlockLifted = false;
-  uint32_t CurrentBlockHiddenLiveInPrefixDepth = 0;
+  bool DeferredLiftedJumpDestFallthrough = false;
 };
 
 } // namespace COMPILER

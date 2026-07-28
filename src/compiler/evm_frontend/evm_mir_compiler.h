@@ -6,6 +6,8 @@
 
 #include "action/vm_eval_stack.h"
 #include "compiler/context.h"
+#include "compiler/evm_frontend/evm_memory_facts.h"
+#include "compiler/evm_frontend/evm_memory_grouping.h"
 #include "compiler/evm_frontend/evm_value_range.h"
 #include "compiler/mir/function.h"
 #include "compiler/mir/instructions.h"
@@ -14,6 +16,9 @@
 #include "evmc/instructions.h"
 #include "intx/intx.hpp"
 #include <algorithm>
+#include <cstdint>
+#include <map>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -136,6 +141,7 @@ public:
   /// U256 value representation as array of 4 x uint64_t
   using U256Value = std::array<uint64_t, EVM_ELEMENTS_COUNT>;
   using U256ConstInt = std::array<MConstantInt *, EVM_ELEMENTS_COUNT>;
+  using JumpTargetPCList = std::vector<uint64_t>;
 
   // Range classification for u256 operands.  Narrower ranges enable
   // single-instruction fast paths instead of expensive multi-limb arithmetic.
@@ -158,14 +164,15 @@ public:
 
     // Constructor for EVMU256Type with 4 I64 components
     Operand(U256Inst Components, EVMType Type)
-        : Type(Type), U256Components(Components), IsU256MultiComponent(true) {
+        : Type(Type), U256Components(Components), IsU256MultiComponent(true),
+          IsU256InstructionBacked(true) {
       ZEN_ASSERT(Type == EVMType::UINT256 && "Multi-component only for U256");
     }
 
     // Constructor for U256 multi-component with explicit range
     Operand(U256Inst Components, EVMType Type, ValueRange Range)
         : Type(Type), Range(Range), U256Components(Components),
-          IsU256MultiComponent(true) {
+          IsU256MultiComponent(true), IsU256InstructionBacked(true) {
       ZEN_ASSERT(Type == EVMType::UINT256 && "Multi-component only for U256");
     }
 
@@ -220,6 +227,7 @@ public:
     }
 
     bool isU256MultiComponent() const { return IsU256MultiComponent; }
+    bool isU256InstructionBacked() const { return IsU256InstructionBacked; }
     bool isConstant() const { return IsConstant; }
     bool isZeroConstant() const {
       return IsConstant && ConstValue[0] == 0 && ConstValue[1] == 0 &&
@@ -310,6 +318,7 @@ public:
     U256Value ConstValue = {};
     bool IsConstant = false;
     bool IsU256MultiComponent = false;
+    bool IsU256InstructionBacked = false;
     DeferredKind DeferredValueKind = DeferredKind::NONE;
     // Range of the base value of a deferred zero-test (the value being tested),
     // used to narrow the OR-fold when materialized.
@@ -329,7 +338,9 @@ public:
   // Complete jump implementation with jump table
   void createJumpTable();
   void implementConstantJump(uint64_t ConstDest, MBasicBlock *FailureBB);
-  void implementIndirectJump(MInstruction *JumpTarget, MBasicBlock *FailureBB);
+  void
+  implementIndirectJump(MInstruction *JumpTarget, MBasicBlock *FailureBB,
+                        const JumpTargetPCList *CandidateTargets = nullptr);
 
   void releaseOperand(Operand Opnd) {}
 
@@ -366,9 +377,11 @@ public:
 
   void handleStop();
   void handleVoidReturn();
-  void handleJump(Operand Dest);
-  void handleJumpI(Operand Dest, Operand Cond);
-  void handleJumpDest(const uint64_t &PC);
+  void handleJump(Operand Dest,
+                  const JumpTargetPCList *CandidateTargets = nullptr);
+  void handleJumpI(Operand Dest, Operand Cond,
+                   const JumpTargetPCList *CandidateTargets = nullptr);
+  void handleJumpDest(const uint64_t &PC, bool HasLiveFallthrough);
 
   // ==================== Arithmetic Instruction Handlers ====================
 
@@ -1009,7 +1022,8 @@ public:
                             Operand OffsetComponents, Operand SizeComponents);
   Operand handleReturnDataSize();
   void dumpMemoryCompileStats() const;
-  void beginMemoryCompileBlock(uint64_t EntryPC);
+  void beginMemoryCompileBlock(uint64_t EntryPC,
+                               uint64_t BodyEndPC = UINT64_MAX);
   void setMemoryCompileBlockConstPrecheckPlan(uint64_t MaxRequiredSize,
                                               uint64_t CoveredDirectOps);
   void
@@ -1055,6 +1069,18 @@ public:
   void handleInvalid();
   void handleUndefined();
   void handleTrap(ErrorCode ErrCode);
+  void setMemoryFacts(const MemoryFacts &Facts) {
+    MemoryFactsData = Facts;
+#ifdef ZEN_ENABLE_EVM_MEMORY_PLAN_FRAMEWORK
+    MemoryAnalysis = std::make_unique<MemoryAnalysisView>(MemoryFactsData);
+    MemoryExpansionPlans =
+        std::make_unique<MemoryExpansionPlanner>(*MemoryAnalysis);
+#else
+    MemoryAnalysis.reset();
+    MemoryExpansionPlans.reset();
+#endif
+  }
+  const MemoryFacts &getMemoryFacts() const { return MemoryFactsData; }
   Operand handleKeccak256(Operand OffsetComponents, Operand LengthComponents);
   Operand handleKeccak256TwoWord(Operand OffsetComponents, Operand Word0,
                                  Operand Word1);
@@ -1312,6 +1338,7 @@ private:
   void normalizeOperandU64NonConst(Operand &Param, uint64_t *Value = nullptr);
   MInstruction *anchorDirectMemoryPointer(MInstruction *Ptr);
   MInstruction *extractKnownU64LowOperand(const Operand &Opnd);
+  void checkStaticModeIR();
   void normalizeOffsetWithSize(Operand &Offset, Operand &Size);
   void preExpandMemoryRange(Operand &Offset, Operand &Size);
 
@@ -1333,7 +1360,15 @@ private:
   template <size_t N>
   U256Inst convertOperandToUNInstruction(const Operand &Param);
 
-  MBasicBlock *getOrCreateIndirectJumpBB(uint64_t SourceBlockPC);
+  MBasicBlock *
+  getOrCreateIndirectJumpBB(uint64_t SourceBlockPC,
+                            const JumpTargetPCList *CandidateTargets = nullptr);
+  MBasicBlock *getOrCreateSharedIndirectJumpBB();
+  MBasicBlock *buildIndirectJumpBB(uint64_t SourceBlockPC,
+                                   const JumpTargetPCList *CandidateTargets,
+                                   bool RegisterDynamicPhi);
+  bool shouldUseSharedDynamicDispatch() const;
+  void linkJumpDestEntryThunkIfNeeded(MBasicBlock *TargetBB);
   void registerPhiIncomingBlock(uint64_t TargetBlockPC, uint64_t PredBlockPC,
                                 MBasicBlock *PredBB);
   void registerDynamicJumpPhiIncomingBlock(uint64_t TargetBlockPC,
@@ -1353,6 +1388,7 @@ private:
   CompilerContext &Ctx;
   MFunction *CurFunc = nullptr;
   MBasicBlock *CurBB = nullptr;
+  MemoryFacts MemoryFactsData;
   MBasicBlock *ReturnBB = nullptr;
 #ifdef ZEN_ENABLE_LINUX_PERF
   uint64_t CurPC = 0;
@@ -1374,6 +1410,11 @@ private:
   std::map<uint64_t, uint64_t> JumpDestCanonicalPCTable;
   // Canonical execution blocks for JUMPDEST opcodes in linear decode.
   std::map<uint64_t, MBasicBlock *> JumpDestBodyTable;
+  // Lazily linked entry thunks for non-canonical JUMPDEST targets in a merged
+  // consecutive-JUMPDEST run. The thunk block exists so JumpDestTable can point
+  // at the raw target, but its CFG edge to the shared body is only registered
+  // when a real jump/dispatch edge targets the thunk.
+  std::map<MBasicBlock *, MBasicBlock *> JumpDestEntryThunkBodyTable;
   // Cached skipped-metering for merged consecutive JUMPDEST runs.
   // Cache it so meterOpcodeRange(S, E) doesn't have to re-scan the same run.
   std::vector<uint32_t> JumpDestRunLastPC;   // [S] = E, else invalid sentinel
@@ -1385,6 +1426,7 @@ private:
   uint64_t HashMask = 0;
   Variable *JumpTargetVar = nullptr;
   std::map<uint64_t, MBasicBlock *> IndirectJumpBBs;
+  MBasicBlock *SharedIndirectJumpBB = nullptr;
 
   // Stack check block for stack overflow/underflow checking
   MBasicBlock *StackCheckBB = nullptr;
@@ -1415,11 +1457,87 @@ private:
     uint64_t MStoreExpandCount = 0;
     uint64_t MStore8ExpandCount = 0;
     uint64_t MCopyExpandCount = 0;
+    uint64_t MCopyGuaranteedElisionCount = 0;
+    uint64_t MemoryDSEStoreCandidates = 0;
+    uint64_t MemoryDSEEliminatedWrites = 0;
+    uint64_t MemoryLoadForwardCandidates = 0;
+    uint64_t MemoryLoadForwarded = 0;
     uint64_t BlockConstPrecheckCount = 0;
     uint64_t BlockLinearPrecheckCount = 0;
     uint64_t PrecheckedMLoadOpCount = 0;
     uint64_t PrecheckedMStoreOpCount = 0;
+    uint64_t PrecheckedMStore8OpCount = 0;
     uint64_t PrecheckedMCopyOpCount = 0;
+    uint64_t MemoryExpansionPlanCount = 0;
+    uint64_t MemoryExpansionPlanPrecheckCount = 0;
+    uint64_t MemoryExpansionPlanGroupingCount = 0;
+    uint64_t MemoryExpansionPlanLinearRegionCount = 0;
+    uint64_t MemoryExpansionPlanReusableCount = 0;
+    uint64_t MemoryExpansionPlanCoveredOps = 0;
+    uint64_t MemoryExpansionPlanCoveredMLoadOps = 0;
+    uint64_t MemoryExpansionPlanCoveredMStoreOps = 0;
+    uint64_t MemoryExpansionPlanCoveredMStore8Ops = 0;
+    uint64_t MemoryExpansionPlanCoveredMCopyOps = 0;
+    uint64_t MemoryExpansionPlanRequiredSizeSum = 0;
+    uint64_t MemoryExpansionPlanRequiredSizeMax = 0;
+    uint64_t MemoryExpansionPlanEstimatedReducedExpansions = 0;
+    uint64_t MemoryExpansionPlanGroupingCandidates = 0;
+    uint64_t MemoryExpansionPlanLinearRegionCandidates = 0;
+    uint64_t MemoryExpansionPlanPrecheckCandidates = 0;
+    uint64_t MemoryExpansionPlanRejectedNoCandidate = 0;
+    uint64_t MemoryExpansionPlanRejectedUnknownInterval = 0;
+    uint64_t MemoryExpansionPlanRejectedInvalidRange = 0;
+    uint64_t MemoryExpansionPlanRejectedOverflow = 0;
+    uint64_t MemoryExpansionPlanRejectedTooLarge = 0;
+    uint64_t MemoryExpansionPlanRejectedZeroSize = 0;
+    uint64_t MemoryExpansionPlanRejectedUnprofitable = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedNotStraightLine = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBranchingHead = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedMergeSuccessor = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBackedgeOrNonForward = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedHardBarrier = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedNoHeadMemoryOp = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedUnknownInterval = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedNonDirectMemoryOp = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedTooFewOps = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedUnprofitable = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierMSize = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierGas = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierCall = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierCreate = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierReturn = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierRevert = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierLog = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierStorage = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierSelfDestruct = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierInvalid = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierUnknownEffect = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBarrierEscape = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixCandidateBlocks = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixCandidateOps = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixAcceptedBlocks = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixAcceptedOps = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixRejectedTooShort = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixRejectedNoHeadMemoryOp = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixBranchingAfterSafePrefix = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixMergeAfterSafePrefix = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixTerminalAfterSafePrefix = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixMissingSuccessorBlock = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixBackedgeAfterSafePrefix = 0;
+    uint64_t MemoryExpansionPlanLinearRegionPrefixBarrierAfterSafePrefix = 0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedBranchingHeadNoSafePrefix =
+        0;
+    uint64_t MemoryExpansionPlanLinearRegionRejectedMergeSuccessorNoSafePrefix =
+        0;
+    uint64_t MemoryExpansionPlanLinearRegionHeadCandidateBlocks = 0;
+    uint64_t MemoryExpansionPlanLinearRegionHeadSkippedEmptyBlocks = 0;
+    uint64_t MemoryExpansionPlanLinearRegionHeadSelectedNonEntryBlock = 0;
+    uint64_t MemoryExpansionPlanLinearRegionHeadRejectedPredecessorNotStraight =
+        0;
+    uint64_t MemoryExpansionPlanLinearRegionHeadRejectedHeadNotDominatingChain =
+        0;
+    uint64_t MemoryExpansionPlanLinearRegionHeadRejectedEntryGuaranteeMissing =
+        0;
     uint64_t MStoreAddrValueAliasReuseCount = 0;
     uint64_t LinearU64AddrFastPathCount = 0;
     uint64_t LinearU64MLoadFastPathCount = 0;
@@ -1592,7 +1710,20 @@ private:
     uint64_t PrecheckedDirectOpCount = 0;
     uint64_t PrecheckedMLoadOpCount = 0;
     uint64_t PrecheckedMStoreOpCount = 0;
+    uint64_t PrecheckedMStore8OpCount = 0;
     uint64_t PrecheckedMCopyOpCount = 0;
+    bool HasMemoryExpansionPlan = false;
+    uint64_t MemoryExpansionPlanKind = 0;
+    uint64_t MemoryExpansionPlanReusable = 0;
+    uint64_t MemoryExpansionPlanCoveredOps = 0;
+    uint64_t MemoryExpansionPlanCoveredMLoadOps = 0;
+    uint64_t MemoryExpansionPlanCoveredMStoreOps = 0;
+    uint64_t MemoryExpansionPlanCoveredMStore8Ops = 0;
+    uint64_t MemoryExpansionPlanCoveredMCopyOps = 0;
+    uint64_t MemoryExpansionPlanRequiredBegin = 0;
+    uint64_t MemoryExpansionPlanRequiredEnd = 0;
+    uint64_t MemoryExpansionPlanRequiredSize = 0;
+    uint64_t MemoryExpansionPlanEstimatedReducedExpansions = 0;
     uint64_t MStoreAddrValueAliasReuseCount = 0;
     uint64_t LinearU64AddrFastPathCount = 0;
     uint64_t LinearU64MLoadFastPathCount = 0;
@@ -1679,6 +1810,10 @@ private:
     uint64_t MaxRequiredSize = 0;
     uint64_t CoveredDirectOpsTotal = 0;
     uint64_t CoveredDirectOpsRemaining = 0;
+    std::vector<uint32_t> CoveredOpIds;
+    bool HasOpPCRange = false;
+    uint64_t FirstOpPC = 0;
+    uint64_t LastOpPC = 0;
     Variable *AnchoredBasePtrVar = nullptr;
   };
   struct MemoryBlockLinearPrecheckPlan {
@@ -1713,6 +1848,13 @@ private:
                                               bool OffsetWasConst,
                                               uint64_t ConstOffset,
                                               uint64_t AccessSize);
+  bool tryUseGuaranteedMinBytesExpansionElision(bool OffsetWasConst,
+                                                uint64_t ConstOffset,
+                                                uint64_t AccessSize);
+  void applyMemoryExpansionPlan(const MemoryExpansionPlan &Plan);
+  void noteMemoryExpansionPlan(const MemoryExpansionPlan &Plan);
+  void noteMemoryExpansionPlanDiagnostics(
+      const MemoryExpansionPlanDiagnostics &Diag);
   uint64_t NextHashPrepMarkerId = 0;
   enum class SmallFrameMemoryOp : uint8_t { MLoad, MStore, MStore8 };
   void noteSmallFrameMemoryOp(SmallFrameMemoryOp Op, bool OffsetWasConst,
@@ -1722,11 +1864,15 @@ private:
                                  bool LengthWasConstU64, uint64_t ConstLength);
   uint64_t NextMemoryBlockSeqId = 0;
   uint64_t CurrentMemoryOpPC = 0;
+  uint64_t CurrentBlockGuaranteedMinBytes = 0;
+  std::map<uint64_t, Operand> CurrentBlockMStoreValues;
   MemoryBlockCompileStats CurBlockMemStats;
   MemoryBlockConstPrecheckPlan CurBlockConstPrecheckPlan;
   MemoryBlockLinearPrecheckPlan CurBlockLinearPrecheckPlan;
   MemoryBlockLargeStaticWorkspacePrecheckPlan
       CurBlockLargeStaticWorkspacePrecheckPlan;
+  std::unique_ptr<MemoryAnalysisView> MemoryAnalysis;
+  std::unique_ptr<MemoryExpansionPlanner> MemoryExpansionPlans;
 
   // Helper methods for memory operations
   MInstruction *getMemoryDataPointer();

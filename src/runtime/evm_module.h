@@ -67,10 +67,9 @@ public:
     return static_cast<int32_t>(offsetof(EVMModule, CodeSize));
   }
 
-  /// Cached result from EVMAnalyzer: true if the contract should fall back
-  /// to interpreter mode instead of JIT. Set once at module creation to
-  /// avoid per-call O(n) bytecode scans.
-  bool ShouldFallbackToInterp = false;
+  /// True if analysis rejected JIT admission or JIT compilation failed.
+  /// Cached on the module to avoid repeated analysis or compilation attempts.
+  std::atomic<bool> ShouldFallbackToInterp{false};
 
 #ifdef ZEN_ENABLE_JIT
   common::CodeMemPool &getJITCodeMemPool() {

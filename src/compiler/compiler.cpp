@@ -63,9 +63,11 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
   MFunc.dump();
 #endif
 
-  MVerifier Verifier(MMod, MFunc, llvm::errs());
-  if (!Verifier.verify()) {
-    throw getError(ErrorCode::MIRVerifyingFailed);
+  {
+    MVerifier Verifier(MMod, MFunc, llvm::errs());
+    if (!Verifier.verify()) {
+      throw getError(ErrorCode::MIRVerifyingFailed);
+    }
   }
 
   DeadMBasicBlockElim MBBDCE;

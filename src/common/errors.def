@@ -180,6 +180,9 @@ DEFINE_ERROR(Execution,     None,   EVMTooLargeRequiredMemory, "EVM Required Mem
 // EVM Error: About Storage
 DEFINE_ERROR(Execution,     None,   EVMStaticModeViolation, "Prohibit modification of the storage")
 
+// EVM Error: About JIT compilation invariants
+DEFINE_ERROR(Compilation,   None,   EVMDynamicJumpConsistencyFailed, "analyzer and codegen disagree on dynamic-jump dispatch")
+
 #endif // ZEN_ENABLE_EVM
 
 #endif // DEFINE_ERROR
