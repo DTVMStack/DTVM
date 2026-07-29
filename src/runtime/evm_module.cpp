@@ -84,6 +84,9 @@ EVMModule::newEVMModule(Runtime &RT, CodeHolderUniquePtr CodeHolder,
     Analyzer.analyze(reinterpret_cast<const uint8_t *>(Mod->Code),
                      Mod->CodeSize);
     Mod->ShouldFallbackToInterp = Analyzer.getJITSuitability().ShouldFallback;
+    Mod->setDynamicEntryMergeFallbackMetrics(
+        Analyzer.getJITSuitability().DynamicEntryMergeFallbackBlocks,
+        Analyzer.getJITSuitability().DynamicEntryMergeFallbackEdges);
 
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
     if (RT.getConfig().EnableProfileGuidedJIT) {

@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Compiler.h"
 #include <cassert>

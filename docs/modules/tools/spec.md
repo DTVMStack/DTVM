@@ -63,7 +63,16 @@ This module does not include: Build system (CMake), test framework (gtest/ctest)
 | Script | Responsibility |
 |--------|----------------|
 | function_selector.py | Compute Solidity function selector (keccak256 first 4 bytes) |
+| run_ssa_compiler_observation.py | Collect and compare target-bytecode compiler phase and IR observations for S0/S1 fixtures |
 | requirements.txt | Python dependencies (PyYAML, rlp, eth-hash, trie, etc.) |
+
+`run_ssa_compiler_observation.py` isolates each selected fixture, alternates
+S0/S1 process order, and enables the opt-in compiler observation record. It
+computes the target bytecode's deterministic FNV-1a fingerprint and requires
+exactly one matching record, preventing helper or subcall modules from being
+mistaken for the selected target. Output contains executable and fixture
+hashes, per-code structural ratios, dominant S1 phase counts, and an atomically
+resumable checkpoint.
 
 ## External Contracts
 

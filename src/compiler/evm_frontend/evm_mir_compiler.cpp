@@ -1202,6 +1202,7 @@ void EVMMirBuilder::assignStackEntryOperand(const Operand &Dest,
 
 typename EVMMirBuilder::Operand
 EVMMirBuilder::prepareStackPhiIncoming(const Operand &Value) {
+  ++StackLiftStatistics.ProtectedIncomingValues;
   U256Inst Prepared = {};
   U256Inst Src = extractU256Operand(Value);
   for (size_t I = 0; I < EVM_ELEMENTS_COUNT; ++I) {
@@ -1215,9 +1216,21 @@ void EVMMirBuilder::registerCurrentBlockPC(uint64_t BlockPC) {
   BlockEntryTable[BlockPC] = CurBB;
 }
 
+void EVMMirBuilder::setStackLiftStatistics(
+    const EVMLiftedStackStatistics &Statistics) {
+  const uint64_t ProtectedIncomingValues =
+      StackLiftStatistics.ProtectedIncomingValues;
+  const uint64_t MaterializedU256Merges =
+      StackLiftStatistics.MaterializedU256Merges;
+  StackLiftStatistics = Statistics;
+  StackLiftStatistics.ProtectedIncomingValues = ProtectedIncomingValues;
+  StackLiftStatistics.MaterializedU256Merges = MaterializedU256Merges;
+}
+
 typename EVMMirBuilder::Operand EVMMirBuilder::materializeStackMergeOperand(
     const std::vector<uint64_t> &PredBlockPCs,
     const std::vector<std::pair<uint64_t, Operand>> &IncomingValues) {
+  ++StackLiftStatistics.MaterializedU256Merges;
   std::map<uint64_t, Operand> IncomingValueMap;
   for (const auto &[PredBlockPC, Value] : IncomingValues) {
     IncomingValueMap[PredBlockPC] = Value;
@@ -7526,6 +7539,27 @@ bool EVMMirBuilder::hasArithCompileStats() const {
          MemStats.MulU128OpportunityCount != 0 ||
          MemStats.DivU128OpportunityCount != 0 ||
          MemStats.ModU128OpportunityCount != 0;
+}
+
+EVMMirBuilder::FeatureCoverageStatistics
+EVMMirBuilder::getFeatureCoverageStatistics() const {
+  FeatureCoverageStatistics Result;
+  Result.MemoryExpansionPlans = MemStats.MemoryExpansionPlanCount;
+  Result.MemoryExpansionPlanCoveredOps = MemStats.MemoryExpansionPlanCoveredOps;
+  Result.MemoryExpansionPlanEstimatedReducedExpansions =
+      MemStats.MemoryExpansionPlanEstimatedReducedExpansions;
+  Result.RangeU64FastPaths =
+      MemStats.AddFastRangeU64Count + MemStats.SubFastRangeU64Count +
+      MemStats.MulFastRangeU64Count + MemStats.DivFastRangeU64Count +
+      MemStats.ModFastRangeU64Count;
+  Result.ConstU64FastPaths =
+      MemStats.AddFastConstU64Count + MemStats.SubFastConstU64Count +
+      MemStats.MulFastConstU64Count + MemStats.DivFastConstU64Count +
+      MemStats.ModFastConstU64Count;
+  Result.FullArithmeticPaths = MemStats.AddFullCount + MemStats.SubFullCount +
+                               MemStats.MulFullCount + MemStats.DivFullCount +
+                               MemStats.ModFullCount;
+  return Result;
 }
 
 void EVMMirBuilder::noteBlockMemoryEventPC(uint64_t PC) {

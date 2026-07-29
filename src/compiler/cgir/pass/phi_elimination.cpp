@@ -21,7 +21,7 @@ struct CopyEdge {
 
 class PhiEliminationImpl {
 public:
-  void runOnCgFunction(CgFunction &MF) {
+  CgPhiElimination::Statistics runOnCgFunction(CgFunction &MF) {
     this->MF = &MF;
     MRI = &MF.getRegInfo();
     TII = &MF.getTargetInstrInfo();
@@ -35,6 +35,7 @@ public:
     for (CgBasicBlock *BB : Blocks) {
       eliminateBlockPhis(*BB);
     }
+    return Stats;
   }
 
 private:
@@ -49,6 +50,7 @@ private:
     if (Phis.empty()) {
       return;
     }
+    Stats.PhiInstructions += Phis.size();
 
     std::unordered_map<CgBasicBlock *, std::vector<CopyEdge>> EdgeCopies;
     EdgeCopies.reserve(BB.pred_size());
@@ -58,6 +60,7 @@ private:
                  (Phi->getNumOperands() % 2) == 1 && "invalid lowered PHI");
 
       const CgRegister DstReg = Phi->getOperand(0).getReg();
+      Stats.PhiIncomingEdges += (Phi->getNumOperands() - 1) / 2;
       for (unsigned OpIdx = 1; OpIdx < Phi->getNumOperands(); OpIdx += 2) {
         CgOperand &SrcOp = Phi->getOperand(OpIdx);
         CgOperand &PredOp = Phi->getOperand(OpIdx + 1);
@@ -68,7 +71,10 @@ private:
     }
 
     for (auto &[Pred, Copies] : EdgeCopies) {
+      Stats.CandidateEdgeCopies += Copies.size();
+      const size_t CandidateCount = Copies.size();
       eraseIdentityCopies(Copies);
+      Stats.IdentityEdgeCopies += CandidateCount - Copies.size();
       if (Copies.empty()) {
         continue;
       }
@@ -79,6 +85,7 @@ private:
       }
 
       CgBasicBlock *SplitBB = createSplitEdgeBlock(*Pred, BB);
+      ++Stats.SplitCriticalEdges;
       emitParallelCopies(*SplitBB, SplitBB->end(), Copies);
       addUnconditionalBranch(*SplitBB, BB);
     }
@@ -150,6 +157,7 @@ private:
     llvm::MutableArrayRef<CgOperand> OperandRef(Operands);
     MF->createCgInstruction(BB, InsertPt, TII->get(llvm::TargetOpcode::COPY),
                             OperandRef);
+    ++Stats.EmittedCopyInstructions;
   }
 
   void emitParallelCopies(CgBasicBlock &BB, CgBasicBlock::iterator InsertPt,
@@ -196,11 +204,12 @@ private:
   CgFunction *MF = nullptr;
   CgRegisterInfo *MRI = nullptr;
   const llvm::TargetInstrInfo *TII = nullptr;
+  CgPhiElimination::Statistics Stats;
 };
 
 } // namespace
 
-void CgPhiElimination::runOnCgFunction(CgFunction &MF) {
+CgPhiElimination::Statistics CgPhiElimination::runOnCgFunction(CgFunction &MF) {
   PhiEliminationImpl Impl;
-  Impl.runOnCgFunction(MF);
+  return Impl.runOnCgFunction(MF);
 }

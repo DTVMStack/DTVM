@@ -60,6 +60,29 @@ public:
   uint64_t getKnownCallDataLoad0Low64() const {
     return MemoryProfile.KnownCallDataLoad0Low64;
   }
+  size_t getDynamicEntryMergeFallbackBlocks() const {
+#ifdef ZEN_ENABLE_JIT
+    return DynamicEntryMergeFallbackBlocks.load(std::memory_order_acquire);
+#else
+    return 0;
+#endif
+  }
+  size_t getDynamicEntryMergeFallbackEdges() const {
+#ifdef ZEN_ENABLE_JIT
+    return DynamicEntryMergeFallbackEdges.load(std::memory_order_acquire);
+#else
+    return 0;
+#endif
+  }
+  void setDynamicEntryMergeFallbackMetrics(size_t FallbackBlocks,
+                                           size_t FallbackEdges) {
+#ifdef ZEN_ENABLE_JIT
+    DynamicEntryMergeFallbackBlocks.store(FallbackBlocks,
+                                          std::memory_order_relaxed);
+    DynamicEntryMergeFallbackEdges.store(FallbackEdges,
+                                         std::memory_order_relaxed);
+#endif
+  }
   static constexpr int32_t getCodeSizeOffset() {
     static_assert(offsetof(EVMModule, CodeSize) <=
                       std::numeric_limits<int32_t>::max(),
@@ -77,6 +100,20 @@ public:
       JITCodeMemPool = std::make_unique<common::CodeMemPool>();
     }
     return *JITCodeMemPool;
+  }
+
+  size_t getEmittedJITCodeSize() const {
+#ifdef ZEN_ENABLE_JIT
+    return EmittedJITCodeSize.load(std::memory_order_acquire);
+#else
+    return 0;
+#endif
+  }
+
+  void setEmittedJITCodeSize(size_t Size) {
+#ifdef ZEN_ENABLE_JIT
+    EmittedJITCodeSize.store(Size, std::memory_order_relaxed);
+#endif
   }
 
   void setJITCodeAndSize(void *Code, size_t Size) {
@@ -134,6 +171,9 @@ private:
   std::unique_ptr<common::CodeMemPool> JITCodeMemPool;
   std::atomic<void *> JITCode{nullptr};
   std::atomic<size_t> JITCodeSize{0};
+  std::atomic<size_t> EmittedJITCodeSize{0};
+  std::atomic<size_t> DynamicEntryMergeFallbackBlocks{0};
+  std::atomic<size_t> DynamicEntryMergeFallbackEdges{0};
 #endif // ZEN_ENABLE_JIT
 };
 

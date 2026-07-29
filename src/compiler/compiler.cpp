@@ -12,7 +12,9 @@
 #include "compiler/cgir/pass/reg_alloc_basic.h"
 #include "compiler/cgir/pass/reg_alloc_greedy.h"
 #include "compiler/cgir/pass/register_coalescer.h"
+#include "compiler/common/llvm_workaround.h"
 #include "compiler/context.h"
+#include "compiler/evm_compiler_metrics.h"
 #include "compiler/frontend/parser.h"
 #include "compiler/mir/function.h"
 #include "compiler/mir/module.h"
@@ -37,6 +39,56 @@
 
 using namespace COMPILER;
 
+namespace {
+
+EVMCompilerMIRSnapshot captureMIRSnapshot(MFunction &MF) {
+  EVMCompilerMIRSnapshot Snapshot;
+  Snapshot.BasicBlocks = MF.getNumBasicBlocks();
+  Snapshot.Instructions = MF.getNumInstructions();
+  Snapshot.Variables = MF.getNumVariables();
+  for (MBasicBlock *BB : MF) {
+    for (MInstruction *Instruction : *BB) {
+      if (Instruction->getOpcode() != OP_phi) {
+        continue;
+      }
+      ++Snapshot.PhiInstructions;
+      Snapshot.PhiIncomingEdges +=
+          llvm::cast<PhiInstruction>(Instruction)->getNumIncoming();
+    }
+  }
+  return Snapshot;
+}
+
+EVMCompilerCgSnapshot captureCgSnapshot(CgFunction &MF, bool CountStackSlots) {
+  EVMCompilerCgSnapshot Snapshot;
+  Snapshot.BasicBlocks = MF.size();
+  Snapshot.VirtualRegisters = MF.getRegInfo().getNumVirtRegs();
+  const auto &TII = MF.getTargetInstrInfo();
+  auto &Workaround = MF.getContext().getLLVMWorkaround();
+  for (CgBasicBlock *BB : MF) {
+    for (const CgInstruction &Instruction : *BB) {
+      ++Snapshot.Instructions;
+      if (Instruction.isPHI()) {
+        ++Snapshot.PhiInstructions;
+        Snapshot.PhiIncomingEdges += (Instruction.getNumOperands() - 1) / 2;
+      }
+      if (!CountStackSlots) {
+        continue;
+      }
+      int FrameIndex = 0;
+      if (Workaround.isLoadFromStackSlot(TII, Instruction, FrameIndex) != 0) {
+        ++Snapshot.StackSlotLoads;
+      }
+      if (Workaround.isStoreToStackSlot(TII, Instruction, FrameIndex) != 0) {
+        ++Snapshot.StackSlotStores;
+      }
+    }
+  }
+  return Snapshot;
+}
+
+} // namespace
+
 // mprotect need protect by chunks(0x1000) in occulum
 // so align code size space to 0x1000
 const size_t MPROTECT_CHUNK_SIZE = 0x1000;
@@ -55,8 +107,14 @@ static inline bool isFuncNeedGreedyRA(uint32_t FuncIdx) {
 #endif // ZEN_ENABLE_DEBUG_GREEDY_RA
 
 void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
-                                       CgFunction &CgFunc,
-                                       bool DisableGreedyRA) {
+                                       CgFunction &CgFunc, bool DisableGreedyRA,
+                                       EVMCompilerObservation *Observation) {
+  if (Observation != nullptr && Observation->Enabled) {
+    EVMCompilerPhaseTimer PhaseTimer(Observation,
+                                     EVMCompilerPhase::ObservationOverhead);
+    Observation->MIRAfterFrontend = captureMIRSnapshot(MFunc);
+    Observation->DisableGreedyRA = DisableGreedyRA;
+  }
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   llvm::DebugFlag = true;
   llvm::dbgs() << "\n########## MIR Dump ##########\n\n";
@@ -64,59 +122,111 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
 #endif
 
   {
+    EVMCompilerPhaseTimer PhaseTimer(Observation, EVMCompilerPhase::MIRVerify);
     MVerifier Verifier(MMod, MFunc, llvm::errs());
     if (!Verifier.verify()) {
       throw getError(ErrorCode::MIRVerifyingFailed);
     }
   }
 
-  DeadMBasicBlockElim MBBDCE;
-  MBBDCE.runOnMFunction(MFunc);
+  {
+    EVMCompilerPhaseTimer PhaseTimer(Observation, EVMCompilerPhase::MIRDCE);
+    DeadMBasicBlockElim MBBDCE;
+    MBBDCE.runOnMFunction(MFunc);
+  }
+  if (Observation != nullptr && Observation->Enabled) {
+    EVMCompilerPhaseTimer PhaseTimer(Observation,
+                                     EVMCompilerPhase::ObservationOverhead);
+    Observation->MIRAfterDCE = captureMIRSnapshot(MFunc);
+  }
 
   CgFunction &MF = CgFunc;
 
-  // TODO: refactor to pass
-  X86CgLowering CgLowering(MF);
-  X86CgPeephole CgPeephole(MF);
-  CgPhiElimination PhiElimination;
-  PhiElimination.runOnCgFunction(MF);
+  {
+    EVMCompilerPhaseTimer PhaseTimer(Observation, EVMCompilerPhase::CgLowering);
+    // TODO: refactor to pass
+    X86CgLowering CgLowering(MF);
+    X86CgPeephole CgPeephole(MF);
+  }
+  if (Observation != nullptr && Observation->Enabled) {
+    EVMCompilerPhaseTimer PhaseTimer(Observation,
+                                     EVMCompilerPhase::ObservationOverhead);
+    Observation->CgBeforePhi = captureCgSnapshot(MF, false);
+  }
+
+  {
+    EVMCompilerPhaseTimer PhaseTimer(Observation,
+                                     EVMCompilerPhase::PhiElimination);
+    CgPhiElimination PhiElimination;
+    const auto PhiStats = PhiElimination.runOnCgFunction(MF);
+    if (Observation != nullptr && Observation->Enabled) {
+      Observation->PhiElimination.PhiInstructions = PhiStats.PhiInstructions;
+      Observation->PhiElimination.PhiIncomingEdges = PhiStats.PhiIncomingEdges;
+      Observation->PhiElimination.CandidateEdgeCopies =
+          PhiStats.CandidateEdgeCopies;
+      Observation->PhiElimination.IdentityEdgeCopies =
+          PhiStats.IdentityEdgeCopies;
+      Observation->PhiElimination.EmittedCopyInstructions =
+          PhiStats.EmittedCopyInstructions;
+      Observation->PhiElimination.SplitCriticalEdges =
+          PhiStats.SplitCriticalEdges;
+    }
+  }
+  if (Observation != nullptr && Observation->Enabled) {
+    EVMCompilerPhaseTimer PhaseTimer(Observation,
+                                     EVMCompilerPhase::ObservationOverhead);
+    Observation->CgAfterPhi = captureCgSnapshot(MF, false);
+  }
 
   uint32_t MFuncIdx = MFunc.getFuncIdx();
 
-  if (DisableGreedyRA) {
-    ZEN_LOG_DEBUG("using fast ra for function %d", MFuncIdx);
-    FastRA RA(MF);
-  } else {
-#ifdef ZEN_ENABLE_DEBUG_GREEDY_RA
-    if (!isFuncNeedGreedyRA(MFuncIdx)) {
+  {
+    EVMCompilerPhaseTimer PhaseTimer(Observation,
+                                     EVMCompilerPhase::RegisterAllocation);
+    if (DisableGreedyRA) {
       ZEN_LOG_DEBUG("using fast ra for function %d", MFuncIdx);
       FastRA RA(MF);
     } else {
-#endif // ZEN_ENABLE_DEBUG_GREEDY_RA
-      ZEN_LOG_DEBUG("using greedy ra for function %d", MFuncIdx);
-      CgDeadCgInstructionElim DCE(MF);
-      CgDominatorTree DomTree(MF);
-      CgLoopInfo Loops(MF);
-      CgSlotIndexes Indexes(MF);
-      CgLiveIntervals LIS(MF);
-      CgLiveStacks LSS(MF);
-      CgBlockFrequencyInfo MBFI(MF);
-      // CgRegisterCoalescer must before CgVirtRegMap
-      CgRegisterCoalescer Coalescer(MF);
-      CgVirtRegMap VRM(MF);
-      CgLiveRegMatrix Matrix(MF);
-      // RABasic ra(MF);
-
-      CgEdgeBundles EdgeBundles(MF);
-      CgSpillPlacement SpillPlacer(MF);
-      MF.EvictAdvisor = std::unique_ptr<CgRegAllocEvictionAdvisorAnalysis>(
-          createReleaseModeAdvisor());
-      std::shared_ptr<CgRAGreedy> RA = std::make_shared<CgRAGreedy>(MF);
-
-      CgVirtRegRewriter Rewriter(MF);
 #ifdef ZEN_ENABLE_DEBUG_GREEDY_RA
-    }
+      if (!isFuncNeedGreedyRA(MFuncIdx)) {
+        ZEN_LOG_DEBUG("using fast ra for function %d", MFuncIdx);
+        FastRA RA(MF);
+      } else {
 #endif // ZEN_ENABLE_DEBUG_GREEDY_RA
+        ZEN_LOG_DEBUG("using greedy ra for function %d", MFuncIdx);
+        CgDeadCgInstructionElim DCE(MF);
+        CgDominatorTree DomTree(MF);
+        CgLoopInfo Loops(MF);
+        CgSlotIndexes Indexes(MF);
+        CgLiveIntervals LIS(MF);
+        if (Observation != nullptr && Observation->Enabled) {
+          Observation->LiveIntervals = MF.getRegInfo().getNumVirtRegs();
+          Observation->LiveIntervalsAvailable = true;
+        }
+        CgLiveStacks LSS(MF);
+        CgBlockFrequencyInfo MBFI(MF);
+        // CgRegisterCoalescer must before CgVirtRegMap
+        CgRegisterCoalescer Coalescer(MF);
+        CgVirtRegMap VRM(MF);
+        CgLiveRegMatrix Matrix(MF);
+        // RABasic ra(MF);
+
+        CgEdgeBundles EdgeBundles(MF);
+        CgSpillPlacement SpillPlacer(MF);
+        MF.EvictAdvisor = std::unique_ptr<CgRegAllocEvictionAdvisorAnalysis>(
+            createReleaseModeAdvisor());
+        std::shared_ptr<CgRAGreedy> RA = std::make_shared<CgRAGreedy>(MF);
+
+        CgVirtRegRewriter Rewriter(MF);
+#ifdef ZEN_ENABLE_DEBUG_GREEDY_RA
+      }
+#endif // ZEN_ENABLE_DEBUG_GREEDY_RA
+    }
+  }
+  if (Observation != nullptr && Observation->Enabled) {
+    EVMCompilerPhaseTimer PhaseTimer(Observation,
+                                     EVMCompilerPhase::ObservationOverhead);
+    Observation->CgAfterRA = captureCgSnapshot(MF, true);
   }
 
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
@@ -125,24 +235,31 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
   MF.dump();
 #endif
 
-  PrologEpilogInserter PEInserter;
-  PEInserter.runOnCgFunction(MF);
+  {
+    EVMCompilerPhaseTimer PhaseTimer(Observation, EVMCompilerPhase::PostRA);
+    PrologEpilogInserter PEInserter;
+    PEInserter.runOnCgFunction(MF);
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
-  llvm::dbgs() << "\n########## CgIR Dump After Prologue/Epilogue Insertion "
-                  "##########\n\n";
-  MF.dump();
+    llvm::dbgs() << "\n########## CgIR Dump After Prologue/Epilogue "
+                    "Insertion ##########\n\n";
+    MF.dump();
 #endif
 
-  ExpandPostRAPseudos PseudosExpander;
-  PseudosExpander.runOnCgFunction(MF);
+    ExpandPostRAPseudos PseudosExpander;
+    PseudosExpander.runOnCgFunction(MF);
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
-  llvm::dbgs() << "\n########## CgIR Dump After Post-RA Pseudo "
-                  "Instruction Expansion "
-                  "##########\n\n";
-  MF.dump();
+    llvm::dbgs() << "\n########## CgIR Dump After Post-RA Pseudo "
+                    "Instruction Expansion ##########\n\n";
+    MF.dump();
 #endif
-  if (MF.EvictAdvisor) {
-    MF.EvictAdvisor.reset();
+    if (MF.EvictAdvisor) {
+      MF.EvictAdvisor.reset();
+    }
+  }
+  if (Observation != nullptr && Observation->Enabled) {
+    EVMCompilerPhaseTimer PhaseTimer(Observation,
+                                     EVMCompilerPhase::ObservationOverhead);
+    Observation->CgAfterPostRA = captureCgSnapshot(MF, true);
   }
 }
 

@@ -14,13 +14,15 @@ class WasmFrontendContext;
 class MModule;
 class MFunction;
 class CgFunction;
+struct EVMCompilerObservation;
 
 class JITCompilerBase : public NonCopyable {
 protected:
   virtual ~JITCompilerBase() = default;
 
   static void compileMIRToCgIR(MModule &Mod, MFunction &MFunc,
-                               CgFunction &CgFunc, bool DisableGreedyRA);
+                               CgFunction &CgFunc, bool DisableGreedyRA,
+                               EVMCompilerObservation *Observation = nullptr);
   static void emitObjectBuffer(CompileContext *Ctx);
 };
 

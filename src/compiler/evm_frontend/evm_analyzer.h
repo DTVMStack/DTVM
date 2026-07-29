@@ -117,6 +117,8 @@ struct JITSuitabilityResult {
   size_t MaxConsecutiveExpensive = 0; // longest unbroken run
   size_t MaxBlockExpensiveCount = 0;  // max RA-expensive ops in one block
   size_t DupFeedbackPatternCount = 0; // DUPn immediately before RA-expensive
+  size_t DynamicEntryMergeFallbackBlocks = 0;
+  size_t DynamicEntryMergeFallbackEdges = 0;
 };
 
 /// Thresholds for JIT suitability fallback. These limits bound bytecode size
@@ -1527,6 +1529,8 @@ private:
     // loop.
     const std::vector<uint64_t> DispatchSources =
         collectAllDynamicJumpDispatchSourceBlocks();
+    size_t DynamicEntryMergeFallbackBlocks = 0;
+    size_t DynamicEntryMergeFallbackEdges = 0;
     for (auto &[EntryPC, Info] : BlockInfos) {
       (void)EntryPC;
       bool EntryKnown = Info.IsEntryStateCompatible;
@@ -1613,6 +1617,17 @@ private:
         }
       }
     }
+
+    for (const auto &[EntryPC, Info] : BlockInfos) {
+      (void)EntryPC;
+      if (!Info.IsDynamicJumpTargetCandidate || Info.CanLiftStack) {
+        continue;
+      }
+      ++DynamicEntryMergeFallbackBlocks;
+      DynamicEntryMergeFallbackEdges += DispatchSources.size();
+    }
+    JITResult.DynamicEntryMergeFallbackBlocks = DynamicEntryMergeFallbackBlocks;
+    JITResult.DynamicEntryMergeFallbackEdges = DynamicEntryMergeFallbackEdges;
 
     // A block with a hidden live-in prefix (absolute entry depth exceeds the
     // block's local entry depth) can only be lifted soundly when it never

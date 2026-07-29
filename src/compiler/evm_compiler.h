@@ -19,7 +19,8 @@ protected:
   ~EVMJITCompiler() override = default;
 
   void compileEVMToMC(EVMFrontendContext &Ctx, MModule &Mod, uint32_t FuncIdx,
-                      bool DisableGreedyRA);
+                      bool DisableGreedyRA,
+                      EVMCompilerObservation *Observation = nullptr);
 
   runtime::EVMModule *EVMMod;
   const runtime::RuntimeConfig &Config;

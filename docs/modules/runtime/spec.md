@@ -95,8 +95,11 @@ runtime propagates errors via `common::Error` / `common::ErrorCode`; common runt
 ## Compatibility Strategy
 
 1. **Config**: `RuntimeConfig` controls RunMode (Interp / Singlepass / Multipass), WASI, statistics, JIT thread count; changes require `validate()`
-2. **Compile options**: Behavior controlled by `ZEN_ENABLE_EVM`, `ZEN_ENABLE_JIT`, `ZEN_ENABLE_SINGLEPASS_JIT`, `ZEN_ENABLE_MULTIPASS_JIT`, `ZEN_ENABLE_BUILTIN_WASI`, `ZEN_ENABLE_CPU_EXCEPTION`, `ZEN_ENABLE_VIRTUAL_STACK`, `ZEN_ENABLE_DWASM`, etc.
-3. **ABI**: entrypoint assembly depends on `Instance`, `MemoryInstance` layout; layout changes require offset updates in assembly
+2. **EVM JIT code size**: `getEmittedJITCodeSize()` reports actual emitted
+   machine-code bytes; `getJITCodeSize()` retains the executable mapping size
+   used for runtime address bounds.
+3. **Compile options**: Behavior controlled by `ZEN_ENABLE_EVM`, `ZEN_ENABLE_JIT`, `ZEN_ENABLE_SINGLEPASS_JIT`, `ZEN_ENABLE_MULTIPASS_JIT`, `ZEN_ENABLE_BUILTIN_WASI`, `ZEN_ENABLE_CPU_EXCEPTION`, `ZEN_ENABLE_VIRTUAL_STACK`, `ZEN_ENABLE_DWASM`, etc.
+4. **ABI**: entrypoint assembly depends on `Instance`, `MemoryInstance` layout; layout changes require offset updates in assembly
 
 ## Cross-References
 

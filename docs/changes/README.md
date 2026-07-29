@@ -53,6 +53,7 @@ Typical triggers:
 | 2026-04-14 | [from-raw-pointer-safety-checks](2026-04-14-from-raw-pointer-safety-checks/README.md) | Accepted | Light | Add null/alignment safety checks to `from_raw_pointer` in Rust bindings |
 | 2026-05-13 | [evm-ngram-macro-ops](2026-05-13-evm-ngram-macro-ops/README.md) | Implemented | Full | Initial EVM n-gram macro-op lowering and specialized keccak helpers for multipass JIT |
 | 2026-07-21 | [evm-memory-alias-and-expansion](2026-07-21-evm-memory-alias-and-expansion/README.md) | Implemented | Full | Stronger memory alias proofs, wider precheck/expansion coverage, DSE, load forwarding, grouping, and MCOPY roadmap |
+| 2026-07-28 | [evm-compiler-observation](2026-07-28-evm-compiler-observation/README.md) | Implemented | Full | Add opt-in structured EVM compiler phase and IR observations |
 
 Each active proposal lives in its own subdirectory. Browse `docs/changes/*/README.md`
 to see all current proposals, or use:

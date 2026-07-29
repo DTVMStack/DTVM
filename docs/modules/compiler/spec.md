@@ -189,6 +189,16 @@ and destination ends for expansion elision while retaining the original
 
 - Compilation start/end times are recorded in `utils::StatisticPhase::JITCompilation`
 - When `ZEN_ENABLE_LINUX_PERF` is enabled, perf JIT dump symbols (e.g., `EVMBB*`) are emitted for generated blocks
+- `DTVM_EVM_COMPILER_OBSERVE=1` emits one schema-versioned JSON record per EVM
+  module. It reports phase times, explicitly separated observation overhead,
+  MIR/CgIR snapshots, stack-lift/Phi/register-allocation counters, feature
+  coverage, and emitted code bytes. The record names the existing stack-SSA and
+  memory-plan build gates. In a build with
+  `ZEN_ENABLE_MULTIPASS_JIT_LOGGING`, feature coverage includes aggregate
+  memory-plan and arithmetic-path counters; without logging those counters
+  remain zero.
+- Observation is disabled by default and must not influence generated code,
+  compiler decisions, or deterministic execution.
 
 ---
 

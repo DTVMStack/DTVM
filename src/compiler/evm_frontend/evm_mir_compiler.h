@@ -6,6 +6,7 @@
 
 #include "action/vm_eval_stack.h"
 #include "compiler/context.h"
+#include "compiler/evm_frontend/evm_lifted_stack_lifter.h"
 #include "compiler/evm_frontend/evm_memory_facts.h"
 #include "compiler/evm_frontend/evm_memory_grouping.h"
 #include "compiler/evm_frontend/evm_value_range.h"
@@ -143,11 +144,21 @@ public:
   using U256ConstInt = std::array<MConstantInt *, EVM_ELEMENTS_COUNT>;
   using JumpTargetPCList = std::vector<uint64_t>;
 
+  struct FeatureCoverageStatistics {
+    uint64_t MemoryExpansionPlans = 0;
+    uint64_t MemoryExpansionPlanCoveredOps = 0;
+    uint64_t MemoryExpansionPlanEstimatedReducedExpansions = 0;
+    uint64_t RangeU64FastPaths = 0;
+    uint64_t ConstU64FastPaths = 0;
+    uint64_t FullArithmeticPaths = 0;
+  };
+
   // Range classification for u256 operands.  Narrower ranges enable
   // single-instruction fast paths instead of expensive multi-limb arithmetic.
   using ValueRange = EVMValueRange;
 
   EVMMirBuilder(CompilerContext &Context, MFunction &MFunc);
+  FeatureCoverageStatistics getFeatureCoverageStatistics() const;
 
   class Operand {
   public:
@@ -358,6 +369,10 @@ public:
   Operand createStackEntryOperand(ValueRange Range = ValueRange::U256);
   void assignStackEntryOperand(const Operand &Dest, const Operand &Value);
   Operand prepareStackPhiIncoming(const Operand &Value);
+  void setStackLiftStatistics(const EVMLiftedStackStatistics &Statistics);
+  const EVMLiftedStackStatistics &getStackLiftStatistics() const {
+    return StackLiftStatistics;
+  }
   void registerCurrentBlockPC(uint64_t BlockPC);
   Operand materializeStackMergeOperand(
       const std::vector<uint64_t> &PredBlockPCs,
@@ -1436,6 +1451,7 @@ private:
   Variable *MemoryBaseVar = nullptr;
   Variable *MemorySizeVar = nullptr;
   uint64_t CurrentBlockPC = 0;
+  EVMLiftedStackStatistics StackLiftStatistics;
   std::map<uint64_t, MBasicBlock *> BlockEntryTable;
   std::map<uint64_t, std::map<uint64_t, MBasicBlock *>>
       DynamicPhiIncomingBlockTable;
