@@ -212,6 +212,18 @@ and destination ends for expansion elision while retaining the original
 - Provide bytecode, gas chunk end/cost arrays for chunk-based metering
 - Use register to hold gas when `ZEN_ENABLE_EVM_GAS_REGISTER` is enabled
 
+### EVM Stack Boundary Batching
+
+Non-lifted EVM block boundaries use batched runtime-stack access. Entry loads
+use `peekStackBatch` followed by one `dropStackBatch`; exit materialization uses
+one `pushStackBatch`. Batch vectors are always bottom-to-top. Empty batches emit
+no MIR and do not update runtime stack state. Full stack-SSA blocks retain the
+existing entry-state and phi protocol.
+
+The runtime stack remains the complete authoritative representation in this
+stage. Every non-lifted exit still writes all logical values, and dynamic
+dispatch, fallback, gas, and runtime ABI behavior are unchanged.
+
 ### EVM Stack SSA Lift Safety
 
 - `ZEN_ENABLE_EVM_STACK_SSA_LIFT` permits compatible EVM operand-stack values

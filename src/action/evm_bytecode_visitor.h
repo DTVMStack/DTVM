@@ -1039,9 +1039,7 @@ private:
         // missed underflow traps in later blocks.
         spillTrackedStackPreservingPrefix(Values, /*PrefixDepth=*/0);
       } else {
-        for (const Operand &Opnd : Values) {
-          Builder.stackPush(Opnd);
-        }
+        Builder.pushStackBatch(Values);
       }
     }
     InDeadCode = true;
@@ -1292,27 +1290,23 @@ private:
 
     CurrentBlockLifted = false;
     int32_t TotalPopSize = -BlockInfo.MinPopHeight;
-    EvalStack ReverseStack;
     // Refine each popped Operand's ValueRange from analyzer-computed entry
     // ranges so u64-narrow fast paths fire on values flowing through CFG
     // joins (see EVMRangeAnalyzer /
     // docs/changes/2026-05-07-value-range-cfg-join). EntryStackRanges[0] is the
     // bottom of entry stack; pop order is top-first.
     const auto &EntryRanges = BlockInfo.EntryStackRanges;
-    const int32_t EntryTopIdx = static_cast<int32_t>(EntryRanges.size()) - 1;
-    int32_t PopIter = 0;
-    while (TotalPopSize > 0) {
-      Operand Opnd = Builder.stackPop();
-      const int32_t SlotIdx = EntryTopIdx - PopIter;
+    std::vector<Operand> EntryValues =
+        Builder.peekStackBatch(static_cast<uint32_t>(TotalPopSize));
+    Builder.dropStackBatch(static_cast<uint32_t>(TotalPopSize));
+    const int32_t FirstEntrySlot =
+        static_cast<int32_t>(EntryRanges.size()) - TotalPopSize;
+    for (int32_t Index = 0; Index < TotalPopSize; ++Index) {
+      Operand &Opnd = EntryValues[static_cast<size_t>(Index)];
+      const int32_t SlotIdx = FirstEntrySlot + Index;
       if (SlotIdx >= 0 && SlotIdx < static_cast<int32_t>(EntryRanges.size())) {
-        Opnd.setRange(EntryRanges[SlotIdx]);
+        Opnd.setRange(EntryRanges[static_cast<size_t>(SlotIdx)]);
       }
-      ReverseStack.push(Opnd);
-      ++PopIter;
-      --TotalPopSize;
-    }
-    while (!ReverseStack.empty()) {
-      Operand Opnd = ReverseStack.pop();
       Stack.push(Opnd);
     }
   }

@@ -2927,6 +2927,17 @@ struct MockStackAccessStats {
   uint32_t StackSetCount = 0;
 };
 
+struct MockBatchStackAccessStats {
+  uint32_t PeekCalls = 0;
+  uint32_t PeekSlots = 0;
+  uint32_t DropCalls = 0;
+  uint32_t DropSlots = 0;
+  uint32_t PushCalls = 0;
+  uint32_t PushSlots = 0;
+  uint32_t StackTopUpdates = 0;
+  uint32_t StackSizeUpdates = 0;
+};
+
 struct MockMeterOpcodeRangeRecord {
   uint64_t StartPC = 0;
   uint64_t EndPCExclusive = 0;
@@ -3036,6 +3047,44 @@ public:
     Operand Top = RuntimeStack.back();
     RuntimeStack.pop_back();
     return Top;
+  }
+
+  std::vector<Operand> peekStackBatch(uint32_t Count, uint32_t SkipTop = 0) {
+    if (Count == 0) {
+      return {};
+    }
+    ZEN_ASSERT(static_cast<uint64_t>(Count) + SkipTop <= RuntimeStack.size() &&
+               "mock runtime stack batch peek underflow");
+    BatchStats.PeekCalls++;
+    BatchStats.PeekSlots += Count;
+    const size_t Begin =
+        RuntimeStack.size() - static_cast<size_t>(SkipTop) - Count;
+    return std::vector<Operand>(RuntimeStack.begin() + Begin,
+                                RuntimeStack.begin() + Begin + Count);
+  }
+
+  void dropStackBatch(uint32_t Count) {
+    if (Count == 0) {
+      return;
+    }
+    ZEN_ASSERT(Count <= RuntimeStack.size() &&
+               "mock runtime stack batch drop underflow");
+    RuntimeStack.resize(RuntimeStack.size() - Count);
+    BatchStats.DropCalls++;
+    BatchStats.DropSlots += Count;
+    BatchStats.StackTopUpdates++;
+    BatchStats.StackSizeUpdates++;
+  }
+
+  void pushStackBatch(const std::vector<Operand> &Values) {
+    if (Values.empty()) {
+      return;
+    }
+    RuntimeStack.insert(RuntimeStack.end(), Values.begin(), Values.end());
+    BatchStats.PushCalls++;
+    BatchStats.PushSlots += Values.size();
+    BatchStats.StackTopUpdates++;
+    BatchStats.StackSizeUpdates++;
   }
 
   void stackSet(int32_t IndexFromTop, Operand SetValue) {
@@ -3291,6 +3340,10 @@ public:
     return Stats[static_cast<uint8_t>(Opcode)];
   }
 
+  const MockBatchStackAccessStats &batchAccessStats() const {
+    return BatchStats;
+  }
+
   uint32_t meteredOpcodeCount(evmc_opcode Opcode) const {
     return MeteredOpcodeCounts[static_cast<uint8_t>(Opcode)];
   }
@@ -3355,6 +3408,12 @@ public:
 
   size_t runtimeStackDepth() const { return RuntimeStack.size(); }
 
+  MockOperand::U256Value runtimeStackValueFromBottom(size_t Index) const {
+    ZEN_ASSERT(Index < RuntimeStack.size() &&
+               "mock runtime stack index is out of range");
+    return RuntimeStack[Index].resolvedValue();
+  }
+
   MockOperand::U256Value topStackValue() const {
     ZEN_ASSERT(!RuntimeStack.empty() && "mock runtime stack is empty");
     return RuntimeStack.back().resolvedValue();
@@ -3411,6 +3470,7 @@ private:
   bool EnableRuntimeStackChecks = false;
   uint8_t CurrentOpcode = 0xff;
   std::array<MockStackAccessStats, 256> Stats = {};
+  MockBatchStackAccessStats BatchStats = {};
   std::array<uint32_t, 256> MeteredOpcodeCounts = {};
   std::vector<MockMeterOpcodeRangeRecord> MeteredRanges;
   std::vector<MockHelperOpcodeRecord> HelperOpcodes;
@@ -3727,6 +3787,69 @@ bool compileWithMockBuilder(const std::vector<uint8_t> &Bytecode,
 
   COMPILER::EVMByteCodeVisitor<MockEVMBuilder> Visitor(Builder, &Ctx);
   return Visitor.compile();
+}
+
+TEST(EVMMirBuilderStackBoundaryBatchTest,
+     EmptyOneSixteenAndSeventeenSlotBatchesBuild) {
+  MirBuilderConstFoldHarness Harness;
+  using Operand = EVMMirBuilder::Operand;
+
+  const size_t InitialStatements =
+      Harness.Func.getBasicBlock(0)->getNumStatements();
+  EXPECT_TRUE(Harness.Builder.peekStackBatch(0).empty());
+  Harness.Builder.dropStackBatch(0);
+  Harness.Builder.pushStackBatch({});
+  EXPECT_EQ(Harness.Func.getBasicBlock(0)->getNumStatements(),
+            InitialStatements);
+
+  for (uint32_t Count : {1u, 16u, 17u}) {
+    std::vector<Operand> Values;
+    Values.reserve(Count);
+    for (uint32_t Index = 0; Index < Count; ++Index) {
+      Values.emplace_back(
+          EVMMirBuilder::U256Value{Index, Index + 1, Index + 2, Index + 3});
+    }
+    Harness.Builder.pushStackBatch(Values);
+    EXPECT_EQ(Harness.Builder.peekStackBatch(Count).size(), Count);
+    Harness.Builder.dropStackBatch(Count);
+  }
+}
+
+TEST(EVMJITFrontendVisitorTest,
+     BatchProtocolPreservesBottomToTopOrderAndSkipTop) {
+  MockEVMBuilder Builder;
+  for (uint64_t Value = 1; Value <= 17; ++Value) {
+    Builder.stackPush(MockOperand(Value));
+  }
+
+  std::vector<MockOperand> Bottom =
+      Builder.peekStackBatch(/*Count=*/1, /*SkipTop=*/16);
+  ASSERT_EQ(Bottom.size(), 1u);
+  EXPECT_EQ(Bottom[0].resolvedValue()[0], 1u);
+
+  std::vector<MockOperand> All = Builder.peekStackBatch(17);
+  ASSERT_EQ(All.size(), 17u);
+  for (uint64_t Index = 0; Index < All.size(); ++Index) {
+    EXPECT_EQ(All[Index].resolvedValue()[0], Index + 1);
+  }
+  Builder.dropStackBatch(17);
+  EXPECT_EQ(Builder.runtimeStackDepth(), 0u);
+
+  Builder.pushStackBatch(All);
+  ASSERT_EQ(Builder.runtimeStackDepth(), 17u);
+  for (uint64_t Index = 0; Index < All.size(); ++Index) {
+    EXPECT_EQ(Builder.runtimeStackValueFromBottom(Index)[0], Index + 1);
+  }
+
+  const MockBatchStackAccessStats &Stats = Builder.batchAccessStats();
+  EXPECT_EQ(Stats.PeekCalls, 2u);
+  EXPECT_EQ(Stats.PeekSlots, 18u);
+  EXPECT_EQ(Stats.DropCalls, 1u);
+  EXPECT_EQ(Stats.DropSlots, 17u);
+  EXPECT_EQ(Stats.PushCalls, 1u);
+  EXPECT_EQ(Stats.PushSlots, 17u);
+  EXPECT_EQ(Stats.StackTopUpdates, 2u);
+  EXPECT_EQ(Stats.StackSizeUpdates, 2u);
 }
 
 TEST(EVMJITFrontendVisitorTest, TerminatingMemoryHelpersRetainExactOpcodePC) {

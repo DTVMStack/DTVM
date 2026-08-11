@@ -353,6 +353,9 @@ public:
 
   void stackPush(Operand PushValue);
   Operand stackPop();
+  std::vector<Operand> peekStackBatch(uint32_t Count, uint32_t SkipTop = 0);
+  void dropStackBatch(uint32_t Count);
+  void pushStackBatch(const std::vector<Operand> &Values);
 
   void stackSet(int32_t IndexFromTop, Operand SetValue);
   Operand stackGet(int32_t IndexFromTop);

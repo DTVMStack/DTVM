@@ -841,6 +841,67 @@ TEST(EVMRangeDifferential, DeadUnderResolvedFallthroughMatchesInterpreter) {
                                            Bytecode, {}));
 }
 
+TEST(EVMStackBoundaryDifferential,
+     SixteenSlotForwardBoundaryStressMatchesInterpreter) {
+  std::vector<uint8_t> Bytecode;
+  auto AppendPush2 = [&](uint16_t Value) {
+    Bytecode.push_back(0x61);
+    Bytecode.push_back(static_cast<uint8_t>(Value >> 8));
+    Bytecode.push_back(static_cast<uint8_t>(Value));
+  };
+
+  constexpr uint32_t Slots = 16;
+  constexpr uint32_t Boundaries = 8;
+  for (uint32_t Slot = 0; Slot < Slots; ++Slot) {
+    AppendPush2(static_cast<uint16_t>(Slot + 1));
+  }
+  for (uint32_t Boundary = 0; Boundary < Boundaries; ++Boundary) {
+    const uint16_t TargetPC = static_cast<uint16_t>(Bytecode.size() + 4);
+    AppendPush2(TargetPC);
+    Bytecode.push_back(0x56);                     // JUMP
+    Bytecode.push_back(0x5b);                     // JUMPDEST
+    Bytecode.insert(Bytecode.end(), Slots, 0x50); // POP x16
+    for (uint32_t Slot = 0; Slot < Slots; ++Slot) {
+      AppendPush2(static_cast<uint16_t>((Boundary + 1) * Slots + Slot + 1));
+    }
+  }
+  Bytecode.push_back(0x00); // STOP
+
+  EXPECT_TRUE(expectInterpMatchesMultipass(
+      "sixteen_slot_forward_boundary_stress", Bytecode, {}));
+}
+
+TEST(EVMStackBoundaryDifferential,
+     PopDup16AndSwap16AcrossBoundaryMatchInterpreter) {
+  std::vector<uint8_t> Bytecode;
+  for (uint8_t Value = 1; Value <= 17; ++Value) {
+    Bytecode.push_back(0x60); // PUSH1
+    Bytecode.push_back(Value);
+  }
+  Bytecode.push_back(0x60); // PUSH1 target
+  Bytecode.push_back(static_cast<uint8_t>(Bytecode.size() + 2));
+  Bytecode.push_back(0x56); // JUMP
+  Bytecode.push_back(0x5b); // JUMPDEST
+  Bytecode.push_back(0x8f); // DUP16
+  Bytecode.push_back(0x9f); // SWAP16
+  Bytecode.push_back(0x50); // POP
+  Bytecode.insert(Bytecode.end(),
+                  {0x5f, 0x52, 0x60, 0x20, 0x5f, 0xf3}); // return top word
+
+  EXPECT_TRUE(expectInterpMatchesMultipass("pop_dup16_swap16_across_boundary",
+                                           Bytecode, {}));
+}
+
+TEST(EVMStackBoundaryDifferential, UnderflowAndOverflowMatchInterpreter) {
+  EXPECT_TRUE(expectInterpStatusMatchesMultipass(
+      "batch_boundary_underflow", {0x50, 0x00}, EVMC_STACK_UNDERFLOW));
+
+  std::vector<uint8_t> Overflow(1025, 0x5f); // PUSH0 x1025
+  Overflow.push_back(0x00);
+  EXPECT_TRUE(expectInterpStatusMatchesMultipass(
+      "batch_boundary_overflow", Overflow, EVMC_STACK_OVERFLOW));
+}
+
 TEST(EVMLiftedStackMerge,
      JumpiFallthroughSharedJumpDestMatchesInterpreterOnBothEdges) {
   const std::vector<uint8_t> Bytecode = {

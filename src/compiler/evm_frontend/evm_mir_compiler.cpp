@@ -1110,6 +1110,102 @@ typename EVMMirBuilder::Operand EVMMirBuilder::stackPop() {
   return Operand(PopComponents, EVMType::UINT256);
 }
 
+std::vector<EVMMirBuilder::Operand>
+EVMMirBuilder::peekStackBatch(uint32_t Count, uint32_t SkipTop) {
+  std::vector<Operand> Values;
+  if (Count == 0) {
+    return Values;
+  }
+
+  const uint64_t AddressedSlots =
+      static_cast<uint64_t>(Count) + static_cast<uint64_t>(SkipTop);
+  ZEN_ASSERT(AddressedSlots <= 1024 &&
+             "runtime stack batch peek exceeds the EVM stack");
+
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MPointerType *U64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
+  MInstruction *StackTopInt = getInstanceStackTopInt();
+  MInstruction *BaseOffset =
+      createIntConstInstruction(I64Type, AddressedSlots * 32ULL);
+  MInstruction *BatchBase = createInstruction<BinaryInstruction>(
+      false, OP_sub, I64Type, StackTopInt, BaseOffset);
+  MInstruction *BatchPtr = createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, U64PtrType, BatchBase);
+
+  Values.reserve(Count);
+  for (uint32_t Slot = 0; Slot < Count; ++Slot) {
+    U256Inst Components = {};
+    for (size_t Limb = 0; Limb < EVM_ELEMENTS_COUNT; ++Limb) {
+      const int32_t Offset =
+          static_cast<int32_t>(static_cast<uint64_t>(Slot) * 32ULL +
+                               static_cast<uint64_t>(Limb) * 8ULL);
+      MInstruction *LoadInstr = createInstruction<LoadInstruction>(
+          false, I64Type, BatchPtr, 1, nullptr, Offset);
+      Variable *ValVar = storeInstructionInTemp(LoadInstr, I64Type);
+      Components[Limb] = loadVariable(ValVar);
+    }
+    Values.emplace_back(Components, EVMType::UINT256);
+  }
+
+  return Values;
+}
+
+void EVMMirBuilder::dropStackBatch(uint32_t Count) {
+  if (Count == 0) {
+    return;
+  }
+  ZEN_ASSERT(Count <= 1024 && "runtime stack batch drop exceeds the EVM stack");
+
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MInstruction *StackBytes =
+      createIntConstInstruction(I64Type, static_cast<uint64_t>(Count) * 32ULL);
+  MInstruction *StackTopInt = getInstanceStackTopInt();
+  MInstruction *StackSize = loadVariable(StackSizeVar);
+  MInstruction *NewTop = createInstruction<BinaryInstruction>(
+      false, OP_sub, I64Type, StackTopInt, StackBytes);
+  MInstruction *NewSize = createInstruction<BinaryInstruction>(
+      false, OP_sub, I64Type, StackSize, StackBytes);
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), NewTop,
+                                        StackTopVar->getVarIdx());
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), NewSize,
+                                        StackSizeVar->getVarIdx());
+}
+
+void EVMMirBuilder::pushStackBatch(const std::vector<Operand> &Values) {
+  if (Values.empty()) {
+    return;
+  }
+  ZEN_ASSERT(Values.size() <= 1024 &&
+             "runtime stack batch push exceeds the EVM stack");
+
+  MType *I64Type = EVMFrontendContext::getMIRTypeFromEVMType(EVMType::UINT64);
+  MPointerType *U64PtrType = MPointerType::create(Ctx, Ctx.I64Type);
+  MInstruction *StackTopInt = getInstanceStackTopInt();
+  MInstruction *StackTopPtr = createInstruction<ConversionInstruction>(
+      false, OP_inttoptr, U64PtrType, StackTopInt);
+
+  for (size_t Slot = 0; Slot < Values.size(); ++Slot) {
+    U256Inst Components = extractU256Operand(Values[Slot]);
+    for (size_t Limb = 0; Limb < EVM_ELEMENTS_COUNT; ++Limb) {
+      const int32_t Offset = static_cast<int32_t>(Slot * 32ULL + Limb * 8ULL);
+      createInstruction<StoreInstruction>(true, &Ctx.VoidType, Components[Limb],
+                                          StackTopPtr, Offset);
+    }
+  }
+
+  MInstruction *StackSize = loadVariable(StackSizeVar);
+  MInstruction *StackBytes = createIntConstInstruction(
+      I64Type, static_cast<uint64_t>(Values.size()) * 32ULL);
+  MInstruction *NewTop = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, StackTopInt, StackBytes);
+  MInstruction *NewSize = createInstruction<BinaryInstruction>(
+      false, OP_add, I64Type, StackSize, StackBytes);
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), NewTop,
+                                        StackTopVar->getVarIdx());
+  createInstruction<DassignInstruction>(true, &(Ctx.VoidType), NewSize,
+                                        StackSizeVar->getVarIdx());
+}
+
 void EVMMirBuilder::stackSet(int32_t IndexFromTop, Operand SetValue) {
   // This set element to stack with index from top
   U256Inst SetComponents = extractU256Operand(SetValue);
