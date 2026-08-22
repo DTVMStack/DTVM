@@ -177,7 +177,7 @@ Thread-local static access point for opcode handlers to get current Frame, Conte
 |------|-----|------|
 | MAXSTACK | 1024 | Stack depth limit |
 | MAX_REQUIRED_MEMORY_SIZE | 16MB | Memory expansion limit |
-| DEFAULT_REVISION | EVMC_CANCUN | Default revision |
+| DEFAULT_REVISION | EVMC_OSAKA | Default revision |
 | BASIC_EXECUTION_COST | 21000 | Base transaction Gas |
 | COLD_ACCOUNT_ACCESS_COST | 2600 | EIP-2929 cold account access |
 | WARM_ACCOUNT_ACCESS_COST | 100 | Warm account access |

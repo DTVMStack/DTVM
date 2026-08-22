@@ -38,6 +38,7 @@ bazel-testlogs
 /*.writen.cpp
 /testsuites
 /venv
+/eest-results/
 
 # fuzzer
 /wtf

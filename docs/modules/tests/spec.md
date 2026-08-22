@@ -37,7 +37,7 @@ This module does not include: EVM interpreter (evm), Host implementation (host),
 
 - **evmStateTests**: Load JSON from `tests/evm_spec_test/state_tests/`; execute per `pre`/`env`/`transaction`/`post`
 - **StateTestFixture**: `TestName`, `PreState`, `Environment`, `Transaction`, `Post`
-- **Fork support**: `post` indexed by fork (Frontier~Prague); filtered by `DTVM_TEST_REVISION` env var
+- **Fork support**: `post` indexed by fork (Frontier~Osaka); filtered by `DTVM_TEST_REVISION` env var; unknown fork labels fail closed
 - **Verification**: `verifyPostState` compares state root, log hash; `verifyStateRoot`, `verifyLogsHash`
 - **Setup**: `parsePreAccounts`, `parseStateTestFile`, `createTransactionFromIndex`
 

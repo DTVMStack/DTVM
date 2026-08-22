@@ -9525,6 +9525,12 @@ MInstruction *EVMMirBuilder::getMemorySize() {
 }
 
 void EVMMirBuilder::reloadMemorySizeFromInstance() {
+  // Runtime helpers that grow memory can initialize the backing buffer on the
+  // first expansion. Keep the cached base pointer in sync with the size;
+  // otherwise later in-bounds operations can keep using the null entry value.
+  if (MemoryBaseVar) {
+    (void)getMemoryDataPointer();
+  }
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   ++MemStats.ReloadMemorySizeCount;
   if (CurBlockMemStats.Active) {

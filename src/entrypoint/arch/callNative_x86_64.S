@@ -163,3 +163,7 @@ _callNative_end:
     .globl callNative_end
 callNative_end:
 #endif
+
+#ifndef ZEN_BUILD_PLATFORM_DARWIN
+    .section .note.GNU-stack,"",@progbits
+#endif

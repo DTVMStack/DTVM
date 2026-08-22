@@ -115,3 +115,7 @@ _stubTemplateEnd:
     .globl stubTemplateEnd
 stubTemplateEnd:
 #endif
+
+#ifndef ZEN_BUILD_PLATFORM_DARWIN
+    .section .note.GNU-stack,"",@progbits
+#endif

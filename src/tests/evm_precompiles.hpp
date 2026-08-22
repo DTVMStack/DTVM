@@ -433,7 +433,6 @@ inline evmc::Result executeModExp(const evmc_message &Msg,
     GasCost = cpp_int_et_off(multComplexityEIP198(MaxLen));
     GasCost *= cpp_int_et_off(IterationCount);
     GasCost /= cpp_int_et_off(20);
-    GasCost += cpp_int_et_off(LegacyModExpBaseGas);
   }
 
   uint64_t GasCost64 = 0;

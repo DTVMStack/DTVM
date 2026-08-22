@@ -94,7 +94,7 @@ This module does not include: module loading (runtime), JIT compilation (compile
 
 ## Compatibility Strategy
 
-- Default revision: `DEFAULT_REVISION = EVMC_CANCUN`
+- Default revision: `DEFAULT_REVISION = EVMC_OSAKA`
 - Supported revisions from EVMC library (Frontier ~ Experimental); opcodes and Gas table switch by Revision
 - New EIPs: update `gas_storage_cost`, `opcode_handlers`, and evmc dependency in sync
 

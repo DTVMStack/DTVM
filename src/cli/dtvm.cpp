@@ -229,6 +229,7 @@ int main(int argc, char *argv[]) {
       {"paris", EVMC_PARIS},
       {"shanghai", EVMC_SHANGHAI},
       {"cancun", EVMC_CANCUN},
+      {"prague", EVMC_PRAGUE},
       {"osaka", EVMC_OSAKA},
   };
 #endif // ZEN_ENABLE_EVM

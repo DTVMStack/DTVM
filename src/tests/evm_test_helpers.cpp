@@ -13,6 +13,7 @@
 #include <intx/intx.hpp>
 #include <iostream>
 #include <rapidjson/document.h>
+#include <stdexcept>
 
 namespace zen::evm_test_utils {
 
@@ -407,7 +408,10 @@ evmc_revision mapForkToRevision(const std::string &Fork) {
   if (Fork == "Prague") {
     return EVMC_PRAGUE;
   }
-  return zen::evm::DEFAULT_REVISION;
+  if (Fork == "Osaka") {
+    return EVMC_OSAKA;
+  }
+  throw std::runtime_error("Unsupported state-test fork: " + Fork);
 }
 
 } // namespace zen::evm_test_utils

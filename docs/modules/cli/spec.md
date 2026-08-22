@@ -110,7 +110,7 @@ Parsing or initialization failures return `EXIT_FAILURE` uniformly; `evmc_status
 - **EVM options**: Only under `ZEN_ENABLE_EVM`: `--format evm`, `--calldata`, `--evm-revision`, `--deploy`, `--contract-address`, `--sender`, `--save-state`, `--load-state`, etc.
 - **singlepass option**: Under `ZEN_ENABLE_EVM` build, `--mode` does not offer `singlepass`
 - **Multipass options**: Only under `ZEN_ENABLE_MULTIPASS_JIT`: `--disable-multipass-greedyra`, `--disable-multipass-multithread`, `--num-multipass-threads`, `--enable-multipass-lazy`, `--enable-evm-gas`, `--entry-hint`
-- **EVM version**: Supports `evmc_revision` from `frontier` to `osaka`; default `EVMC_CANCUN`
+- **EVM version**: Supports `evmc_revision` from `frontier` to `osaka`; default `EVMC_OSAKA`
 
 ## Cross-References
 

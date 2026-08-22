@@ -614,7 +614,7 @@ EVMInstance *getOrCreateInstance(DTVM *VM, EVMModule *Mod, evmc_revision Rev,
       TheInst = *InstRet;
       VM->CachedMainInst = TheInst;
       // Ensure revision is initialized for the first use of cached main
-      // instance; default is DEFAULT_REVISION (CANCUN), which can overcharge
+      // instance; using a default revision here can select the wrong schedule
       // pre-fork blocks if not reset.
       TheInst->resetForNewCall(Rev, *Mod);
     }

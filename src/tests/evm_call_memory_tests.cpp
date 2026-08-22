@@ -4,6 +4,7 @@
 #include "compiler/evm_frontend/evm_imported.h"
 #include "compiler/evm_frontend/evm_mir_compiler.h"
 #include "compiler/mir/module.h"
+#include "runtime/evm_instance.h"
 
 #include "llvm/Support/raw_ostream.h"
 #include <gtest/gtest.h>
@@ -162,6 +163,36 @@ TEST(EVMMirBuilderPreparedMemoryProofTest,
   EXPECT_TRUE(containsRuntimeCall(*RevertMir, RuntimeFunctions.SetRevert));
   EXPECT_FALSE(
       containsRuntimeCall(*RevertMir, RuntimeFunctions.SetRevertNoExpand));
+}
+
+TEST(EVMMirBuilderPreparedMemoryProofTest,
+     ReloadsMemoryBaseBeforeSizeAfterColdCodeCopy) {
+  const std::vector<uint8_t> Bytecode = {
+      OP_PUSH1, 0x20, OP_PUSH0, OP_PUSH1,  0x80,    OP_CODECOPY,
+      OP_PUSH1, 0x01, OP_PUSH0, OP_MSTORE, OP_STOP,
+  };
+  const auto Mir = compileCallMemoryMir(Bytecode);
+  ASSERT_TRUE(Mir.has_value());
+
+  const auto &RuntimeFunctions = COMPILER::getRuntimeFunctionTable();
+  const std::string CodeCopyCall = "target = const.i64 " +
+                                   std::to_string(COMPILER::getFunctionAddress(
+                                       RuntimeFunctions.SetCodeCopy)) +
+                                   ", ";
+  const std::string MemoryBaseLoad =
+      "offset = " +
+      std::to_string(zen::runtime::EVMInstance::getMemoryBaseOffset()) + ")";
+  const std::string MemorySizeLoad =
+      "offset = " +
+      std::to_string(zen::runtime::EVMInstance::getMemorySizeOffset()) + ")";
+
+  const size_t CallPos = Mir->find(CodeCopyCall);
+  ASSERT_NE(CallPos, std::string::npos);
+  const size_t BaseReloadPos = Mir->find(MemoryBaseLoad, CallPos);
+  const size_t SizeReloadPos = Mir->find(MemorySizeLoad, CallPos);
+  ASSERT_NE(BaseReloadPos, std::string::npos);
+  ASSERT_NE(SizeReloadPos, std::string::npos);
+  EXPECT_LT(BaseReloadPos, SizeReloadPos);
 }
 #endif
 

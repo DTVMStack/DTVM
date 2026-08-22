@@ -578,7 +578,7 @@ TEST(EVMRangeAnalyzer, ShrPreservesValueRange) {
 }
 
 TEST(EVMRangeAnalyzer, ClzIsU64InOsaka) {
-  // CLZ is Osaka-gated; default Cancun analysis would treat 0x1e as undefined.
+  // CLZ is Osaka-gated; an explicit pre-Osaka revision treats it as undefined.
   std::vector<uint8_t> Code;
   appendPush(Code, 0x7f, u256MaxLiteralPush32());
   Code.push_back(0x1e); // CLZ

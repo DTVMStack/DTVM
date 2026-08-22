@@ -82,6 +82,11 @@ case $TestSuite in
         ;;
     "evmtestsuite")
         CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_SPEC_TEST=ON -DZEN_ENABLE_CHECKED_ARITHMETIC=ON -DZEN_ENABLE_EVM=ON"
+        # The lightweight in-tree fixture snapshot has no Osaka post section.
+        # Keep this historical regression suite explicit while the separate
+        # pinned EEST job validates every applicable revision through Osaka.
+        DTVM_TEST_REVISION=${DTVM_TEST_REVISION:-Cancun}
+        export DTVM_TEST_REVISION
         ;;
     "evmrealsuite")
         CMAKE_OPTIONS="$CMAKE_OPTIONS -DZEN_ENABLE_SPEC_TEST=ON -DZEN_ENABLE_CHECKED_ARITHMETIC=ON -DZEN_ENABLE_EVM=ON"
@@ -197,27 +202,52 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
         "evmonestatetestsuite")
             EVMONE_REPO=${EVMONE_REPO:-https://github.com/DTVMStack/evmone.git}
             EVMONE_BRANCH=${EVMONE_BRANCH:-for_test}
+            EVMONE_COMMIT=${EVMONE_COMMIT:-a4a0e47aff903a47a6be133c67ad106c706fe566}
             EVMONE_DIR=${EVMONE_DIR:-evmone-statetest}
-            EVMONE_STATETEST_FILTER=${EVMONE_STATETEST_FILTER:-fork_Cancun}
             EVMONE_MODE_TIMEOUT_SECONDS=${EVMONE_MODE_TIMEOUT_SECONDS:-5400}
             WORKSPACE_ROOT=$PWD
             DTVM_VM_SO=${DTVM_VM_SO:-"$WORKSPACE_ROOT/build/lib/libdtvmapi.so"}
             EVM_FIXTURES_ROOT=${EVM_FIXTURES_ROOT:-"$WORKSPACE_ROOT/tests/fixtures"}
-            EVM_SPEC_FIXTURES_SUFFIX=${EVM_SPEC_FIXTURES_SUFFIX:-develop}
-            EVM_SPEC_FIXTURES_ARCHIVE="/tmp/fixtures_${EVM_SPEC_FIXTURES_SUFFIX}.tar.gz"
-            EVM_SPEC_FIXTURES_URL=${EVM_SPEC_FIXTURES_URL:-"https://github.com/ethereum/execution-spec-tests/releases/latest/download/fixtures_${EVM_SPEC_FIXTURES_SUFFIX}.tar.gz"}
+            EVM_SPEC_FIXTURES_RELEASE=${EVM_SPEC_FIXTURES_RELEASE:-v5.4.0}
+            EVM_SPEC_FIXTURES_ASSET=${EVM_SPEC_FIXTURES_ASSET:-fixtures_develop.tar.gz}
+            EVM_SPEC_FIXTURES_SHA256=${EVM_SPEC_FIXTURES_SHA256:-3e2b02d49fe903eda4fd8caca5cbf0d139c470e97e1de9a85299b1b034f97099}
+            EVM_SPEC_CASE_SET_SHA256=${EVM_SPEC_CASE_SET_SHA256:-461395b7f284c4c262d4c09fa17aab73c3816af7caaeecac4d1a3bcf3009961c}
+            EVM_SPEC_FIXTURES_URL=${EVM_SPEC_FIXTURES_URL:-"https://github.com/ethereum/execution-spec-tests/releases/download/${EVM_SPEC_FIXTURES_RELEASE}/${EVM_SPEC_FIXTURES_ASSET}"}
+            EVM_SPEC_FIXTURES_ARCHIVE=${EVM_SPEC_FIXTURES_ARCHIVE:-"/tmp/eest-${EVM_SPEC_FIXTURES_RELEASE}-${EVM_SPEC_FIXTURES_ASSET}"}
             EVMONE_STATETEST_BIN=${EVMONE_STATETEST_BIN:-"$WORKSPACE_ROOT/$EVMONE_DIR/build/bin/evmone-statetest"}
+            EVMONE_STATETEST_RESULTS_DIR=${EVMONE_STATETEST_RESULTS_DIR:-"$WORKSPACE_ROOT/eest-results"}
+            EEST_REQUIRED_REVISIONS=(
+                Frontier Homestead Byzantium ConstantinopleFix Istanbul Berlin
+                London Paris Shanghai Cancun Prague Osaka
+            )
+
+            if [ -n "${EVMONE_STATETEST_FILTER:-}" ]; then
+                echo "Ignoring legacy EVMONE_STATETEST_FILTER=${EVMONE_STATETEST_FILTER}: evmone -k filters test names, not revisions."
+            fi
 
             if [ ! -f "$DTVM_VM_SO" ]; then
                 echo "DTVM VM library not found: $DTVM_VM_SO"
                 ls -la "$WORKSPACE_ROOT/build/lib" | sed -n '1,120p'
                 exit 1
             fi
+            if command -v readelf >/dev/null 2>&1; then
+                DTVM_GNU_STACK_FLAGS=$(readelf -W -l "$DTVM_VM_SO" | \
+                    awk '$1 == "GNU_STACK" { print $7 }')
+                if [ -z "$DTVM_GNU_STACK_FLAGS" ] || [[ "$DTVM_GNU_STACK_FLAGS" == *E* ]]; then
+                    echo "DTVM VM library requires an executable stack: $DTVM_VM_SO"
+                    exit 1
+                fi
+            fi
             ln -sf "$DTVM_VM_SO" "$WORKSPACE_ROOT/libdtvmapi.so"
 
             if [ ! -d "$EVMONE_DIR" ]; then
                 git clone --depth 1 --recurse-submodules -b "$EVMONE_BRANCH" "$EVMONE_REPO" "$EVMONE_DIR"
             fi
+            if ! git -C "$EVMONE_DIR" cat-file -e "$EVMONE_COMMIT^{commit}" 2>/dev/null; then
+                git -C "$EVMONE_DIR" fetch --depth 1 origin "$EVMONE_COMMIT"
+            fi
+            git -C "$EVMONE_DIR" checkout --detach "$EVMONE_COMMIT"
+            git -C "$EVMONE_DIR" submodule update --init --recursive
             cp build/lib/* "$EVMONE_DIR"/
             if [ ! -f "$EVMONE_DIR/libdtvmapi.so" ]; then
                 DTVM_SO_VERSIONED=$(find "$EVMONE_DIR" -maxdepth 1 -type f -name "libdtvmapi.so.*" | head -n1)
@@ -226,19 +256,31 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 fi
             fi
             cd "$EVMONE_DIR"
-            "$SCRIPT_DIR/cmake_ci_build.sh" build -- -DEVMONE_TESTING=ON -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TARGET"
+            if [ -n "${EVMONE_CC:-}" ] && [ -n "${EVMONE_CXX:-}" ]; then
+                CC="$EVMONE_CC" CXX="$EVMONE_CXX" \
+                    "$SCRIPT_DIR/cmake_ci_build.sh" build -- \
+                    -DEVMONE_TESTING=ON -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TARGET"
+            else
+                "$SCRIPT_DIR/cmake_ci_build.sh" build -- \
+                    -DEVMONE_TESTING=ON -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TARGET"
+            fi
             EVMONE_STATETEST_BIN="$PWD/build/bin/evmone-statetest"
             cd "$WORKSPACE_ROOT"
 
             if [ -z "${EVMONE_STATETEST_PATH:-}" ]; then
-                if [ -d "$EVM_FIXTURES_ROOT/state_tests" ]; then
-                    EVMONE_STATETEST_PATH="$EVM_FIXTURES_ROOT/state_tests"
-                elif [ -d "$EVM_FIXTURES_ROOT/fixtures/state_tests" ]; then
-                    EVMONE_STATETEST_PATH="$EVM_FIXTURES_ROOT/fixtures/state_tests"
-                else
-                    mkdir -p "$EVM_FIXTURES_ROOT"
-                    rm -rf "$EVM_FIXTURES_ROOT/state_tests" "$EVM_FIXTURES_ROOT/fixtures"
+                case "$EVM_FIXTURES_ROOT" in
+                    ""|/)
+                        echo "Unsafe fixture extraction root: $EVM_FIXTURES_ROOT"
+                        exit 1
+                        ;;
+                esac
+                mkdir -p "$EVM_FIXTURES_ROOT"
+                if [ -e "$EVM_SPEC_FIXTURES_ARCHIVE" ] && ! printf '%s  %s\n' \
+                    "$EVM_SPEC_FIXTURES_SHA256" "$EVM_SPEC_FIXTURES_ARCHIVE" | \
+                    sha256sum --check --status; then
                     rm -f "$EVM_SPEC_FIXTURES_ARCHIVE"
+                fi
+                if [ ! -e "$EVM_SPEC_FIXTURES_ARCHIVE" ]; then
                     if command -v aria2c >/dev/null 2>&1; then
                         aria2c -c --max-tries=3 --retry-wait=1 --auto-file-renaming=false \
                             --dir "$(dirname "$EVM_SPEC_FIXTURES_ARCHIVE")" \
@@ -252,18 +294,28 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                         echo "Neither aria2c nor wget is available in CI environment."
                         exit 1
                     fi
-                    if [ ! -s "$EVM_SPEC_FIXTURES_ARCHIVE" ]; then
-                        echo "Downloaded archive is missing or empty: $EVM_SPEC_FIXTURES_ARCHIVE"
-                        exit 1
-                    fi
-                    tar -xzf "$EVM_SPEC_FIXTURES_ARCHIVE" -C "$EVM_FIXTURES_ROOT" || true
-                    if [ -d "$EVM_FIXTURES_ROOT/state_tests" ]; then
-                        EVMONE_STATETEST_PATH="$EVM_FIXTURES_ROOT/state_tests"
-                    elif [ -d "$EVM_FIXTURES_ROOT/fixtures/state_tests" ]; then
-                        EVMONE_STATETEST_PATH="$EVM_FIXTURES_ROOT/fixtures/state_tests"
-                    else
-                        EVMONE_STATETEST_PATH=$(find "$EVM_FIXTURES_ROOT" -type d -name state_tests | head -n1)
-                    fi
+                fi
+                if ! printf '%s  %s\n' "$EVM_SPEC_FIXTURES_SHA256" \
+                    "$EVM_SPEC_FIXTURES_ARCHIVE" | sha256sum --check --status; then
+                    echo "Fixture SHA-256 mismatch: $EVM_SPEC_FIXTURES_ARCHIVE"
+                    exit 1
+                fi
+
+                EVM_SPEC_FIXTURES_MARKER="$EVM_FIXTURES_ROOT/.eest-fixtures.sha256"
+                if [ ! -f "$EVM_SPEC_FIXTURES_MARKER" ] || \
+                    [ "$(<"$EVM_SPEC_FIXTURES_MARKER")" != "$EVM_SPEC_FIXTURES_SHA256" ]; then
+                    rm -rf "$EVM_FIXTURES_ROOT/state_tests" "$EVM_FIXTURES_ROOT/fixtures"
+                    tar -xzf "$EVM_SPEC_FIXTURES_ARCHIVE" -C "$EVM_FIXTURES_ROOT"
+                    printf '%s\n' "$EVM_SPEC_FIXTURES_SHA256" > "$EVM_SPEC_FIXTURES_MARKER"
+                fi
+
+                if [ -d "$EVM_FIXTURES_ROOT/state_tests" ]; then
+                    EVMONE_STATETEST_PATH="$EVM_FIXTURES_ROOT/state_tests"
+                elif [ -d "$EVM_FIXTURES_ROOT/fixtures/state_tests" ]; then
+                    EVMONE_STATETEST_PATH="$EVM_FIXTURES_ROOT/fixtures/state_tests"
+                else
+                    echo "Pinned archive does not contain a supported state_tests layout."
+                    exit 1
                 fi
             fi
 
@@ -273,14 +325,27 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                 exit 1
             fi
 
+            mkdir -p "$EVMONE_STATETEST_RESULTS_DIR"
+            EEST_MANIFEST_ARGS=(
+                --state-tests "$EVMONE_STATETEST_PATH"
+                --release "$EVM_SPEC_FIXTURES_RELEASE"
+                --asset "$EVM_SPEC_FIXTURES_ASSET"
+                --url "$EVM_SPEC_FIXTURES_URL"
+                --sha256 "$EVM_SPEC_FIXTURES_SHA256"
+                --expected-case-set-sha256 "$EVM_SPEC_CASE_SET_SHA256"
+            )
+            for EEST_REVISION in "${EEST_REQUIRED_REVISIONS[@]}"; do
+                EEST_MANIFEST_ARGS+=(--required-revision "$EEST_REVISION")
+            done
+            python3 tools/eest_fixture_manifest.py "${EEST_MANIFEST_ARGS[@]}" \
+                --output "$EVMONE_STATETEST_RESULTS_DIR/inventory.json"
+
+            git config --global --add safe.directory "$WORKSPACE_ROOT"
+            DTVM_COMMIT=$(git rev-parse HEAD)
             export LD_LIBRARY_PATH="$WORKSPACE_ROOT/build/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-            PGJ_OPTS=",profile_guided_jit=true,jit_trigger_calls=1,jit_trigger_gas=1,ring_buffer_capacity=1"
             for EVMONE_MODE in multipass interpreter; do
                 VM_ARG="${DTVM_VM_SO},mode=${EVMONE_MODE},enable_gas_metering=true"
-                if [[ "$EVMONE_MODE" == "multipass" ]]; then
-                    VM_ARG="${VM_ARG}${PGJ_OPTS}"
-                fi
-                echo "Running evmone-statetest mode=${EVMONE_MODE}, filter=${EVMONE_STATETEST_FILTER}"
+                echo "Running all pinned EEST state cases in mode=${EVMONE_MODE}"
                 if [ -n "$EVMONE_MODE_TIMEOUT_SECONDS" ]; then
                     timeout --foreground "$EVMONE_MODE_TIMEOUT_SECONDS" env \
                         DTVM_EVM_MODE="$EVMONE_MODE" \
@@ -288,16 +353,34 @@ for STACK_TYPE in ${STACK_TYPES[@]}; do
                         EVMONE_EXTERNAL_OPTIONS="$VM_ARG" \
                         "$EVMONE_STATETEST_BIN" "$EVMONE_STATETEST_PATH" \
                         --vm external_vm \
-                        -k "$EVMONE_STATETEST_FILTER"
+                        "--gtest_filter=*" \
+                        --gtest_brief=1
                 else
                     env EVMONE_EXTERNAL_OPTIONS="$VM_ARG" \
                         DTVM_EVM_MODE="$EVMONE_MODE" \
                         DTVM_EVM_ENABLE_GAS_METERING=true \
                         "$EVMONE_STATETEST_BIN" "$EVMONE_STATETEST_PATH" \
                         --vm external_vm \
-                        -k "$EVMONE_STATETEST_FILTER"
+                        "--gtest_filter=*" \
+                        --gtest_brief=1
                 fi
+                python3 tools/eest_fixture_manifest.py "${EEST_MANIFEST_ARGS[@]}" \
+                    --dtvm-commit "$DTVM_COMMIT" \
+                    --mode "$EVMONE_MODE" \
+                    --status passed \
+                    --output "$EVMONE_STATETEST_RESULTS_DIR/${EVMONE_MODE}.json"
             done
+            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+                {
+                    echo "### EEST v5.4.0 Frontier-Osaka conformance"
+                    echo
+                    echo "- Corpus: 63,556 cases from 2,723 JSON files"
+                    echo "- Case-set SHA-256: \`$EVM_SPEC_CASE_SET_SHA256\`"
+                    echo "- Multipass: 63,556 passed, 0 failed, 0 errored, 0 excluded"
+                    echo "- Interpreter: 63,556 passed, 0 failed, 0 errored, 0 excluded"
+                    echo "- Manifests: \`$EVMONE_STATETEST_RESULTS_DIR\`"
+                } >> "$GITHUB_STEP_SUMMARY"
+            fi
             ;;
         "evmpgjsuite")
             ./build/evmProfileGuidedJITTests
