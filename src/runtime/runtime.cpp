@@ -930,6 +930,10 @@ void Runtime::callWasmFunctionInJITMode(Instance &Inst, uint32_t FuncIdx,
 }
 
 #ifdef ZEN_ENABLE_EVM
+/// Size of the unmapped low address range. A faulting address below this is a
+/// null pointer plus a small offset, never a real allocation.
+static constexpr uintptr_t NullPointerPageSize = 4096;
+
 void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
                                evmc::Result &Result) {
   EVMModule *Module = const_cast<EVMModule *>(Inst.getModule());
@@ -996,6 +1000,20 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
       switch (JmpSignum) {
       case SIGSEGV:
       case SIGBUS: {
+        // A fault in the first page is a null-pointer dereference inside
+        // compiled code, not an EVM memory access: EVM memory is a heap buffer
+        // and is never mapped at page zero. Reporting it as an out-of-bounds
+        // access laundered an engine defect into a consensus-visible halt,
+        // which is how one stayed hidden - the caller saw a plausible
+        // EVMC_INVALID_MEMORY_ACCESS and carried on with the wrong gas. Report
+        // an internal error so the embedder fails loudly instead. This branch
+        // should be unreachable; it is a tripwire, not a recovery path.
+        if (reinterpret_cast<uintptr_t>(TLS.getTrapState().FaultingAddress) <
+            NullPointerPageSize) {
+          CapturedTapErrCode = ErrorCode::EVMNullPointerDereference;
+          StatusCode = EVMC_INTERNAL_ERROR;
+          break;
+        }
         // out of bounds signal
         CapturedTapErrCode = ErrorCode::OutOfBoundsMemory;
         StatusCode = EVMC_INVALID_MEMORY_ACCESS;

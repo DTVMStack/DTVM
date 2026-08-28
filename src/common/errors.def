@@ -180,6 +180,11 @@ DEFINE_ERROR(Execution,     None,   EVMTooLargeRequiredMemory, "EVM Required Mem
 // EVM Error: About Storage
 DEFINE_ERROR(Execution,     None,   EVMStaticModeViolation, "Prohibit modification of the storage")
 
+// EVM Error: a null-pointer dereference inside compiled code. Not an EVM
+// condition - EVM memory is a heap buffer that is never mapped at page zero -
+// so this is an engine defect and must not be reported as an EVM halt.
+DEFINE_ERROR(Execution,     None,   EVMNullPointerDereference, "null pointer dereference in compiled code")
+
 // EVM Error: About JIT compilation invariants
 DEFINE_ERROR(Compilation,   None,   EVMDynamicJumpConsistencyFailed, "analyzer and codegen disagree on dynamic-jump dispatch")
 
