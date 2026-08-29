@@ -1068,9 +1068,9 @@ private:
           Info.getType(), Operand(Info.getType(), Reg, Operand::FLAG_NONE),
           Opnd);
       if (Kind == WASMTypeKind::INTEGER) {
-        ZEN_ASSERT(GpRegUsed |= (1 << Reg));
+        GpRegUsed |= (1 << Reg);
       } else {
-        ZEN_ASSERT(FpRegUsed |= (1 << Reg));
+        FpRegUsed |= (1 << Reg);
       }
     } else {
       ZEN_ASSERT(Info.getOffset() < StackOffset);
