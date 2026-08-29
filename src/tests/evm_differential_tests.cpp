@@ -284,6 +284,51 @@ TEST(EVMPreparedCopyFallbackDifferential,
   EXPECT_EQ(Output, "60045F5F");
 }
 
+TEST(EVMMemoryBaseCacheDifferential,
+     HelperGrownMemoryIsAddressableFromALaterBlock) {
+  // The JIT caches the EVM memory base and size in function-entry locals. A
+  // frame starts with a null base, because EVM memory is allocated lazily on
+  // the frame's first growth, and the expansion branch is the only place the
+  // base cache is refreshed.
+  //
+  // Here the first growth happens inside the CALLDATACOPY runtime helper - a
+  // dynamic copy length keeps it on the generic, memory-growing helper rather
+  // than a prepared one - so the helper performs the lazy allocation and moves
+  // the instance's base off null. The two constant-offset stores in the next
+  // block share one block precheck, whose expansion is already satisfied by
+  // the reloaded size, so they address memory through the cached base without
+  // taking the expansion branch. If that cache was not refreshed alongside the
+  // size it still holds the entry-time null and the stores dereference it.
+  const std::vector<uint8_t> Bytecode = {
+      0x36,       // PC0:  CALLDATASIZE, dynamic copy length
+      0x5f,       // PC1:  PUSH0 calldata offset
+      0x5f,       // PC2:  PUSH0 destination offset
+      0x37,       // PC3:  CALLDATACOPY, grows memory inside the helper
+      0x60, 0x08, // PC4:  PUSH1 successor
+      0x56,       // PC6:  JUMP
+      0x5b,       // PC7:  unreachable padding
+      0x5b,       // PC8:  JUMPDEST
+      0x60, 0x01, // PC9:  PUSH1 1
+      0x5f,       // PC11: PUSH0 store offset
+      0x52,       // PC12: MSTORE through the cached base
+      0x60, 0x02, // PC13: PUSH1 2
+      0x60, 0x20, // PC15: PUSH1 store offset
+      0x52,       // PC17: MSTORE, second op sharing the block precheck
+      0x60, 0x40, // PC18: PUSH1 return length
+      0x5f,       // PC20: PUSH0 return offset
+      0xf3,       // PC21: RETURN
+  };
+  // 64 bytes of calldata, so the helper grows memory to exactly the 64 bytes
+  // the two stores need and the block precheck finds nothing left to expand.
+  const std::vector<uint8_t> CallData(64, 0xab);
+
+  const auto Output = expectInterpMatchesMultipassWithGas(
+      "memory_base_cache_after_helper_growth", Bytecode, CallData);
+  EXPECT_EQ(Output,
+            "0000000000000000000000000000000000000000000000000000000000000001"
+            "0000000000000000000000000000000000000000000000000000000000000002");
+}
+
 TEST(EVMKeccakMemoryProofDifferential,
      CrossBlockProofReusePreservesHashAndGas) {
   const std::vector<uint8_t> Bytecode = {

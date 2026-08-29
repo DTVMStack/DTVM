@@ -1889,7 +1889,12 @@ private:
   MInstruction *getConstBlockDirectMemoryBasePtr();
   MInstruction *getLargeStaticWorkspaceDirectMemoryBasePtr();
   MInstruction *getMemorySize();
-  void reloadMemorySizeFromInstance();
+  // Refresh the cached EVM memory base from the instance. Callers must keep
+  // this paired with the cached size: the two are one snapshot of the frame's
+  // memory, and refreshing either alone lets generated code combine a fresh
+  // size with a stale base.
+  void reloadMemoryBaseFromInstance();
+  void reloadMemoryCachesFromInstance();
   void expandMemoryIR(MInstruction *RequiredSize, MInstruction *Overflow);
   void chargeWordCopyGasIR(MInstruction *Size);
   void chargeDynamicGasIR(MInstruction *GasCost);
