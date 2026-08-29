@@ -296,6 +296,42 @@ const uint8_t *skipCurrentBlock(const uint8_t *Ip, const uint8_t *End) {
     case I64_EXTEND32_S:
       break;
 
+#ifdef ZEN_ENABLE_BULK_MEMORY
+    case WASM_PREFIX_FC: { // Bulk memory operations prefix
+      uint32_t SubOpcode;
+      Ip = readLEBNumber(Ip, End, SubOpcode);
+      switch (SubOpcode) {
+      case FC_MEMORY_INIT: // memory.init: dataidx(LEB) + memidx(1 byte)
+        Ip = skipLEBNumber<uint32_t>(Ip, End);
+        Ip++; // skip memidx
+        break;
+      case FC_DATA_DROP: // data.drop: dataidx(LEB)
+        Ip = skipLEBNumber<uint32_t>(Ip, End);
+        break;
+      case FC_MEMORY_COPY: // memory.copy: 2 bytes
+        Ip += 2;
+        break;
+      case FC_MEMORY_FILL: // memory.fill: 1 byte
+        Ip++;
+        break;
+      case FC_TABLE_INIT: // table.init: elemidx(LEB) + tableidx(LEB)
+        Ip = skipLEBNumber<uint32_t>(Ip, End);
+        Ip = skipLEBNumber<uint32_t>(Ip, End);
+        break;
+      case FC_ELEM_DROP: // elem.drop: elemidx(LEB)
+        Ip = skipLEBNumber<uint32_t>(Ip, End);
+        break;
+      case FC_TABLE_COPY: // table.copy: dst_tableidx(LEB) + src_tableidx(LEB)
+        Ip = skipLEBNumber<uint32_t>(Ip, End);
+        Ip = skipLEBNumber<uint32_t>(Ip, End);
+        break;
+      default:
+        break;
+      }
+      break;
+    }
+#endif
+
     } // switch opcode
   }   // while ip < end
   return nullptr;

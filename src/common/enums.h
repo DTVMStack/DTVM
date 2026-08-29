@@ -46,6 +46,21 @@ enum Opcode {
 #undef DEFINE_WASM_OPCODE
 }; // Opcode
 
+// Multi-byte opcode prefix
+constexpr uint8_t WASM_PREFIX_FC = 0xFC;
+
+// 0xFC sub-opcodes for bulk memory operations
+// Note: These are always defined to allow code to compile even when
+// ZEN_ENABLE_BULK_MEMORY is disabled. Runtime checks ensure these
+// opcodes are properly rejected when the feature is disabled.
+constexpr uint8_t FC_MEMORY_INIT = 0x08;
+constexpr uint8_t FC_DATA_DROP = 0x09;
+constexpr uint8_t FC_MEMORY_COPY = 0x0A;
+constexpr uint8_t FC_MEMORY_FILL = 0x0B;
+constexpr uint8_t FC_TABLE_INIT = 0x0C;
+constexpr uint8_t FC_ELEM_DROP = 0x0D;
+constexpr uint8_t FC_TABLE_COPY = 0x0E;
+
 enum LabelType {
   LABEL_BLOCK,
   LABEL_LOOP,

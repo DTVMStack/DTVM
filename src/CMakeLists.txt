@@ -17,6 +17,10 @@ if(ZEN_ENABLE_BUILTIN_WASI)
   add_definitions(-DZEN_ENABLE_BUILTIN_WASI)
 endif()
 
+if(ZEN_ENABLE_BULK_MEMORY)
+  add_definitions(-DZEN_ENABLE_BULK_MEMORY)
+endif()
+
 if(ZEN_ENABLE_BUILTIN_ENV)
   add_definitions(-DZEN_ENABLE_BUILTIN_ENV)
 endif()

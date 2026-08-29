@@ -240,6 +240,9 @@ struct ElemEntry {
   InitExpr InitExprVal;
   uint32_t NumFuncIdxs;
   uint32_t *FuncIdxs;
+#ifdef ZEN_ENABLE_BULK_MEMORY
+  uint8_t Mode; // 0=active, 1=passive, 2=declarative
+#endif
 };
 
 struct CodeEntry {
@@ -268,6 +271,9 @@ struct DataEntry {
   uint32_t Offset;
   uint8_t InitExprKind;
   InitExpr InitExprVal;
+#ifdef ZEN_ENABLE_BULK_MEMORY
+  uint8_t Mode; // 0=active, 1=passive
+#endif
 };
 
 class Module final : public BaseModule<Module> {
@@ -382,6 +388,8 @@ public:
 
   uint32_t getNumDataSegments() const { return NumDataSegments; }
 
+  uint32_t getNumElementSegments() const { return NumElementSegments; }
+
   // ==================== Validating Methods ====================
 
   bool isValidType(uint32_t TypeIdx) const { return TypeIdx < NumTypes; }
@@ -404,6 +412,17 @@ public:
 
   bool isValidGlobal(uint32_t GlobalIdx) const {
     return GlobalIdx < getNumTotalGlobals();
+  }
+
+  bool isValidDataSegment(uint32_t DataIdx) const {
+    // During code validation, NumDataSegments may not be set yet
+    // (Data section comes after Code section), so use DataCount if available
+    uint32_t Count = (DataCount != -1u) ? DataCount : NumDataSegments;
+    return DataIdx < Count;
+  }
+
+  bool isValidElemSegment(uint32_t ElemIdx) const {
+    return ElemIdx < NumElementSegments;
   }
 
   // ==================== Segment Accessing Methods ====================
@@ -461,6 +480,11 @@ public:
   DataEntry *getDataEntry(uint32_t DataSegIdx) const {
     ZEN_ASSERT(DataSegIdx < NumDataSegments);
     return DataTable + DataSegIdx;
+  }
+
+  ElemEntry *getElemEntry(uint32_t ElemSegIdx) const {
+    ZEN_ASSERT(ElemSegIdx < NumElementSegments);
+    return ElementTable + ElemSegIdx;
   }
 
   // ==================== Layout Methods ====================

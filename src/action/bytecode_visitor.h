@@ -742,6 +742,52 @@ private:
         handleIntExtend<WASMType::I64, WASMType::I32, true>();
         break;
 
+      case common::WASM_PREFIX_FC: { // Bulk memory operations prefix
+#ifdef ZEN_ENABLE_BULK_MEMORY
+        uint32_t SubOpcode;
+        Ip = readSafeLEBNumber(Ip, SubOpcode);
+        // Skip operands based on sub-opcode
+        switch (SubOpcode) {
+        case common::FC_MEMORY_INIT: // memory.init: dataidx(LEB) + memidx(1
+                                     // byte)
+          Ip = utils::skipLEBNumber<uint32_t>(Ip, IpEnd);
+          Ip++; // skip memidx
+          break;
+        case common::FC_DATA_DROP: // data.drop: dataidx(LEB)
+          Ip = utils::skipLEBNumber<uint32_t>(Ip, IpEnd);
+          break;
+        case common::FC_MEMORY_COPY: // memory.copy: 2 bytes
+          Ip += 2;
+          break;
+        case common::FC_MEMORY_FILL: // memory.fill: 1 byte
+          Ip++;
+          break;
+        case common::FC_TABLE_INIT: // table.init: elemidx(LEB) + tableidx(LEB)
+          Ip = utils::skipLEBNumber<uint32_t>(Ip, IpEnd);
+          Ip = utils::skipLEBNumber<uint32_t>(Ip, IpEnd);
+          break;
+        case common::FC_ELEM_DROP: // elem.drop: elemidx(LEB)
+          Ip = utils::skipLEBNumber<uint32_t>(Ip, IpEnd);
+          break;
+        case common::FC_TABLE_COPY: // table.copy: dst_tableidx(LEB) +
+                                    // src_tableidx(LEB)
+          Ip = utils::skipLEBNumber<uint32_t>(Ip, IpEnd);
+          Ip = utils::skipLEBNumber<uint32_t>(Ip, IpEnd);
+          break;
+        default:
+          break;
+        }
+        throw getErrorWithExtraMessage(
+            ErrorCode::UnsupportedOpcode,
+            "bulk memory operations not supported in JIT mode");
+#else
+        throw getErrorWithExtraMessage(
+            ErrorCode::UnsupportedOpcode,
+            "bulk memory operations not enabled (compile with "
+            "ZEN_ENABLE_BULK_MEMORY=ON)");
+#endif
+      }
+
       default:
         throw getErrorWithExtraMessage(ErrorCode::UnsupportedOpcode,
                                        std::to_string(Opcode));

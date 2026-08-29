@@ -76,6 +76,7 @@ jobs:
           export TestSuite=microsuite
           export CPU_EXCEPTION_TYPE='check'
           export ENABLE_GAS_METER=false
+          export ENABLE_BULK_MEMORY=true
 
           bash .ci/run_test_suite.sh
 
