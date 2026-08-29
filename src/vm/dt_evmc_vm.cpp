@@ -6,6 +6,7 @@
 #include "common/enums.h"
 #include "common/errors.h"
 #include "compiler/evm_frontend/evm_analyzer.h"
+#include "evm/evm.h"
 #include "evm/interpreter.h"
 #include "evm/opcode_handlers.h"
 #include "jit_profile.h"
@@ -691,7 +692,7 @@ evmc_result runInterpreterOnResolvedInstance(DTVM *VM, EVMModule *Mod,
 
   evmc::Result Result =
       std::move(const_cast<evmc::Result &>(Ctx.getExeResult()));
-  Result.gas_left = TheInst->getGas();
+  zen::evm::setFrameGasLeft(Result, TheInst->getGas());
 
   return Result.release_raw();
 }
@@ -985,7 +986,7 @@ evmc_result execute(evmc_vm *EVMInstance, const evmc_host_interface *Host,
     VM->RT->callEVMInJITMode(*TheInst, MsgWithCode, Result);
 #endif // ZEN_ENABLE_VIRTUAL_STACK
 
-    Result.gas_left = TheInst->getGas();
+    zen::evm::setFrameGasLeft(Result, TheInst->getGas());
     return Result.release_raw();
   }
 #else

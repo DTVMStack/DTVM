@@ -49,6 +49,23 @@ constexpr auto MAX_SIZE_OF_INITCODE = 0xC000;
 /// code.
 static constexpr auto EMPTY_CODE_HASH =
     0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470_bytes32;
+
+/// Store the gas a finished frame hands back to its caller, applying the EVM's
+/// terminal gas rule: an exceptional halt consumes all of the frame's gas, and
+/// only a success or a revert returns any.
+///
+/// This must be the last write to `Result.gas_left`. The instance's own gas
+/// counter is not authoritative once a frame has halted - the interpreter
+/// zeroes the frame's gas rather than the instance's, and the JIT trap path
+/// never touches either - so assigning `Instance::getGas()` unconditionally
+/// hands the caller gas the EVM has already burned. evmone applies the same
+/// rule in `make_execution_result`.
+inline void setFrameGasLeft(evmc::Result &Result, uint64_t InstanceGas) {
+  const bool KeepsGas =
+      Result.status_code == EVMC_SUCCESS || Result.status_code == EVMC_REVERT;
+  Result.gas_left = KeepsGas ? static_cast<int64_t>(InstanceGas) : 0;
+}
+
 } // namespace zen::evm
 
 #endif // ZEN_EVM_GAS_EVM_H

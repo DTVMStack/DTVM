@@ -785,7 +785,7 @@ void Runtime::callEVMMainOnPhysStack(EVMInstance &Inst, evmc_message &Msg,
   } else {
     callEVMInInterpMode(Inst, MsgWithCode, Result);
   }
-  Result.gas_left = Inst.getGas();
+  zen::evm::setFrameGasLeft(Result, Inst.getGas());
 }
 
 void Runtime::callEVMMain(EVMInstance &Inst, evmc_message &Msg,
