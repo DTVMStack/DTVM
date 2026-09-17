@@ -1,0 +1,22 @@
+ZetaEngine Command Line Interface
+
+Usage: dtvm [OPTIONS] WASM_FILE
+
+Positionals:
+  WASM_FILE TEXT REQUIRED     WASM filename
+
+Options:
+  -h,--help                   Print this help message and exit
+  -m,--mode ENUM:value in {multipass->2,singlepass->1,interpreter->0} OR {2,1,0}
+                              Running mode
+  -f,--function TEXT          Entry function name
+  --args TEXT ...             Entry function args
+  --env TEXT ...              Environment variables
+  --dir TEXT ...              Work directories
+  --gas-limit UINT            Gas limit
+  --log-level ENUM:value in {off->6,fatal->5,error->4,info->2,warn->3,debug->1,trace->0} OR {6,5,4,2,3,1,0}
+                              Log level
+  --num-extra-compilations UINT
+                              The number of extra compilations
+commit=882c83155
+build_dir=/path/to/DTVM_paper_882c83155/build_paper

@@ -47,3 +47,18 @@ bazel-testlogs
 .claude/*
 !.claude/skills/
 !.claude/skills/**
+
+# Paper reproduction (benchmarks/paper) generated artifacts
+benchmarks/paper/runtimes/*/build/
+benchmarks/paper/runtimes/*/out/
+benchmarks/paper/runtimes/dtvm/dtvm
+benchmarks/paper/runtimes/dtvm/CMakeCache.txt
+benchmarks/paper/runtimes/dtvm_main/dtvm
+benchmarks/paper/runtimes/dtvm_main/CMakeCache.txt
+benchmarks/paper/raw_data/
+benchmarks/paper/scripts/webassembly-testsuites/case/
+benchmarks/paper/**/.DS_Store
+
+# benchmarks/paper python artifacts
+benchmarks/paper/**/__pycache__/
+benchmarks/paper/**/*.pyc

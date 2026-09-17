@@ -1,0 +1,163 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 1894881..262dca5 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -434,6 +434,9 @@ default = [
+   # feature.
+   "clap/default",
+   "clap/wrap_help",
++
++  # WAPM paper TTFI stdout (Total compilation time / Execution N)
++  "ttfi-report",
+ ]
+ 
+ # ========================================
+@@ -506,6 +509,7 @@ run = [
+   "wasmtime-cli-flags/async",
+ ]
+ completion = ["dep:clap_complete"]
++ttfi-report = []
+ 
+ [[test]]
+ name = "disas"
+diff --git a/src/commands/run.rs b/src/commands/run.rs
+index 7baa4a3..3d347ee 100644
+--- a/src/commands/run.rs
++++ b/src/commands/run.rs
+@@ -13,6 +13,8 @@ use std::ffi::OsString;
+ use std::path::{Path, PathBuf};
+ use std::sync::{Arc, Mutex};
+ use std::thread;
++#[cfg(feature = "ttfi-report")]
++use std::time::Instant;
+ use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
+ use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
+ use wasmtime_wasi::{IoView, WasiView};
+@@ -429,6 +431,8 @@ impl RunCommand {
+         let result = match linker {
+             CliLinker::Core(linker) => {
+                 let module = module.unwrap_core();
++                #[cfg(feature = "ttfi-report")]
++                let exec_start = Instant::now();
+                 let instance = linker
+                     .instantiate_async(&mut *store, &module)
+                     .await
+@@ -459,10 +463,13 @@ impl RunCommand {
+                         .or_else(|| instance.get_func(&mut *store, "_start"))
+                 };
+ 
+-                match func {
++                let run_result = match func {
+                     Some(func) => self.invoke_func(store, func).await,
+                     None => Ok(()),
+-                }
++                };
++                #[cfg(feature = "ttfi-report")]
++                crate::ttfi_report::report_execution(exec_start.elapsed());
++                run_result
+             }
+             #[cfg(feature = "component-model")]
+             CliLinker::Component(linker) => {
+diff --git a/src/common.rs b/src/common.rs
+index f9275e2..13d39c6 100644
+--- a/src/common.rs
++++ b/src/common.rs
+@@ -3,6 +3,7 @@
+ use anyhow::{anyhow, bail, Context, Result};
+ use clap::Parser;
+ use std::net::TcpListener;
++use std::time::Instant;
+ use std::{fs::File, path::Path, time::Duration};
+ use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
+ use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
+@@ -181,15 +182,21 @@ impl RunCommon {
+         // which isn't ready to happen at this time). It's hoped though that
+         // opening a file twice isn't too bad in the grand scheme of things with
+         // respect to the CLI.
++        #[cfg(feature = "ttfi-report")]
++        let mmap_start = Instant::now();
+         match wasmtime::_internal::MmapVec::from_file(file) {
+-            Ok(map) => self.load_module_contents(
++            Ok(map) => {
++                #[cfg(feature = "ttfi-report")]
++                crate::ttfi_report::report_mmap(mmap_start.elapsed());
++                self.load_module_contents(
+                 engine,
+                 path,
+                 &map,
+                 || unsafe { Module::deserialize_file(engine, path) },
+                 #[cfg(feature = "component-model")]
+                 || unsafe { Component::deserialize_file(engine, path) },
+-            ),
++                )
++            }
+             Err(_) => {
+                 let bytes = std::fs::read(path)
+                     .with_context(|| format!("failed to read file: {}", path.display()))?;
+@@ -245,7 +252,14 @@ impl RunCommon {
+                         }
+                     }
+                     Some(wasmtime::CodeHint::Module) | None => {
+-                        RunTarget::Core(code.compile_module()?)
++                        #[cfg(feature = "ttfi-report")]
++                        let compile_start = Instant::now();
++                        let module = code.compile_module()?;
++                        #[cfg(feature = "ttfi-report")]
++                        crate::ttfi_report::report_compile_time(compile_start.elapsed());
++                        #[cfg(not(feature = "ttfi-report"))]
++                        let module = code.compile_module()?;
++                        RunTarget::Core(module)
+                     }
+                 }
+             }
+diff --git a/src/lib.rs b/src/lib.rs
+index 296c75d..f1ee4db 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -8,3 +8,6 @@ pub mod commands;
+ 
+ #[cfg(feature = "run")]
+ pub(crate) mod common;
++
++#[cfg(feature = "ttfi-report")]
++pub(crate) mod ttfi_report;
+diff --git a/src/ttfi_report.rs b/src/ttfi_report.rs
+new file mode 100644
+index 0000000..3dc5ce1
+--- /dev/null
++++ b/src/ttfi_report.rs
+@@ -0,0 +1,34 @@
++//! WAPM paper-style Time-to-First-Invocation reporting on stdout.
++//!
++//! Enabled with the `ttfi-report` crate feature (on by default in dtvm paper builds).
++
++use std::sync::atomic::{AtomicUsize, Ordering};
++use std::time::Duration;
++
++static EXEC_COUNT: AtomicUsize = AtomicUsize::new(0);
++
++/// Reset per-process execution counter (optional; new process starts at 0).
++pub fn reset_execution_count() {
++    EXEC_COUNT.store(0, Ordering::Relaxed);
++}
++
++pub fn report_mmap(elapsed: Duration) {
++    let us = elapsed.as_micros();
++    println!(
++        "Creating mmap for file took: {:.3}µs",
++        us as f64 / 1000.0
++    );
++    println!("mmap success:");
++}
++
++pub fn report_compile_time(elapsed: Duration) {
++    let us = elapsed.as_micros();
++    let ms = us / 1000;
++    println!("Total compilation time: {} ms ({} µs)", ms, us);
++}
++
++pub fn report_execution(elapsed: Duration) {
++    let n = EXEC_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
++    let ms = elapsed.as_secs_f64() * 1000.0;
++    println!("Execution {}: {:.3} ms", n, ms);
++}

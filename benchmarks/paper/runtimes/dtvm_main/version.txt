@@ -1,0 +1,1 @@
+c3c3fd856d693d33be05ba25c5e6969a58be7e1f 2026-05-29 07:22:34 +0000 perf: commute two-address operands and fix branch peephole for 30% fib speedup
