@@ -6106,9 +6106,10 @@ EVMMirBuilder::handleKeccak256(Operand OffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
-  if (!UsePreparedMemory) {
-    reloadMemorySizeFromInstance();
-  }
+  // Constant KECCAK ranges are executed by a no-expand helper, but the helper
+  // may still grow the instance memory on first use.  Keep the cached base
+  // pointer/size in sync before lowering the next direct memory operation.
+  reloadMemorySizeFromInstance();
   return Result;
 }
 
@@ -6138,9 +6139,10 @@ EVMMirBuilder::handleKeccak256TwoWord(Operand OffsetComponents, Operand Word0,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
-  if (!UsePreparedMemory) {
-    reloadMemorySizeFromInstance();
-  }
+  // The no-expand helper may still grow the instance memory on first use
+  // (see handleKeccak256).  Keep the cached base pointer/size in sync before
+  // lowering the next direct memory operation.
+  reloadMemorySizeFromInstance();
   return Result;
 }
 
@@ -6171,9 +6173,10 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleKeccak256CallDataConstSlot(
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
-  if (!UsePreparedMemory) {
-    reloadMemorySizeFromInstance();
-  }
+  // The no-expand helper may still grow the instance memory on first use
+  // (see handleKeccak256).  Keep the cached base pointer/size in sync before
+  // lowering the next direct memory operation.
+  reloadMemorySizeFromInstance();
   return Result;
 }
 
@@ -6203,9 +6206,10 @@ EVMMirBuilder::handleKeccak256CallerConstSlot(Operand OffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
-  if (!UsePreparedMemory) {
-    reloadMemorySizeFromInstance();
-  }
+  // The no-expand helper may still grow the instance memory on first use
+  // (see handleKeccak256).  Keep the cached base pointer/size in sync before
+  // lowering the next direct memory operation.
+  reloadMemorySizeFromInstance();
   return Result;
 }
 

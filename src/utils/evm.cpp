@@ -329,204 +329,223 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
     return false;
   }
 
-  Host.accounts.clear();
+  // Parse into temporary storage first so failures cannot partially mutate the
+  // caller-supplied host. Start from the caller's tx_context so a state file
+  // without tx_context (or with missing fields) keeps the values the caller
+  // already established (e.g. tx_origin from the CLI --sender); fields present
+  // in the JSON are overlaid on top of it.
+  evmc::MockedHost ParsedHost;
+  ParsedHost.accounts.clear();
+  ParsedHost.tx_context = Host.tx_context;
 
-  // Parse accounts
-  if (Doc.HasMember("accounts") && Doc["accounts"].IsObject()) {
-    const rapidjson::Value &Accounts = Doc["accounts"];
+  try {
+    // Parse accounts
+    if (Doc.HasMember("accounts") && Doc["accounts"].IsObject()) {
+      const rapidjson::Value &Accounts = Doc["accounts"];
 
-    for (auto It = Accounts.MemberBegin(); It != Accounts.MemberEnd(); ++It) {
-      const std::string AddressStr = It->name.GetString();
-      evmc::address Address = zen::utils::parseAddress(AddressStr);
+      for (auto It = Accounts.MemberBegin(); It != Accounts.MemberEnd(); ++It) {
+        const std::string AddressStr = It->name.GetString();
+        evmc::address Address = zen::utils::parseAddress(AddressStr);
 
-      const rapidjson::Value &AccountData = It->value;
-      evmc::MockedAccount Account;
+        const rapidjson::Value &AccountData = It->value;
+        evmc::MockedAccount &Account = ParsedHost.accounts[Address];
 
-      // Parse balance
-      if (AccountData.HasMember("balance") &&
-          AccountData["balance"].IsString()) {
-        Account.balance =
-            zen::utils::parseUint256(AccountData["balance"].GetString());
-      }
+        // Parse balance
+        if (AccountData.HasMember("balance") &&
+            AccountData["balance"].IsString()) {
+          Account.balance =
+              zen::utils::parseUint256(AccountData["balance"].GetString());
+        }
 
-      // Parse nonce
-      if (AccountData.HasMember("nonce") && AccountData["nonce"].IsUint64()) {
-        Account.nonce = AccountData["nonce"].GetUint64();
-      } else if (AccountData.HasMember("nonce") &&
-                 AccountData["nonce"].IsString()) {
-        std::string NonceStr =
-            zen::utils::stripHexPrefix(AccountData["nonce"].GetString());
-        Account.nonce = std::stoull(NonceStr, nullptr, 16);
-      }
+        // Parse nonce
+        if (AccountData.HasMember("nonce") && AccountData["nonce"].IsUint64()) {
+          Account.nonce = AccountData["nonce"].GetUint64();
+        } else if (AccountData.HasMember("nonce") &&
+                   AccountData["nonce"].IsString()) {
+          std::string NonceStr =
+              zen::utils::stripHexPrefix(AccountData["nonce"].GetString());
+          Account.nonce = std::stoull(NonceStr, nullptr, 16);
+        }
 
-      // Parse code
-      if (AccountData.HasMember("code") && AccountData["code"].IsString()) {
-        Account.code = zen::utils::hexToBytes(AccountData["code"].GetString());
-      }
+        // Parse code
+        if (AccountData.HasMember("code") && AccountData["code"].IsString()) {
+          Account.code =
+              zen::utils::hexToBytes(AccountData["code"].GetString());
+        }
 
-      // Parse codehash
-      if (AccountData.HasMember("codehash") &&
-          AccountData["codehash"].IsString()) {
-        Account.codehash =
-            zen::utils::parseBytes32(AccountData["codehash"].GetString());
-      }
+        // Parse codehash
+        if (AccountData.HasMember("codehash") &&
+            AccountData["codehash"].IsString()) {
+          Account.codehash =
+              zen::utils::parseBytes32(AccountData["codehash"].GetString());
+        }
 
-      // Parse storage
-      if (AccountData.HasMember("storage") &&
-          AccountData["storage"].IsObject()) {
-        const rapidjson::Value &Storage = AccountData["storage"];
+        // Parse storage
+        if (AccountData.HasMember("storage") &&
+            AccountData["storage"].IsObject()) {
+          const rapidjson::Value &Storage = AccountData["storage"];
 
-        for (auto StorageIt = Storage.MemberBegin();
-             StorageIt != Storage.MemberEnd(); ++StorageIt) {
-          const std::string KeyStr = StorageIt->name.GetString();
-          evmc::bytes32 Key = zen::utils::parseBytes32(KeyStr);
+          for (auto StorageIt = Storage.MemberBegin();
+               StorageIt != Storage.MemberEnd(); ++StorageIt) {
+            const std::string KeyStr = StorageIt->name.GetString();
+            evmc::bytes32 Key = zen::utils::parseBytes32(KeyStr);
 
-          const rapidjson::Value &StorageValue = StorageIt->value;
-          evmc::StorageValue StorageVal;
+            const rapidjson::Value &StorageValue = StorageIt->value;
+            evmc::StorageValue StorageVal;
 
-          if (StorageValue.IsObject()) {
-            // The optional original value allows callers to provide a
-            // transaction-specific original. access_status is never part of a
-            // pre-state; legacy files may include it and it must be ignored.
-            if (StorageValue.HasMember("value") &&
-                StorageValue["value"].IsString()) {
+            if (StorageValue.IsObject()) {
+              // The optional original value allows callers to provide a
+              // transaction-specific original. access_status is never part of a
+              // pre-state; legacy files may include it and it must be ignored.
+              if (StorageValue.HasMember("value") &&
+                  StorageValue["value"].IsString()) {
+                StorageVal.current =
+                    zen::utils::parseBytes32(StorageValue["value"].GetString());
+              }
+              if (StorageValue.HasMember("original") &&
+                  StorageValue["original"].IsString()) {
+                StorageVal.original = zen::utils::parseBytes32(
+                    StorageValue["original"].GetString());
+              } else {
+                // A persisted transaction-final state is the start of a new
+                // transaction. Unless an explicit original value is provided,
+                // current is also the transaction's original value.
+                StorageVal.original = StorageVal.current;
+              }
+            } else if (StorageValue.IsString()) {
+              // Old format with just value
               StorageVal.current =
-                  zen::utils::parseBytes32(StorageValue["value"].GetString());
-            }
-            if (StorageValue.HasMember("original") &&
-                StorageValue["original"].IsString()) {
-              StorageVal.original = zen::utils::parseBytes32(
-                  StorageValue["original"].GetString());
-            } else {
-              // A persisted transaction-final state is the start of a new
-              // transaction. Unless an explicit original value is provided,
-              // current is also the transaction's original value.
+                  zen::utils::parseBytes32(StorageValue.GetString());
               StorageVal.original = StorageVal.current;
             }
-          } else if (StorageValue.IsString()) {
-            // Old format with just value
-            StorageVal.current =
-                zen::utils::parseBytes32(StorageValue.GetString());
-            StorageVal.original = StorageVal.current;
-          }
 
-          Account.storage[Key] = StorageVal;
+            ParsedHost.accounts[Address].storage[Key] = StorageVal;
+          }
         }
       }
-
-      Host.accounts[Address] = Account;
-    }
-  }
-
-  // Parse tx_context if available
-  if (Doc.HasMember("tx_context") && Doc["tx_context"].IsObject()) {
-    const rapidjson::Value &TxContext = Doc["tx_context"];
-
-    if (TxContext.HasMember("gas_price") && TxContext["gas_price"].IsString()) {
-      Host.tx_context.tx_gas_price =
-          zen::utils::parseUint256(TxContext["gas_price"].GetString());
     }
 
-    if (TxContext.HasMember("block_number") &&
-        TxContext["block_number"].IsUint64()) {
-      auto Val = TxContext["block_number"].GetUint64();
-      if (Val > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-        Val = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+    // Parse tx_context if available
+    if (Doc.HasMember("tx_context") && Doc["tx_context"].IsObject()) {
+      const rapidjson::Value &TxContext = Doc["tx_context"];
+
+      if (TxContext.HasMember("gas_price") &&
+          TxContext["gas_price"].IsString()) {
+        ParsedHost.tx_context.tx_gas_price =
+            zen::utils::parseUint256(TxContext["gas_price"].GetString());
       }
-      Host.tx_context.block_number = static_cast<int64_t>(Val);
-    }
 
-    if (TxContext.HasMember("block_timestamp") &&
-        TxContext["block_timestamp"].IsUint64()) {
-      auto Val = TxContext["block_timestamp"].GetUint64();
-      if (Val > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-        Val = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+      if (TxContext.HasMember("block_number") &&
+          TxContext["block_number"].IsUint64()) {
+        auto Val = TxContext["block_number"].GetUint64();
+        if (Val > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+          Val = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+        }
+        ParsedHost.tx_context.block_number = static_cast<int64_t>(Val);
       }
-      Host.tx_context.block_timestamp = static_cast<int64_t>(Val);
-    }
 
-    if (TxContext.HasMember("block_coinbase") &&
-        TxContext["block_coinbase"].IsString()) {
-      Host.tx_context.block_coinbase =
-          zen::utils::parseAddress(TxContext["block_coinbase"].GetString());
-    }
-
-    if (TxContext.HasMember("block_prev_randao") &&
-        TxContext["block_prev_randao"].IsString()) {
-      Host.tx_context.block_prev_randao =
-          zen::utils::parseUint256(TxContext["block_prev_randao"].GetString());
-    }
-
-    if (TxContext.HasMember("block_gas_limit") &&
-        TxContext["block_gas_limit"].IsUint64()) {
-      auto Val = TxContext["block_gas_limit"].GetUint64();
-      if (Val > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-        Val = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+      if (TxContext.HasMember("block_timestamp") &&
+          TxContext["block_timestamp"].IsUint64()) {
+        auto Val = TxContext["block_timestamp"].GetUint64();
+        if (Val > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+          Val = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+        }
+        ParsedHost.tx_context.block_timestamp = static_cast<int64_t>(Val);
       }
-      Host.tx_context.block_gas_limit = static_cast<int64_t>(Val);
-    }
 
-    if (TxContext.HasMember("block_base_fee") &&
-        TxContext["block_base_fee"].IsString()) {
-      Host.tx_context.block_base_fee =
-          zen::utils::parseUint256(TxContext["block_base_fee"].GetString());
-    }
-
-    if (TxContext.HasMember("tx_origin") && TxContext["tx_origin"].IsString()) {
-      Host.tx_context.tx_origin =
-          zen::utils::parseAddress(TxContext["tx_origin"].GetString());
-    }
-
-    if (TxContext.HasMember("chain_id") && TxContext["chain_id"].IsString()) {
-      Host.tx_context.chain_id =
-          zen::utils::parseUint256(TxContext["chain_id"].GetString());
-    }
-
-    if (TxContext.HasMember("blob_base_fee") &&
-        TxContext["blob_base_fee"].IsString()) {
-      Host.tx_context.blob_base_fee =
-          zen::utils::parseUint256(TxContext["blob_base_fee"].GetString());
-    }
-  }
-
-  // Parse and pre-warm EIP-2930 access list if present.
-  // Warm addresses cost 100 gas instead of cold 2600, warm storage slots
-  // cost 100 gas instead of cold 2100.
-  if (Doc.HasMember("access_list") && Doc["access_list"].IsArray()) {
-    for (const auto &Entry : Doc["access_list"].GetArray()) {
-      if (!Entry.IsObject() || !Entry.HasMember("address") ||
-          !Entry["address"].IsString()) {
-        continue;
+      if (TxContext.HasMember("block_coinbase") &&
+          TxContext["block_coinbase"].IsString()) {
+        ParsedHost.tx_context.block_coinbase =
+            zen::utils::parseAddress(TxContext["block_coinbase"].GetString());
       }
-      evmc::address Address;
-      try {
-        Address = zen::utils::parseAddress(Entry["address"].GetString());
-      } catch (...) {
-        continue;
-      }
-      Host.access_account(Address);
 
-      if (!Entry.HasMember("storage_keys") ||
-          !Entry["storage_keys"].IsArray()) {
-        continue;
+      if (TxContext.HasMember("block_prev_randao") &&
+          TxContext["block_prev_randao"].IsString()) {
+        ParsedHost.tx_context.block_prev_randao = zen::utils::parseUint256(
+            TxContext["block_prev_randao"].GetString());
       }
-      // EIP-2930 requires access-list storage keys to be warm even when the
-      // account is not yet present in the initial host state (e.g. when the
-      // contract is created later in the same transaction). Use the host
-      // access_storage API so the account entry is materialized automatically.
-      for (const auto &KeyVal : Entry["storage_keys"].GetArray()) {
-        if (!KeyVal.IsString()) {
+
+      if (TxContext.HasMember("block_gas_limit") &&
+          TxContext["block_gas_limit"].IsUint64()) {
+        auto Val = TxContext["block_gas_limit"].GetUint64();
+        if (Val > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+          Val = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+        }
+        ParsedHost.tx_context.block_gas_limit = static_cast<int64_t>(Val);
+      }
+
+      if (TxContext.HasMember("block_base_fee") &&
+          TxContext["block_base_fee"].IsString()) {
+        ParsedHost.tx_context.block_base_fee =
+            zen::utils::parseUint256(TxContext["block_base_fee"].GetString());
+      }
+
+      if (TxContext.HasMember("tx_origin") &&
+          TxContext["tx_origin"].IsString()) {
+        ParsedHost.tx_context.tx_origin =
+            zen::utils::parseAddress(TxContext["tx_origin"].GetString());
+      }
+
+      if (TxContext.HasMember("chain_id") && TxContext["chain_id"].IsString()) {
+        ParsedHost.tx_context.chain_id =
+            zen::utils::parseUint256(TxContext["chain_id"].GetString());
+      }
+
+      if (TxContext.HasMember("blob_base_fee") &&
+          TxContext["blob_base_fee"].IsString()) {
+        ParsedHost.tx_context.blob_base_fee =
+            zen::utils::parseUint256(TxContext["blob_base_fee"].GetString());
+      }
+    }
+
+    // Parse and pre-warm EIP-2930 access list if present.
+    // Warm addresses cost 100 gas instead of cold 2600, warm storage slots
+    // cost 100 gas instead of cold 2100.
+    if (Doc.HasMember("access_list") && Doc["access_list"].IsArray()) {
+      for (const auto &Entry : Doc["access_list"].GetArray()) {
+        if (!Entry.IsObject() || !Entry.HasMember("address") ||
+            !Entry["address"].IsString()) {
           continue;
         }
+        evmc::address Address;
         try {
-          evmc::bytes32 Key = zen::utils::parseBytes32(KeyVal.GetString());
-          Host.access_storage(Address, Key);
+          Address = zen::utils::parseAddress(Entry["address"].GetString());
         } catch (...) {
           continue;
         }
+        ParsedHost.access_account(Address);
+
+        if (!Entry.HasMember("storage_keys") ||
+            !Entry["storage_keys"].IsArray()) {
+          continue;
+        }
+        // EIP-2930 requires access-list storage keys to be warm even when the
+        // account is not yet present in the initial host state (e.g. when the
+        // contract is created later in the same transaction). Use the host
+        // access_storage API so the account entry is materialized
+        // automatically.
+        for (const auto &KeyVal : Entry["storage_keys"].GetArray()) {
+          if (!KeyVal.IsString()) {
+            continue;
+          }
+          try {
+            evmc::bytes32 Key = zen::utils::parseBytes32(KeyVal.GetString());
+            ParsedHost.access_storage(Address, Key);
+          } catch (...) {
+            continue;
+          }
+        }
       }
     }
+  } catch (const std::exception &) {
+    return false;
   }
+
+  // Data is assigned only after all fields parse successfully so a malformed
+  // state file cannot leave the caller with a partially-updated host.
+  Host.accounts = std::move(ParsedHost.accounts);
+  Host.tx_context = ParsedHost.tx_context;
+
   return true;
 }
 
@@ -559,8 +578,10 @@ void prewarmTransactionAccounts(evmc::MockedHost &Host, evmc_revision Revision,
                                 const evmc::address &Sender,
                                 const evmc::address &Recipient,
                                 const evmc::address &Coinbase) {
-  // EIP-2929 (Berlin+): sender, recipient, and precompiled contracts
-  // (0x01-0x09) are always warm at the start of a transaction.
+  // EIP-2929 (Berlin+): sender, recipient, and precompiled contracts are
+  // always warm at the start of a transaction.  Cancun adds the KZG point
+  // evaluation precompile at 0x0a (EIP-4844), so keep the precompile range
+  // revision-aware.
   if (Revision >= EVMC_BERLIN) {
     Host.access_account(Sender);
     // Contract-creation transactions do not have a transaction-level recipient.
@@ -569,9 +590,11 @@ void prewarmTransactionAccounts(evmc::MockedHost &Host, evmc_revision Revision,
     if (Recipient != evmc::address{}) {
       Host.access_account(Recipient);
     }
-    for (int PrecompileIdx = 1; PrecompileIdx <= 9; ++PrecompileIdx) {
+    const int LastPrecompileIdx = Revision >= EVMC_CANCUN ? 10 : 9;
+    for (int PrecompileIdx = 1; PrecompileIdx <= LastPrecompileIdx;
+         ++PrecompileIdx) {
       evmc::address PrecompileAddr{};
-      PrecompileAddr.bytes[19] = static_cast<uint8_t>(PrecompileIdx);
+      PrecompileAddr.bytes[19] = PrecompileIdx;
       Host.access_account(PrecompileAddr);
     }
   }

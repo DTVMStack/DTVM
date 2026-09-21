@@ -473,13 +473,10 @@ public:
       return false;
     }
     const auto &Acc = It->second;
-    if (Acc.nonce != 0) {
-      return true;
-    }
-    if (!Acc.code.empty()) {
-      return true;
-    }
-    if (std::memcmp(Acc.codehash.bytes, EMPTY_CODE_HASH.bytes, 32) != 0) {
+    // EIP-161: An account is empty when nonce, balance, and code are all
+    // zero.  Do not use a zero code hash as evidence of a non-empty account:
+    // persisted prestate accounts may legitimately have a zeroed code hash.
+    if (Acc.nonce != 0 || !Acc.code.empty()) {
       return true;
     }
     return toUint256Bytes(Acc.balance) != 0;
