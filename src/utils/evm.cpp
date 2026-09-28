@@ -13,6 +13,8 @@
 #include <limits>
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
+#include <utility>
+#include <vector>
 
 namespace zen::utils {
 
@@ -338,6 +340,13 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
   ParsedHost.accounts.clear();
   ParsedHost.tx_context = Host.tx_context;
 
+  // Access-list entries are validated against the temporary state and replayed
+  // on the caller's host only after the atomic commit below: account warmth
+  // lives in the host access journal, which would be discarded together with
+  // the temporary host.
+  std::vector<std::pair<evmc::address, std::vector<evmc::bytes32>>>
+      ParsedAccessList;
+
   try {
     // Parse accounts
     if (Doc.HasMember("accounts") && Doc["accounts"].IsObject()) {
@@ -498,7 +507,7 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
       }
     }
 
-    // Parse and pre-warm EIP-2930 access list if present.
+    // Parse (validate) the EIP-2930 access list if present.
     // Warm addresses cost 100 gas instead of cold 2600, warm storage slots
     // cost 100 gas instead of cold 2100.
     if (Doc.HasMember("access_list") && Doc["access_list"].IsArray()) {
@@ -513,28 +522,23 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
         } catch (...) {
           continue;
         }
-        ParsedHost.access_account(Address);
 
-        if (!Entry.HasMember("storage_keys") ||
-            !Entry["storage_keys"].IsArray()) {
-          continue;
-        }
-        // EIP-2930 requires access-list storage keys to be warm even when the
-        // account is not yet present in the initial host state (e.g. when the
-        // contract is created later in the same transaction). Use the host
-        // access_storage API so the account entry is materialized
-        // automatically.
-        for (const auto &KeyVal : Entry["storage_keys"].GetArray()) {
-          if (!KeyVal.IsString()) {
-            continue;
-          }
-          try {
-            evmc::bytes32 Key = zen::utils::parseBytes32(KeyVal.GetString());
-            ParsedHost.access_storage(Address, Key);
-          } catch (...) {
-            continue;
+        std::vector<evmc::bytes32> StorageKeys;
+        if (Entry.HasMember("storage_keys") &&
+            Entry["storage_keys"].IsArray()) {
+          for (const auto &KeyVal : Entry["storage_keys"].GetArray()) {
+            if (!KeyVal.IsString()) {
+              continue;
+            }
+            try {
+              StorageKeys.emplace_back(
+                  zen::utils::parseBytes32(KeyVal.GetString()));
+            } catch (...) {
+              continue;
+            }
           }
         }
+        ParsedAccessList.emplace_back(Address, std::move(StorageKeys));
       }
     }
   } catch (const std::exception &) {
@@ -545,6 +549,21 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
   // state file cannot leave the caller with a partially-updated host.
   Host.accounts = std::move(ParsedHost.accounts);
   Host.tx_context = ParsedHost.tx_context;
+
+  // Replay the validated access list on the caller's host. Account warmth is
+  // journaled in the host itself (not in accounts), so prewarming must happen
+  // here; replaying after the atomic commit keeps a malformed state file from
+  // partially warming the caller's state.
+  for (const auto &AccessEntry : ParsedAccessList) {
+    Host.access_account(AccessEntry.first);
+    // EIP-2930 requires access-list storage keys to be warm even when the
+    // account is not yet present in the initial host state (e.g. when the
+    // contract is created later in the same transaction). access_storage
+    // materializes the account entry automatically.
+    for (const auto &Key : AccessEntry.second) {
+      Host.access_storage(AccessEntry.first, Key);
+    }
+  }
 
   return true;
 }

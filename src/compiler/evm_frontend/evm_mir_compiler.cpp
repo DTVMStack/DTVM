@@ -4868,9 +4868,11 @@ void EVMMirBuilder::handleCodeCopy(Operand DestOffsetComponents,
     reloadGasFromMemory();
   }
 #endif
-  if (!UsePreparedMemory) {
-    reloadMemorySizeFromInstance();
-  }
+  // No-expand helpers run on a proven memory range, but the instance memory
+  // backing buffer may still be materialized or rebased on first use.  Keep
+  // the cached base pointer and size in sync so the next direct memory
+  // operation never reads a stale base.
+  reloadMemorySizeFromInstance();
 }
 
 typename EVMMirBuilder::Operand
@@ -6106,9 +6108,10 @@ EVMMirBuilder::handleKeccak256(Operand OffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
-  // Constant KECCAK ranges are executed by a no-expand helper, but the helper
-  // may still grow the instance memory on first use.  Keep the cached base
-  // pointer/size in sync before lowering the next direct memory operation.
+  // No-expand helpers run on a proven memory range, but the instance memory
+  // backing buffer may still be materialized or rebased on first use.  Keep
+  // the cached base pointer and size in sync so the next direct memory
+  // operation never reads a stale base.
   reloadMemorySizeFromInstance();
   return Result;
 }
@@ -6139,9 +6142,10 @@ EVMMirBuilder::handleKeccak256TwoWord(Operand OffsetComponents, Operand Word0,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
-  // The no-expand helper may still grow the instance memory on first use
-  // (see handleKeccak256).  Keep the cached base pointer/size in sync before
-  // lowering the next direct memory operation.
+  // No-expand helpers run on a proven memory range, but the instance memory
+  // backing buffer may still be materialized or rebased on first use.  Keep
+  // the cached base pointer and size in sync so the next direct memory
+  // operation never reads a stale base.
   reloadMemorySizeFromInstance();
   return Result;
 }
@@ -6173,9 +6177,10 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleKeccak256CallDataConstSlot(
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
-  // The no-expand helper may still grow the instance memory on first use
-  // (see handleKeccak256).  Keep the cached base pointer/size in sync before
-  // lowering the next direct memory operation.
+  // No-expand helpers run on a proven memory range, but the instance memory
+  // backing buffer may still be materialized or rebased on first use.  Keep
+  // the cached base pointer and size in sync so the next direct memory
+  // operation never reads a stale base.
   reloadMemorySizeFromInstance();
   return Result;
 }
@@ -6206,9 +6211,10 @@ EVMMirBuilder::handleKeccak256CallerConstSlot(Operand OffsetComponents,
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
   reloadGasFromMemory();
 #endif
-  // The no-expand helper may still grow the instance memory on first use
-  // (see handleKeccak256).  Keep the cached base pointer/size in sync before
-  // lowering the next direct memory operation.
+  // No-expand helpers run on a proven memory range, but the instance memory
+  // backing buffer may still be materialized or rebased on first use.  Keep
+  // the cached base pointer and size in sync so the next direct memory
+  // operation never reads a stale base.
   reloadMemorySizeFromInstance();
   return Result;
 }
@@ -7509,9 +7515,11 @@ void EVMMirBuilder::handleCallDataCopy(Operand DestOffsetComponents,
     reloadGasFromMemory();
   }
 #endif
-  if (!UsePreparedMemory) {
-    reloadMemorySizeFromInstance();
-  }
+  // No-expand helpers run on a proven memory range, but the instance memory
+  // backing buffer may still be materialized or rebased on first use.  Keep
+  // the cached base pointer and size in sync so the next direct memory
+  // operation never reads a stale base.
+  reloadMemorySizeFromInstance();
 }
 
 void EVMMirBuilder::handleExtCodeCopy(Operand AddressComponents,

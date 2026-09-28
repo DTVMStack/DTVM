@@ -1340,6 +1340,64 @@ TEST(EVMStateSaveLoad, PartialTxContextOverlaysOnlyPresentFields) {
   std::filesystem::remove(FilePath);
 }
 
+// ---------------------------------------------------------------------------
+// Regression test: loadState() must pre-warm the EIP-2930 access list on the
+// caller's host.  Account warmth lives in the host access journal (not in the
+// accounts map), so any prewarming done on a temporary parsing host would be
+// discarded together with it and execution would charge cold-access gas for
+// access-list entries.
+// ---------------------------------------------------------------------------
+TEST(EVMStateSaveLoad, AccessListPrewarmSurvivesLoadState) {
+  const std::string FilePath = "/tmp/dtvm_test_access_list_state.json";
+
+  // One entry with storage keys, one plain address entry, and one malformed
+  // entry that must be skipped without failing the load.
+  const std::string StateJson = R"({
+  "accounts": {},
+  "access_list": [
+    {
+      "address": "00000000000000000000000000000000000000aa",
+      "storage_keys": [
+        "0000000000000000000000000000000000000000000000000000000000000001",
+        "not-hex"
+      ]
+    },
+    {"address": "00000000000000000000000000000000000000bb"},
+    {"address": "zzz"}
+  ]
+})";
+  {
+    std::ofstream OutFile(FilePath);
+    OutFile << StateJson;
+  }
+
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  const evmc::address WarmAddr = evmc::literals::operator""_address(
+      "00000000000000000000000000000000000000aa");
+  const evmc::address WarmAddrNoKeys = evmc::literals::operator""_address(
+      "00000000000000000000000000000000000000bb");
+  const evmc::bytes32 WarmKey = zen::utils::parseBytes32(
+      "0000000000000000000000000000000000000000000000000000000000000001");
+
+  ASSERT_TRUE(zen::utils::loadState(*Host, FilePath));
+
+  // Account warmth must survive loadState (EIP-2930).
+  EXPECT_EQ(Host->access_account(WarmAddr), EVMC_ACCESS_WARM)
+      << "Access-list account must be warm after loadState";
+  EXPECT_EQ(Host->access_account(WarmAddrNoKeys), EVMC_ACCESS_WARM)
+      << "Access-list entry without storage keys must also be warm";
+
+  // Storage key warmth must survive loadState.
+  EXPECT_EQ(Host->access_storage(WarmAddr, WarmKey), EVMC_ACCESS_WARM)
+      << "Access-list storage key must be warm after loadState";
+
+  // The access-list-only account must stay materialized so keys of accounts
+  // created later in the transaction remain observable.
+  EXPECT_NE(Host->accounts.find(WarmAddr), Host->accounts.end());
+
+  std::filesystem::remove(FilePath);
+}
+
 // Regression test for https://github.com/DTVMStack/DTVM/issues/589.
 // A storage value loaded from prestate is both current and original for the
 // new transaction. If original remains zero, a non-zero prestate slot written
