@@ -2338,6 +2338,42 @@ TEST(EVMRegressionTest, Issue602_KZGPrecompileStaysColdBeforeCancun) {
       << "KZG precompile must not be pre-warmed before Cancun";
 }
 
+// EIP-2537 (Prague) activates the BLS12-381 precompiles at 0x0b-0x10, so the
+// revision-aware prewarm range must extend to 0x10; 0x11 and above stay cold.
+TEST(EVMRegressionTest, BLSPrecompilesAreWarmOnPrague) {
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  evmc::address Sender{};
+  evmc::address Recipient{};
+  evmc::address Coinbase{};
+  zen::utils::prewarmTransactionAccounts(*Host, EVMC_PRAGUE, Sender, Recipient,
+                                         Coinbase);
+  for (int PrecompileIdx = 0x0b; PrecompileIdx <= 0x10; ++PrecompileIdx) {
+    evmc::address BLSPrecompile{};
+    BLSPrecompile.bytes[19] = static_cast<uint8_t>(PrecompileIdx);
+    EXPECT_EQ(Host->access_account(BLSPrecompile), EVMC_ACCESS_WARM)
+        << "BLS precompile at index " << PrecompileIdx
+        << " must be warm at transaction start on Prague";
+  }
+  // Nothing above 0x10 is a known precompile, so it must not be pre-warmed.
+  evmc::address FirstUnassigned{};
+  FirstUnassigned.bytes[19] = 0x11;
+  EXPECT_EQ(Host->access_account(FirstUnassigned), EVMC_ACCESS_COLD)
+      << "Addresses above the BLS range must not be pre-warmed";
+}
+
+TEST(EVMRegressionTest, BLSPrecompilesStayColdBeforePrague) {
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  evmc::address Sender{};
+  evmc::address Recipient{};
+  evmc::address Coinbase{};
+  zen::utils::prewarmTransactionAccounts(*Host, EVMC_CANCUN, Sender, Recipient,
+                                         Coinbase);
+  evmc::address BLSPrecompile{};
+  BLSPrecompile.bytes[19] = 0x0b;
+  EXPECT_EQ(Host->access_account(BLSPrecompile), EVMC_ACCESS_COLD)
+      << "BLS precompiles must not be pre-warmed before Prague";
+}
+
 TEST(EVMRegressionTest, Issue606_EmptyPrestateAccountChargesNewAccountGas) {
   const evmc::address SenderAddr = evmc::literals::operator""_address(
       "1111111111111111111111111111111111111111");
