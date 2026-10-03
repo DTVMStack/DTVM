@@ -1239,13 +1239,13 @@ void CreateHandler::doExecute() {
   }
   Context->getInstance()->addGasRefund(Result.gas_refund);
 
+  // Always set return data from the host result, matching CALL handler
+  // behavior and EVM spec (EIP-211: RETURNDATA should reflect last sub-call).
+  Context->setReturnData(std::vector<uint8_t>(
+      Result.output_data, Result.output_data + Result.output_size));
   if (Result.status_code == EVMC_SUCCESS) {
-    Context->setReturnData(std::vector<uint8_t>());
     Frame->pop(); // pop the assume value
     Frame->push(intx::be::load<intx::uint256>(Result.create_address));
-  } else {
-    Context->setReturnData(std::vector<uint8_t>(
-        Result.output_data, Result.output_data + Result.output_size));
   }
   Context->setStatus(EVMC_SUCCESS);
 }
