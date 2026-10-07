@@ -30,7 +30,7 @@ The compiler module is responsible for DTVM's multi-pass JIT compilation pipelin
 ### Multi-pass Compilation Pipeline
 
 1. **Frontend→dMIR**: `WasmMirBuilder` / `EVMMirBuilder` translate source/bytecode to `MModule` + `MFunction` (dMIR)
-2. **dMIR optimization**: `DeadMBasicBlockElim`, `MVerifier`
+2. **dMIR optimization**: `MVerifier`, `MIRPeephole` (ctz/clz-eq-0, select+icmp, local algebra, constant `br_if`), `DeadMBasicBlockElim`, re-`MVerifier`
 3. **dMIR→CgIR**: `X86CgLowering`, `X86CgPeephole`
 4. **Register allocation**: `FastRA` or `CgRAGreedy` + `CgRegisterCoalescer`, `CgVirtRegMap`, `CgLiveIntervals`, etc.
 5. **Post-RA processing**: `PrologEpilogInserter`, `ExpandPostRAPseudos`
@@ -95,6 +95,20 @@ In multithread LazyJIT, each function stub's `jmp` target is published monotonic
 
 - `MBasicBlock`s in `MFunction` are connected by control flow; `MInstruction`s belong to an `MBasicBlock` or are embedded as expressions in another `MInstruction`
 - `MVerifier` must pass before entering CgIR lowering
+- `MIRPeephole` is function-local and deterministic: it rewrites nested
+  integer expression trees and constant `br_if` terminators only. It must
+  not fold `div`/`rem` (zero-divisor traps) or `ctz`/`clz` compares against
+  a non-zero constant. Discarding a subtree requires a proven-pure tree
+  (no load / call / wasm-check). Folding a constant `br_if` must drop the
+  untaken CFG edge **and** any phi incoming on the still-live target that
+  came from this block. After the pass, `DeadMBasicBlockElim` may drop
+  unreachable blocks and must keep live phi incoming lists aligned with
+  remaining predecessors so a second `MVerifier` still holds.
+  `PhiInstruction::removeIncoming` must compact operand slots against a
+  fixed old-N base; decrementing `_operand_num` slides the slot window.
+  `freeMem` must use `_operand_cap` (allocation width), not the live
+  `_operand_num`. Pred/succ removal is swap-pop: `vector::erase` on a
+  bump-allocated `CompileVector` can memmove into the LLVM ASan red zone.
 
 ### EVM JIT Invariants
 

@@ -5,6 +5,7 @@
 
 #include "compiler/context.h"
 #include "compiler/mir/instruction.h"
+#include "llvm/ADT/SmallVector.h"
 
 namespace COMPILER {
 class MFunction;
@@ -30,6 +31,7 @@ public:
   void addStatement(MInstruction *Inst) {
     Statements.push_back(Inst);
     Inst->setParentBB(this);
+    notePhi(Inst);
   }
 
   void addStatementBeforeFirstNonPhi(MInstruction *Inst) {
@@ -48,11 +50,50 @@ public:
     std::advance(It, Idx);
     Statements.insert(It, Inst);
     Inst->setParentBB(this);
+    notePhi(Inst);
   }
 
   size_t getNumStatements() const { return Statements.size(); }
 
-  void clear() { Statements.clear(); }
+  void clear() {
+    Statements.clear();
+    Phis.clear();
+  }
+
+  llvm::iterator_range<llvm::SmallVector<MInstruction *, 2>::iterator> phis() {
+    return llvm::make_range(Phis.begin(), Phis.end());
+  }
+  llvm::iterator_range<llvm::SmallVector<MInstruction *, 2>::const_iterator>
+  phis() const {
+    return llvm::make_range(Phis.begin(), Phis.end());
+  }
+
+  void replaceStatement(MInstruction *Old, MInstruction *New) {
+    ZEN_ASSERT(Old && New);
+    for (auto It = Statements.begin(); It != Statements.end(); ++It) {
+      if (*It == Old) {
+        *It = New;
+        New->setParentBB(this);
+        dropPhi(Old);
+        notePhi(New);
+        return;
+      }
+    }
+    ZEN_ASSERT(false &&
+               "replaceStatement: old instruction is not in this block");
+  }
+
+  void eraseStatement(MInstruction *Inst) {
+    ZEN_ASSERT(Inst);
+    for (auto It = Statements.begin(); It != Statements.end(); ++It) {
+      if (*It == Inst) {
+        Statements.erase(It);
+        dropPhi(Inst);
+        return;
+      }
+    }
+    ZEN_ASSERT(false && "eraseStatement: instruction is not in this block");
+  }
 
   uint32_t getIdx() const { return BBIdx; }
 
@@ -60,10 +101,11 @@ public:
 
   MFunction &getParent() const { return Parent; }
 
-  using PredIterator = CompileVector<MBasicBlock *>::iterator;
-  using ConstPredIterator = CompileVector<MBasicBlock *>::const_iterator;
-  using SuccIterator = CompileVector<MBasicBlock *>::iterator;
-  using ConstSuccIterator = CompileVector<MBasicBlock *>::const_iterator;
+  using BlockList = llvm::SmallVector<MBasicBlock *, 4>;
+  using PredIterator = BlockList::iterator;
+  using ConstPredIterator = BlockList::const_iterator;
+  using SuccIterator = BlockList::iterator;
+  using ConstSuccIterator = BlockList::const_iterator;
 
   llvm::iterator_range<SuccIterator> predecessors() {
     return llvm::make_range(Predecessors.begin(), Predecessors.end());
@@ -98,11 +140,43 @@ public:
 #endif // ZEN_ENABLE_EVM
 
 private:
+  // Host SmallVector. The block itself is also host-owned
+  // (MFunction::createBasicBlock uses new). Pred/succ order is not a
+  // contract. Statement order is preserved.
+  static void eraseUnordered(BlockList &Vec, BlockList::iterator It) {
+    if (It == Vec.end()) {
+      return;
+    }
+    if (It + 1 != Vec.end()) {
+      *It = Vec.back();
+    }
+    Vec.pop_back();
+  }
+
+  void notePhi(MInstruction *Inst) {
+    if (Inst && Inst->getKind() == MInstruction::PHI) {
+      Phis.push_back(Inst);
+    }
+  }
+
+  void dropPhi(MInstruction *Inst) {
+    if (Inst == nullptr || Inst->getKind() != MInstruction::PHI) {
+      return;
+    }
+    for (auto It = Phis.begin(); It != Phis.end(); ++It) {
+      if (*It == Inst) {
+        Phis.erase(It);
+        return;
+      }
+    }
+  }
+
   uint32_t BBIdx = 0;
   MFunction &Parent;
-  CompileList<MInstruction *> Statements;
-  CompileVector<MBasicBlock *> Predecessors;
-  CompileVector<MBasicBlock *> Successors;
+  llvm::SmallVector<MInstruction *, 8> Statements;
+  llvm::SmallVector<MInstruction *, 2> Phis;
+  BlockList Predecessors;
+  BlockList Successors;
 #ifdef ZEN_ENABLE_EVM
   bool JumpDestBBFlag = false;
 #ifdef ZEN_ENABLE_LINUX_PERF

@@ -102,7 +102,7 @@ classDiagram
 | **MFunction** | `FuncIdx`, `FuncType`, `Variables`, `BasicBlocks`, `Instructions`, `ExceptionSetBBs` | `createBasicBlock()`, `appendBlock()`, `createVariable()`, `createInstruction()`, `getGasRegisterVarIdx()` (EVM) |
 | **MFunctionType** | `RetType`, `ParamTypes` (via `getSubTypes()`) | `getNumParams()`, `param_begin()`, `param_end()`, `getReturnType()` |
 | **MBasicBlock** | `Idx`, `Instructions`, `Successors` | `addSuccessor()`, `getIdx()` |
-| **MInstruction** | `_opcode`, `_kind`, `_type`, `_operand_num`, `_parent` (BB or parent instruction) | `getOpcode()`, `getKind()`, `getType()`, `getOperand()`, `setOperand()`, `isStatement()`, `isTerminator()` |
+| **MInstruction** | `_opcode`, `_kind`, `_type`, `_operand_num`, `_operand_cap`, `_parent` (BB or parent instruction) | `getOpcode()`, `getKind()`, `getType()`, `getOperand()`, `setOperand()`, `isStatement()`, `isTerminator()` |
 | **Variable** | `VarIdx`, `Type` | `getVarIdx()`, `getType()` |
 | **MType** | Static `I8`, `I16`, `I32`, `I64`, `F32`, `F64`, `VOID` | - |
 

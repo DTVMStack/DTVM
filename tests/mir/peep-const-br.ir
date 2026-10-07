@@ -1,0 +1,33 @@
+; RUN: ircompiler %s -f 0 --args 10 | FileCheck %s -check-prefix T
+; RUN: ircompiler %s -f 1 --args 10 | FileCheck %s -check-prefix F
+
+; T: 0xb:i32
+; F: 0xc:i32
+
+func %0 (i32) -> i32 {
+    var $1 i32
+@0:
+    br_if const.i32 1, @1, @2
+@1:
+    $1 = add ($0, const.i32 1)
+    br @3
+@2:
+    $1 = add ($0, const.i32 2)
+    br @3
+@3:
+    return $1
+}
+
+func %1 (i32) -> i32 {
+    var $1 i32
+@0:
+    br_if const.i32 0, @1, @2
+@1:
+    $1 = add ($0, const.i32 1)
+    br @3
+@2:
+    $1 = add ($0, const.i32 2)
+    br @3
+@3:
+    return $1
+}

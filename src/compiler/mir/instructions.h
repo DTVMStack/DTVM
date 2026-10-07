@@ -10,6 +10,8 @@
 #include "compiler/mir/instruction.h"
 #include "compiler/mir/opcode.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVector.h"
+#include <cstddef>
 
 namespace COMPILER {
 
@@ -203,6 +205,26 @@ public:
     }
   }
 
+  // Operand pointers live in the slots immediately before `this`
+  // (`getOperand(i) == this - _operand_num + i`). Decrementing
+  // `_operand_num` slides that window, so the compact must use a
+  // fixed base for the old N and only then rewrite the new window.
+  void removeIncoming(size_t Index) {
+    ZEN_ASSERT(Index < getNumIncoming());
+    const OperandNum OldN = _operand_num;
+    MInstruction **OldSlots = reinterpret_cast<MInstruction **>(this) - OldN;
+    for (size_t I = Index + 1; I < OldN; ++I) {
+      OldSlots[I - 1] = OldSlots[I];
+    }
+    Blocks.erase(Blocks.begin() + static_cast<std::ptrdiff_t>(Index));
+    _operand_num--;
+    MInstruction **NewSlots =
+        reinterpret_cast<MInstruction **>(this) - _operand_num;
+    for (int J = static_cast<int>(_operand_num) - 1; J >= 0; --J) {
+      NewSlots[J] = OldSlots[J];
+    }
+  }
+
   // Update only the incoming block for an edge, leaving the incoming value
   // unchanged. Used when the CFG edge an incoming block represents is resolved
   // after the value has already been wired.
@@ -216,7 +238,7 @@ private:
 
   PhiInstruction(CompileMemPool &MemPool, MType *Type, size_t NumIncoming)
       : DynamicOperandInstruction(MInstruction::PHI, OP_phi, NumIncoming, Type),
-        Blocks(NumIncoming, MemPool) {
+        Blocks(NumIncoming, nullptr) {
     for (size_t Index = 0; Index < NumIncoming; ++Index) {
       Blocks[Index] = nullptr;
       getOperand(static_cast<OperandNum>(Index)) = nullptr;
@@ -231,7 +253,10 @@ private:
     }
   }
 
-  CompileVector<MBasicBlock *> Blocks;
+  // Host SmallVector, not CompileVector: bump-slab std::vector +
+  // LLVM ASan red zones. Inline capacity covers typical phi arity so
+  // Release litmus detachFromPool does not leak a heap buffer.
+  llvm::SmallVector<MBasicBlock *, 4> Blocks;
 };
 
 class DassignInstruction : public UnaryInstruction {

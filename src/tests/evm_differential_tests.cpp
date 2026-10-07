@@ -1511,6 +1511,67 @@ TEST(EVMCallMemoryProofDifferential,
   }
 }
 
+// Const-0 JUMPI into a still-live JUMPDEST (second pred is a real JUMP)
+// forces foldConstBrIf to drop an edge without killing the target. The
+// merge phi must lose the dead incoming; a slot-window bug in
+// removeIncoming would silently swap the surviving 0xBB for 0xAA.
+TEST(EVMPeepholePhi, ConstFalseJumpiSharedMergeMatchesInterpreter) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0xaa, // PC0  PUSH1 0xAA (dead JUMPI incoming)
+      0x60, 0x00, // PC2  PUSH1 0    (const-false cond)
+      0x60, 0x0e, // PC4  PUSH1 14   (shared merge)
+      0x57,       // PC6  JUMPI
+      0x50,       // PC7  POP
+      0x60, 0xbb, // PC8  PUSH1 0xBB (live incoming)
+      0x60, 0x0e, // PC10 PUSH1 14
+      0x56,       // PC12 JUMP
+      0x00,       // PC13 STOP (padding)
+      0x5b,       // PC14 JUMPDEST merge
+      0x5f,       // PC15 PUSH0
+      0x52,       // PC16 MSTORE
+      0x60, 0x20, // PC17 PUSH1 32
+      0x5f,       // PC19 PUSH0
+      0xf3,       // PC20 RETURN
+  };
+  const auto MergeOut = expectInterpMatchesMultipassWithGas(
+      "const_false_jumpi_shared_merge", Bytecode, {});
+  EXPECT_EQ(MergeOut,
+            "00000000000000000000000000000000000000000000000000000000000000BB");
+}
+
+// Loop header with a const-0 JUMPI pred plus the real entry JUMP and the
+// back-edge. i starts at 0, increments until i<3 fails, returns 3.
+// Taking the dead 0xAA incoming would return 0xAB after one increment.
+TEST(EVMPeepholePhi, LoopPhiWithDeadConstJumpiMatchesInterpreter) {
+  const std::vector<uint8_t> Bytecode = {
+      0x60, 0xaa, // PC0  PUSH1 0xAA (dead header incoming)
+      0x60, 0x00, // PC2  PUSH1 0
+      0x60, 0x0d, // PC4  PUSH1 13   (loop header)
+      0x57,       // PC6  JUMPI
+      0x50,       // PC7  POP
+      0x60, 0x00, // PC8  PUSH1 0    (i = 0)
+      0x60, 0x0d, // PC10 PUSH1 13
+      0x56,       // PC12 JUMP
+      0x5b,       // PC13 JUMPDEST loop
+      0x60, 0x01, // PC14 PUSH1 1
+      0x01,       // PC16 ADD
+      0x80,       // PC17 DUP1
+      0x60, 0x03, // PC18 PUSH1 3
+      0x11, // PC20 GT   (3 > i  <=>  i < 3; EVM LT/GT compare top < second)
+      0x60, 0x0d, // PC21 PUSH1 13
+      0x57,       // PC23 JUMPI
+      0x5f,       // PC24 PUSH0
+      0x52,       // PC25 MSTORE
+      0x60, 0x20, // PC26 PUSH1 32
+      0x5f,       // PC28 PUSH0
+      0xf3,       // PC29 RETURN
+  };
+  const auto LoopOut = expectInterpMatchesMultipassWithGas(
+      "loop_phi_dead_const_jumpi", Bytecode, {});
+  EXPECT_EQ(LoopOut,
+            "0000000000000000000000000000000000000000000000000000000000000003");
+}
+
 TEST(EVMKeccakMemoryProofDifferential,
      TwoWordHelperWordGasOutOfGasBoundaryMatchesInterpreter) {
   const auto Bytecode = twoWordKeccakBytecode();

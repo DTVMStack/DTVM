@@ -1,0 +1,38 @@
+; RUN: ircompiler %s -f 0 --args 0 | FileCheck %s -check-prefix Z
+; RUN: ircompiler %s -f 0 --args 1 | FileCheck %s -check-prefix O
+; RUN: ircompiler %s -f 0 --args 2 | FileCheck %s -check-prefix T
+; RUN: ircompiler %s -f 0 --args -1 | FileCheck %s -check-prefix M
+; RUN: ircompiler %s -f 1 --args 0 | FileCheck %s -check-prefix C0
+; RUN: ircompiler %s -f 1 --args -2147483648 | FileCheck %s -check-prefix CS
+; RUN: ircompiler %s -f 1 --args 1 | FileCheck %s -check-prefix C1
+; RUN: ircompiler %s -f 2 --args 16 | FileCheck %s -check-prefix EQ4
+
+; Z: 0x0:i32
+; O: 0x1:i32
+; T: 0x0:i32
+; M: 0x1:i32
+; C0: 0x0:i32
+; CS: 0x1:i32
+; C1: 0x0:i32
+; EQ4: 0x1:i32
+
+func %0 (i32) -> i32 {
+    var $1 i32
+@0:
+    $1 = cmp ieq (ctz ($0), const.i32 0)
+    return $1
+}
+
+func %1 (i32) -> i32 {
+    var $1 i32
+@0:
+    $1 = cmp ieq (clz ($0), const.i32 0)
+    return $1
+}
+
+func %2 (i32) -> i32 {
+    var $1 i32
+@0:
+    $1 = cmp ieq (ctz ($0), const.i32 4)
+    return $1
+}

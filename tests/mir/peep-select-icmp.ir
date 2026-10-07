@@ -1,0 +1,25 @@
+; RUN: ircompiler %s -f 0 --args 0 | FileCheck %s -check-prefix F
+; RUN: ircompiler %s -f 0 --args 1 | FileCheck %s -check-prefix T
+; RUN: ircompiler %s -f 0 --args 99 | FileCheck %s -check-prefix N
+; RUN: ircompiler %s -f 1 --args 0 | FileCheck %s -check-prefix EF
+; RUN: ircompiler %s -f 1 --args 1 | FileCheck %s -check-prefix ET
+
+; F: 0x0:i32
+; T: 0x1:i32
+; N: 0x1:i32
+; EF: 0x1:i32
+; ET: 0x0:i32
+
+func %0 (i32) -> i32 {
+    var $1 i32
+@0:
+    $1 = cmp ieq (select ($0, const.i32 7, const.i32 3), const.i32 7)
+    return $1
+}
+
+func %1 (i32) -> i32 {
+    var $1 i32
+@0:
+    $1 = cmp ieq (select ($0, const.i32 7, const.i32 3), const.i32 3)
+    return $1
+}
