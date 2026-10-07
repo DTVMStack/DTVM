@@ -1,6 +1,6 @@
-# Wasmer 7.1.0 (TTFI / overflow / fib mainline)
+# Wasmer 7.1.0 (current paper)
 
-Shared version for PolyBench TTFI, WAPM TTFI, overflow, and fib(30). Three backends: **cranelift + singlepass + llvm**.
+Current paper Wasmer baseline for PolyBench wall-clock, PolyBench TTFI, WAPM TTFI, overflow, and fib(30). Three backends: **cranelift + singlepass + llvm**.
 
 ## Instrumentation Locations
 
@@ -13,7 +13,7 @@ Example instrumented source: `/path/to/wasmer-7.1.0`
 
 ## LLVM 21 (required for the llvm backend)
 
-wasmer 7.1 uses `llvm-sys-211` and needs **LLVM 21** (not the LLVM 18 from the paper-era 5.0.4).
+wasmer 7.1 uses `llvm-sys-211` and needs **LLVM 21** (not the LLVM 18 from the historical 5.0.4 pin).
 
 ```bash
 tar -xf LLVM-21.1.8-Linux-X64.tar.xz -C ~

@@ -72,12 +72,16 @@ The following come from experiment notes / `VERSIONS.md` / the experiment notebo
 
 ### Comparison Runtimes
 
+Current paper experiments: Wasmtime **45.0.0**, Wasmer **7.1.0**, DTVM **`c3c3fd856`**. Historical wall-clock captures used 31.0.0 / 5.0.4 / `882c83155`.
+
 | Runtime | Notes / archived version | Notes |
 |---------|--------------------------|-------|
-| **Wasmtime** | **31.0.0** ([official x86_64-linux tar.xz](https://github.com/bytecodealliance/wasmtime/releases/download/v31.0.0/wasmtime-v31.0.0-x86_64-linux.tar.xz)) | `runtimes/wasmtime-31.0.0/BUILD.md` |
-| **Wasmer** | **`v5.0.4`**; the Singlepass comparison also used **`v5.0.5-rc1`** (wasi limitation) | Wasmer is **not pinned** in this repo |
+| **Wasmtime (current paper)** | **45.0.0** ([official x86_64-linux tar.xz](https://github.com/bytecodealliance/wasmtime/releases/download/v45.0.0/wasmtime-v45.0.0-x86_64-linux.tar.xz)) | `runtimes/wasmtime-45.0.0/` |
+| **Wasmer (current paper)** | **`v7.1.0`** (cranelift / singlepass / llvm; llvm needs LLVM 21) | `runtimes/wasmer-7.1.0/` |
+| **DTVM `dtvm` (current paper)** | **`c3c3fd856`** | `runtimes/dtvm_main/version.txt` |
+| **Wasmtime (historical)** | **31.0.0** ([official x86_64-linux tar.xz](https://github.com/bytecodealliance/wasmtime/releases/download/v31.0.0/wasmtime-v31.0.0-x86_64-linux.tar.xz)) | `runtimes/wasmtime-31.0.0/BUILD.md` |
+| **Wasmer (historical)** | **`v5.0.4`**; the Singlepass comparison also used **`v5.0.5-rc1`** (wasi limitation) | `runtimes/wasmer-5.0.4/` |
 | **WAMR `iwasm`** | **1.2.3** | `runtimes/wamr-1.2.3/` |
-| **DTVM `dtvm`** | DTVM source fork (commits in `VERSIONS.md`) | not vanilla WAMR |
 
 ### Build Toolchain (experiment notes / lab notebook)
 
@@ -85,7 +89,8 @@ The following come from experiment notes / `VERSIONS.md` / the experiment notebo
 |------|----------------|----------|
 | **rustc** | **≥ 1.85.0** (Wasmtime build) | Wasmtime baseline |
 | **LLVM / clang (DTVM build)** | **15.0.0**, e.g. `/opt/clang+llvm-15.0.0-x86_64-linux-gnu-rhel-8.4/...` | Coremark / dtvm builds |
-| **LLVM (Wasmer build)** | **18.1.7**, e.g. `...-ubuntu-18.04-...` | Wasmer build |
+| **LLVM (Wasmer 7.1, current paper)** | **21.x**, e.g. `LLVM-21.1.8-Linux-X64` | Wasmer 7.1 llvm backend |
+| **LLVM (Wasmer 5.0.4, historical)** | **18.1.7**, e.g. `...-ubuntu-18.04-...` | historical Wasmer build |
 | **WASI SDK clang** | archived wasm metadata: **11.0.0** (27 cases), **14.0.3** (3 cases) | PolyBench (`benchmarks/polybenchc/BUILD.md`) |
 | **WAMR AOT LLVM** | **11.1.0** | `runtimes/wamr-1.2.3/BUILD.md` |
 | **Emscripten `em++`** | **not pinned** | `benchmarks/overflow/build.sh`, `-O2` |

@@ -1,6 +1,6 @@
-# DTVM (dtvm) — Paper Reproduction Build
+# DTVM (dtvm) — Historical Reproduction Build
 
-Paper experiments use commit **`882c83155`** (DTVM source fork).
+Historical PolyBench / WAPM wall-clock captures used commit **`882c83155`** (DTVM source fork). Current paper experiments use **`c3c3fd856`**; see [`../dtvm_main/README.md`](../dtvm_main/README.md).
 
 ## Prerequisites
 

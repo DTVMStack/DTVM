@@ -56,7 +56,7 @@ Run from the **`webassembly-testsuites` root** (or an equivalent layout); the fo
 
 ### 3.1 DTVM (the paper's lazy column)
 
-Build per `runtimes/dtvm/BUILD.md`, commit pin **`882c83155`**. Inferred lazy-benchmark options:
+Build per `runtimes/dtvm_main/README.md`, current paper commit pin **`c3c3fd856`**. Earlier captures used **`882c83155`** (`runtimes/dtvm/BUILD.md`). Inferred lazy-benchmark options:
 
 ```bash
 dtvm -m multipass \

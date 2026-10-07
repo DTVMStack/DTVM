@@ -1,6 +1,7 @@
-# Wasmtime 31.0.0 Build Notes
+# Wasmtime 31.0.0 Build Notes (historical)
 
-The paper's Wasmtime baseline (Cranelift backend).
+Historical Wasmtime pin for earlier PolyBench wall-clock captures (Cranelift backend). Current paper experiments use Wasmtime **45.0.0**; see [`../wasmtime-45.0.0/`](../wasmtime-45.0.0/).
+
 
 - Version: **31.0.0**
 - Upstream: https://github.com/bytecodealliance/wasmtime
@@ -112,7 +113,7 @@ When reproducing, use `export WASMTIME_CACHE=0` and pass case arguments the same
 
 | Scenario | `wasmtime` path |
 |----------|-----------------|
-| WAPM paper instrumented build | `runtimes/wasmtime-31.0.0/out/wasmtime` |
+| Historical WAPM TTFI instrumented build | `runtimes/wasmtime-31.0.0/out/wasmtime` |
 | `benchmarks/overflow/build.sh` | `/opt/wasmtime-v31.0.0-x86_64-linux/wasmtime` |
 | Experiment-machine example | `/opt/wasmtime-v31.0.0-x86_64-linux/wasmtime` |
 

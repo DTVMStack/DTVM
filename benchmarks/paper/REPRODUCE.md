@@ -22,41 +22,41 @@ Each runtime directory keeps only `BUILD.md` + `build.sh` + `version.txt`; binar
 ### DTVM (dtvm)
 
 ```bash
-# Paper PolyBench / WAPM wall-clock: commit 882c83155
-# TTFI mainline: main HEAD (includes "Total compilation time" instrumentation)
+# Current paper experiments (PolyBench / TTFI): commit c3c3fd856
 # overflow / fib: newest fastest commit (e.g. e532db3e2)
+# Historical wall-clock captures only: commit 882c83155
 ```
 
-See [`runtimes/dtvm/BUILD.md`](runtimes/dtvm/BUILD.md).
+See [`runtimes/dtvm_main/README.md`](runtimes/dtvm_main/README.md) (current) and [`runtimes/dtvm/BUILD.md`](runtimes/dtvm/BUILD.md) (historical).
 
 ### Wasmtime
 
 | Purpose | Version | Path |
 |---------|---------|------|
-| Paper PolyBench wall-clock | **31.0.0** | `runtimes/wasmtime-31.0.0/` (includes `patches/ttfi-report.patch`) |
-| TTFI / overflow / fib mainline | **45.0.0** | `runtimes/wasmtime-45.0.0/` (source tree must include the TTFI instrumentation) |
+| Current paper experiments (PolyBench / TTFI / overflow / fib) | **45.0.0** | `runtimes/wasmtime-45.0.0/` (TTFI source tree must include the instrumentation) |
+| Historical wall-clock captures | **31.0.0** | `runtimes/wasmtime-31.0.0/` (includes `patches/ttfi-report.patch`) |
 
 ```bash
-# 31.0.0: official prebuilt tarball, or build from source
-cd runtimes/wasmtime-31.0.0 && ./build.sh all
-# 45.0.0: build from an instrumented source tree
+# 45.0.0 (current paper): official prebuilt tarball, or build from an instrumented source tree
 WASMER_SRC=/path/to/wasmtime-45.0.0 runtimes/wasmtime-45.0.0/build.sh
+# 31.0.0 (historical only): official prebuilt tarball, or build from source
+cd runtimes/wasmtime-31.0.0 && ./build.sh all
 ```
 
 ### Wasmer
 
 | Purpose | Version | Path |
 |---------|---------|------|
-| Paper PolyBench `wasmer llvm` column | **5.0.4** | `runtimes/wasmer-5.0.4/` |
-| TTFI / overflow / fib mainline | **7.1.0** | `runtimes/wasmer-7.1.0/` (cranelift + singlepass + llvm) |
+| Current paper experiments (PolyBench `wasmer llvm` / TTFI / overflow / fib) | **7.1.0** | `runtimes/wasmer-7.1.0/` (cranelift + singlepass + llvm) |
+| Historical wall-clock captures | **5.0.4** | `runtimes/wasmer-5.0.4/` |
 
 ```bash
-# 5.0.4: cranelift + singlepass + llvm (llvm backend needs LLVM 18)
-cd runtimes/wasmer-5.0.4 && ./build.sh
-# 7.1.0: cranelift + singlepass (default); llvm needs LLVM 21
+# 7.1.0 (current paper): cranelift + singlepass (default); llvm needs LLVM 21
 LLVM_SYS_211_PREFIX=/path/to/LLVM-21.1.8-Linux-X64 \
   WASMER_SRC=/path/to/wasmer-7.1.0 \
   runtimes/wasmer-7.1.0/build.sh
+# 5.0.4 (historical only): cranelift + singlepass + llvm (llvm backend needs LLVM 18)
+cd runtimes/wasmer-5.0.4 && ./build.sh
 ```
 
 ### WAMR 1.2.3 (optional, paper interpreter baseline)

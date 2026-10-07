@@ -1,6 +1,6 @@
-# Wasmtime 31.0.0
+# Wasmtime 31.0.0 (historical)
 
-The paper's Wasmtime baseline (Cranelift backend).
+Historical Wasmtime pin for earlier PolyBench wall-clock captures (Cranelift backend). Current paper experiments use Wasmtime **45.0.0**; see [`../wasmtime-45.0.0/`](../wasmtime-45.0.0/).
 
 ## Quick Install (official prebuilt package)
 
@@ -21,9 +21,7 @@ tar xf wasmtime-v31.0.0-x86_64-linux.tar.xz
 
 - [`BUILD.md`](BUILD.md) — prebuilt package, source build, path notes
 - [`build.sh`](build.sh) — source clone / automatic `git apply patches/ttfi-report.patch` / `cargo build --release` / install to `out/`
-- [`patches/ttfi-report.patch`](patches/) — the paper's `Total compilation time` instrumentation (based on `release-31.0.0`)
-
-> The current TTFI / overflow / fib mainline has moved to Wasmtime **45.0.0**; see [`../wasmtime-45.0.0/`](../wasmtime-45.0.0/).
+- [`patches/ttfi-report.patch`](patches/) — historical `Total compilation time` instrumentation (based on `release-31.0.0`)
 
 ## Version Pin
 

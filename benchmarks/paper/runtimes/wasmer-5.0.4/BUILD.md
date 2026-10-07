@@ -1,4 +1,4 @@
-# Wasmer 5.0.4 (WAPM paper TTFI)
+# Wasmer 5.0.4 (historical WAPM TTFI)
 
 ## Source patch
 
@@ -9,7 +9,7 @@ Instrumented tree (default): `/path/to/wasmer-5.0.4`
 - `lib/cli/src/commands/run/mod.rs` — readfile timer
 - `lib/wasix/src/state/builder.rs` — instantiate + guest execution timers
 
-Run flags (paper): `wasmer run --<engine> --cache-dir=/dev/null <case>.wasm …`
+Run flags (historical captures): `wasmer run --<engine> --cache-dir=/dev/null <case>.wasm …`
 
 ## Build
 
