@@ -183,7 +183,7 @@ classDiagram
 | `None` | Not compiled |
 | `Pending` | Pending compilation |
 | `InProgress` | Compiling |
-| `Done` | Completed |
+| `Done` | Background GreedyRA is canonical in `GreedyRACodePtrs`; FastRA must not patch the stub |
 
 ---
 

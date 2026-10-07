@@ -6,27 +6,6 @@
 
 using namespace COMPILER;
 
-/// \note thread safe
-void JITStubBuilder::updateStubJmpTargetPtr(uint8_t *CurStubCodePtr,
-                                            uint8_t *TargetPtr) {
-  // -5 because the jmp instructions has 5 bytes
-  int64_t CallRelOffset = TargetPtr - CurStubCodePtr - 5;
-  ZEN_ASSERT(CallRelOffset <= UINT32_MAX);
-  int32_t CallRelOffsetI32 = static_cast<int32_t>(CallRelOffset);
-
-  /// Atomic write of the 4-byte offset in `jmp` instruction is required.
-  /// `__atomic_store_n` is optimized to `mov` and `mfence` in gcc 9, which does
-  /// not ensure atomicity. Hence, we use inline assembly for guaranteed
-  /// atomicity.
-
-  /// \note x86_64 only
-  asm volatile(
-      "xchgl %0, 1(%1)" // +1 because the jmp instructions first byte is opcode
-      :
-      : "r"(CallRelOffsetI32), "r"(CurStubCodePtr)
-      : "memory");
-}
-
 static uint64_t
 compileOnRequestTrampoline([[maybe_unused]] zen::runtime::Instance *Inst,
                            uint8_t *NextFuncStubCodePtr) {
@@ -97,8 +76,10 @@ void JITStubBuilder::compileFunctionToStub(uint32_t FuncIdx) {
             CurFuncStubCodePtr);
 
   // Update the first instruction(jmp instruction) of trampoline default to
-  // jumping to the next instruction
-  std::memset(CurFuncStubCodePtr + 1, 0, 4);
+  // jumping to the next instruction (rel32 == stub_jmp::kTrampolineRel32)
+  int32_t TrampolineRel32 = stub_jmp::kTrampolineRel32;
+  std::memcpy(CurFuncStubCodePtr + 1, &TrampolineRel32,
+              sizeof(TrampolineRel32));
 
   uint8_t *StubTmplPatchPointPtr =
       reinterpret_cast<uint8_t *>(stubTemplatePatchPoint);
