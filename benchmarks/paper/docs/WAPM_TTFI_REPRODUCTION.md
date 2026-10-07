@@ -321,7 +321,7 @@ Environment variables (table merge):
 
 ## 9. Older Runtime Versions (optional)
 
-To compare against the paper's **same-version** wasmtime 31 / wasmer 5.0.4:
+To compare against **historical** wasmtime 31.0.0 / wasmer 5.0.4 captures (not the current paper experiments):
 
 ```bash
 ./runtimes/wasmtime-31.0.0/build.sh

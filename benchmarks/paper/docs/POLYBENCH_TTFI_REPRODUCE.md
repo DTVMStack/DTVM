@@ -61,7 +61,7 @@ cd "$ROOT"
 
 | Runtime | Version | Default binary |
 |---------|---------|----------------|
-| DTVM `dtvm` | **`c3c3fd856`** (example main HEAD) | `$ROOT/runtimes/dtvm_main/dtvm` |
+| DTVM `dtvm` | **`c3c3fd856`** (current paper pin) | `$ROOT/runtimes/dtvm_main/dtvm` |
 | Wasmtime | **45.0.0** (with TTFI instrumentation) | `$ROOT/runtimes/wasmtime-45.0.0/out/wasmtime` |
 | Wasmer | **7.1.0** (with TTFI instrumentation) | `$ROOT/runtimes/wasmer-7.1.0/out/wasmer` or `out/bin/wasmer` |
 

@@ -1,6 +1,6 @@
-# Wasmtime 45.0.0 (TTFI / overflow / fib mainline)
+# Wasmtime 45.0.0 (current paper)
 
-Shared version for PolyBench TTFI, WAPM TTFI, overflow, and fib(30). Requires a source tree **already containing the `ttfi-report` instrumentation**.
+Current paper Wasmtime baseline for PolyBench wall-clock, PolyBench TTFI, WAPM TTFI, overflow, and fib(30). TTFI runs require a source tree **already containing the `ttfi-report` instrumentation**.
 
 ## Instrumentation Locations
 
@@ -10,7 +10,7 @@ Shared version for PolyBench TTFI, WAPM TTFI, overflow, and fib(30). Requires a 
 
 Example instrumented source: `/path/to/wasmtime-45.0.0`
 
-> The equivalent patch for the paper-era 31.0.0 is `../wasmtime-31.0.0/patches/ttfi-report.patch` (same semantics; usable as a cherry-pick reference).
+> The equivalent patch for the historical 31.0.0 pin is `../wasmtime-31.0.0/patches/ttfi-report.patch` (same semantics; usable as a cherry-pick reference).
 
 ## Build
 

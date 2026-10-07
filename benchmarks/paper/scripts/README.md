@@ -48,7 +48,7 @@ export WASMTIME_CACHE=0
 | `run_wasmer_ttfi_compare.sh <repeats> <outdir> <engine>` | single wasmer backend |
 | `run_wasmtime_ttfi_compare.sh` | wasmtime only |
 | `build_wapm_local_table.py` | build the paper-format md/csv from logs/CSVs |
-| `run_wapm_local_full_round.sh <repeats>` | paper versions (wt31 + wasmer 5.0.4, optional historical comparison) |
+| `run_wapm_local_full_round.sh <repeats>` | historical versions (wt31 + wasmer 5.0.4, optional comparison) |
 
 Entry document: [`../docs/WAPM_TTFI_REPRODUCTION.md`](../docs/WAPM_TTFI_REPRODUCTION.md)
 

@@ -1,24 +1,24 @@
-# DTVM (paper-version `dtvm`)
+# DTVM (historical `dtvm`)
 
-The paper's `dtvm` CLI (multipass JIT, `--enable-multipass-lazy`, etc.).
+Historical `dtvm` CLI pin for earlier PolyBench / WAPM wall-clock captures (multipass JIT, `--enable-multipass-lazy`, etc.). Current paper experiments use **`c3c3fd856`** under [`../dtvm_main/`](../dtvm_main/).
 
 ## Experiment Commits
 
 | Purpose | Commit | Notes |
 |---------|--------|-------|
-| **Paper PolyBench / WAPM wall-clock** | **`882c83155`** | see [`BUILD.md`](BUILD.md) |
-| **PolyBench / WAPM TTFI mainline** | main HEAD (with `Total compilation time` instrumentation) | see `../dtvm_main/version.txt`; build steps in [`../../docs/POLYBENCH_TTFI_REPRODUCE.md`](../../docs/POLYBENCH_TTFI_REPRODUCE.md) §3.1 |
+| **Current paper PolyBench / TTFI** | **`c3c3fd856`** | see [`../dtvm_main/`](../dtvm_main/); build steps in [`../../docs/POLYBENCH_TTFI_REPRODUCE.md`](../../docs/POLYBENCH_TTFI_REPRODUCE.md) §3.1 |
 | **overflow / fib(30)** | latest fast commit (example `e532db3e2`) | see [`../../benchmarks/overflow/REPRODUCE_fib_overflow_5way.md`](../../benchmarks/overflow/REPRODUCE_fib_overflow_5way.md) |
+| **Historical PolyBench / WAPM wall-clock** | **`882c83155`** | this directory; see [`BUILD.md`](BUILD.md) |
 
 ## Artifacts in This Directory
 
 Binaries are not committed; copy them manually per `BUILD.md`:
 
-- `dtvm` — Release build @ the paper commit (`.gitignore`)
-- `CMakeCache.txt` — snapshot of the paper build configuration (`.gitignore`)
+- `dtvm` — Release build @ the historical commit (`.gitignore`)
+- `CMakeCache.txt` — snapshot of the historical build configuration (`.gitignore`)
 - `version.txt` — `./dtvm --help` excerpt + `commit=…` + `build_dir=…`
 
-## PolyBench Multipass CLI (paper)
+## PolyBench Multipass CLI
 
 ```bash
 # main (multipass)

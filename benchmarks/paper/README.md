@@ -8,7 +8,7 @@ Mainline comparison: **DTVM (multipass / lazy)** vs **Wasmtime 45.0.0** vs **Was
 
 ```
 benchmarks/paper/
-├── VERSIONS.md          # runtime version pins (paper baseline + current mainline)
+├── VERSIONS.md          # runtime version pins (current paper experiments + historical captures)
 ├── ENVIRONMENT.md       # experiment environment and toolchain inventory
 ├── REPRODUCE.md         # reproduction overview (links to per-topic guides)
 ├── SOURCES.md           # provenance and license notes

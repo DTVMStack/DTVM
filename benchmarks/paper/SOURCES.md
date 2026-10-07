@@ -6,7 +6,7 @@ The material in this directory was curated from an experiment archive. This file
 
 | Path here | Archive source | Notes |
 |-----------|---------------|-------|
-| `runtimes/dtvm/` | DTVM source repository | the paper baseline fork; not WAMR 1.2.3 |
+| `runtimes/dtvm/` | DTVM source repository | historical paper-era fork pin (`882c83155`); not WAMR 1.2.3 |
 | `benchmarks/polybenchc/`, `benchmarks/wapm/` (wasm) | `webassembly-testsuites` repo `case/benchmark/`, `case/wapm/` | prebuilt wasm of public PolyBench/C and WAPM workloads |
 | `benchmarks/contracts/` | contract-testbed repo `test/vm_benchmark/` | contract sources and hex artifacts; runner source not included |
 | `benchmarks/overflow/`, `benchmarks/fib/` | experiment archive | Fig. 7 workloads |
@@ -27,8 +27,9 @@ The material in this directory was curated from an experiment archive. This file
 ## Gaps (absent from the archive as well)
 
 - Upstream WAMR 1.2.3 checkout (fetch the official tag yourself)
-- Wasmtime 31.0.0 binary (use the official tarball; see `runtimes/wasmtime-31.0.0/BUILD.md`)
+- Wasmtime 45.0.0 binary (current paper; use the official tarball or `runtimes/wasmtime-45.0.0/build.sh`)
+- Wasmtime 31.0.0 binary (historical; use the official tarball; see `runtimes/wasmtime-31.0.0/BUILD.md`)
 - Contract sol→evm / sol→wasm compile commands (only prebuilt hex exist)
 - C sources for `c_erc20_wasm` / `c_fib_wasm`
 - Sources for standalone wasm such as `fib_no_contract.c.wasm`
-- The DTVM binary (build per `runtimes/dtvm/BUILD.md`)
+- The DTVM binary (current paper: `runtimes/dtvm_main/README.md` @ `c3c3fd856`; historical: `runtimes/dtvm/BUILD.md`)

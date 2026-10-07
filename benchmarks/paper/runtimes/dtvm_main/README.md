@@ -1,10 +1,10 @@
-# DTVM (`dtvm`) — main HEAD
+# DTVM (`dtvm`) — current paper pin
 
-The mainline version for PolyBench TTFI / WAPM TTFI (with `Total compilation time` instrumentation).
+The current paper version for PolyBench wall-clock / PolyBench TTFI / WAPM TTFI (with `Total compilation time` instrumentation).
 
 ## Commit
 
-See [`version.txt`](version.txt) (example `c3c3fd856`, 2026-05-29). The paper baseline `882c83155` is under [`../dtvm/`](../dtvm/).
+See [`version.txt`](version.txt): **`c3c3fd856`** (2026-05-29). Historical captures at `882c83155` are under [`../dtvm/`](../dtvm/).
 
 ## Build
 

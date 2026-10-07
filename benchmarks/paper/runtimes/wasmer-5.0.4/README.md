@@ -1,6 +1,6 @@
-# Wasmer 5.0.4
+# Wasmer 5.0.4 (historical)
 
-The paper's Wasmer baseline; the PolyBench wall-clock `wasmer llvm` column.
+Historical Wasmer pin for earlier PolyBench wall-clock `wasmer llvm` captures. Current paper experiments use Wasmer **7.1.0**; see [`../wasmer-7.1.0/`](../wasmer-7.1.0/).
 
 ## Build
 
@@ -20,4 +20,4 @@ Artifact: `out/bin/wasmer` (covered by `.gitignore`).
 
 - [`BUILD.md`](BUILD.md) — instrumentation locations, benchmark flags
 
-> The current TTFI / overflow / fib mainline has moved to Wasmer **7.1.0** (LLVM 21); see [`../wasmer-7.1.0/`](../wasmer-7.1.0/).
+> Current paper experiments use Wasmer **7.1.0** (LLVM 21); see [`../wasmer-7.1.0/`](../wasmer-7.1.0/).
