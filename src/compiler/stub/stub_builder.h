@@ -5,6 +5,7 @@
 #define COMPILER_STUB_STUB_BUILDER_H
 
 #include "compiler/common/common_defs.h"
+#include "compiler/stub/stub_jmp_target.h"
 
 namespace COMPILER {
 
@@ -13,9 +14,20 @@ public:
   JITStubBuilder(zen::common::CodeMemPool &CodeMemPool)
       : CodeMPool(CodeMemPool) {}
 
-  /// \note thread safe
+  /// Unconditional GreedyRA (or single-thread) stub publish. Tear-free, not
+  /// monotonic by itself. Thread-safe vs concurrent FastRA CAS from trampoline.
   static void updateStubJmpTargetPtr(uint8_t *CurStubCodePtr,
-                                     uint8_t *TargetPtr);
+                                     uint8_t *TargetPtr) {
+    stub_jmp::updateTarget(CurStubCodePtr, TargetPtr);
+  }
+
+  /// FastRA publish: succeed only while the stub still points at the
+  /// trampoline. After GreedyRA (or another FastRA) is installed, returns
+  /// false and leaves the stub unchanged.
+  static bool tryUpdateStubJmpTargetIfTrampoline(uint8_t *CurStubCodePtr,
+                                                 uint8_t *TargetPtr) {
+    return stub_jmp::tryUpdateTargetIfTrampoline(CurStubCodePtr, TargetPtr);
+  }
 
   void allocateStubSpace(uint32_t NumInternalFunctions);
 

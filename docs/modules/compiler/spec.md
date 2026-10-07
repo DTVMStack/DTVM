@@ -81,6 +81,16 @@ The compiler module is responsible for DTVM's multi-pass JIT compilation pipelin
 - When `CompileContext::Inited == true`, `MemPool`, `CodePtr`, `FuncOffsetMap`, etc. are in a valid state
 - `EVMFrontendContext` must have `Bytecode`, `BytecodeSize`, `GasMeteringEnabled`, `GasChunkInfo` (if chunk metering is enabled) set before `compile()`
 
+### LazyJIT stub publish monotonicity
+
+In multithread LazyJIT, each function stub's `jmp` target is published monotonically:
+
+- trampoline (`rel32 == 0`) → FastRA → GreedyRA
+- `CompileStatus::Done` means `GreedyRACodePtrs[FuncIdx]` is the canonical compiled body
+- After Done, foreground FastRA must not patch the stub; `compileFunctionOnRequest` returns the GreedyRA pointer
+- FastRA may CAS-patch only from the trampoline; background GreedyRA may overwrite trampoline or FastRA
+- Tear-free `xchg` of the 4-byte `rel32` does not by itself enforce this ordering
+
 ### dMIR Invariants
 
 - `MBasicBlock`s in `MFunction` are connected by control flow; `MInstruction`s belong to an `MBasicBlock` or are embedded as expressions in another `MInstruction`

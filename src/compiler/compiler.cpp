@@ -703,6 +703,12 @@ void LazyJITCompiler::compileFunctionInBackgroud(WasmFrontendContext &Ctx,
   uint8_t *JITFuncCodePtr =
       compileFunction(Ctx, FuncIdx, Config.DisableMultipassGreedyRA);
   uint8_t *FuncStubCodePtr = StubBuilder.getFuncStubCodePtr(FuncIdx);
+  // Publish order: GreedyRA pointer, then Done, then stub patch.
+  // Done-before-patch lets a foreground thread that observes Done return
+  // GreedyRA even if the stub still points at the trampoline. Stub quality is
+  // monotonic (trampoline -> FastRA -> GreedyRA): FastRA may only CAS from
+  // trampoline, so this unconditional GreedyRA patch upgrades and cannot be
+  // rolled back.
   GreedyRACodePtrs[FuncIdx] = JITFuncCodePtr;
   CompileStatuses[FuncIdx] = CompileStatus::Done;
   JITStubBuilder::updateStubJmpTargetPtr(FuncStubCodePtr, JITFuncCodePtr);
@@ -719,18 +725,31 @@ uint8_t *LazyJITCompiler::compileFunctionOnRequest(uint8_t *FuncStubCodePtr) {
     Stats.stopRecord(Timer);
     return JITFuncCodePtr;
   }
+  // After background GreedyRA is Done, never FastRA-patch the stub.
   if (CompileStatuses[FuncIdx] == CompileStatus::Done) {
     return GreedyRACodePtrs[FuncIdx];
   }
   ZEN_LOG_DEBUG("compile function %d on request", FuncIdx);
   auto Timer = Stats.startRecord(utils::StatisticPhase::JITLazyFgCompilation);
-  // Compile the function with fastRA for faster compilation
+  // Compile the function with fastRA for faster compilation. Parallel
+  // foreground compiles of the same FuncIdx may each produce a FastRA body;
+  // at least this caller gets a runnable pointer even if stub CAS loses.
   uint8_t *JITFuncCodePtr = compileFunction(*MainContext, FuncIdx, true);
   Stats.stopRecord(Timer);
+  // Re-check immediately before any FastRA stub publish. Litmus this closes:
+  //   FG: FastRA compile; load Done == false
+  //   BG: store GreedyRA ptr; store Done; xchg stub -> GreedyRA
+  //   FG: xchg stub -> FastRA   // illegal permanent downgrade
+  // xchg of rel32 is tear-free but not monotonic; skip FastRA patch after Done
+  // and only CAS from trampoline so a late FastRA store cannot win.
   if (CompileStatuses[FuncIdx] == CompileStatus::Done) {
     return GreedyRACodePtrs[FuncIdx];
   }
-  JITStubBuilder::updateStubJmpTargetPtr(FuncStubCodePtr, JITFuncCodePtr);
+  JITStubBuilder::tryUpdateStubJmpTargetIfTrampoline(FuncStubCodePtr,
+                                                     JITFuncCodePtr);
+  if (CompileStatuses[FuncIdx] == CompileStatus::Done) {
+    return GreedyRACodePtrs[FuncIdx];
+  }
   return JITFuncCodePtr;
 }
 

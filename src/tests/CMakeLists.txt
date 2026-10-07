@@ -380,6 +380,37 @@ if(ZEN_ENABLE_SPEC_TEST)
   add_test(NAME mempoolTests COMMAND mempoolTests)
   add_test(NAME cAPITests COMMAND cAPITests)
 
+  if(ZEN_BUILD_TARGET_X86_64)
+    add_executable(lazyJitStubTests lazy_jit_stub_tests.cpp)
+    target_include_directories(
+      lazyJitStubTests PRIVATE ${googletest_SOURCE_DIR}/googletest/include
+    )
+    if(ZEN_ENABLE_ASAN)
+      target_compile_options(lazyJitStubTests PRIVATE -fsanitize=address)
+      if(ZEN_BUILD_PLATFORM_DARWIN)
+        target_link_libraries(
+          lazyJitStubTests
+          PRIVATE dtvmcore gtest_main Threads::Threads -fsanitize=address
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+      else()
+        target_link_libraries(
+          lazyJitStubTests
+          PRIVATE dtvmcore gtest_main Threads::Threads -fsanitize=address
+                  -static-libasan
+          PUBLIC ${GTEST_BOTH_LIBRARIES}
+        )
+      endif()
+    else()
+      target_link_libraries(
+        lazyJitStubTests
+        PRIVATE dtvmcore gtest_main Threads::Threads
+        PUBLIC ${GTEST_BOTH_LIBRARIES}
+      )
+    endif()
+    add_test(NAME lazyJitStubTests COMMAND lazyJitStubTests)
+  endif()
+
   if(ZEN_ENABLE_EVM)
     add_test(NAME evmInterpTests COMMAND evmInterpTests)
     add_test(NAME evmCacheTests COMMAND evmCacheTests)

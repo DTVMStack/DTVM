@@ -80,6 +80,8 @@ private:
     None,
     Pending,
     InProgress,
+    /// Background GreedyRA is the canonical body in GreedyRACodePtrs. After
+    /// Done, foreground FastRA must not patch the stub (monotonic publish).
     Done,
   };
 
