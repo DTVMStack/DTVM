@@ -45,6 +45,7 @@ set(COMPILER_SRCS
     mir/constants.cpp
     mir/opcode.cpp
     mir/pass/verifier.cpp
+    mir/pass/peephole.cpp
     cgir/cg_basic_block.cpp
     cgir/cg_instruction.cpp
     cgir/cg_function.cpp

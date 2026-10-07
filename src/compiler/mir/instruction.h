@@ -128,26 +128,33 @@ protected:
   template <typename T>
   static void *allocMem(CompileMemPool &MemPool, OperandNum NumOperands) {
     uint32_t TotalSize = sizeof(T) + sizeof(MInstruction *) * NumOperands;
-    uint8_t *Start = reinterpret_cast<uint8_t *>(MemPool.allocate(TotalSize));
+    uint8_t *Start =
+        reinterpret_cast<uint8_t *>(MemPool.allocate(TotalSize, alignof(T)));
     uint8_t *Obj = Start + TotalSize - sizeof(T);
     return reinterpret_cast<void *>(Obj);
   }
 
   static void freeMem(CompileMemPool &MemPool, MInstruction *Inst) {
     uint8_t *Obj = reinterpret_cast<uint8_t *>(Inst);
-    uint8_t *Start = Obj - sizeof(MInstruction *) * (Inst->_operand_num);
+    // Use the allocation width, not the live operand count. Phi
+    // removeIncoming shrinks `_operand_num` and slides the window toward
+    // `this`; the bump prefix still starts at `_operand_cap` slots back.
+    uint8_t *Start = Obj - sizeof(MInstruction *) * (Inst->_operand_cap);
     MemPool.deallocate(reinterpret_cast<void *>(Start));
   }
 
   // only MFunction can create MInstruction
   MInstruction(Kind kind, Opcode opcode, OperandNum operand_num, MType *type)
-      : _kind(kind), _opcode(opcode), _operand_num(operand_num), _type(type) {}
+      : _kind(kind), _opcode(opcode), _operand_num(operand_num),
+        _operand_cap(operand_num), _type(type),
+        _parent(static_cast<MBasicBlock *>(nullptr)) {}
 
   virtual ~MInstruction() = default;
 
   Kind _kind;
   Opcode _opcode;
   OperandNum _operand_num;
+  OperandNum _operand_cap;
   MType *_type;
   zen::common::Variant<MBasicBlock *, MInstruction *> _parent;
 };

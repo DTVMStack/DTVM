@@ -17,6 +17,7 @@
 #include "compiler/mir/function.h"
 #include "compiler/mir/module.h"
 #include "compiler/mir/pass/dead_basicblock_elim.h"
+#include "compiler/mir/pass/peephole.h"
 #include "compiler/mir/pass/verifier.h"
 #include "compiler/target/x86/x86_cg_peephole.h"
 #include "compiler/target/x86/x86_mc_lowering.h"
@@ -70,8 +71,18 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
     }
   }
 
+  MIRPeephole Peep;
+  Peep.runOnMFunction(MFunc);
+
   DeadMBasicBlockElim MBBDCE;
   MBBDCE.runOnMFunction(MFunc);
+
+  {
+    MVerifier Verifier(MMod, MFunc, llvm::errs());
+    if (!Verifier.verify()) {
+      throw getError(ErrorCode::MIRVerifyingFailed);
+    }
+  }
 
   CgFunction &MF = CgFunc;
 
