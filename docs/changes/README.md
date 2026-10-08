@@ -47,6 +47,7 @@ Typical triggers:
 
 | Date | Name | Status | Tier | Description |
 |------|------|--------|------|-------------|
+| 2026-10-08 | [r1-baseline-counters](2026-10-08-r1-baseline-counters/README.md) | Implemented | Light | Opt-in jump/SPP upper-bound dump on evmCacheComplexityDemo; no R1 absinterp |
 | 2026-10-07 | [mir-codegen-peepholes](2026-10-07-mir-codegen-peepholes/README.md) | Accepted | Full | Wasmtime-inspired MIR peeps: ctz/clz, select-icmp, algebra, const-br |
 | 2026-03-10 | [evm-stack-ssa-lifting](2026-03-10-evm-stack-ssa-lifting/README.md) | Implemented | Full | True-SSA stack lifting for EVM multipass JIT |
 | 2026-04-11 | [evm-shared-jump-resolution](2026-04-11-evm-shared-jump-resolution/README.md) | Implemented | Light | Extract shared jump target resolution pass into bytecode cache |
