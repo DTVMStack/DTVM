@@ -34,7 +34,7 @@ if [ ! -d "$HEX_DIR" ]; then
   exit 2
 fi
 
-HEADER="cell,r1,spp,label,slice,code_bytes,n_jumpdest,n_jump,n_jumpi,n_jump_total,n_resolved,n_unresolved,unresolved_frac,n_jd_blocked,jd_blocked_frac,implicit_dyn_pred,n_gas_chunks,n_meter_nonzero_before,n_meter_nonzero_after,spp_zeroed_chunks,n_chunks_shifted,build_us,r1_flag,spp_flag,n_multi"
+HEADER="r1,spp,label,slice,code_bytes,n_jumpdest,n_jump,n_jumpi,n_jump_total,n_resolved,n_unresolved,unresolved_frac,n_jd_blocked,jd_blocked_frac,implicit_dyn_pred,n_gas_chunks,n_meter_nonzero_before,n_meter_nonzero_after,spp_zeroed_chunks,n_chunks_shifted,build_us,r1_flag,spp_flag,n_multi"
 
 AB_CSV="$OUT/r1_phase2_ab.csv"
 {
@@ -42,14 +42,13 @@ AB_CSV="$OUT/r1_phase2_ab.csv"
   shopt -s nullglob
   for r1 in off on; do
     for spp in off on; do
-      cell="r1=${r1},spp=${spp}"
       for path in "$HEX_DIR"/$GLOB; do
         [ -f "$path" ] || continue
         base=$(basename "$path")
         label=${base%.*}
         row=$("$DEMO" --bytecode "$path" --label "$label" --dump-r1-stats \
           --slice "$SLICE" --r1 "$r1" --spp "$spp")
-        echo "${cell},${r1},${spp},${row}"
+        echo "${r1},${spp},${row}"
       done
     done
   done

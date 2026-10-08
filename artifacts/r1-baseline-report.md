@@ -2,11 +2,12 @@
 
 Date: 2026-10-08. **No end-to-end % speedup is claimed.** This run measures
 today’s in-tree benches plus jump/SPP upper-bound counters. Cross-block
-absinterp (full R1) is **not** implemented.
+absinterp (full R1) is implemented in Phase 2; see
+`artifacts/r1-phase2-ab.md` (R1 demoted from H2 on this corpus).
 
 日期：2026-10-08。**不宣称端到端加速百分比。** 本报告只记录仓库内可复现
-基准，以及今日块内 absinterp / SPP 的上界计数。完整跨块抽象解释（R1）
-**未实现**。
+基准，以及今日块内 absinterp / SPP 的上界计数。完整跨块抽象解释见
+`artifacts/r1-phase2-ab.md`（本语料上将 R1 从 H2 降级）。
 
 ---
 

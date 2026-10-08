@@ -1,6 +1,6 @@
 # Change: R1 cross-block absinterp feeding existing SPP
 
-- **Status**: Accepted
+- **Status**: Implemented
 - **Date**: 2026-10-08
 - **Tier**: Full
 
@@ -53,7 +53,7 @@ Non-breaking. `ZEN_EVM_DISABLE_R1=1` restores Phase-1 resolution.
 ### Phase 3: Tests + A/B
 
 - [x] Over-approx / gas-identical / Top-stays-dynamic tests
-- [ ] 2×2 absinterp × SPP on the 12 hexes
+- [x] 2×2 absinterp × SPP on the 12 hexes (`artifacts/r1-phase2-ab.md`)
 
 ## Compatibility Notes
 

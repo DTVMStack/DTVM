@@ -47,7 +47,7 @@ Typical triggers:
 
 | Date | Name | Status | Tier | Description |
 |------|------|--------|------|-------------|
-| 2026-10-08 | [r1-cross-block-absinterp](2026-10-08-r1-cross-block-absinterp/README.md) | Accepted | Full | Cross-block Const/ConstSet absinterp feeding existing SPP; fail-closed |
+| 2026-10-08 | [r1-cross-block-absinterp](2026-10-08-r1-cross-block-absinterp/README.md) | Implemented | Full | Cross-block Const/ConstSet absinterp feeding existing SPP; fail-closed |
 | 2026-10-08 | [r1-baseline-counters](2026-10-08-r1-baseline-counters/README.md) | Implemented | Light | Opt-in jump/SPP upper-bound dump on evmCacheComplexityDemo; no R1 absinterp |
 | 2026-10-07 | [mir-codegen-peepholes](2026-10-07-mir-codegen-peepholes/README.md) | Accepted | Full | Wasmtime-inspired MIR peeps: ctz/clz, select-icmp, algebra, const-br |
 | 2026-03-10 | [evm-stack-ssa-lifting](2026-03-10-evm-stack-ssa-lifting/README.md) | Implemented | Full | True-SSA stack lifting for EVM multipass JIT |
