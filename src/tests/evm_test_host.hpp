@@ -475,14 +475,30 @@ public:
   evmc_access_status
   access_account(const evmc::address &Addr) noexcept override {
     // MockedHost's recorded-access vector is capped at 200 entries, so it is
-    // only a debugging journal and cannot be the SSOT for transaction warmth.
-    // For example, a large EIP-2930 access list can fill the vector before
-    // transaction pre-warming reaches later precompiles.
-    const bool WasWarm = AccessedAccounts.count(Addr) != 0;
-    AccessedAccounts.insert(Addr);
-    const evmc_access_status BaseStatus =
-        evmc::MockedHost::access_account(Addr);
-    return WasWarm ? EVMC_ACCESS_WARM : BaseStatus;
+    // only a debugging journal.  Bypass the base implementation here: it has a
+    // quadratic-over-cap bound when checking existing entries and cannot track
+    // warmth beyond the cap.  For example, a large EIP-2930 access list can
+    // fill the vector before pre-warming reaches later precompiles.
+    if (AccessedAccounts.insert(Addr).second) {
+      if (recorded_account_accesses.size() <
+          evmc::MockedHost::max_recorded_account_accesses) {
+        recorded_account_accesses.push_back(Addr);
+      }
+    } else {
+      return EVMC_ACCESS_WARM;
+    }
+
+    // Preserve the established EVMC precompile range semantics.
+    static const evmc::address FirstPrecompile =
+        evmc::literals::operator""_address(
+            "0000000000000000000000000000000000000001");
+    static const evmc::address LastPrecompile =
+        evmc::literals::operator""_address(
+            "0000000000000000000000000000000000000009");
+    if (Addr >= FirstPrecompile && Addr <= LastPrecompile) {
+      return EVMC_ACCESS_WARM;
+    }
+    return EVMC_ACCESS_COLD;
   }
 
   bool account_exists(const evmc::address &Addr) const noexcept override {
