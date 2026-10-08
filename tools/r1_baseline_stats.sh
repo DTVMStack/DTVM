@@ -34,7 +34,7 @@ if [ ! -d "$CORPUS" ]; then
   exit 2
 fi
 
-HEADER="label,slice,code_bytes,n_jumpdest,n_jump,n_jumpi,n_jump_total,n_resolved,n_unresolved,unresolved_frac,n_jd_blocked,jd_blocked_frac,implicit_dyn_pred,n_gas_chunks,n_meter_nonzero_before,n_meter_nonzero_after,spp_zeroed_chunks,n_chunks_shifted,build_us"
+HEADER="label,slice,code_bytes,n_jumpdest,n_jump,n_jumpi,n_jump_total,n_resolved,n_unresolved,unresolved_frac,n_jd_blocked,jd_blocked_frac,implicit_dyn_pred,n_gas_chunks,n_meter_nonzero_before,n_meter_nonzero_after,spp_zeroed_chunks,n_chunks_shifted,build_us,r1,spp,n_multi"
 
 {
   echo "$HEADER"

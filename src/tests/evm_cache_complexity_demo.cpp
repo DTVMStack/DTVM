@@ -10,10 +10,11 @@
 //      Loads bytecode from file (hex or raw bytes), runs cache build,
 //      emits CSV row.
 //
-// Optional --dump-r1-stats replaces the timing-only CSV with today's
-// R1 upper-bound counters (unresolved JUMP/JUMPI after block-local
+// Optional --dump-r1-stats replaces the timing-only CSV with R1
+// counters (unresolved JUMP/JUMPI after local + optional cross-block
 // absinterp, JUMPDESTs stamped with ImplicitDynamicPredCount, and
 // nonzero gas-chunk / meterGas sites before vs after SPP).
+// --r1 on|off and --spp on|off select the 2×2 ablation.
 //
 // Output (default): CSV `<label>,<n_jumpdests>,<build_us>` on stdout.
 // Output (--dump-r1-stats): one CSV data row; header is printed by
@@ -245,9 +246,9 @@ struct JumpCensus {
   size_t NUnresolved = 0;
 };
 
-// Match buildCFGEdges: a JUMP/JUMPI is resolved if absinterp wrote it, or
-// the adjacent PUSH1..PUSH32 fallback decodes a valid JUMPDEST. Everything
-// else is today's unresolved dynamic source (HasUnresolvedDynamicSuccessor).
+// Match buildCFGEdges: a JUMP/JUMPI is resolved if the single-target map,
+// the ConstSet multi-target map, or the adjacent PUSH1..PUSH32 fallback
+// names a valid JUMPDEST. Everything else is HasUnresolvedDynamicSuccessor.
 JumpCensus countJumps(const std::vector<uint8_t> &Code,
                       const zen::evm::EVMBytecodeCache &Cache) {
   JumpCensus Out;
@@ -261,8 +262,9 @@ JumpCensus countJumps(const std::vector<uint8_t> &Code,
       else
         ++Out.NJumpi;
 
-      bool Resolved = Cache.ResolvedJumpTargets.count(static_cast<uint32_t>(Pc)) !=
-                      0;
+      const uint32_t PC32 = static_cast<uint32_t>(Pc);
+      bool Resolved = Cache.ResolvedJumpTargets.count(PC32) != 0 ||
+                      Cache.ResolvedJumpMultiTargets.count(PC32) != 0;
       if (!Resolved && PrevPc != SIZE_MAX && isPush1To32(PrevOp) &&
           PrevPc + opcodeLen(PrevOp) == Pc &&
           PrevPc < Cache.PushValueMap.size() && Pc < Cache.JumpDestMap.size()) {
@@ -318,27 +320,41 @@ struct TimedCache {
   double Us = 0;
 };
 
-TimedCache buildTimedCache(const std::vector<uint8_t> &Code) {
+TimedCache buildTimedCache(const std::vector<uint8_t> &Code, bool EnableSPP,
+                           bool EnableR1) {
   TimedCache Out;
   using Clock = zen::common::SteadyClock;
   const auto Start = Clock::now();
   zen::evm::buildBytecodeCache(Out.Cache,
                                reinterpret_cast<const std::byte *>(Code.data()),
-                               Code.size(), EVMC_CANCUN, /*EnableSPP=*/true);
+                               Code.size(), EVMC_CANCUN, EnableSPP, EnableR1);
   const auto End = Clock::now();
   Out.Us = std::chrono::duration<double, std::micro>(End - Start).count();
   return Out;
 }
 
 double timeCacheBuildUs(const std::vector<uint8_t> &Code) {
-  return buildTimedCache(Code).Us;
+  return buildTimedCache(Code, /*EnableSPP=*/true, /*EnableR1=*/true).Us;
+}
+
+bool parseOnOff(const std::string &S, bool &Out) {
+  if (S == "on" || S == "1" || S == "true") {
+    Out = true;
+    return true;
+  }
+  if (S == "off" || S == "0" || S == "false") {
+    Out = false;
+    return true;
+  }
+  return false;
 }
 
 [[noreturn]] void usage(const char *Argv0, int RC) {
   std::fprintf(stderr,
                "usage: %s <n_jumpdests>\n"
                "       %s --bytecode <hex-or-bin-file> [--label <tag>] "
-               "[--dump-r1-stats] [--slice auto|runtime|full]\n",
+               "[--dump-r1-stats] [--slice auto|runtime|full] "
+               "[--r1 on|off] [--spp on|off]\n",
                Argv0, Argv0);
   std::exit(RC);
 }
@@ -355,6 +371,8 @@ int main(int Argc, char **Argv) {
   size_t SyntheticN = 0;
   bool Synthetic = true;
   bool DumpR1 = false;
+  bool EnableR1 = true;
+  bool EnableSPP = true;
 
   for (int I = 1; I < Argc; ++I) {
     const std::string Arg = Argv[I];
@@ -367,6 +385,12 @@ int main(int Argc, char **Argv) {
       DumpR1 = true;
     } else if (Arg == "--slice" && I + 1 < Argc) {
       Slice = Argv[++I];
+    } else if (Arg == "--r1" && I + 1 < Argc) {
+      if (!parseOnOff(Argv[++I], EnableR1))
+        usage(Argv[0], 2);
+    } else if (Arg == "--spp" && I + 1 < Argc) {
+      if (!parseOnOff(Argv[++I], EnableSPP))
+        usage(Argv[0], 2);
     } else if (Arg.size() > 0 &&
                std::isdigit(static_cast<unsigned char>(Arg[0]))) {
       SyntheticN = static_cast<size_t>(std::stoull(Arg));
@@ -423,7 +447,7 @@ int main(int Argc, char **Argv) {
     return 0;
   }
 
-  const TimedCache Built = buildTimedCache(Code);
+  const TimedCache Built = buildTimedCache(Code, EnableSPP, EnableR1);
   const JumpCensus J = countJumps(Code, Built.Cache);
   const ChunkCensus C = countChunks(Built.Cache);
   const size_t NJumpTotal = J.NJump + J.NJumpi;
@@ -438,13 +462,15 @@ int main(int Argc, char **Argv) {
                               static_cast<double>(NumJumpDests);
   const size_t SPPZeroed =
       C.NMeterBefore > C.NMeterAfter ? C.NMeterBefore - C.NMeterAfter : 0;
+  const size_t NMulti = Built.Cache.ResolvedJumpMultiTargets.size();
 
   std::printf(
       "%s,%s,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%.6f,%zu,%.6f,%zu,%zu,%zu,%zu,%zu,"
-      "%zu,%.3f\n",
+      "%zu,%.3f,%d,%d,%zu\n",
       Label.c_str(), UsedSlice.c_str(), Code.size(), NumJumpDests, J.NJump,
       J.NJumpi, NJumpTotal, J.NResolved, J.NUnresolved, UnresolvedFrac,
       NJDBlocked, JDBlockedFrac, J.NUnresolved, C.NChunks, C.NMeterBefore,
-      C.NMeterAfter, SPPZeroed, C.NShifted, Built.Us);
+      C.NMeterAfter, SPPZeroed, C.NShifted, Built.Us, EnableR1 ? 1 : 0,
+      EnableSPP ? 1 : 0, NMulti);
   return 0;
 }
