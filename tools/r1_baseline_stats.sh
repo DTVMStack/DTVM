@@ -6,15 +6,16 @@
 # Requires evmCacheComplexityDemo built with ZEN_ENABLE_EVM.
 #
 # Usage:
-#   tools/r1_baseline_stats.sh <demo_binary> <corpus_dir> [out_csv] [slice]
+#   tools/r1_baseline_stats.sh <demo_binary> <corpus_dir> [out_csv] [slice] [glob]
 #
 # slice: auto (default) | runtime | full
+# glob:  default *_evm.hex so wasm hex in the paper corpus is skipped
 # stdout / out_csv columns are documented in the header row.
 
 set -euo pipefail
 
 if [ $# -lt 2 ]; then
-  echo "usage: $0 <demo_binary> <corpus_dir> [out_csv] [slice]" >&2
+  echo "usage: $0 <demo_binary> <corpus_dir> [out_csv] [slice] [glob]" >&2
   exit 2
 fi
 
@@ -22,6 +23,7 @@ DEMO=$1
 CORPUS=$2
 OUT=${3:-/dev/stdout}
 SLICE=${4:-auto}
+GLOB=${5:-*_evm.hex}
 
 if [ ! -x "$DEMO" ]; then
   echo "error: $DEMO not executable" >&2
@@ -32,12 +34,12 @@ if [ ! -d "$CORPUS" ]; then
   exit 2
 fi
 
-HEADER="label,slice,code_bytes,n_jumpdest,n_jump,n_jumpi,n_jump_total,n_resolved,n_unresolved,unresolved_frac,n_jd_blocked,jd_blocked_frac,implicit_dyn_pred,n_gas_chunks,n_meter_nonzero_before,n_meter_nonzero_after,spp_zeroed_chunks,build_us"
+HEADER="label,slice,code_bytes,n_jumpdest,n_jump,n_jumpi,n_jump_total,n_resolved,n_unresolved,unresolved_frac,n_jd_blocked,jd_blocked_frac,implicit_dyn_pred,n_gas_chunks,n_meter_nonzero_before,n_meter_nonzero_after,spp_zeroed_chunks,n_chunks_shifted,build_us"
 
 {
   echo "$HEADER"
   shopt -s nullglob
-  for path in "$CORPUS"/*; do
+  for path in "$CORPUS"/$GLOB; do
     [ -f "$path" ] || continue
     base=$(basename "$path")
     label=${base%.*}

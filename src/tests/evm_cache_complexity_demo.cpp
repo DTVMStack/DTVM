@@ -289,6 +289,7 @@ struct ChunkCensus {
   size_t NChunks = 0;
   size_t NMeterBefore = 0;
   size_t NMeterAfter = 0;
+  size_t NShifted = 0;
 };
 
 ChunkCensus countChunks(const zen::evm::EVMBytecodeCache &Cache) {
@@ -298,10 +299,16 @@ ChunkCensus countChunks(const zen::evm::EVMBytecodeCache &Cache) {
     if (Cache.GasChunkEnd[Pc] <= Pc)
       continue;
     ++Out.NChunks;
-    if (Pc < Cache.GasChunkCost.size() && Cache.GasChunkCost[Pc] != 0)
+    const uint64_t Before =
+        Pc < Cache.GasChunkCost.size() ? Cache.GasChunkCost[Pc] : 0;
+    const uint64_t After =
+        Pc < Cache.GasChunkCostSPP.size() ? Cache.GasChunkCostSPP[Pc] : 0;
+    if (Before != 0)
       ++Out.NMeterBefore;
-    if (Pc < Cache.GasChunkCostSPP.size() && Cache.GasChunkCostSPP[Pc] != 0)
+    if (After != 0)
       ++Out.NMeterAfter;
+    if (Before != After)
+      ++Out.NShifted;
   }
   return Out;
 }
@@ -434,10 +441,10 @@ int main(int Argc, char **Argv) {
 
   std::printf(
       "%s,%s,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%.6f,%zu,%.6f,%zu,%zu,%zu,%zu,%zu,"
-      "%.3f\n",
+      "%zu,%.3f\n",
       Label.c_str(), UsedSlice.c_str(), Code.size(), NumJumpDests, J.NJump,
       J.NJumpi, NJumpTotal, J.NResolved, J.NUnresolved, UnresolvedFrac,
       NJDBlocked, JDBlockedFrac, J.NUnresolved, C.NChunks, C.NMeterBefore,
-      C.NMeterAfter, SPPZeroed, Built.Us);
+      C.NMeterAfter, SPPZeroed, C.NShifted, Built.Us);
   return 0;
 }

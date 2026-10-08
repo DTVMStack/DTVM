@@ -31,5 +31,5 @@ inputs; the demo reconstructs the same decision `buildCFGEdges` uses.
 
 - [x] Implementation complete
 - [x] Tests added/updated (demo flag + synthetic sanity in the runner)
-- [x] Module specs in `docs/modules/` updated (if affected)
-- [ ] Build and tests pass
+- [x] Module specs in `docs/modules/` updated (if affected) — cache contract unchanged
+- [x] Build and tests pass (`evmCacheTests` 16/16; RelWithDebInfo EVM+multipass)

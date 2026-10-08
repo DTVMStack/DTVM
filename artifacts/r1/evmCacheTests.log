@@ -1,0 +1,48 @@
+Running main() from /workspace/build-r1/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = EVMCache*
+[==========] Running 16 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 4 tests from EVMCacheImplicitDynPred
+[ RUN      ] EVMCacheImplicitDynPred.BuildsCleanly_NoDynJumpWithDeadJumpDest
+[       OK ] EVMCacheImplicitDynPred.BuildsCleanly_NoDynJumpWithDeadJumpDest (0 ms)
+[ RUN      ] EVMCacheImplicitDynPred.DynTargetJumpDest_StitchedIntoSPP
+[       OK ] EVMCacheImplicitDynPred.DynTargetJumpDest_StitchedIntoSPP (0 ms)
+[ RUN      ] EVMCacheImplicitDynPred.InterpreterOnly_LeavesSPPArrayEmpty
+[       OK ] EVMCacheImplicitDynPred.InterpreterOnly_LeavesSPPArrayEmpty (0 ms)
+[ RUN      ] EVMCacheImplicitDynPred.MultipleDynJumps_BothTargetsCounted
+[       OK ] EVMCacheImplicitDynPred.MultipleDynJumps_BothTargetsCounted (0 ms)
+[----------] 4 tests from EVMCacheImplicitDynPred (0 ms total)
+
+[----------] 2 tests from EVMCacheSPP
+[ RUN      ] EVMCacheSPP.DoesNotShiftSuccessorCostBeforeSstore
+[       OK ] EVMCacheSPP.DoesNotShiftSuccessorCostBeforeSstore (0 ms)
+[ RUN      ] EVMCacheSPP.DoesNotShiftFallthroughBeforeUnresolvedJumpi
+[       OK ] EVMCacheSPP.DoesNotShiftFallthroughBeforeUnresolvedJumpi (0 ms)
+[----------] 2 tests from EVMCacheSPP (0 ms total)
+
+[----------] 10 tests from EVMCacheDominator
+[ RUN      ] EVMCacheDominator.LinearChain_Correct
+[       OK ] EVMCacheDominator.LinearChain_Correct (0 ms)
+[ RUN      ] EVMCacheDominator.DiamondCFG_Correct
+[       OK ] EVMCacheDominator.DiamondCFG_Correct (0 ms)
+[ RUN      ] EVMCacheDominator.NestedLoop_Correct
+[       OK ] EVMCacheDominator.NestedLoop_Correct (0 ms)
+[ RUN      ] EVMCacheDominator.DisjointRoots_SelfIdom
+[       OK ] EVMCacheDominator.DisjointRoots_SelfIdom (0 ms)
+[ RUN      ] EVMCacheDominator.ClassCDescendant_SeedsAtInit
+[       OK ] EVMCacheDominator.ClassCDescendant_SeedsAtInit (0 ms)
+[ RUN      ] EVMCacheDominator.SelfLoop_Correct
+[       OK ] EVMCacheDominator.SelfLoop_Correct (0 ms)
+[ RUN      ] EVMCacheDominator.OverlappingBackEdgesIDom
+[       OK ] EVMCacheDominator.OverlappingBackEdgesIDom (0 ms)
+[ RUN      ] EVMCacheDominator.NestedSharedExit
+[       OK ] EVMCacheDominator.NestedSharedExit (0 ms)
+[ RUN      ] EVMCacheDominator.CriticalEdgeEmptySplitTopology
+[       OK ] EVMCacheDominator.CriticalEdgeEmptySplitTopology (0 ms)
+[ RUN      ] EVMCacheDominator.DynTargetInStaticLoop
+[       OK ] EVMCacheDominator.DynTargetInStaticLoop (0 ms)
+[----------] 10 tests from EVMCacheDominator (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 16 tests from 3 test suites ran. (0 ms total)
+[  PASSED  ] 16 tests.

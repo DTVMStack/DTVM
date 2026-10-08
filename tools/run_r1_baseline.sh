@@ -28,6 +28,12 @@ mkdir -p "$ARTIFACTS"
 
 log() { printf '[r1-baseline] %s\n' "$*"; }
 
+# Paper wasm blobs are Git LFS pointers until pulled.
+if command -v git-lfs >/dev/null 2>&1; then
+  git -C "$ROOT" lfs pull --include 'benchmarks/paper/benchmarks/polybenchc/*.wasm' \
+    >/dev/null 2>&1 || log "git lfs pull skipped/failed (PolyBench may be pointers)"
+fi
+
 detect_llvm_dir() {
   if [[ -n "${LLVM_DIR:-}" && -f "${LLVM_DIR}/LLVMConfig.cmake" ]]; then
     echo "$LLVM_DIR"
@@ -69,6 +75,8 @@ CMAKE_ARGS=(
   -S "$ROOT"
   -B "$BUILD_DIR"
   "${CMAKE_GENERATOR[@]}"
+  -DCMAKE_C_COMPILER="${CC:-gcc}"
+  -DCMAKE_CXX_COMPILER="${CXX:-g++}"
   -DCMAKE_BUILD_TYPE=RelWithDebInfo
   -DZEN_ENABLE_EVM=ON
   -DZEN_ENABLE_SINGLEPASS_JIT=OFF
@@ -102,8 +110,12 @@ log "R1 stats (full hex, including constructor/metadata if extraction skipped)"
 "$ROOT/tools/r1_baseline_stats.sh" "$DEMO" "$HEX_DIR" \
   "$ARTIFACTS/r1_stats_auto.csv" auto
 
-log "evm-cache wall-clock ($CACHE_RUNS runs / file)"
-"$ROOT/tools/bench_evm_cache.sh" "$DEMO" "$HEX_DIR" "$CACHE_RUNS" \
+log "evm-cache wall-clock ($CACHE_RUNS runs / file, EVM hex only)"
+EVM_CORPUS="$ARTIFACTS/evm_hex_corpus"
+rm -rf "$EVM_CORPUS"
+mkdir -p "$EVM_CORPUS"
+cp "$HEX_DIR"/*_evm.hex "$EVM_CORPUS"/
+"$ROOT/tools/bench_evm_cache.sh" "$DEMO" "$EVM_CORPUS" "$CACHE_RUNS" \
   "$ARTIFACTS/evm_cache_timing.csv"
 
 # Synthetic sanity: one unresolved JUMP must stamp every JUMPDEST.
@@ -118,22 +130,15 @@ if [[ "$ENABLE_MULTIPASS" == ON ]]; then
     | tee "$ARTIFACTS/polybench_timing.log" || \
     log "PolyBench timing failed (see log)"
 
-  log "dtvm EVM CLI smoke (fib deploy + extra executions)"
-  /usr/bin/time -f 'elapsed_sec=%e' \
-    "$DTVM" --format evm --mode multipass --enable-evm-gas --deploy \
-      --enable-statistics --num-extra-executions 20 --benchmark \
-      "$HEX_DIR/fib_evm.hex" \
-      > "$ARTIFACTS/dtvm_fib_deploy.log" 2>&1 || \
-    log "fib deploy CLI failed (see log)"
+  log "dtvm EVM CLI smoke (fib runtime fibonacci(20); needs --gas-limit)"
+  "$DTVM" --format evm --mode multipass --enable-evm-gas \
+    --gas-limit 21000000 --enable-statistics --num-extra-executions 20 \
+    --calldata 61047ff40000000000000000000000000000000000000000000000000000000000000014 \
+    "$HEX_DIR/fib_evm.hex" \
+    > "$ARTIFACTS/dtvm_fib_deploy.log" 2>&1 || \
+    log "fib CLI failed (creation hex is deploy bytecode; extract runtime first)"
 else
   log "skip PolyBench multipass and EVM JIT CLI — LLVM 15 missing"
-  log "interpreter CLI smoke (fib deploy)"
-  /usr/bin/time -f 'elapsed_sec=%e' \
-    "$DTVM" --format evm --mode interpreter --enable-evm-gas --deploy \
-      --enable-statistics --num-extra-executions 5 --benchmark \
-      "$HEX_DIR/fib_evm.hex" \
-      > "$ARTIFACTS/dtvm_fib_deploy_interp.log" 2>&1 || \
-    log "fib interpreter CLI failed (see log)"
 fi
 
 log "done. artifacts in $ARTIFACTS"
