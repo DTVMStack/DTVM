@@ -2441,16 +2441,19 @@ TEST(EVMRegressionTest, Issue606_EmptyPrestateAccountChargesNewAccountGas) {
 // Before Spurious Dragon (EIP-161), an account loaded in prestate exists even
 // if it is empty.  In particular, CALL to such an account must not charge the
 // 25000-gas new-account cost that the absence-based account check triggers.
-TEST(EVMRegressionTest, PreSpuriousDragonEmptyAccountDoesNotChargeNewAccountGas) {
+TEST(EVMRegressionTest,
+     PreSpuriousDragonEmptyAccountDoesNotChargeNewAccountGas) {
   const evmc::address SenderAddr = evmc::literals::operator""_address(
       "1111111111111111111111111111111111111111");
   const evmc::address ContractAddr = evmc::literals::operator""_address(
       "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f");
   const evmc::address CalleeAddr = evmc::literals::operator""_address(
       "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7");
-  const std::vector<uint8_t> Bytecode = zen::utils::fromHex(
-      "6000600060006000600073a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7"
-      "600ff15a6280010555").value();
+  const std::vector<uint8_t> Bytecode =
+      zen::utils::fromHex(
+          "6000600060006000600073a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7"
+          "600ff15a6280010555")
+          .value();
   const evmc::bytes32 StorageKey = zen::utils::parseBytes32(
       "0000000000000000000000000000000000000000000000000000000000800105");
 
@@ -2489,15 +2492,13 @@ TEST(EVMRegressionTest, PreSpuriousDragonEmptyAccountDoesNotChargeNewAccountGas)
     EXPECT_EQ(Result.Status, EVMC_SUCCESS);
     const auto &Storage = Host->accounts[ContractAddr].storage;
     EXPECT_NE(Storage.find(StorageKey), Storage.end());
-    return static_cast<uint64_t>(
-        intx::be::load<intx::uint256>(
-            Host->accounts[ContractAddr].storage.at(StorageKey).current));
+    return static_cast<uint64_t>(intx::be::load<intx::uint256>(
+        Host->accounts[ContractAddr].storage.at(StorageKey).current));
   };
 
   const uint64_t ExistingEmptyAccountGas =
       RunWithOptionallyMaterializedCallee(true);
-  const uint64_t AbsentAccountGas =
-      RunWithOptionallyMaterializedCallee(false);
+  const uint64_t AbsentAccountGas = RunWithOptionallyMaterializedCallee(false);
   EXPECT_EQ(ExistingEmptyAccountGas, AbsentAccountGas + 25000);
 }
 
