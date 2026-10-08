@@ -1,5 +1,6 @@
 // Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -1712,6 +1713,9 @@ SettlementResult runDtvmCliSettlementTransaction(
   Config.Mode = common::RunMode::InterpMode;
 
   auto HostPtr = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  // The CLI selects the Host revision before loading state and pre-warming.
+  // Keep this helper aligned with src/cli/dtvm.cpp.
+  HostPtr->setRevision(Revision);
   std::forward<PrepareHostT>(PrepareHost)(*HostPtr);
 
   auto &SenderAcc = HostPtr->accounts[SenderAddr];
@@ -2282,6 +2286,69 @@ TEST(EVMStateSaveLoad, BlockTimestampAtInt64Max) {
 
   std::filesystem::remove(FilePath);
 }
+// A malformed account entry must fail the whole state load without invoking a
+// RapidJSON member lookup.  RapidJSON asserts on HasMember when the value is
+// not an object, so wrapping parser calls in try/catch is insufficient.
+TEST(EVMStateSaveLoad, NullAccountObjectFailsCleanly) {
+  const std::string StateFilePath = "/tmp/dtvm_null_account_state.json";
+  {
+    std::ofstream StateFile(StateFilePath);
+    ASSERT_TRUE(StateFile) << "Failed to create malformed state file";
+    StateFile << R"({
+      "accounts": {
+        "00000000000000000000000000000000000000f1": null
+      }
+    })";
+  }
+
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  EXPECT_FALSE(zen::utils::loadState(*Host, StateFilePath))
+      << "A null account value must fail state loading";
+  EXPECT_TRUE(Host->accounts.empty())
+      << "A malformed state file must not partially mutate the host";
+  std::filesystem::remove(StateFilePath);
+}
+
+// MockedHost caps its debugging access journal at 200 entries.  A valid access
+// list can fill that journal, after which generic MockedHost::access_account
+// would report later prewarmed addresses as cold.  This Host's unbounded set
+// must remain the warmth source of truth.
+TEST(EVMStateSaveLoad, LargeAccessListDoesNotEvictPrewarm) {
+  const std::string StateFilePath = "/tmp/dtvm_large_access_list.json";
+  std::string StateJson = R"({
+  "accounts": {},
+  "access_list": [
+)";
+  constexpr int EntryCount =
+      static_cast<int>(evmc::MockedHost::max_recorded_account_accesses);
+  for (int I = 0; I < EntryCount; ++I) {
+    char Address[48];
+    std::snprintf(Address, sizeof(Address),
+                  "    \"000000000000000000000000000000000000%04x\"", I);
+    StateJson += Address;
+    StateJson += (I + 1 == EntryCount) ? "\n" : ",\n";
+  }
+  StateJson += "  ]\n}";
+  {
+    std::ofstream StateFile(StateFilePath);
+    ASSERT_TRUE(StateFile) << "Failed to create large access-list state";
+    StateFile << StateJson;
+  }
+
+  auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  ASSERT_TRUE(zen::utils::loadState(*Host, StateFilePath));
+  evmc::address Sender{};
+  evmc::address Recipient{};
+  evmc::address Coinbase{};
+  zen::utils::prewarmTransactionAccounts(*Host, EVMC_CANCUN, Sender, Recipient,
+                                         Coinbase);
+  evmc::address KZGPrecompile{};
+  KZGPrecompile.bytes[19] = 0x0a;
+  EXPECT_EQ(Host->access_account(KZGPrecompile), EVMC_ACCESS_WARM)
+      << "KZG prewarm must survive a 200-entry MockedHost access journal";
+  std::filesystem::remove(StateFilePath);
+}
+
 // ---------------------------------------------------------------------------
 // Regression tests for upstream issues that were fixed by PR #601 - #610.
 // ---------------------------------------------------------------------------
@@ -2500,6 +2567,99 @@ TEST(EVMRegressionTest,
       RunWithOptionallyMaterializedCallee(true);
   const uint64_t AbsentAccountGas = RunWithOptionallyMaterializedCallee(false);
   EXPECT_EQ(ExistingEmptyAccountGas, AbsentAccountGas + 25000);
+}
+
+// This test uses the same Host->upfront->call path as dtvm.cpp.  It also
+// demonstrates why the Host revision must be selected before that path: an
+// instance set to Tangerine Whistle still consults a Host that defaults to the
+// latest revision if only the instance is synchronized.
+TEST(EVMRegressionTest, CLIPathSynchronizesPreSpuriousDragonHostRevision) {
+  const evmc::address SenderAddr = evmc::literals::operator""_address(
+      "1111111111111111111111111111111111111111");
+  const evmc::address ContractAddr = evmc::literals::operator""_address(
+      "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f");
+  const evmc::address CalleeAddr = evmc::literals::operator""_address(
+      "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7");
+  const std::vector<uint8_t> Bytecode =
+      zen::utils::fromHex(
+          "6000600060006000600073a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7"
+          "600ff15a6280010555")
+          .value();
+  const evmc::bytes32 StorageKey = zen::utils::parseBytes32(
+      "0000000000000000000000000000000000000000000000000000000000800105");
+
+  auto RunWithHostRevision =
+      [&](bool SynchronizeHostRevision) -> uint64_t {
+    auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+    if (SynchronizeHostRevision) {
+      Host->setRevision(EVMC_TANGERINE_WHISTLE);
+    }
+    Host->accounts[CalleeAddr] = evmc::MockedAccount{};
+    Host->accounts[ContractAddr].code =
+        evmc::bytes(Bytecode.data(), Bytecode.size());
+    Host->accounts[SenderAddr].set_balance(0x1bc16d674ec80000ULL);
+    evmc_tx_context TxCtx{};
+    TxCtx.tx_origin = SenderAddr;
+    TxCtx.block_coinbase = evmc::address{};
+    TxCtx.tx_gas_price = intx::be::store<evmc::uint256be>(intx::uint256(1));
+    TxCtx.block_base_fee = intx::be::store<evmc::uint256be>(intx::uint256(1));
+    Host->tx_context = TxCtx;
+
+    RuntimeConfig Config;
+    Config.Mode = common::RunMode::InterpMode;
+    auto RT = Runtime::newEVMRuntime(Config, Host.get());
+    EXPECT_TRUE(RT);
+    if (!RT) {
+      return 0;
+    }
+    Host->setRuntime(RT.get());
+
+    auto ModRet = RT->loadEVMModule("cli_host_revision", Bytecode.data(),
+                                    Bytecode.size());
+    EXPECT_TRUE(ModRet);
+    if (!ModRet) {
+      return 0;
+    }
+    EVMModule *Mod = *ModRet;
+
+    Isolation *Iso = RT->createManagedIsolation();
+    EXPECT_NE(Iso, nullptr);
+    if (!Iso) {
+      return 0;
+    }
+
+    evmc_message Msg{};
+    Msg.kind = EVMC_CALL;
+    Msg.gas = 1000000;
+    Msg.sender = SenderAddr;
+    Msg.recipient = ContractAddr;
+    Msg.code_address = ContractAddr;
+
+    EXPECT_EQ(
+        zen::utils::applyEvmUpfrontGas(*Host, Msg, 1000000,
+                                       EVMC_TANGERINE_WHISTLE),
+        zen::utils::EvmUpfrontGasResult::Success);
+
+    auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
+    EXPECT_TRUE(InstRet);
+    if (!InstRet) {
+      return 0;
+    }
+    EVMInstance *Inst = *InstRet;
+    Inst->setRevision(EVMC_TANGERINE_WHISTLE);
+
+    evmc::Result ExecResult{};
+    RT->callEVMMain(*Inst, Msg, ExecResult);
+    EXPECT_EQ(ExecResult.status_code, EVMC_SUCCESS);
+    EXPECT_NE(Host->accounts[ContractAddr].storage.find(StorageKey),
+              Host->accounts[ContractAddr].storage.end());
+    return static_cast<uint64_t>(intx::be::load<intx::uint256>(
+        Host->accounts[ContractAddr].storage.at(StorageKey).current));
+  };
+
+  const uint64_t SyncedRemainingGas = RunWithHostRevision(true);
+  const uint64_t DesyncedRemainingGas = RunWithHostRevision(false);
+  EXPECT_EQ(SyncedRemainingGas, DesyncedRemainingGas + 25000);
 }
 
 TEST(EVMRegressionTest, Issue593_CreateDoesNotCreditPhantomBalance) {

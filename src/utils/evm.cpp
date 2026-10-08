@@ -357,6 +357,9 @@ bool loadState(evmc::MockedHost &Host, const std::string &FilePath) {
         evmc::address Address = zen::utils::parseAddress(AddressStr);
 
         const rapidjson::Value &AccountData = It->value;
+        if (!AccountData.IsObject()) {
+          return false;
+        }
         evmc::MockedAccount &Account = ParsedHost.accounts[Address];
 
         // Parse balance

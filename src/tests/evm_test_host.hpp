@@ -100,6 +100,7 @@ private:
       InternalCallModuleCache;
   std::unordered_map<evmc::address, std::unordered_set<evmc::bytes32>>
       PrewarmStorageKeys;
+  std::unordered_set<evmc::address> AccessedAccounts;
   std::unordered_set<evmc::address> CreatedInTx;
   std::unordered_set<evmc::address> PendingSelfdestructs;
   uint64_t CallStipendRefund = 0; // track CALL stipend refunds for prepaid fees
@@ -183,6 +184,8 @@ public:
     }
     clearInternalCallModuleCache();
     const evmc_revision ActiveRevision = Config.Revision;
+    recorded_account_accesses.clear();
+    AccessedAccounts.clear();
     const bool IsCreateTx = Config.Message.kind == EVMC_CREATE ||
                             Config.Message.kind == EVMC_CREATE2;
     const evmc::address &PrecompileAddr =
@@ -465,6 +468,21 @@ public:
 
     finalizeSelfdestructs();
     return Result;
+  }
+
+  void setRevision(evmc_revision NewRev) { Revision = NewRev; }
+
+  evmc_access_status
+  access_account(const evmc::address &Addr) noexcept override {
+    // MockedHost's recorded-access vector is capped at 200 entries, so it is
+    // only a debugging journal and cannot be the SSOT for transaction warmth.
+    // For example, a large EIP-2930 access list can fill the vector before
+    // transaction pre-warming reaches later precompiles.
+    const bool WasWarm = AccessedAccounts.count(Addr) != 0;
+    AccessedAccounts.insert(Addr);
+    const evmc_access_status BaseStatus =
+        evmc::MockedHost::access_account(Addr);
+    return WasWarm ? EVMC_ACCESS_WARM : BaseStatus;
   }
 
   bool account_exists(const evmc::address &Addr) const noexcept override {
@@ -980,6 +998,7 @@ private:
 
   struct HostStateSnapshot {
     decltype(accounts) Accounts;
+    decltype(AccessedAccounts) AccessedAccounts;
     decltype(recorded_logs) Logs;
     decltype(recorded_selfdestructs) Selfdestructs;
     std::unordered_set<evmc::address> CreatedAccounts;
@@ -988,13 +1007,18 @@ private:
   };
 
   HostStateSnapshot captureHostState() const {
-    return HostStateSnapshot{
-        accounts,    recorded_logs,        recorded_selfdestructs,
-        CreatedInTx, PendingSelfdestructs, recorded_account_accesses};
+    return HostStateSnapshot{accounts,
+                             AccessedAccounts,
+                             recorded_logs,
+                             recorded_selfdestructs,
+                             CreatedInTx,
+                             PendingSelfdestructs,
+                             recorded_account_accesses};
   }
 
   void restoreHostState(const HostStateSnapshot &Snapshot) {
     accounts = Snapshot.Accounts;
+    AccessedAccounts = Snapshot.AccessedAccounts;
     recorded_logs = Snapshot.Logs;
     recorded_selfdestructs = Snapshot.Selfdestructs;
     CreatedInTx = Snapshot.CreatedAccounts;
