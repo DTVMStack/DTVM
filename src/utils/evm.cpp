@@ -600,7 +600,7 @@ void prewarmTransactionAccounts(evmc::MockedHost &Host, evmc_revision Revision,
   // EIP-2929 (Berlin+): sender, recipient, and precompiled contracts are
   // always warm at the start of a transaction.  Keep the precompile range
   // revision-aware: Cancun adds the KZG point evaluation precompile at 0x0a
-  // (EIP-4844) and Prague adds the BLS12-381 precompiles at 0x0b-0x10
+  // (EIP-4844) and Prague adds the seven BLS12-381 precompiles at 0x0b-0x11
   // (EIP-2537).
   if (Revision >= EVMC_BERLIN) {
     Host.access_account(Sender);
@@ -615,7 +615,7 @@ void prewarmTransactionAccounts(evmc::MockedHost &Host, evmc_revision Revision,
       LastPrecompileIdx = 10;
     }
     if (Revision >= EVMC_PRAGUE) {
-      LastPrecompileIdx = 16;
+      LastPrecompileIdx = 0x11;
     }
     for (int PrecompileIdx = 1; PrecompileIdx <= LastPrecompileIdx;
          ++PrecompileIdx) {

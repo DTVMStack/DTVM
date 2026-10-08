@@ -473,6 +473,13 @@ public:
       return false;
     }
     const auto &Acc = It->second;
+    // EIP-161's empty-account semantics take effect only from Spurious Dragon.
+    // Older forks must distinguish a previously-created empty account from an
+    // absent account.
+    if (Revision < EVMC_SPURIOUS_DRAGON) {
+      return true;
+    }
+
     // EIP-161: An account is empty when nonce, balance, and code are all
     // zero.  Do not use a zero code hash as evidence of a non-empty account:
     // persisted prestate accounts may legitimately have a zeroed code hash.

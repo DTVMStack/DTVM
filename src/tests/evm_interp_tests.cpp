@@ -2338,8 +2338,8 @@ TEST(EVMRegressionTest, Issue602_KZGPrecompileStaysColdBeforeCancun) {
       << "KZG precompile must not be pre-warmed before Cancun";
 }
 
-// EIP-2537 (Prague) activates the BLS12-381 precompiles at 0x0b-0x10, so the
-// revision-aware prewarm range must extend to 0x10; 0x11 and above stay cold.
+// EIP-2537 (Prague) activates the BLS12-381 precompiles at 0x0b-0x11, so the
+// revision-aware prewarm range must extend to 0x11; 0x12 and above stay cold.
 TEST(EVMRegressionTest, BLSPrecompilesAreWarmOnPrague) {
   auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
   evmc::address Sender{};
@@ -2347,16 +2347,16 @@ TEST(EVMRegressionTest, BLSPrecompilesAreWarmOnPrague) {
   evmc::address Coinbase{};
   zen::utils::prewarmTransactionAccounts(*Host, EVMC_PRAGUE, Sender, Recipient,
                                          Coinbase);
-  for (int PrecompileIdx = 0x0b; PrecompileIdx <= 0x10; ++PrecompileIdx) {
+  for (int PrecompileIdx = 0x0b; PrecompileIdx <= 0x11; ++PrecompileIdx) {
     evmc::address BLSPrecompile{};
     BLSPrecompile.bytes[19] = static_cast<uint8_t>(PrecompileIdx);
     EXPECT_EQ(Host->access_account(BLSPrecompile), EVMC_ACCESS_WARM)
         << "BLS precompile at index " << PrecompileIdx
         << " must be warm at transaction start on Prague";
   }
-  // Nothing above 0x10 is a known precompile, so it must not be pre-warmed.
+  // Nothing above 0x11 is a known precompile, so it must not be pre-warmed.
   evmc::address FirstUnassigned{};
-  FirstUnassigned.bytes[19] = 0x11;
+  FirstUnassigned.bytes[19] = 0x12;
   EXPECT_EQ(Host->access_account(FirstUnassigned), EVMC_ACCESS_COLD)
       << "Addresses above the BLS range must not be pre-warmed";
 }
@@ -2436,6 +2436,69 @@ TEST(EVMRegressionTest, Issue606_EmptyPrestateAccountChargesNewAccountGas) {
       "00000000000000000000000000000000000000000000000000000000000e6a29");
   EXPECT_EQ(std::memcmp(StorageValue.bytes, ExpectedRemainingGas.bytes, 32), 0)
       << "CALL with value to an empty prestate account must charge 25000 gas";
+}
+
+// Before Spurious Dragon (EIP-161), an account loaded in prestate exists even
+// if it is empty.  In particular, CALL to such an account must not charge the
+// 25000-gas new-account cost that the absence-based account check triggers.
+TEST(EVMRegressionTest, PreSpuriousDragonEmptyAccountDoesNotChargeNewAccountGas) {
+  const evmc::address SenderAddr = evmc::literals::operator""_address(
+      "1111111111111111111111111111111111111111");
+  const evmc::address ContractAddr = evmc::literals::operator""_address(
+      "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f");
+  const evmc::address CalleeAddr = evmc::literals::operator""_address(
+      "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7");
+  const std::vector<uint8_t> Bytecode = zen::utils::fromHex(
+      "6000600060006000600073a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7"
+      "600ff15a6280010555").value();
+  const evmc::bytes32 StorageKey = zen::utils::parseBytes32(
+      "0000000000000000000000000000000000000000000000000000000000800105");
+
+  auto RunWithOptionallyMaterializedCallee =
+      [&](bool MaterializeCallee) -> uint64_t {
+    auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+    Host->accounts[ContractAddr].code =
+        evmc::bytes(Bytecode.data(), Bytecode.size());
+    Host->accounts[SenderAddr].set_balance(0x1bc16d674ec80000ULL);
+    if (MaterializeCallee) {
+      Host->accounts[CalleeAddr] = evmc::MockedAccount{};
+    }
+
+    RuntimeConfig Config;
+    Config.Mode = common::RunMode::InterpMode;
+    auto RT = Runtime::newEVMRuntime(Config, Host.get());
+    EXPECT_TRUE(RT);
+    Host->setRuntime(RT.get());
+
+    zen::evm::ZenMockedEVMHost::TransactionExecutionConfig ExecConfig;
+    ExecConfig.ModuleName = "pre-spurious-dragon-empty-account";
+    ExecConfig.Bytecode = Bytecode.data();
+    ExecConfig.BytecodeSize = Bytecode.size();
+    ExecConfig.Revision = EVMC_TANGERINE_WHISTLE;
+    ExecConfig.GasLimit = 1000000;
+    evmc_message Msg{};
+    Msg.kind = EVMC_CALL;
+    Msg.gas = 1000000;
+    Msg.sender = SenderAddr;
+    Msg.recipient = ContractAddr;
+    Msg.code_address = ContractAddr;
+    ExecConfig.Message = Msg;
+
+    auto Result = Host->executeTransaction(ExecConfig);
+    EXPECT_TRUE(Result.Success) << Result.ErrorMessage;
+    EXPECT_EQ(Result.Status, EVMC_SUCCESS);
+    const auto &Storage = Host->accounts[ContractAddr].storage;
+    EXPECT_NE(Storage.find(StorageKey), Storage.end());
+    return static_cast<uint64_t>(
+        intx::be::load<intx::uint256>(
+            Host->accounts[ContractAddr].storage.at(StorageKey).current));
+  };
+
+  const uint64_t ExistingEmptyAccountGas =
+      RunWithOptionallyMaterializedCallee(true);
+  const uint64_t AbsentAccountGas =
+      RunWithOptionallyMaterializedCallee(false);
+  EXPECT_EQ(ExistingEmptyAccountGas, AbsentAccountGas + 25000);
 }
 
 TEST(EVMRegressionTest, Issue593_CreateDoesNotCreditPhantomBalance) {
