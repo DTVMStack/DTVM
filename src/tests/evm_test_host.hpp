@@ -1014,7 +1014,7 @@ private:
 
   struct HostStateSnapshot {
     decltype(accounts) Accounts;
-    decltype(AccessedAccounts) AccessedAccounts;
+    decltype(AccessedAccounts) AccessedAccountsSnapshot;
     decltype(recorded_logs) Logs;
     decltype(recorded_selfdestructs) Selfdestructs;
     std::unordered_set<evmc::address> CreatedAccounts;
@@ -1034,7 +1034,7 @@ private:
 
   void restoreHostState(const HostStateSnapshot &Snapshot) {
     accounts = Snapshot.Accounts;
-    AccessedAccounts = Snapshot.AccessedAccounts;
+    AccessedAccounts = Snapshot.AccessedAccountsSnapshot;
     recorded_logs = Snapshot.Logs;
     recorded_selfdestructs = Snapshot.Selfdestructs;
     CreatedInTx = Snapshot.CreatedAccounts;
