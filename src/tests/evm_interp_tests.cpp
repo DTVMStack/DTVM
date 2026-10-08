@@ -2588,8 +2588,7 @@ TEST(EVMRegressionTest, CLIPathSynchronizesPreSpuriousDragonHostRevision) {
   const evmc::bytes32 StorageKey = zen::utils::parseBytes32(
       "0000000000000000000000000000000000000000000000000000000000800105");
 
-  auto RunWithHostRevision =
-      [&](bool SynchronizeHostRevision) -> uint64_t {
+  auto RunWithHostRevision = [&](bool SynchronizeHostRevision) -> uint64_t {
     auto Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
     if (SynchronizeHostRevision) {
       Host->setRevision(EVMC_TANGERINE_WHISTLE);
@@ -2635,10 +2634,9 @@ TEST(EVMRegressionTest, CLIPathSynchronizesPreSpuriousDragonHostRevision) {
     Msg.recipient = ContractAddr;
     Msg.code_address = ContractAddr;
 
-    EXPECT_EQ(
-        zen::utils::applyEvmUpfrontGas(*Host, Msg, 1000000,
-                                       EVMC_TANGERINE_WHISTLE),
-        zen::utils::EvmUpfrontGasResult::Success);
+    EXPECT_EQ(zen::utils::applyEvmUpfrontGas(*Host, Msg, 1000000,
+                                             EVMC_TANGERINE_WHISTLE),
+              zen::utils::EvmUpfrontGasResult::Success);
 
     auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
     EXPECT_TRUE(InstRet);
