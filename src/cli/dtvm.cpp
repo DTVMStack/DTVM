@@ -324,6 +324,9 @@ int main(int argc, char *argv[]) {
 #ifdef ZEN_ENABLE_EVM
   if (Config.Format == InputFormat::EVM) {
     auto MockedEVMHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+    // Synchronize the Host and EVMInstance revisions. account_exists and
+    // precompile handling in the Host use the selected fork's semantics.
+    MockedEVMHost->setRevision(EvmRevision);
     // Set tx_origin from sender address before loading state,
     // so loadState() can override it if tx_origin is present in state.json
     MockedEVMHost->tx_context.tx_origin =

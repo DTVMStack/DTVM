@@ -100,6 +100,7 @@ private:
       InternalCallModuleCache;
   std::unordered_map<evmc::address, std::unordered_set<evmc::bytes32>>
       PrewarmStorageKeys;
+  std::unordered_set<evmc::address> AccessedAccounts;
   std::unordered_set<evmc::address> CreatedInTx;
   std::unordered_set<evmc::address> PendingSelfdestructs;
   uint64_t CallStipendRefund = 0; // track CALL stipend refunds for prepaid fees
@@ -183,6 +184,8 @@ public:
     }
     clearInternalCallModuleCache();
     const evmc_revision ActiveRevision = Config.Revision;
+    recorded_account_accesses.clear();
+    AccessedAccounts.clear();
     const bool IsCreateTx = Config.Message.kind == EVMC_CREATE ||
                             Config.Message.kind == EVMC_CREATE2;
     const evmc::address &PrecompileAddr =
@@ -467,19 +470,54 @@ public:
     return Result;
   }
 
+  void setRevision(evmc_revision NewRev) { Revision = NewRev; }
+
+  evmc_access_status
+  access_account(const evmc::address &Addr) noexcept override {
+    // MockedHost's recorded-access vector is capped at 200 entries, so it is
+    // only a debugging journal.  Bypass the base implementation here: it has a
+    // quadratic-over-cap bound when checking existing entries and cannot track
+    // warmth beyond the cap.  For example, a large EIP-2930 access list can
+    // fill the vector before pre-warming reaches later precompiles.
+    if (AccessedAccounts.insert(Addr).second) {
+      if (recorded_account_accesses.size() <
+          evmc::MockedHost::max_recorded_account_accesses) {
+        recorded_account_accesses.push_back(Addr);
+      }
+    } else {
+      return EVMC_ACCESS_WARM;
+    }
+
+    // Preserve the established EVMC precompile range semantics.
+    static const evmc::address FirstPrecompile =
+        evmc::literals::operator""_address(
+            "0000000000000000000000000000000000000001");
+    static const evmc::address LastPrecompile =
+        evmc::literals::operator""_address(
+            "0000000000000000000000000000000000000009");
+    if (Addr >= FirstPrecompile && Addr <= LastPrecompile) {
+      return EVMC_ACCESS_WARM;
+    }
+    return EVMC_ACCESS_COLD;
+  }
+
   bool account_exists(const evmc::address &Addr) const noexcept override {
     auto It = accounts.find(Addr);
     if (It == accounts.end()) {
       return false;
     }
     const auto &Acc = It->second;
-    if (Acc.nonce != 0) {
+    // EIP-161's empty-account semantics take effect only from Spurious Dragon.
+    // Older forks must distinguish a previously-created empty account from an
+    // absent account.
+    if (Revision < EVMC_SPURIOUS_DRAGON) {
       return true;
     }
-    if (!Acc.code.empty()) {
-      return true;
-    }
-    if (std::memcmp(Acc.codehash.bytes, EMPTY_CODE_HASH.bytes, 32) != 0) {
+
+    // EIP-161: An account is empty when nonce, balance, and code are all
+    // zero.  Do not use a zero code hash as evidence of a non-empty account:
+    // persisted prestate accounts may legitimately have a zeroed code hash.
+    if (Acc.nonce != 0 || !Acc.code.empty()) {
       return true;
     }
     return toUint256Bytes(Acc.balance) != 0;
@@ -976,6 +1014,7 @@ private:
 
   struct HostStateSnapshot {
     decltype(accounts) Accounts;
+    decltype(AccessedAccounts) AccessedAccountsSnapshot;
     decltype(recorded_logs) Logs;
     decltype(recorded_selfdestructs) Selfdestructs;
     std::unordered_set<evmc::address> CreatedAccounts;
@@ -984,13 +1023,18 @@ private:
   };
 
   HostStateSnapshot captureHostState() const {
-    return HostStateSnapshot{
-        accounts,    recorded_logs,        recorded_selfdestructs,
-        CreatedInTx, PendingSelfdestructs, recorded_account_accesses};
+    return HostStateSnapshot{accounts,
+                             AccessedAccounts,
+                             recorded_logs,
+                             recorded_selfdestructs,
+                             CreatedInTx,
+                             PendingSelfdestructs,
+                             recorded_account_accesses};
   }
 
   void restoreHostState(const HostStateSnapshot &Snapshot) {
     accounts = Snapshot.Accounts;
+    AccessedAccounts = Snapshot.AccessedAccountsSnapshot;
     recorded_logs = Snapshot.Logs;
     recorded_selfdestructs = Snapshot.Selfdestructs;
     CreatedInTx = Snapshot.CreatedAccounts;
