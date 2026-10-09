@@ -19,6 +19,7 @@ namespace {
 
 using zen::evm::buildBytecodeCache;
 using zen::evm::EVMBytecodeCache;
+using zen::evm::resolveJumpTargets;
 
 constexpr uint8_t OP_STOP = static_cast<uint8_t>(evmc_opcode::OP_STOP);
 constexpr uint8_t OP_ADD = static_cast<uint8_t>(evmc_opcode::OP_ADD);
@@ -414,6 +415,52 @@ TEST(EVMCacheDominator, DynTargetInStaticLoop) {
   EXPECT_EQ(IDom[2], 1u) << "Stitched dyn-target dominated by static parent.";
   EXPECT_EQ(IDom[3], 2u);
   EXPECT_EQ(IDom[4], 1u);
+}
+
+// A build without SPP may leave the jump targets out: none of the other
+// fields depend on them, and resolveJumpTargets() later gives the same table
+// as a build that resolved them up front.
+TEST(EVMCacheJumpTargets, DeferredResolutionMatchesEagerBuild) {
+  // PUSH1 4, JUMP, STOP, JUMPDEST, PUSH0, PUSH1 10, JUMPI, STOP, JUMPDEST, STOP
+  const std::vector<uint8_t> Code = {
+      OP_PUSH1, 0x04, OP_JUMP,  OP_STOP, OP_JUMPDEST, OP_PUSH0,
+      OP_PUSH1, 0x0a, OP_JUMPI, OP_STOP, OP_JUMPDEST, OP_STOP,
+  };
+  const auto *Data = reinterpret_cast<const std::byte *>(Code.data());
+
+  const EVMBytecodeCache Eager = buildNoSPPCache(Code);
+  ASSERT_EQ(Eager.ResolvedJumpTargets.size(), 2u);
+  EXPECT_EQ(Eager.ResolvedJumpTargets.at(2), 4u);
+  EXPECT_EQ(Eager.ResolvedJumpTargets.at(8), 10u);
+
+  EVMBytecodeCache Deferred;
+  buildBytecodeCache(Deferred, Data, Code.size(), EVMC_CANCUN,
+                     /*EnableSPP=*/false, /*ResolveJumpTargets=*/false);
+  EXPECT_TRUE(Deferred.ResolvedJumpTargets.empty());
+  EXPECT_EQ(Deferred.JumpDestMap, Eager.JumpDestMap);
+  EXPECT_EQ(Deferred.PushValueMap, Eager.PushValueMap);
+  EXPECT_EQ(Deferred.GasChunkEnd, Eager.GasChunkEnd);
+  EXPECT_EQ(Deferred.GasChunkCost, Eager.GasChunkCost);
+  EXPECT_EQ(Deferred.GasChunkCostSPP, Eager.GasChunkCostSPP);
+
+  resolveJumpTargets(Deferred, Data, Code.size(), EVMC_CANCUN);
+  EXPECT_EQ(Deferred.ResolvedJumpTargets, Eager.ResolvedJumpTargets);
+}
+
+// The SPP pipeline reads the jump targets, so an SPP build resolves them
+// whatever the caller asks for.
+TEST(EVMCacheJumpTargets, SPPBuildAlwaysResolves) {
+  const std::vector<uint8_t> Code = {
+      OP_PUSH1, 0x04, OP_JUMP, OP_STOP, OP_JUMPDEST, OP_STOP,
+  };
+  EVMBytecodeCache Cache;
+  buildBytecodeCache(Cache, reinterpret_cast<const std::byte *>(Code.data()),
+                     Code.size(), EVMC_CANCUN, /*EnableSPP=*/true,
+                     /*ResolveJumpTargets=*/false);
+  const EVMBytecodeCache Reference = buildSPPCache(Code);
+  EXPECT_EQ(Cache.ResolvedJumpTargets, Reference.ResolvedJumpTargets);
+  EXPECT_EQ(Cache.ResolvedJumpTargets.size(), 1u);
+  EXPECT_EQ(Cache.GasChunkCostSPP, Reference.GasChunkCostSPP);
 }
 
 } // namespace

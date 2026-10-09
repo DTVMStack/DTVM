@@ -37,9 +37,21 @@ struct EVMBytecodeCache {
 // metering pipeline runs and GasChunkCostSPP is populated with shifted
 // per-chunk costs for the multipass JIT. When false (interpreter-only
 // modules), the pipeline is skipped and GasChunkCostSPP stays empty.
+//
+// ResolvedJumpTargets is filled when EnableSPP or ResolveJumpTargets is set.
+// The SPP pipeline reads it; without SPP nothing in the build does, and its
+// only consumer is the JIT front end. A build for the interpreter can
+// therefore pass ResolveJumpTargets = false and call resolveJumpTargets()
+// later, if the module is ever compiled.
 void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
                         size_t CodeSize, evmc_revision Rev,
-                        bool EnableSPP = false);
+                        bool EnableSPP = false, bool ResolveJumpTargets = true);
+
+// Fill Cache.ResolvedJumpTargets of a cache built for the same code and
+// revision without them. The result equals that of a build that resolved the
+// jump targets up front.
+void resolveJumpTargets(EVMBytecodeCache &Cache, const common::Byte *Code,
+                        size_t CodeSize, evmc_revision Rev);
 
 } // namespace zen::evm
 

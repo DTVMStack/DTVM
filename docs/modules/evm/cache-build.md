@@ -25,14 +25,29 @@ void buildBytecodeCache(EVMBytecodeCache &Cache,
                         const common::Byte *Code,
                         size_t CodeSize,
                         evmc_revision Rev,
-                        bool EnableSPP);
+                        bool EnableSPP,
+                        bool ResolveJumpTargets);
+
+void resolveJumpTargets(EVMBytecodeCache &Cache,
+                        const common::Byte *Code,
+                        size_t CodeSize,
+                        evmc_revision Rev);
 ```
 
-Single entry that zero-initialises the cache vectors, populates the
-JUMPDEST and PUSH-value maps, and delegates the rest to
-`buildGasChunksSPP`. `EnableSPP=true` selects the SPP-scheduled
+`buildBytecodeCache` is the single entry that zero-initialises the cache
+vectors, populates the JUMPDEST and PUSH-value maps, and delegates the
+rest to `buildGasChunksSPP`. `EnableSPP=true` selects the SPP-scheduled
 chunk-cost path (`GasChunkCostSPP` filled); `EnableSPP=false` runs the
 straight-line fallback only.
+
+`ResolvedJumpTargets` holds the constant JUMP/JUMPI targets found by the
+abstract-stack pass. `buildCFGEdges` reads it on the SPP path and the JIT
+front end reads it when it compiles; the interpreter never does. An SPP
+build therefore always resolves it. Without SPP the caller chooses:
+`ResolveJumpTargets=false` leaves the table empty, and
+`resolveJumpTargets()` fills it later with the same result.
+`EVMModule` builds interpreter-side caches without the table and
+completes them in `getBytecodeCacheForJIT()` before a compile reads them.
 
 ## Pipeline (in shipped execution order)
 

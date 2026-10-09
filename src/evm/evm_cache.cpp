@@ -1772,7 +1772,8 @@ static bool buildGasChunksSPP(
 } // namespace
 
 void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
-                        size_t CodeSize, evmc_revision Rev, bool EnableSPP) {
+                        size_t CodeSize, evmc_revision Rev, bool EnableSPP,
+                        bool ResolveJumpTargets) {
   Cache.JumpDestMap.assign(CodeSize, 0);
   Cache.PushValueMap.resize(CodeSize);
   Cache.GasChunkEnd.assign(CodeSize, 0);
@@ -1793,20 +1794,29 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
   }
   // Shared jump target resolution: abstract stack simulation run once,
   // results consumed by both SPP gas optimizer and SSA liftability analyzer.
-  resolveJumpTargetsByAbstractStack(Code, CodeSize, Cache.JumpDestMap,
-                                    MetricsTable, Cache.ResolvedJumpTargets);
+  // Without SPP the gas chunks below do not depend on it, so a caller that
+  // only interprets may leave it to resolveJumpTargets().
+  if (EnableSPP || ResolveJumpTargets) {
+    resolveJumpTargetsByAbstractStack(Code, CodeSize, Cache.JumpDestMap,
+                                      MetricsTable, Cache.ResolvedJumpTargets);
+  }
   EVM_PROFILE_END(buildJumpDestMap);
-
-  // Shared jump target resolution: abstract stack simulation run once,
-  // results consumed by both SPP gas optimizer and SSA liftability analyzer.
-  Cache.ResolvedJumpTargets.clear();
-  resolveJumpTargetsByAbstractStack(Code, CodeSize, Cache.JumpDestMap,
-                                    MetricsTable, Cache.ResolvedJumpTargets);
 
   buildGasChunksSPP(Code, CodeSize, MetricsTable, Cache.JumpDestMap,
                     Cache.PushValueMap, Cache.ResolvedJumpTargets,
                     Cache.GasChunkEnd, Cache.GasChunkCost,
                     Cache.GasChunkCostSPP, EnableSPP);
+}
+
+void resolveJumpTargets(EVMBytecodeCache &Cache, const common::Byte *Code,
+                        size_t CodeSize, evmc_revision Rev) {
+  const auto *MetricsTable = evmc_get_instruction_metrics_table(Rev);
+  if (!MetricsTable) {
+    MetricsTable = evmc_get_instruction_metrics_table(DEFAULT_REVISION);
+  }
+  Cache.ResolvedJumpTargets.clear();
+  resolveJumpTargetsByAbstractStack(Code, CodeSize, Cache.JumpDestMap,
+                                    MetricsTable, Cache.ResolvedJumpTargets);
 }
 
 namespace for_testing {

@@ -811,6 +811,10 @@ void updateProfileAndMaybeTriggerJIT(DTVM *VM, const evmc_message *Msg,
     return;
   }
 
+  // The compile thread reads the bytecode cache. Complete it here, on the
+  // thread that also interprets this module, so the compile never writes it.
+  (void)Mod->getBytecodeCacheForJIT();
+
   // Trigger background JIT compilation via thread pool.
   auto &Pool = getOrCreateCompilePool(VM);
   auto Future =

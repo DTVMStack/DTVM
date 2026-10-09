@@ -40,6 +40,12 @@ public:
   evmc::Host *Host;
 
   const evm::EVMBytecodeCache &getBytecodeCache() const;
+  /// The bytecode cache with ResolvedJumpTargets filled in, as the JIT needs
+  /// it. A cache built without SPP leaves the jump targets out, because the
+  /// interpreter never reads them. This completes such a cache in place, so
+  /// call it on the thread that executes the module before a compile is handed
+  /// to another thread; the compile thread then only reads.
+  const evm::EVMBytecodeCache &getBytecodeCacheForJIT() const;
   evmc_revision getRevision() const { return Revision; }
   void setRevision(evmc_revision Rev) { Revision = Rev; }
   const EVMMemorySpecializationProfile &getMemorySpecializationProfile() const {
@@ -116,6 +122,7 @@ private:
 
   void initBytecodeCache() const;
   mutable bool BytecodeCacheInitialized = false;
+  mutable bool JumpTargetsResolved = false;
   mutable evm::EVMBytecodeCache BytecodeCache;
   // Whether this module will be consumed by the multipass JIT. When true,
   // buildBytecodeCache runs the expensive SPP metering pipeline so the JIT
