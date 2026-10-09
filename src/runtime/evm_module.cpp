@@ -115,8 +115,21 @@ const evm::EVMBytecodeCache &EVMModule::getBytecodeCache() const {
 }
 
 void EVMModule::initBytecodeCache() const {
+  // Only the SPP pipeline and the JIT read the resolved jump targets. Without
+  // SPP, leave them to getBytecodeCacheForJIT(): most interpreted modules are
+  // never compiled.
   evm::buildBytecodeCache(BytecodeCache, Code, CodeSize, Revision,
-                          CacheNeedsSPP);
+                          CacheNeedsSPP, CacheNeedsSPP);
+  JumpTargetsResolved = CacheNeedsSPP;
+}
+
+const evm::EVMBytecodeCache &EVMModule::getBytecodeCacheForJIT() const {
+  const evm::EVMBytecodeCache &Cache = getBytecodeCache();
+  if (!JumpTargetsResolved) {
+    evm::resolveJumpTargets(BytecodeCache, Code, CodeSize, Revision);
+    JumpTargetsResolved = true;
+  }
+  return Cache;
 }
 
 } // namespace zen::runtime

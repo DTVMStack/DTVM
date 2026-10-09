@@ -89,7 +89,7 @@ void EagerEVMJITCompiler::compile() {
                     EVMMod->CodeSize);
     Ctx.setMemoryLinearStrideSkipLeadingZeroLimbStores(
         EVMMod->getMemoryLinearStrideSkipLeadingZeroLimbStores());
-    const auto &Cache = EVMMod->getBytecodeCache();
+    const auto &Cache = EVMMod->getBytecodeCacheForJIT();
     // GasChunkCostSPP is only allocated when the SPP metering pipeline runs
     // (i.e. this module will be JIT-compiled). Pass nullptr when the array is
     // empty so the JIT falls back to the unshifted GasChunkCost automatically.

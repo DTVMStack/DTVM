@@ -1485,6 +1485,36 @@ TEST(EVMLogMemoryPreexpandDifferential, StaticModePrecedesMemoryExpansion) {
   EXPECT_EQ(Multi.LogsSignature, Interp.LogsSignature);
 }
 
+TEST(EVMModuleBytecodeCache, JumpTargetsAreResolvedForTheJITOnly) {
+  // PUSH1 4, JUMP, STOP, JUMPDEST, STOP: one constant jump.
+  const std::vector<uint8_t> Bytecode = {0x60, 0x04, 0x56, 0x00, 0x5b, 0x00};
+
+  RuntimeConfig Config;
+  Config.Mode = common::RunMode::MultipassMode;
+  Config.EnableProfileGuidedJIT = true; // load without compiling
+
+  auto MockedHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  auto RT = Runtime::newEVMRuntime(Config, MockedHost.get());
+  ASSERT_TRUE(RT);
+  MockedHost->setRuntime(RT.get());
+
+  auto ModRet = RT->loadEVMModule("jump_targets_on_demand", Bytecode.data(),
+                                  Bytecode.size(), evmc_revision::EVMC_OSAKA);
+  ASSERT_TRUE(ModRet);
+  EVMModule *Mod = *ModRet;
+
+  // The interpreter's view of the cache carries no jump targets.
+  const auto &Cache = Mod->getBytecodeCache();
+  EXPECT_TRUE(Cache.ResolvedJumpTargets.empty());
+  EXPECT_EQ(Cache.GasChunkEnd.size(), Bytecode.size());
+
+  // The JIT's view completes the same cache object in place.
+  const auto &JITCache = Mod->getBytecodeCacheForJIT();
+  EXPECT_EQ(&JITCache, &Cache);
+  ASSERT_EQ(JITCache.ResolvedJumpTargets.size(), 1u);
+  EXPECT_EQ(JITCache.ResolvedJumpTargets.at(2), 4u);
+}
+
 TEST(EVMCallMemoryProofDifferential, PreparedIdentityCallMatchesInterpreter) {
   const auto Output = expectInterpMatchesMultipassWithGas(
       "staticcall_prepared_memory", preparedCallMemoryBytecode(OP_STATICCALL),
