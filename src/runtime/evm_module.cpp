@@ -77,12 +77,15 @@ EVMModule::newEVMModule(Runtime &RT, CodeHolderUniquePtr CodeHolder,
   Mod->Host = RT.getEVMHost();
 
   if (RT.getConfig().Mode != common::RunMode::InterpMode) {
-    // Run the EVMAnalyzer once at module creation to determine if this
-    // contract should fall back to interpreter. This avoids per-call O(n)
-    // bytecode scans in the execute() hot path.
+    // Run the EVMAnalyzer suitability pass once at module creation to
+    // determine if this contract should fall back to interpreter. This avoids
+    // per-call O(n) bytecode scans in the execute() hot path. Only the
+    // fallback verdict is read here, so the CFG, liftability and range passes
+    // of a full analyze() are skipped; the JIT front end runs its own full
+    // analysis when it compiles the module.
     COMPILER::EVMAnalyzer Analyzer(Rev);
-    Analyzer.analyze(reinterpret_cast<const uint8_t *>(Mod->Code),
-                     Mod->CodeSize);
+    Analyzer.analyzeSuitabilityOnly(
+        reinterpret_cast<const uint8_t *>(Mod->Code), Mod->CodeSize);
     Mod->ShouldFallbackToInterp = Analyzer.getJITSuitability().ShouldFallback;
 
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
