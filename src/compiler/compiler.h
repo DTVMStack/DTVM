@@ -19,8 +19,12 @@ class JITCompilerBase : public NonCopyable {
 protected:
   virtual ~JITCompilerBase() = default;
 
+  /// \p KeepFirstParamInRegister tells the greedy allocator never to spill or
+  /// split the first parameter. Set it when most of the function reads that
+  /// parameter, as an EVM function reads its instance pointer.
   static void compileMIRToCgIR(MModule &Mod, MFunction &MFunc,
-                               CgFunction &CgFunc, bool DisableGreedyRA);
+                               CgFunction &CgFunc, bool DisableGreedyRA,
+                               bool KeepFirstParamInRegister = false);
   static void emitObjectBuffer(CompileContext *Ctx);
 };
 
