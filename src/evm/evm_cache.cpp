@@ -1797,12 +1797,6 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
                                     MetricsTable, Cache.ResolvedJumpTargets);
   EVM_PROFILE_END(buildJumpDestMap);
 
-  // Shared jump target resolution: abstract stack simulation run once,
-  // results consumed by both SPP gas optimizer and SSA liftability analyzer.
-  Cache.ResolvedJumpTargets.clear();
-  resolveJumpTargetsByAbstractStack(Code, CodeSize, Cache.JumpDestMap,
-                                    MetricsTable, Cache.ResolvedJumpTargets);
-
   buildGasChunksSPP(Code, CodeSize, MetricsTable, Cache.JumpDestMap,
                     Cache.PushValueMap, Cache.ResolvedJumpTargets,
                     Cache.GasChunkEnd, Cache.GasChunkCost,
