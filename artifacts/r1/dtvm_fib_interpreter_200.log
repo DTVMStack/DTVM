@@ -1,0 +1,6 @@
+output: 0x0000000000000000000000000000000000000000000000000000000000001A6D
+[2026-10-08 12:02:54.156] [info] [statistics.cpp:102] ================  [Begin] ZetaEngine Statistics  ================
+[2026-10-08 12:02:54.156] [info] [statistics.cpp:125] Load:			1 times, avg 0.001ms, total 0.001ms, 0.96%
+[2026-10-08 12:02:54.156] [info] [statistics.cpp:125] Instantiation:		201 times, avg 0.000ms, total 0.058ms, 99.04%
+[2026-10-08 12:02:54.156] [info] [statistics.cpp:132] Total:		0.059ms
+[2026-10-08 12:02:54.156] [info] [statistics.cpp:134] =================  [End] ZetaEngine Statistics =================

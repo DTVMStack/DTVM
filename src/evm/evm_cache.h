@@ -29,17 +29,24 @@ struct EVMBytecodeCache {
   /// Pre-resolved jump targets via abstract stack simulation.
   /// Key: PC of the JUMP/JUMPI opcode.
   /// Value: canonical target JUMPDEST PC.
-  /// Only constant jumps are present; absence means dynamic/unresolved.
+  /// Only constant (single-target) jumps are present; absence means the
+  /// jump is dynamic, or it lives in ResolvedJumpMultiTargets.
   std::unordered_map<uint32_t, uint32_t> ResolvedJumpTargets;
+  /// Sound over-approx multi-target JUMP/JUMPI sets from the cross-block
+  /// ConstSet worklist. SSA does not consume this map (multi stays
+  /// non-lifted). SPP `buildCFGEdges` materialises one explicit edge per dest.
+  std::unordered_map<uint32_t, std::vector<uint32_t>> ResolvedJumpMultiTargets;
 };
 
 // Build the bytecode cache. When EnableSPP is true, the expensive SPP
 // metering pipeline runs and GasChunkCostSPP is populated with shifted
 // per-chunk costs for the multipass JIT. When false (interpreter-only
 // modules), the pipeline is skipped and GasChunkCostSPP stays empty.
+// EnableR1 (default true) runs the cross-block Const/ConstSet worklist
+// after the block-local pass. ZEN_EVM_DISABLE_R1=1 force-disables it.
 void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
                         size_t CodeSize, evmc_revision Rev,
-                        bool EnableSPP = false);
+                        bool EnableSPP = false, bool EnableR1 = true);
 
 } // namespace zen::evm
 
