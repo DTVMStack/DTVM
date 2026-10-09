@@ -4071,6 +4071,32 @@ TEST(EVMJITFrontendAnalyzerTest,
   EXPECT_FALSE(SuitabilityOnlyAnalyzer.hasUnknownDynamicJumpTargets());
 }
 
+TEST(EVMJITFrontendAnalyzerTest, SuitabilityOnlyAgreesOnFallbackVerdict) {
+  // Module load reads only ShouldFallback, from the suitability-only pass.
+  // Cover both verdicts: a contract over the bytecode size limit, a run of
+  // RA-expensive opcodes over the consecutive limit, and one small contract
+  // that stays on the JIT path.
+  const std::vector<uint8_t> Oversized(MAX_JIT_BYTECODE_SIZE + 1, 0x5b);
+  const std::vector<uint8_t> ExpensiveRun(MAX_CONSECUTIVE_RA_EXPENSIVE + 1,
+                                          0x1b);
+  const std::vector<uint8_t> Small = {0x60, 0x01, 0x60, 0x02, 0x01, 0x00};
+
+  const struct {
+    const std::vector<uint8_t> &Bytecode;
+    bool ExpectedFallback;
+  } Cases[] = {{Oversized, true}, {ExpensiveRun, true}, {Small, false}};
+
+  for (const auto &Case : Cases) {
+    const EVMAnalyzer FullAnalyzer = analyzeBytecode(Case.Bytecode);
+    const EVMAnalyzer SuitabilityOnlyAnalyzer =
+        analyzeSuitabilityOnlyBytecode(Case.Bytecode);
+    EXPECT_EQ(FullAnalyzer.getJITSuitability().ShouldFallback,
+              Case.ExpectedFallback);
+    EXPECT_EQ(SuitabilityOnlyAnalyzer.getJITSuitability().ShouldFallback,
+              Case.ExpectedFallback);
+  }
+}
+
 TEST(EVMJITFrontendAnalyzerTest,
      ConstantJumpiKeepsMatchingEntryDepthSuccessorsLiftable) {
   const std::vector<uint8_t> Bytecode = {

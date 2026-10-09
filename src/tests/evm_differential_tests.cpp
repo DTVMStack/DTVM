@@ -1608,4 +1608,49 @@ TEST(EVMCallMemoryProofDifferential, EmptyRangesIgnoreHighOffsets) {
             "0000000000000000000000000000000000000000000000000000000000000001");
 }
 
+TEST(EVMModuleLoadSuitability, LoadTimeVerdictMatchesFullAnalysis) {
+  // newEVMModule decides between the JIT and the interpreter from the
+  // suitability-only analyzer pass. The verdict stored on the module must be
+  // the one a full analysis gives, and eager compilation must follow it.
+  const struct {
+    const char *Label;
+    std::vector<uint8_t> Bytecode;
+  } Cases[] = {
+      {"oversized",
+       std::vector<uint8_t>(COMPILER::MAX_JIT_BYTECODE_SIZE + 1, 0x5b)},
+      {"small", {0x60, 0x01, 0x60, 0x02, 0x01, 0x00}},
+  };
+
+  for (const auto &Case : Cases) {
+    COMPILER::EVMAnalyzer Analyzer(evmc_revision::EVMC_OSAKA);
+    Analyzer.analyze(Case.Bytecode.data(), Case.Bytecode.size());
+    const bool ExpectedFallback = Analyzer.getJITSuitability().ShouldFallback;
+
+    for (bool ProfileGuided : {false, true}) {
+      RuntimeConfig Config;
+      Config.Mode = common::RunMode::MultipassMode;
+      Config.DisableMultipassMultithread = true;
+      Config.EnableProfileGuidedJIT = ProfileGuided;
+
+      auto MockedHost = std::make_unique<zen::evm::ZenMockedEVMHost>();
+      auto RT = Runtime::newEVMRuntime(Config, MockedHost.get());
+      ASSERT_TRUE(RT) << Case.Label;
+      MockedHost->setRuntime(RT.get());
+
+      auto ModRet =
+          RT->loadEVMModule(Case.Label, Case.Bytecode.data(),
+                            Case.Bytecode.size(), evmc_revision::EVMC_OSAKA);
+      ASSERT_TRUE(ModRet) << Case.Label;
+      EVMModule *Mod = *ModRet;
+
+      EXPECT_EQ(Mod->ShouldFallbackToInterp.load(), ExpectedFallback)
+          << Case.Label << " profile_guided=" << ProfileGuided;
+      // Profile-guided modules are never compiled at load.
+      const bool ExpectJITCode = !ProfileGuided && !ExpectedFallback;
+      EXPECT_EQ(Mod->getJITCode() != nullptr, ExpectJITCode)
+          << Case.Label << " profile_guided=" << ProfileGuided;
+    }
+  }
+}
+
 #endif
