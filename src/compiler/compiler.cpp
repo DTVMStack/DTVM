@@ -55,9 +55,41 @@ static inline bool isFuncNeedGreedyRA(uint32_t FuncIdx) {
 }
 #endif // ZEN_ENABLE_DEBUG_GREEDY_RA
 
+/// Mark the live interval of the first parameter unspillable, so that the
+/// greedy allocator assigns it one register for the whole function.
+///
+/// The allocator otherwise treats the parameter like any other long interval:
+/// on a large function it splits the interval, spills the pieces and reloads
+/// them, and comes back to the pieces many times. For a value that most of the
+/// function reads, that work costs far more allocation time than it saves.
+///
+/// Does nothing unless the register is still what lowering made of the
+/// parameter: a single definition, the copy of the incoming argument in the
+/// entry block. Coalescing may have merged it into another value.
+static void keepFirstParamInRegister(const X86CgLowering &Lowering,
+                                     CgFunction &MF, CgLiveIntervals &LIS) {
+  const CgRegister Reg = Lowering.getVarReg(0);
+  if (!Reg.isVirtual() || !LIS.hasInterval(Reg)) {
+    return;
+  }
+  const CgInstruction *Def = nullptr;
+  for (const CgOperand &MO : MF.getRegInfo().def_operands(Reg)) {
+    if (Def || MO.getSubReg() != 0) {
+      return;
+    }
+    Def = MO.getParent();
+  }
+  if (!Def || Def->getParent() != &MF.front() || !Def->isCopy() ||
+      !Def->getOperand(1).isReg() ||
+      !Def->getOperand(1).getReg().isPhysical()) {
+    return;
+  }
+  LIS.getInterval(Reg).markNotSpillable();
+}
+
 void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
-                                       CgFunction &CgFunc,
-                                       bool DisableGreedyRA) {
+                                       CgFunction &CgFunc, bool DisableGreedyRA,
+                                       bool KeepFirstParamInRegister) {
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   llvm::DebugFlag = true;
   llvm::dbgs() << "\n########## MIR Dump ##########\n\n";
@@ -115,6 +147,9 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
       // CgRegisterCoalescer must before CgVirtRegMap
       CgRegisterCoalescer Coalescer(MF);
       CgVirtRegMap VRM(MF);
+      if (KeepFirstParamInRegister) {
+        keepFirstParamInRegister(CgLowering, MF, LIS);
+      }
       CgLiveRegMatrix Matrix(MF);
       // RABasic ra(MF);
 

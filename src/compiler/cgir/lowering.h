@@ -55,6 +55,13 @@ public:
     MRI.freezeReservedRegs(*MF);
   }
 
+  /// The virtual register lowering assigned to MIR variable \p VarIdx
+  /// (parameters come first), or no register if it assigned none.
+  CgRegister getVarReg(uint32_t VarIdx) const {
+    auto It = _var_reg_map.find(VarIdx);
+    return It == _var_reg_map.end() ? CgRegister() : It->second;
+  }
+
 protected:
   static bool isJumpTableSuitable(const CompileVector<int64_t> &CaseImmList) {
     uint32_t NumCases = CaseImmList.size();
