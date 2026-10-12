@@ -996,9 +996,9 @@ void Runtime::callEVMInJITMode(EVMInstance &Inst, evmc_message &Msg,
       switch (JmpSignum) {
       case SIGSEGV:
       case SIGBUS: {
-        // out of bounds signal
-        CapturedTapErrCode = ErrorCode::OutOfBoundsMemory;
-        StatusCode = EVMC_INVALID_MEMORY_ACCESS;
+        // EVM memory is never bounds-checked by a fault, so any fault other
+        // than native stack exhaustion is an engine defect, not an EVM halt.
+        StatusCode = EVMC_INTERNAL_ERROR;
 #ifdef ZEN_ENABLE_VIRTUAL_STACK
         {
           auto *FaultingAddress =

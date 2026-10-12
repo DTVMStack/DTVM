@@ -87,6 +87,7 @@ This module does not include: module loading (runtime), JIT compilation (compile
 | EVMC_BAD_JUMP_DESTINATION | evmc | Invalid jump target |
 | EVMC_INVALID_MEMORY_ACCESS | evmc | RETURNDATACOPY out of bounds, etc. |
 | EVMC_STATIC_MODE_VIOLATION | evmc | Storage write in static mode |
+| EVMC_INTERNAL_ERROR | evmc | Engine defect, e.g. a fault in JIT code other than native stack exhaustion; not an EVM halt |
 | EVMC_REVERT | evmc | REVERT normal termination |
 | EVMStackOverflow | common | Stack overflow (throw) |
 | EVMStackUnderflow | common | Stack underflow (throw) |
