@@ -55,6 +55,10 @@ public:
     MRI.freezeReservedRegs(*MF);
   }
 
+  CgRegister getVarReg(uint32_t VarIdx) const {
+    return _var_reg_map.at(VarIdx);
+  }
+
 protected:
   static bool isJumpTableSuitable(const CompileVector<int64_t> &CaseImmList) {
     uint32_t NumCases = CaseImmList.size();

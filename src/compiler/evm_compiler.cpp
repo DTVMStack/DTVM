@@ -49,7 +49,8 @@ void EVMJITCompiler::compileEVMToMC(EVMFrontendContext &Ctx, MModule &Mod,
 #endif // ZEN_ENABLE_MULTIPASS_JIT_LOGGING
 
   // Apply MIR optimizations and generate machine code
-  compileMIRToCgIR(Mod, MFunc, CgFunc, DisableGreedyRA);
+  compileMIRToCgIR(Mod, MFunc, CgFunc, DisableGreedyRA,
+                   /*KeepFirstParamInRegister=*/true);
 
   // Generate machine code
   Ctx.getMCLowering().runOnCgFunction(CgFunc);

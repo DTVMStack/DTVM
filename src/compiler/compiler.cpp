@@ -56,8 +56,8 @@ static inline bool isFuncNeedGreedyRA(uint32_t FuncIdx) {
 #endif // ZEN_ENABLE_DEBUG_GREEDY_RA
 
 void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
-                                       CgFunction &CgFunc,
-                                       bool DisableGreedyRA) {
+                                       CgFunction &CgFunc, bool DisableGreedyRA,
+                                       bool KeepFirstParamInRegister) {
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
   llvm::DebugFlag = true;
   llvm::dbgs() << "\n########## MIR Dump ##########\n\n";
@@ -115,6 +115,9 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
       // CgRegisterCoalescer must before CgVirtRegMap
       CgRegisterCoalescer Coalescer(MF);
       CgVirtRegMap VRM(MF);
+      if (KeepFirstParamInRegister) {
+        LIS.getInterval(CgLowering.getVarReg(0)).markNotSpillable();
+      }
       CgLiveRegMatrix Matrix(MF);
       // RABasic ra(MF);
 

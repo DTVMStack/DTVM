@@ -20,7 +20,8 @@ protected:
   virtual ~JITCompilerBase() = default;
 
   static void compileMIRToCgIR(MModule &Mod, MFunction &MFunc,
-                               CgFunction &CgFunc, bool DisableGreedyRA);
+                               CgFunction &CgFunc, bool DisableGreedyRA,
+                               bool KeepFirstParamInRegister = false);
   static void emitObjectBuffer(CompileContext *Ctx);
 };
 

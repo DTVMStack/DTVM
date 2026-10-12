@@ -3220,15 +3220,16 @@ bool CgRegisterCoalescer::joinVirtRegs(CgCoalescerPair &CP) {
   CgLiveInterval &RHS = LIS->getInterval(CP.getSrcReg());
   CgLiveInterval &LHS = LIS->getInterval(CP.getDstReg());
   bool TrackSubRegLiveness = MRI->shouldTrackSubRegLiveness(*CP.getNewRC());
-  JoinVals RHSVals(RHS, CP.getSrcReg(), CP.getSrcIdx(), LaneBitmask::getNone(),
-                   NewVNInfo, CP, LIS, TRI, false, TrackSubRegLiveness);
-  JoinVals LHSVals(LHS, CP.getDstReg(), CP.getDstIdx(), LaneBitmask::getNone(),
-                   NewVNInfo, CP, LIS, TRI, false, TrackSubRegLiveness);
 
   LLVM_DEBUG(dbgs() << "\t\tRHS = " << RHS << "\n\t\tLHS = " << LHS << '\n');
 
   if (isHighCostLiveInterval(LHS) || isHighCostLiveInterval(RHS))
     return false;
+
+  JoinVals RHSVals(RHS, CP.getSrcReg(), CP.getSrcIdx(), LaneBitmask::getNone(),
+                   NewVNInfo, CP, LIS, TRI, false, TrackSubRegLiveness);
+  JoinVals LHSVals(LHS, CP.getDstReg(), CP.getDstIdx(), LaneBitmask::getNone(),
+                   NewVNInfo, CP, LIS, TRI, false, TrackSubRegLiveness);
 
   // First compute NewVNInfo and the simple value mappings.
   // Detect impossible conflicts early.
