@@ -1,0 +1,13 @@
+label,adjacent_push,bare_jumpdest_jump,dup_target,internal_return,local_dup_push,n_jump,n_unres_no_adj_push,top_calldata,top_computed,unknown_dynamic
+counter_evm,0,0,0,0,,12,0,0,0,0
+ecdsa_evm,0,0,0,5,,90,17,0,1,11
+erc1155_evm,572,45,0,142,,1043,806,0,18,29
+erc20_evm,74,0,0,1,,125,79,0,2,2
+erc721_evm,650,37,0,169,,1066,896,0,17,23
+fib_evm,0,0,0,5,,28,6,0,0,1
+generative_nft_evm,0,0,0,1,,16,1,0,0,0
+merkle_evm,0,0,0,2,,39,5,0,0,3
+poseidon_evm,0,0,0,1,,60,8,1,0,6
+uniswapv2_erc20_evm,131,0,0,7,,287,212,0,2,72
+uniswapv2_factory_evm,326,0,1,11,20,413,391,1,4,28
+uniswapv2_router_evm,585,0,0,15,2,695,658,5,1,50

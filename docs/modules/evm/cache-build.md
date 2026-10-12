@@ -25,22 +25,27 @@ void buildBytecodeCache(EVMBytecodeCache &Cache,
                         const common::Byte *Code,
                         size_t CodeSize,
                         evmc_revision Rev,
-                        bool EnableSPP);
+                        bool EnableSPP,
+                        bool EnableR1 = true);
 ```
 
 Single entry that zero-initialises the cache vectors, populates the
 JUMPDEST and PUSH-value maps, and delegates the rest to
 `buildGasChunksSPP`. `EnableSPP=true` selects the SPP-scheduled
 chunk-cost path (`GasChunkCostSPP` filled); `EnableSPP=false` runs the
-straight-line fallback only.
+straight-line fallback only. `EnableR1=true` (default) runs the
+cross-block Const/ConstSet worklist after the block-local jump pass;
+`ZEN_EVM_DISABLE_R1=1` force-disables it.
 
 ## Pipeline (in shipped execution order)
 
 | # | Phase | Purpose |
 |---:|---|---|
 | 0 | `buildJumpDestMapAndPushCache` | Single bytecode walk: mark valid JUMPDESTs (skipping PUSH-data regions); decode PUSHn immediates into `PushValueMap` |
+| 0b | `resolveJumpTargetsByAbstractStack` | Block-local Const resolution (PUSH/DUP/SWAP within one block) |
+| 0c | `resolveJumpTargetsCrossBlock` | Worklist Const/ConstSet/Top fixpoint. Fail-closed on Top or non-convergence (local map unchanged, no multi-targets). Commits single-target `ResolvedJumpTargets` and multi-target `ResolvedJumpMultiTargets` |
 | 1 | `buildGasBlocks` | Single bytecode walk: emit one `GasBlock` per basic block, record `JumpDestBlocks` inline, compute per-block straight-line gas |
-| 2 | `buildCFGEdges` | Single sweep: emit resolved and fallthrough Succs/Preds edges into `EdgeTables`; for unresolved dynamic JUMP/JUMPI, mark the source with `HasUnresolvedDynamicSuccessor` and stamp possible JUMPDEST targets with `ImplicitDynamicPredCount` |
+| 2 | `buildCFGEdges` | Single sweep: emit resolved (single + multi) and fallthrough Succs/Preds edges into `EdgeTables`; for remaining unresolved dynamic JUMP/JUMPI, mark the source with `HasUnresolvedDynamicSuccessor` and stamp possible JUMPDEST targets with `ImplicitDynamicPredCount` |
 | 3 | `splitCriticalEdges` | Insert empty synthetic blocks on `multi-succ → multi-pred` edges; appends new entries onto `Blocks` and `EdgeTables` |
 | 4 | `buildAdjacencyCSR` | Flatten `EdgeTables.Succs` and `.Preds` into two read-only `CSRGraph`s after the graph is frozen |
 | 5 | `computeReachable` | DFS from block 0 over `SuccsCSR`; produce `Reachable` bitset |

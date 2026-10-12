@@ -4,6 +4,7 @@
 #include "evm/evm_cache.h"
 
 #include "evm/evm.h"
+#include "evm/evm_absinterp.h"
 #include "evm/evm_cache_for_testing.h"
 #include "evmc/instructions.h"
 
@@ -11,6 +12,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <unordered_map>
 #include <utility>
@@ -522,6 +524,8 @@ buildCFGEdges(std::vector<GasBlock> &Blocks, EdgeTables &Edges,
               const std::vector<uint8_t> &JumpDestMap,
               const std::vector<intx::uint256> &PushValueMap,
               const std::unordered_map<uint32_t, uint32_t> &ResolvedJumpTargets,
+              const std::unordered_map<uint32_t, std::vector<uint32_t>>
+                  &ResolvedJumpMultiTargets,
               const std::vector<uint32_t> &JumpDestBlocks, size_t CodeSize) {
   // Single pass: add fallthrough + static-jump edges, count unresolved
   // dynamic jumps inline so we can stamp every JUMPDEST with the right
@@ -549,23 +553,41 @@ buildCFGEdges(std::vector<GasBlock> &Blocks, EdgeTables &Edges,
       auto It = ResolvedJumpTargets.find(Block.LastPc);
       if (It != ResolvedJumpTargets.end()) {
         DestPc = It->second;
-      } else if (resolveConstantJumpTarget(JumpDestMap, PushValueMap, CodeSize,
-                                           Block, DestPc)) {
-        // Keep the constant-decode fallback for cases the shared abstract
-        // stack pass intentionally leaves unresolved.
-      } else {
-        Block.HasUnresolvedDynamicSuccessor = 1;
-        ++DynamicJumpCount;
+        const uint32_t SuccId = BlockAtPc[DestPc];
+        if (SuccId != UINT32_MAX) {
+          addEdge(Edges, static_cast<uint32_t>(BlockId), SuccId);
+        }
         continue;
       }
 
-      // Static (constant) jump: single known target.
-      const uint32_t SuccId = BlockAtPc[DestPc];
-      if (SuccId != UINT32_MAX) {
-        addEdge(Edges, static_cast<uint32_t>(BlockId), SuccId);
+      auto MultiIt = ResolvedJumpMultiTargets.find(Block.LastPc);
+      if (MultiIt != ResolvedJumpMultiTargets.end()) {
+        // Fully resolved ConstSet: materialise every sound dest. Do not
+        // mark HasUnresolvedDynamicSuccessor — ImplicitDynamicPredCount
+        // is cleared for this source.
+        for (uint32_t MultiDest : MultiIt->second) {
+          if (MultiDest >= CodeSize) {
+            continue;
+          }
+          const uint32_t SuccId = BlockAtPc[MultiDest];
+          if (SuccId != UINT32_MAX) {
+            addEdge(Edges, static_cast<uint32_t>(BlockId), SuccId);
+          }
+        }
+        continue;
       }
-      // Dynamic jump: handled by the implicit-predecessor count stamped onto
-      // every JUMPDEST below. No explicit Succs/Preds edges added.
+
+      if (resolveConstantJumpTarget(JumpDestMap, PushValueMap, CodeSize, Block,
+                                    DestPc)) {
+        const uint32_t SuccId = BlockAtPc[DestPc];
+        if (SuccId != UINT32_MAX) {
+          addEdge(Edges, static_cast<uint32_t>(BlockId), SuccId);
+        }
+        continue;
+      }
+
+      Block.HasUnresolvedDynamicSuccessor = 1;
+      ++DynamicJumpCount;
     }
   }
 
@@ -1489,6 +1511,8 @@ static bool buildGasChunksSPP(
     const std::vector<uint8_t> &JumpDestMap,
     const std::vector<intx::uint256> &PushValueMap,
     const std::unordered_map<uint32_t, uint32_t> &ResolvedJumpTargets,
+    const std::unordered_map<uint32_t, std::vector<uint32_t>>
+        &ResolvedJumpMultiTargets,
     std::vector<uint32_t> &GasChunkEnd, std::vector<uint64_t> &GasChunkCost,
     std::vector<uint64_t> &GasChunkCostSPP, bool EnableSPP) {
   std::vector<GasBlock> Blocks;
@@ -1536,7 +1560,8 @@ static bool buildGasChunksSPP(
 
   EVM_PROFILE_BEGIN(buildCFGEdges);
   buildCFGEdges(Blocks, Edges, BlockAtPc, JumpDestMap, PushValueMap,
-                ResolvedJumpTargets, JumpDestBlocks, CodeSize);
+                ResolvedJumpTargets, ResolvedJumpMultiTargets, JumpDestBlocks,
+                CodeSize);
   EVM_PROFILE_END(buildCFGEdges);
 
   EVM_PROFILE_BEGIN(splitCriticalEdges);
@@ -1772,7 +1797,8 @@ static bool buildGasChunksSPP(
 } // namespace
 
 void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
-                        size_t CodeSize, evmc_revision Rev, bool EnableSPP) {
+                        size_t CodeSize, evmc_revision Rev, bool EnableSPP,
+                        bool EnableR1) {
   Cache.JumpDestMap.assign(CodeSize, 0);
   Cache.PushValueMap.resize(CodeSize);
   Cache.GasChunkEnd.assign(CodeSize, 0);
@@ -1783,6 +1809,13 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
     Cache.GasChunkCostSPP.clear();
   }
   Cache.ResolvedJumpTargets.clear();
+  Cache.ResolvedJumpMultiTargets.clear();
+
+  if (const char *Env = std::getenv("ZEN_EVM_DISABLE_R1")) {
+    if (Env[0] == '1' && Env[1] == '\0') {
+      EnableR1 = false;
+    }
+  }
 
   EVM_PROFILE_BEGIN(buildJumpDestMap);
   buildJumpDestMapAndPushCache(Code, CodeSize, Cache.JumpDestMap,
@@ -1791,22 +1824,23 @@ void buildBytecodeCache(EVMBytecodeCache &Cache, const common::Byte *Code,
   if (!MetricsTable) {
     MetricsTable = evmc_get_instruction_metrics_table(DEFAULT_REVISION);
   }
-  // Shared jump target resolution: abstract stack simulation run once,
-  // results consumed by both SPP gas optimizer and SSA liftability analyzer.
+  // Block-local jump resolution (PUSH/DUP/SWAP within one block).
   resolveJumpTargetsByAbstractStack(Code, CodeSize, Cache.JumpDestMap,
                                     MetricsTable, Cache.ResolvedJumpTargets);
   EVM_PROFILE_END(buildJumpDestMap);
 
-  // Shared jump target resolution: abstract stack simulation run once,
-  // results consumed by both SPP gas optimizer and SSA liftability analyzer.
-  Cache.ResolvedJumpTargets.clear();
-  resolveJumpTargetsByAbstractStack(Code, CodeSize, Cache.JumpDestMap,
-                                    MetricsTable, Cache.ResolvedJumpTargets);
+  if (EnableR1) {
+    EVM_PROFILE_BEGIN(resolveJumpTargetsCrossBlock);
+    resolveJumpTargetsCrossBlock(Code, CodeSize, Cache.JumpDestMap,
+                                 MetricsTable, Cache.ResolvedJumpTargets,
+                                 Cache.ResolvedJumpMultiTargets);
+    EVM_PROFILE_END(resolveJumpTargetsCrossBlock);
+  }
 
   buildGasChunksSPP(Code, CodeSize, MetricsTable, Cache.JumpDestMap,
                     Cache.PushValueMap, Cache.ResolvedJumpTargets,
-                    Cache.GasChunkEnd, Cache.GasChunkCost,
-                    Cache.GasChunkCostSPP, EnableSPP);
+                    Cache.ResolvedJumpMultiTargets, Cache.GasChunkEnd,
+                    Cache.GasChunkCost, Cache.GasChunkCostSPP, EnableSPP);
 }
 
 namespace for_testing {

@@ -25,7 +25,8 @@ This module does not include: module loading (runtime), JIT compilation (compile
 - `buildBytecodeCache()` called before first interpretation or JIT execution (`EVMModule::getBytecodeCache()` lazy init)
 - **JumpDestMap**: PC-indexed; marks valid JUMPDEST (excludes PUSH data region)
 - **PushValueMap**: PC-indexed; stores PUSHn immediates (big-endian, zero-padded)
-- **GasChunkEnd / GasChunkCost**: SPP (Structured Precharging Pass) chunked Gas metering; pre-charge straight-line Gas; block boundaries at JUMPDEST, control-flow terminators, SSTORE, CALL/CREATE, etc.
+- **ResolvedJumpTargets / ResolvedJumpMultiTargets**: block-local plus optional cross-block (`EnableR1`) jump resolution. Multi-target ConstSet edges feed SPP CFG only; SSA still reads the single-target map
+- **GasChunkEnd / GasChunkCost**: SPP (Structured Precharging Pass) chunked Gas metering; pre-charge straight-line Gas; block boundaries at JUMPDEST, control-flow terminators, SSTORE, CALL/CREATE, etc. Interpreter always reads unshifted `GasChunkCost`
 
 ### 3. Interpretation Context and Stack Safety
 

@@ -58,11 +58,14 @@ We build a CFG of gas blocks and compute a *shifted* metering function `m`
 using a linear-time SPP pass:
 
 - Edges: fallthrough edges, including `JUMPI` fallthrough, are explicit.
-  Resolved jump-target edges are also explicit after validation by
+  Resolved jump-target edges (single-target `ResolvedJumpTargets` and
+  ConstSet `ResolvedJumpMultiTargets`) are also explicit after validation by
   `JumpDestMap`. Target edges for an unresolved dynamic `JUMP` or `JUMPI` are
   omitted. The source is marked with `HasUnresolvedDynamicSuccessor`, and each
   possible `JUMPDEST` target carries the corresponding
-  `ImplicitDynamicPredCount`.
+  `ImplicitDynamicPredCount`. The cross-block worklist (`EnableR1`, default
+  on) is fail-closed: a reached `Top` dest or a non-converged fixpoint
+  commits nothing beyond the block-local pass.
 - Critical edges are split before SPP to preserve the local update rules.
 - Dominators are computed by the Cooper-Harvey-Kennedy (CHK) algorithm
   (`computeDomInfo` in `evm_cache.cpp`): iterate `IDom[b] = NCA(p, IDom[b])`
@@ -91,7 +94,7 @@ emits a CSV row per named phase to stderr:
 
     EVM_CACHE_PROFILE,<phase>,<microseconds>
 
-Named phases: `buildJumpDestMap`, `buildGasBlocks`, `buildCFGEdges`,
+Named phases: `buildJumpDestMap`, `resolveJumpTargetsCrossBlock`, `buildGasBlocks`, `buildCFGEdges`,
 `splitCriticalEdges`, `buildCSR`, `computeReachable`, `computeDomInfo`,
 `findBackEdges`, `computeReverseTopo`, `buildLoopsUsingDominance`,
 `computeInCycle`, `meteringInit`, `lemma614Schedule`, `writeback`. When `OFF`
