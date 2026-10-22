@@ -962,22 +962,21 @@ void evmEmitLog4NoExpand(zen::runtime::EVMInstance *Instance, uint64_t Offset,
   evmEmitLogNoExpandGeneric<4>(Instance, Offset, Size, Topics);
 }
 
-const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
-                                       evmc_call_kind CallKind,
-                                       const intx::uint256 &Value,
-                                       uint64_t Offset, uint64_t Size,
-                                       const uint8_t *Salt = nullptr) {
+const intx::uint256 *
+evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
+                        evmc_call_kind CallKind, const intx::uint256 &Value,
+                        uint64_t Offset, uint64_t Size,
+                        const uint8_t *Salt = nullptr) {
   const zen::runtime::EVMModule *Module = Instance->getModule();
   ZEN_ASSERT(Module && Module->Host);
 
   const evmc_message *Msg = Instance->getCurrentMessage();
   ZEN_ASSERT(Msg && "No current message set in EVMInstance");
 
-  static thread_local uint8_t ZeroAddress[32] = {0};
   if (Instance->isStaticMode()) {
     triggerStaticModeViolation(Instance);
     Instance->setReturnData({});
-    return ZeroAddress;
+    return storeUint256Result(intx::uint256{0});
   }
 
   // Calculate required memory size and charge gas
@@ -985,7 +984,7 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   if (Size > 0) {
     if (!Instance->expandMemoryChecked(Offset, Size)) {
       Instance->setReturnData({});
-      return ZeroAddress;
+      return storeUint256Result(intx::uint256{0});
     }
 
     uint8_t *MemoryBase = Instance->getMemoryBase();
@@ -996,7 +995,7 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   if (Rev >= EVMC_SHANGHAI && Size > zen::evm::MAX_SIZE_OF_INITCODE) {
     if (!Instance->chargeGas(Instance->getGas() + 1)) {
       Instance->setReturnData({});
-      return ZeroAddress;
+      return storeUint256Result(intx::uint256{0});
     }
   }
   uint64_t InitCodeWordCost = 0;
@@ -1012,20 +1011,20 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
     if (InitCodeCost != 0) {
       if (!Instance->chargeGas(InitCodeCost)) {
         Instance->setReturnData({});
-        return ZeroAddress;
+        return storeUint256Result(intx::uint256{0});
       }
     }
   }
 
   if (Msg->depth >= zen::evm::MAXSTACK) {
     Instance->setReturnData({});
-    return ZeroAddress;
+    return storeUint256Result(intx::uint256{0});
   }
 
   if (Value != 0 && intx::be::load<intx::uint256>(
                         Module->Host->get_balance(Msg->recipient)) < Value) {
     Instance->setReturnData({});
-    return ZeroAddress;
+    return storeUint256Result(intx::uint256{0});
   }
 
   // Create message for CREATE/CREATE2
@@ -1060,7 +1059,7 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   if (GasUsed != 0) {
     if (!Instance->chargeGas(GasUsed)) {
       Instance->setReturnData({});
-      return ZeroAddress;
+      return storeUint256Result(intx::uint256{0});
     }
   }
   // Track subcall refund (may be negative)
@@ -1071,22 +1070,26 @@ const uint8_t *evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
   Instance->setReturnData(std::move(ReturnData));
 
   if (Result.status_code == EVMC_SUCCESS) {
-    static thread_local uint8_t PaddedAddress[32] = {0};
-    memcpy(PaddedAddress + 12, Result.create_address.bytes, 20);
-    return PaddedAddress;
+    // Copy into the uint256 return slot. convertCallResult materializes the
+    // four limbs immediately, so a later CREATE/CREATE2 cannot overwrite an
+    // earlier stack operand (shared PaddedAddress pointer used to).
+    evmc::bytes32 Padded{};
+    std::memcpy(Padded.bytes + 12, Result.create_address.bytes, 20);
+    return storeUint256Result(intx::be::load<intx::uint256>(Padded));
   }
-  return ZeroAddress;
+  return storeUint256Result(intx::uint256{0});
 }
 
-const uint8_t *evmHandleCreate(zen::runtime::EVMInstance *Instance,
-                               const intx::uint256 &Value, uint64_t Offset,
-                               uint64_t Size) {
+const intx::uint256 *evmHandleCreate(zen::runtime::EVMInstance *Instance,
+                                     const intx::uint256 &Value,
+                                     uint64_t Offset, uint64_t Size) {
   return evmHandleCreateInternal(Instance, EVMC_CREATE, Value, Offset, Size);
 }
 
-const uint8_t *evmHandleCreate2(zen::runtime::EVMInstance *Instance,
-                                const intx::uint256 &Value, uint64_t Offset,
-                                uint64_t Size, const uint8_t *Salt) {
+const intx::uint256 *evmHandleCreate2(zen::runtime::EVMInstance *Instance,
+                                      const intx::uint256 &Value,
+                                      uint64_t Offset, uint64_t Size,
+                                      const uint8_t *Salt) {
   return evmHandleCreateInternal(Instance, EVMC_CREATE2, Value, Offset, Size,
                                  Salt);
 }

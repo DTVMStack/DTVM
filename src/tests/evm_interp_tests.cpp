@@ -6,6 +6,7 @@
 #include <fstream>
 #include <functional>
 #include <gtest/gtest.h>
+#include <iomanip>
 #include <string_view>
 #include <yaml-cpp/yaml.h>
 
@@ -2733,6 +2734,284 @@ TEST(EVMRegressionTest, Issue610_IntrinsicGasChargedOnce) {
   EXPECT_EQ(Result.GasCharged, 21000u);
   EXPECT_EQ(Result.InitialSenderBalance - Result.FinalSenderBalance,
             SettlementGasPrice * 21000);
+}
+
+namespace {
+
+const evmc::address kIssue622Sender = evmc::literals::operator""_address(
+    "1111111111111111111111111111111111111111");
+const evmc::address kIssue622Contract = evmc::literals::operator""_address(
+    "2222222222222222222222222222222222222222");
+const evmc::address kIssue621Sender = evmc::literals::operator""_address(
+    "9bc81ed155d7d499de12690768a9363c37003ea3");
+const evmc::address kIssue621Contract = evmc::literals::operator""_address(
+    "4270c45295084669dd55139de82c0e823dfd8af5");
+
+constexpr uint64_t kWarmAccountProbeDelta = 22207;
+constexpr uint64_t kColdAccountProbeDelta = 24707;
+
+std::vector<common::RunMode> evmRegressionRunModes() {
+  std::vector<common::RunMode> Modes = {common::RunMode::InterpMode};
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+  Modes.push_back(common::RunMode::MultipassMode);
+#endif
+  return Modes;
+}
+
+const char *runModeName(common::RunMode Mode) {
+  switch (Mode) {
+  case common::RunMode::InterpMode:
+    return "interpreter";
+  case common::RunMode::SinglepassMode:
+    return "singlepass";
+  case common::RunMode::MultipassMode:
+    return "multipass";
+  default:
+    return "unknown";
+  }
+}
+
+void appendPush32Word(std::vector<uint8_t> &Bytecode,
+                      const std::vector<uint8_t> &Prefix) {
+  std::vector<uint8_t> Word(32, 0);
+  std::memcpy(Word.data(), Prefix.data(), Prefix.size());
+  Bytecode.push_back(0x7f);
+  Bytecode.insert(Bytecode.end(), Word.begin(), Word.end());
+}
+
+std::vector<uint8_t>
+buildCreateAccessProbeBytecode(const std::vector<uint8_t> &InitCode,
+                               const evmc::address &CreatedAddr,
+                               uint8_t CreateOpcode, uint8_t ProbeOpcode) {
+  std::vector<uint8_t> Bytecode;
+  appendPush32Word(Bytecode, InitCode);
+  Bytecode.insert(Bytecode.end(), {0x60, 0x00, 0x52});
+  if (CreateOpcode == 0xf5) {
+    Bytecode.insert(Bytecode.end(), {0x60, 0x00});
+  }
+  Bytecode.insert(Bytecode.end(),
+                  {0x60, static_cast<uint8_t>(InitCode.size()), 0x60, 0x00,
+                   0x60, 0x00, CreateOpcode, 0x50, 0x73});
+  Bytecode.insert(Bytecode.end(), CreatedAddr.bytes, CreatedAddr.bytes + 20);
+  Bytecode.insert(Bytecode.end(), {0x5a, 0x60, 0x01, 0x55, ProbeOpcode, 0x50,
+                                   0x5a, 0x60, 0x02, 0x55});
+  return Bytecode;
+}
+
+uint64_t loadStorageU64(const evmc::MockedAccount &Account, uint8_t Slot) {
+  evmc::bytes32 Key{};
+  Key.bytes[31] = Slot;
+  auto It = Account.storage.find(Key);
+  EXPECT_NE(It, Account.storage.end()) << "missing storage slot " << int(Slot);
+  if (It == Account.storage.end()) {
+    return 0;
+  }
+  return static_cast<uint64_t>(
+      intx::be::load<intx::uint256>(It->second.current));
+}
+
+struct HostTxRun {
+  bool Success = false;
+  evmc_status_code Status = EVMC_INTERNAL_ERROR;
+  std::string ErrorMessage;
+  std::unique_ptr<zen::evm::ZenMockedEVMHost> Host;
+};
+
+HostTxRun runHostContractTx(common::RunMode Mode,
+                            const evmc::address &SenderAddr,
+                            const evmc::address &ContractAddr,
+                            const std::vector<uint8_t> &Bytecode,
+                            uint64_t GasLimit, uint64_t SenderBalance) {
+  HostTxRun Run;
+  RuntimeConfig Config;
+  Config.Mode = Mode;
+  Config.EnableEvmGasMetering = Mode == common::RunMode::MultipassMode;
+
+  Run.Host = std::make_unique<zen::evm::ZenMockedEVMHost>();
+  auto &Host = *Run.Host;
+  Host.setRevision(EVMC_CANCUN);
+  Host.accounts[ContractAddr].code =
+      evmc::bytes(Bytecode.data(), Bytecode.size());
+  Host.accounts[ContractAddr].nonce = 0;
+  Host.accounts[SenderAddr].set_balance(SenderBalance);
+  Host.tx_context.tx_origin = SenderAddr;
+
+  auto RT = Runtime::newEVMRuntime(Config, &Host);
+  EXPECT_TRUE(RT) << "Failed to create runtime for " << runModeName(Mode);
+  if (!RT) {
+    return Run;
+  }
+  Host.setRuntime(RT.get());
+
+  zen::evm::ZenMockedEVMHost::TransactionExecutionConfig ExecConfig;
+  ExecConfig.ModuleName = std::string("issue_create_") + runModeName(Mode);
+  ExecConfig.Bytecode = Bytecode.data();
+  ExecConfig.BytecodeSize = Bytecode.size();
+  ExecConfig.Revision = EVMC_CANCUN;
+  ExecConfig.GasLimit = GasLimit;
+  evmc_message Msg{};
+  Msg.kind = EVMC_CALL;
+  Msg.gas = static_cast<int64_t>(GasLimit);
+  Msg.sender = SenderAddr;
+  Msg.recipient = ContractAddr;
+  Msg.code_address = ContractAddr;
+  ExecConfig.Message = Msg;
+
+  auto Result = Host.executeTransaction(ExecConfig);
+  Run.Success = Result.Success;
+  Run.Status = Result.Status;
+  Run.ErrorMessage = Result.ErrorMessage;
+  return Run;
+}
+
+} // namespace
+
+// Regression for https://github.com/DTVMStack/DTVM/issues/622.
+// A failed CREATE/CREATE2 must keep the created address warm (EIP-2929).
+TEST(EVMRegressionTest, Issue622_FailedCreateKeepsAddressWarm) {
+  const std::vector<uint8_t> ExceptionalInit = {0xf2};
+  const std::vector<uint8_t> RevertInit = {0x60, 0x00, 0x60, 0x00, 0xfd};
+  const std::vector<uint8_t> SuccessInit = {0x00};
+  const uint8_t ProbeOpcodes[] = {0x31, 0x3b, 0x3f}; // BALANCE/EXTCODESIZE/HASH
+
+  zen::evm::ZenMockedEVMHost AddressHost;
+  const evmc::address CreatedAddr =
+      AddressHost.computeCreateAddress(kIssue622Contract, 0);
+  EXPECT_EQ(evmc::hex(CreatedAddr), "659b375d76a8e9a2c68da8818022d6561aa60845");
+
+  for (common::RunMode Mode : evmRegressionRunModes()) {
+    for (const auto *Init : {&ExceptionalInit, &RevertInit, &SuccessInit}) {
+      for (uint8_t Probe : ProbeOpcodes) {
+        auto Bytecode =
+            buildCreateAccessProbeBytecode(*Init, CreatedAddr, 0xf0, Probe);
+        auto Run = runHostContractTx(Mode, kIssue622Sender, kIssue622Contract,
+                                     Bytecode, 16000000, 0xde0b6b3a7640000ULL);
+        ASSERT_TRUE(Run.Success)
+            << Run.ErrorMessage << " mode=" << runModeName(Mode);
+        ASSERT_EQ(Run.Status, EVMC_SUCCESS) << runModeName(Mode);
+        const uint64_t Slot1 =
+            loadStorageU64(Run.Host->accounts[kIssue622Contract], 1);
+        const uint64_t Slot2 =
+            loadStorageU64(Run.Host->accounts[kIssue622Contract], 2);
+        EXPECT_EQ(Slot1 - Slot2, kWarmAccountProbeDelta)
+            << "mode=" << runModeName(Mode) << " probe=0x" << std::hex
+            << int(Probe) << " init_size=" << std::dec << Init->size()
+            << " slot1=" << Slot1 << " slot2=" << Slot2;
+      }
+    }
+
+    auto Create2Bytecode = buildCreateAccessProbeBytecode(
+        ExceptionalInit,
+        AddressHost.computeCreate2Address(
+            kIssue622Contract, evmc::bytes32{},
+            {ExceptionalInit.data(), ExceptionalInit.size()}),
+        0xf5, 0x31);
+    auto Create2Run =
+        runHostContractTx(Mode, kIssue622Sender, kIssue622Contract,
+                          Create2Bytecode, 16000000, 0xde0b6b3a7640000ULL);
+    ASSERT_TRUE(Create2Run.Success) << Create2Run.ErrorMessage;
+    ASSERT_EQ(Create2Run.Status, EVMC_SUCCESS);
+    const uint64_t Create2Slot1 =
+        loadStorageU64(Create2Run.Host->accounts[kIssue622Contract], 1);
+    const uint64_t Create2Slot2 =
+        loadStorageU64(Create2Run.Host->accounts[kIssue622Contract], 2);
+    EXPECT_EQ(Create2Slot1 - Create2Slot2, kWarmAccountProbeDelta)
+        << "CREATE2 failed-init BALANCE must stay warm in "
+        << runModeName(Mode);
+  }
+}
+
+// Child-acquired warm marks from a reverted CREATE init frame must not leak
+// into the parent. Cancun incorporate_child_on_error does not merge them.
+TEST(EVMRegressionTest, Issue622_CreateRevertDropsChildAccessMarks) {
+  const evmc::address ChildTouched = evmc::literals::operator""_address(
+      "3333333333333333333333333333333333333333");
+  std::vector<uint8_t> InitCode = {0x73};
+  InitCode.insert(InitCode.end(), ChildTouched.bytes, ChildTouched.bytes + 20);
+  InitCode.insert(InitCode.end(), {0x31, 0x50, 0x60, 0x00, 0x60, 0x00, 0xfd});
+  ASSERT_LE(InitCode.size(), 32u);
+
+  for (common::RunMode Mode : evmRegressionRunModes()) {
+    std::vector<uint8_t> Bytecode;
+    appendPush32Word(Bytecode, InitCode);
+    Bytecode.insert(Bytecode.end(), {0x60, 0x00, 0x52, 0x60,
+                                     static_cast<uint8_t>(InitCode.size()),
+                                     0x60, 0x00, 0x60, 0x00, 0xf0, 0x50, 0x73});
+    Bytecode.insert(Bytecode.end(), ChildTouched.bytes,
+                    ChildTouched.bytes + 20);
+    Bytecode.insert(Bytecode.end(), {0x5a, 0x60, 0x01, 0x55, 0x31, 0x50, 0x5a,
+                                     0x60, 0x02, 0x55});
+
+    auto Run = runHostContractTx(Mode, kIssue622Sender, kIssue622Contract,
+                                 Bytecode, 16000000, 0xde0b6b3a7640000ULL);
+    ASSERT_TRUE(Run.Success) << Run.ErrorMessage;
+    ASSERT_EQ(Run.Status, EVMC_SUCCESS);
+    const uint64_t Slot1 =
+        loadStorageU64(Run.Host->accounts[kIssue622Contract], 1);
+    const uint64_t Slot2 =
+        loadStorageU64(Run.Host->accounts[kIssue622Contract], 2);
+    EXPECT_EQ(Slot1 - Slot2, kColdAccountProbeDelta)
+        << "reverted CREATE init must not keep child BALANCE marks in "
+        << runModeName(Mode);
+  }
+}
+
+// Regression for https://github.com/DTVMStack/DTVM/issues/621.
+// CREATE then CREATE2 in one function must keep the first create's address.
+TEST(EVMRegressionTest, Issue621_CreateThenCreate2KeepsFirstAddress) {
+  const std::vector<uint8_t> Bytecode =
+      zen::utils::fromHex("5f5f5f5ff05f5f5f5ff550185f55").value();
+  zen::evm::ZenMockedEVMHost AddressHost;
+  const evmc::address ExpectedCreateAddr =
+      AddressHost.computeCreateAddress(kIssue621Contract, 0);
+  const evmc::address Create2Addr = AddressHost.computeCreate2Address(
+      kIssue621Contract, evmc::bytes32{}, evmc::bytes_view{});
+  EXPECT_EQ(evmc::hex(ExpectedCreateAddr),
+            "b83f722b539ddd6686feaea8f6980d3df0eebcf4");
+  EXPECT_EQ(evmc::hex(Create2Addr), "afb8fb6df4f6feb435dd2cac082ae85cdc6c3713");
+
+  evmc::bytes32 Slot0{};
+  for (common::RunMode Mode : evmRegressionRunModes()) {
+    auto Run = runHostContractTx(Mode, kIssue621Sender, kIssue621Contract,
+                                 Bytecode, 1000000, 0x1bc16d674ec80000ULL);
+    ASSERT_TRUE(Run.Success) << Run.ErrorMessage << " " << runModeName(Mode);
+    ASSERT_EQ(Run.Status, EVMC_SUCCESS) << runModeName(Mode);
+    ASSERT_NE(Run.Host->accounts[kIssue621Contract].storage.find(Slot0),
+              Run.Host->accounts[kIssue621Contract].storage.end())
+        << runModeName(Mode);
+    evmc::bytes32 ExpectedWord{};
+    std::memcpy(ExpectedWord.bytes + 12, ExpectedCreateAddr.bytes, 20);
+    const auto Stored = intx::be::load<intx::uint256>(
+        Run.Host->accounts[kIssue621Contract].storage.at(Slot0).current);
+    const auto Expected = intx::be::load<intx::uint256>(ExpectedWord);
+    EXPECT_EQ(Stored, Expected)
+        << "storage[0] must be CREATE #1 address in " << runModeName(Mode)
+        << ", not CREATE2 " << evmc::hex(Create2Addr);
+  }
+}
+
+TEST(EVMRegressionTest, Issue621_Create2ThenCreateKeepsFirstAddress) {
+  // CREATE2; CREATE; POP; XOR; PUSH0; SSTORE — first result must survive.
+  const std::vector<uint8_t> Bytecode =
+      zen::utils::fromHex("5f5f5f5ff55f5f5f5ff050185f55").value();
+  zen::evm::ZenMockedEVMHost AddressHost;
+  const evmc::address ExpectedCreate2Addr = AddressHost.computeCreate2Address(
+      kIssue621Contract, evmc::bytes32{}, evmc::bytes_view{});
+
+  evmc::bytes32 Slot0{};
+  for (common::RunMode Mode : evmRegressionRunModes()) {
+    auto Run = runHostContractTx(Mode, kIssue621Sender, kIssue621Contract,
+                                 Bytecode, 1000000, 0x1bc16d674ec80000ULL);
+    ASSERT_TRUE(Run.Success) << Run.ErrorMessage << " " << runModeName(Mode);
+    ASSERT_EQ(Run.Status, EVMC_SUCCESS) << runModeName(Mode);
+    evmc::bytes32 ExpectedWord{};
+    std::memcpy(ExpectedWord.bytes + 12, ExpectedCreate2Addr.bytes, 20);
+    const auto Stored = intx::be::load<intx::uint256>(
+        Run.Host->accounts[kIssue621Contract].storage.at(Slot0).current);
+    const auto Expected = intx::be::load<intx::uint256>(ExpectedWord);
+    EXPECT_EQ(Stored, Expected)
+        << "storage[0] must be CREATE2 #1 address in " << runModeName(Mode);
+  }
 }
 
 #ifdef ZEN_ENABLE_MULTIPASS_JIT

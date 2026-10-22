@@ -73,11 +73,12 @@ using Log3Fn = void (*)(zen::runtime::EVMInstance *, uint64_t, uint64_t,
 using Log4Fn = void (*)(zen::runtime::EVMInstance *, uint64_t, uint64_t,
                         const uint8_t *, const uint8_t *, const uint8_t *,
                         const uint8_t *);
-using CreateFn = const uint8_t *(*)(zen::runtime::EVMInstance *,
-                                    const intx::uint256 &, uint64_t, uint64_t);
-using Create2Fn = const uint8_t *(*)(zen::runtime::EVMInstance *,
-                                     const intx::uint256 &, uint64_t, uint64_t,
-                                     const uint8_t *);
+using CreateFn = const intx::uint256 *(*)(zen::runtime::EVMInstance *,
+                                          const intx::uint256 &, uint64_t,
+                                          uint64_t);
+using Create2Fn = const intx::uint256 *(*)(zen::runtime::EVMInstance *,
+                                           const intx::uint256 &, uint64_t,
+                                           uint64_t, const uint8_t *);
 
 // Call function types for different call operations
 using CallFn = uint64_t (*)(zen::runtime::EVMInstance *, uint64_t,
@@ -279,12 +280,13 @@ void evmEmitLog4NoExpand(zen::runtime::EVMInstance *Instance, uint64_t Offset,
                          uint64_t Size, const uint8_t *Topic1,
                          const uint8_t *Topic2, const uint8_t *Topic3,
                          const uint8_t *Topic4);
-const uint8_t *evmHandleCreate(zen::runtime::EVMInstance *Instance,
-                               const intx::uint256 &Value, uint64_t Offset,
-                               uint64_t Size);
-const uint8_t *evmHandleCreate2(zen::runtime::EVMInstance *Instance,
-                                const intx::uint256 &Value, uint64_t Offset,
-                                uint64_t Size, const uint8_t *Salt);
+const intx::uint256 *evmHandleCreate(zen::runtime::EVMInstance *Instance,
+                                     const intx::uint256 &Value,
+                                     uint64_t Offset, uint64_t Size);
+const intx::uint256 *evmHandleCreate2(zen::runtime::EVMInstance *Instance,
+                                      const intx::uint256 &Value,
+                                      uint64_t Offset, uint64_t Size,
+                                      const uint8_t *Salt);
 uint64_t evmHandleCall(zen::runtime::EVMInstance *Instance, uint64_t Gas,
                        const uint8_t *ToAddr, const intx::uint256 &Value,
                        uint64_t ArgsOffset, uint64_t ArgsSize,
