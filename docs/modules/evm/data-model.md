@@ -60,6 +60,9 @@ classDiagram
         +PushValueMap: vector~intx::uint256~
         +GasChunkEnd: vector~uint32_t~
         +GasChunkCost: vector~uint64_t~
+        +GasChunkCostSPP: vector~uint64_t~
+        +ResolvedJumpTargets: unordered_map~uint32_t, uint32_t~
+        +ResolvedJumpMultiTargets: unordered_map~uint32_t, vector~uint32_t~~
     }
 
     class EVMResource {
@@ -144,7 +147,10 @@ Bytecode pre-analysis cache, filled by `buildBytecodeCache()`, used by interpret
 | JumpDestMap | `[pc] -> 0/1` valid JUMPDEST |
 | PushValueMap | `[pc] -> intx::uint256` PUSH immediate |
 | GasChunkEnd | `[chunk_start_pc] -> chunk_end_pc` |
-| GasChunkCost | `[chunk_start_pc] -> chunk_gas_cost` |
+| GasChunkCost | `[chunk_start_pc] -> chunk_gas_cost` (interpreter; unshifted) |
+| GasChunkCostSPP | `[chunk_start_pc] -> SPP-shifted cost` (JIT only) |
+| ResolvedJumpTargets | JUMP/JUMPI PC → single JUMPDEST PC |
+| ResolvedJumpMultiTargets | JUMP/JUMPI PC → sound ConstSet of JUMPDEST PCs |
 
 ### EVMResource
 

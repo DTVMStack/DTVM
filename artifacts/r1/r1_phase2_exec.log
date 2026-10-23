@@ -1,0 +1,37 @@
+=== fib r1=off extras=50 ===
+output: 0x0000000000000000000000000000000000000000000000000000000000001A6D
+[2026-10-08 12:39:09.611] [info] [statistics.cpp:102] ================  [Begin] ZetaEngine Statistics  ================
+[2026-10-08 12:39:09.611] [info] [statistics.cpp:125] Load:			1 times, avg 0.001ms, total 0.001ms, 0.01%
+[2026-10-08 12:39:09.611] [info] [statistics.cpp:125] JIT Compilation:		1 times, avg 8.294ms, total 8.294ms, 99.86%
+[2026-10-08 12:39:09.611] [info] [statistics.cpp:125] Instantiation:		51 times, avg 0.000ms, total 0.011ms, 0.13%
+[2026-10-08 12:39:09.611] [info] [statistics.cpp:132] Total:		8.306ms
+[2026-10-08 12:39:09.611] [info] [statistics.cpp:134] =================  [End] ZetaEngine Statistics =================
+wall_ms_r1=off_33.919
+=== fib r1=on extras=50 ===
+output: 0x0000000000000000000000000000000000000000000000000000000000001A6D
+[2026-10-08 12:39:09.654] [info] [statistics.cpp:102] ================  [Begin] ZetaEngine Statistics  ================
+[2026-10-08 12:39:09.654] [info] [statistics.cpp:125] Load:			1 times, avg 0.001ms, total 0.001ms, 0.01%
+[2026-10-08 12:39:09.654] [info] [statistics.cpp:125] JIT Compilation:		1 times, avg 7.570ms, total 7.570ms, 99.86%
+[2026-10-08 12:39:09.654] [info] [statistics.cpp:125] Instantiation:		51 times, avg 0.000ms, total 0.010ms, 0.13%
+[2026-10-08 12:39:09.654] [info] [statistics.cpp:132] Total:		7.581ms
+[2026-10-08 12:39:09.654] [info] [statistics.cpp:134] =================  [End] ZetaEngine Statistics =================
+wall_ms_r1=on_32.332
+=== counter r1=off extras=50 ===
+[2026-10-08 12:39:09.672] [info] [statistics.cpp:102] ================  [Begin] ZetaEngine Statistics  ================
+[2026-10-08 12:39:09.672] [info] [statistics.cpp:125] Load:			1 times, avg 0.001ms, total 0.001ms, 0.02%
+[2026-10-08 12:39:09.672] [info] [statistics.cpp:125] JIT Compilation:		1 times, avg 3.834ms, total 3.834ms, 99.75%
+[2026-10-08 12:39:09.672] [info] [statistics.cpp:125] Instantiation:		51 times, avg 0.000ms, total 0.009ms, 0.24%
+[2026-10-08 12:39:09.672] [info] [statistics.cpp:132] Total:		3.844ms
+[2026-10-08 12:39:09.672] [info] [statistics.cpp:134] =================  [End] ZetaEngine Statistics =================
+dtvm counter r1=off failed
+wall_ms_r1=off_8.216
+=== counter r1=on extras=50 ===
+[2026-10-08 12:39:09.690] [info] [statistics.cpp:102] ================  [Begin] ZetaEngine Statistics  ================
+[2026-10-08 12:39:09.690] [info] [statistics.cpp:125] Load:			1 times, avg 0.001ms, total 0.001ms, 0.01%
+[2026-10-08 12:39:09.690] [info] [statistics.cpp:125] JIT Compilation:		1 times, avg 3.929ms, total 3.929ms, 99.76%
+[2026-10-08 12:39:09.690] [info] [statistics.cpp:125] Instantiation:		51 times, avg 0.000ms, total 0.009ms, 0.23%
+[2026-10-08 12:39:09.690] [info] [statistics.cpp:132] Total:		3.939ms
+[2026-10-08 12:39:09.690] [info] [statistics.cpp:134] =================  [End] ZetaEngine Statistics =================
+dtvm counter r1=on failed
+wall_ms_r1=on_7.975
+test_vmbench: blocked (out-of-tree contract-testbed)

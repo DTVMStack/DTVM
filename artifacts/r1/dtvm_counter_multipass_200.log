@@ -1,0 +1,6 @@
+[2026-10-08 12:02:54.169] [info] [statistics.cpp:102] ================  [Begin] ZetaEngine Statistics  ================
+[2026-10-08 12:02:54.169] [info] [statistics.cpp:125] Load:			1 times, avg 0.001ms, total 0.001ms, 0.01%
+[2026-10-08 12:02:54.169] [info] [statistics.cpp:125] JIT Compilation:		1 times, avg 4.399ms, total 4.399ms, 99.34%
+[2026-10-08 12:02:54.169] [info] [statistics.cpp:125] Instantiation:		201 times, avg 0.000ms, total 0.029ms, 0.65%
+[2026-10-08 12:02:54.169] [info] [statistics.cpp:132] Total:		4.429ms
+[2026-10-08 12:02:54.169] [info] [statistics.cpp:134] =================  [End] ZetaEngine Statistics =================

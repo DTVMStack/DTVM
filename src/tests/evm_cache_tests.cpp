@@ -31,19 +31,38 @@ constexpr uint8_t OP_JUMPI = static_cast<uint8_t>(evmc_opcode::OP_JUMPI);
 constexpr uint8_t OP_JUMPDEST = static_cast<uint8_t>(evmc_opcode::OP_JUMPDEST);
 constexpr uint8_t OP_PUSH0 = static_cast<uint8_t>(evmc_opcode::OP_PUSH0);
 constexpr uint8_t OP_PUSH1 = static_cast<uint8_t>(evmc_opcode::OP_PUSH1);
+constexpr uint8_t OP_SWAP1 = static_cast<uint8_t>(evmc_opcode::OP_SWAP1);
 
 EVMBytecodeCache buildSPPCache(const std::vector<uint8_t> &Code) {
   EVMBytecodeCache Cache;
   buildBytecodeCache(Cache, reinterpret_cast<const std::byte *>(Code.data()),
-                     Code.size(), EVMC_CANCUN, /*EnableSPP=*/true);
+                     Code.size(), EVMC_CANCUN, /*EnableSPP=*/true,
+                     /*EnableR1=*/true);
   return Cache;
 }
 
 EVMBytecodeCache buildNoSPPCache(const std::vector<uint8_t> &Code) {
   EVMBytecodeCache Cache;
   buildBytecodeCache(Cache, reinterpret_cast<const std::byte *>(Code.data()),
-                     Code.size(), EVMC_CANCUN, /*EnableSPP=*/false);
+                     Code.size(), EVMC_CANCUN, /*EnableSPP=*/false,
+                     /*EnableR1=*/true);
   return Cache;
+}
+
+EVMBytecodeCache buildCache(const std::vector<uint8_t> &Code, bool EnableSPP,
+                            bool EnableR1) {
+  EVMBytecodeCache Cache;
+  buildBytecodeCache(Cache, reinterpret_cast<const std::byte *>(Code.data()),
+                     Code.size(), EVMC_CANCUN, EnableSPP, EnableR1);
+  return Cache;
+}
+
+void expectGasChunkCostEqual(const EVMBytecodeCache &A,
+                             const EVMBytecodeCache &B) {
+  ASSERT_EQ(A.GasChunkCost.size(), B.GasChunkCost.size());
+  for (size_t I = 0; I < A.GasChunkCost.size(); ++I) {
+    EXPECT_EQ(A.GasChunkCost[I], B.GasChunkCost[I]) << "pc=" << I;
+  }
 }
 
 // Smoke: no dynamic jumps + a statically-dead JUMPDEST must not crash;
@@ -414,6 +433,118 @@ TEST(EVMCacheDominator, DynTargetInStaticLoop) {
   EXPECT_EQ(IDom[2], 1u) << "Stitched dyn-target dominated by static parent.";
   EXPECT_EQ(IDom[3], 2u);
   EXPECT_EQ(IDom[4], 1u);
+}
+
+// ---- R1 cross-block absinterp ---------------------------------------------
+//
+// Single-caller Solidity internal return: SWAP1;JUMP dest is the in-block
+// return address pushed by the only caller. Cross-block Const must resolve
+// it; the block-local pass alone cannot.
+//
+//   0: PUSH1 0x05   ret
+//   2: PUSH1 0x07   func
+//   4: JUMP
+//   5: JUMPDEST     ret
+//   6: STOP
+//   7: JUMPDEST     func
+//   8: PUSH1 0x01
+//  10: SWAP1
+//  11: JUMP
+
+TEST(EVMCacheR1, SingleCallerConst_ResolvesInternalReturn) {
+  const std::vector<uint8_t> Code = {
+      OP_PUSH1, 0x05, OP_PUSH1, 0x07, OP_JUMP, OP_JUMPDEST, OP_STOP,
+      OP_JUMPDEST,    OP_PUSH1, 0x01, OP_SWAP1, OP_JUMP,
+  };
+  const EVMBytecodeCache Off = buildCache(Code, /*SPP=*/true, /*R1=*/false);
+  const EVMBytecodeCache On = buildCache(Code, /*SPP=*/true, /*R1=*/true);
+
+  EXPECT_EQ(Off.ResolvedJumpTargets.count(11u), 0u);
+  EXPECT_EQ(Off.ResolvedJumpMultiTargets.count(11u), 0u);
+  ASSERT_EQ(On.ResolvedJumpTargets.count(11u), 1u);
+  EXPECT_EQ(On.ResolvedJumpTargets.at(11u), 5u);
+  EXPECT_TRUE(On.ResolvedJumpMultiTargets.empty());
+  expectGasChunkCostEqual(On, Off);
+}
+
+// Two callers, same function: dest is ConstSet {ret1, ret2}.
+// JUMPI stack is [cond, dest] (dest on top), so PUSH cond then PUSH dest.
+//
+//   0: PUSH1 0x01   cond
+//   2: PUSH1 0x0C   caller2
+//   4: JUMPI
+//   5: PUSH1 0x0A   ret1
+//   7: PUSH1 0x14   func
+//   9: JUMP
+//  10: JUMPDEST     ret1
+//  11: STOP
+//  12: JUMPDEST     caller2
+//  13: PUSH1 0x12   ret2
+//  15: PUSH1 0x14   func
+//  17: JUMP
+//  18: JUMPDEST     ret2
+//  19: STOP
+//  20: JUMPDEST     func
+//  21: PUSH1 0x01
+//  23: SWAP1
+//  24: JUMP
+
+TEST(EVMCacheR1, TwoCallerConstSet_MultiTargetContainsBothReturns) {
+  const std::vector<uint8_t> Code = {
+      OP_PUSH1,    0x01, OP_PUSH1, 0x0C, OP_JUMPI, OP_PUSH1, 0x0A, OP_PUSH1,
+      0x14,        OP_JUMP, OP_JUMPDEST, OP_STOP, OP_JUMPDEST, OP_PUSH1, 0x12,
+      OP_PUSH1,    0x14, OP_JUMP, OP_JUMPDEST, OP_STOP, OP_JUMPDEST, OP_PUSH1,
+      0x01,        OP_SWAP1, OP_JUMP,
+  };
+  const EVMBytecodeCache Off = buildCache(Code, true, false);
+  const EVMBytecodeCache On = buildCache(Code, true, true);
+
+  EXPECT_EQ(Off.ResolvedJumpTargets.count(24u), 0u);
+  EXPECT_EQ(Off.ResolvedJumpMultiTargets.count(24u), 0u);
+  ASSERT_EQ(On.ResolvedJumpMultiTargets.count(24u), 1u);
+  const auto &Dests = On.ResolvedJumpMultiTargets.at(24u);
+  ASSERT_EQ(Dests.size(), 2u);
+  EXPECT_EQ(Dests[0], 10u);
+  EXPECT_EQ(Dests[1], 18u);
+  expectGasChunkCostEqual(On, Off);
+}
+
+// CALLDATALOAD; JUMP is Top. Fail-closed: no new resolutions, same as today.
+TEST(EVMCacheR1, CalldataTop_StaysUnresolvedLikeToday) {
+  const std::vector<uint8_t> Code = {
+      OP_CALLDATALOAD, OP_JUMP, OP_JUMPDEST, OP_ADD, OP_POP, OP_STOP,
+  };
+  const EVMBytecodeCache Off = buildCache(Code, true, false);
+  const EVMBytecodeCache On = buildCache(Code, true, true);
+
+  EXPECT_TRUE(On.ResolvedJumpTargets.empty());
+  EXPECT_TRUE(On.ResolvedJumpMultiTargets.empty());
+  EXPECT_EQ(On.ResolvedJumpTargets.size(), Off.ResolvedJumpTargets.size());
+  expectGasChunkCostEqual(On, Off);
+  ASSERT_EQ(On.GasChunkCostSPP.size(), Off.GasChunkCostSPP.size());
+  for (size_t I = 0; I < On.GasChunkCostSPP.size(); ++I) {
+    EXPECT_EQ(On.GasChunkCostSPP[I], Off.GasChunkCostSPP[I]) << "pc=" << I;
+  }
+}
+
+// Reachable Top jump (CALLDATALOAD; JUMP) plus a Const internal-return
+// that is only reachable if we over-approx through the Top dispatcher.
+// invalidate_suspect must refuse to commit anything new.
+TEST(EVMCacheR1, TopPlusConstSet_FailClosedNoMultiCommit) {
+  const std::vector<uint8_t> Code = {
+      OP_CALLDATALOAD, OP_JUMP,  OP_JUMPDEST, OP_PUSH1, 0x09, OP_PUSH1,
+      0x0B,            OP_JUMP,  OP_JUMPDEST, OP_STOP,  OP_JUMPDEST,
+      OP_PUSH1,        0x01,     OP_SWAP1,    OP_JUMP,
+  };
+  const uint32_t FuncJump = static_cast<uint32_t>(Code.size() - 1);
+  const EVMBytecodeCache Off = buildCache(Code, true, false);
+  const EVMBytecodeCache On = buildCache(Code, true, true);
+
+  EXPECT_TRUE(On.ResolvedJumpMultiTargets.empty());
+  EXPECT_EQ(On.ResolvedJumpTargets.count(FuncJump), 0u);
+  EXPECT_EQ(On.ResolvedJumpTargets.count(1u), 0u);
+  EXPECT_EQ(Off.ResolvedJumpTargets.count(FuncJump), 0u);
+  expectGasChunkCostEqual(On, Off);
 }
 
 } // namespace
