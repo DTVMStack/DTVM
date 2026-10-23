@@ -1070,14 +1070,15 @@ evmHandleCreateInternal(zen::runtime::EVMInstance *Instance,
       return storeUint256Result(intx::uint256{0});
     }
   }
-  // Track subcall refund (may be negative)
-  Instance->addGasRefund(Result.gas_refund);
 
   std::vector<uint8_t> ReturnData(Result.output_data,
                                   Result.output_data + Result.output_size);
   Instance->setReturnData(std::move(ReturnData));
 
   if (Result.status_code == EVMC_SUCCESS) {
+    // Cancun incorporate_child_on_error merges gas_left only. EVMC requires
+    // gas_refund to be 0 unless status is SUCCESS.
+    Instance->addGasRefund(Result.gas_refund);
     // Copy into the uint256 return slot. convertCallResult materializes the
     // four limbs immediately, so a later CREATE/CREATE2 cannot overwrite an
     // earlier stack operand (shared PaddedAddress pointer used to).

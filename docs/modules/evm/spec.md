@@ -40,6 +40,7 @@ This module does not include: module loading (runtime), JIT compilation (compile
 - Gas deducted from `Frame->Msg.gas`; set `EVMC_OUT_OF_GAS` on failure
 - Memory expansion formula: `cost = (new_words²/512 + 3*new_words) - (current_words²/512 + 3*current_words)`; bounded by `MAX_REQUIRED_MEMORY_SIZE` (16MB)
 - Storage (SSTORE) uses `SSTORE_COSTS[Rev][Status]` by revision and storage status; Gas refund aggregated at `EVMInstance` level
+- `CREATE` / `CREATE2` merge the child's `gas_refund` into the parent only on `EVMC_SUCCESS`. Failed init (REVERT, exceptional halt) and post-init deploy failures do not credit the parent (Cancun `incorporate_child_on_error`, EVMC `gas_refund` MUST be 0 unless SUCCESS)
 
 ### 5. Message Stack and Return Data Handling
 

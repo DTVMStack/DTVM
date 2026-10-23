@@ -1237,9 +1237,12 @@ void CreateHandler::doExecute() {
   if (CallGas > GasLeft) {
     chargeGas(Frame, CallGas - GasLeft); // it's safe to charge gas here
   }
-  Context->getInstance()->addGasRefund(Result.gas_refund);
 
+  // Cancun incorporate_child_on_error merges gas_left only. EVMC also requires
+  // gas_refund to be 0 unless status is SUCCESS. Do not credit the parent on
+  // REVERT or exceptional CREATE failure.
   if (Result.status_code == EVMC_SUCCESS) {
+    Context->getInstance()->addGasRefund(Result.gas_refund);
     Context->setReturnData(std::vector<uint8_t>());
     Frame->pop(); // pop the assume value
     Frame->push(intx::be::load<intx::uint256>(Result.create_address));

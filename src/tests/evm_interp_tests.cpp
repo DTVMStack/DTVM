@@ -2780,6 +2780,34 @@ void appendPush32Word(std::vector<uint8_t> &Bytecode,
   Bytecode.insert(Bytecode.end(), Word.begin(), Word.end());
 }
 
+// Cancun net-cost SSTORE: 0→1 (ADDED) then 1→0 (ADDED_DELETED) refunds
+// G_sset - G_warmaccess = 20000 - 100.
+constexpr uint64_t kCancunAddedDeletedRefund = 19900;
+
+const std::vector<uint8_t> kSstoreClearRefundOps = {
+    0x60, 0x01, 0x60, 0x00, 0x55, 0x60, 0x00, 0x60, 0x00, 0x55};
+
+std::vector<uint8_t>
+buildCreateInitWithRefundOps(const std::vector<uint8_t> &Tail) {
+  std::vector<uint8_t> Init = kSstoreClearRefundOps;
+  Init.insert(Init.end(), Tail.begin(), Tail.end());
+  return Init;
+}
+
+std::vector<uint8_t>
+buildParentCreateBytecode(const std::vector<uint8_t> &InitCode,
+                          uint8_t CreateOpcode) {
+  std::vector<uint8_t> Bytecode;
+  appendPush32Word(Bytecode, InitCode);
+  Bytecode.insert(Bytecode.end(), {0x60, 0x00, 0x52});
+  if (CreateOpcode == 0xf5) {
+    Bytecode.insert(Bytecode.end(), {0x60, 0x00});
+  }
+  Bytecode.insert(Bytecode.end(), {0x60, static_cast<uint8_t>(InitCode.size()),
+                                   0x60, 0x00, 0x60, 0x00, CreateOpcode, 0x50});
+  return Bytecode;
+}
+
 std::vector<uint8_t>
 buildCreateAccessProbeBytecode(const std::vector<uint8_t> &InitCode,
                                const evmc::address &CreatedAddr,
@@ -2815,6 +2843,9 @@ struct HostTxRun {
   bool Success = false;
   evmc_status_code Status = EVMC_INTERNAL_ERROR;
   std::string ErrorMessage;
+  uint64_t GasUsed = 0;
+  uint64_t GasRefund = 0;
+  uint64_t GasCharged = 0;
   std::unique_ptr<zen::evm::ZenMockedEVMHost> Host;
 };
 
@@ -2862,6 +2893,9 @@ HostTxRun runHostContractTx(common::RunMode Mode,
   Run.Success = Result.Success;
   Run.Status = Result.Status;
   Run.ErrorMessage = Result.ErrorMessage;
+  Run.GasUsed = Result.GasUsed;
+  Run.GasRefund = Result.GasRefund;
+  Run.GasCharged = Result.GasCharged;
   return Run;
 }
 
@@ -3012,6 +3046,77 @@ TEST(EVMRegressionTest, Issue621_Create2ThenCreateKeepsFirstAddress) {
     const auto Expected = intx::be::load<intx::uint256>(ExpectedWord);
     EXPECT_EQ(Stored, Expected)
         << "storage[0] must be CREATE2 #1 address in " << runModeName(Mode);
+  }
+}
+
+// Regression for https://github.com/DTVMStack/DTVM/issues/624.
+// Cancun incorporate_child_on_error / evmone execute() merge gas_left only
+// on CREATE failure. Child SSTORE refunds must not credit the parent on
+// REVERT, exceptional halt, or a post-init deploy failure (code too large).
+TEST(EVMRegressionTest, Issue624_FailedCreateDoesNotMergeChildRefund) {
+  const auto RevertInit =
+      buildCreateInitWithRefundOps({0x60, 0x00, 0x60, 0x00, 0xfd});
+  const auto HaltInit = buildCreateInitWithRefundOps({0xfe});
+  // RETURN 0x6001 bytes: EIP-170 deploy failure after a successful init frame.
+  const auto OversizedInit =
+      buildCreateInitWithRefundOps({0x61, 0x60, 0x01, 0x60, 0x00, 0xf3});
+  ASSERT_LE(RevertInit.size(), 32u);
+  ASSERT_LE(HaltInit.size(), 32u);
+  ASSERT_LE(OversizedInit.size(), 32u);
+  ASSERT_GT(0x6001u, static_cast<unsigned>(zen::evm::MAX_CODE_SIZE));
+
+  const struct {
+    const char *Name;
+    const std::vector<uint8_t> *Init;
+  } Cases[] = {
+      {"revert", &RevertInit},
+      {"halt", &HaltInit},
+      {"oversized", &OversizedInit},
+  };
+
+  for (common::RunMode Mode : evmRegressionRunModes()) {
+    for (uint8_t CreateOpcode : {uint8_t{0xf0}, uint8_t{0xf5}}) {
+      for (const auto &Case : Cases) {
+        auto Bytecode = buildParentCreateBytecode(*Case.Init, CreateOpcode);
+        auto Run = runHostContractTx(Mode, kIssue622Sender, kIssue622Contract,
+                                     Bytecode, 16000000, 0xde0b6b3a7640000ULL);
+        ASSERT_TRUE(Run.Success)
+            << Run.ErrorMessage << " mode=" << runModeName(Mode)
+            << " case=" << Case.Name << " op=0x" << std::hex
+            << int(CreateOpcode);
+        ASSERT_EQ(Run.Status, EVMC_SUCCESS)
+            << runModeName(Mode) << " " << Case.Name;
+        EXPECT_EQ(Run.GasRefund, 0u)
+            << "failed CREATE must not merge child SSTORE refund in "
+            << runModeName(Mode) << " case=" << Case.Name << " op=0x"
+            << std::hex << int(CreateOpcode) << " gasUsed=" << std::dec
+            << Run.GasUsed << " gasCharged=" << Run.GasCharged;
+      }
+    }
+  }
+}
+
+// Successful CREATE must still merge the child's refund, matching evmone.
+TEST(EVMRegressionTest, Issue624_SuccessfulCreateMergesChildRefund) {
+  const auto SuccessInit = buildCreateInitWithRefundOps({0x00});
+  ASSERT_LE(SuccessInit.size(), 32u);
+
+  for (common::RunMode Mode : evmRegressionRunModes()) {
+    for (uint8_t CreateOpcode : {uint8_t{0xf0}, uint8_t{0xf5}}) {
+      auto Bytecode = buildParentCreateBytecode(SuccessInit, CreateOpcode);
+      auto Run = runHostContractTx(Mode, kIssue622Sender, kIssue622Contract,
+                                   Bytecode, 16000000, 0xde0b6b3a7640000ULL);
+      ASSERT_TRUE(Run.Success) << Run.ErrorMessage << " " << runModeName(Mode);
+      ASSERT_EQ(Run.Status, EVMC_SUCCESS) << runModeName(Mode);
+      const uint64_t Expected =
+          std::min(kCancunAddedDeletedRefund,
+                   zen::utils::computeRefundCap(EVMC_CANCUN, Run.GasUsed));
+      EXPECT_EQ(Run.GasRefund, Expected)
+          << "successful CREATE must merge child refund in "
+          << runModeName(Mode) << " op=0x" << std::hex << int(CreateOpcode)
+          << " gasUsed=" << std::dec << Run.GasUsed;
+      EXPECT_GT(Run.GasRefund, 0u) << runModeName(Mode);
+    }
   }
 }
 
