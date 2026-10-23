@@ -900,6 +900,9 @@ public:
       const int64_t GasRefund = static_cast<int64_t>(Inst->getGasRefund());
 
       // 6 Deploy the contract code (the output is the runtime code)
+      // EVMC: gas_refund MUST be 0 unless status is SUCCESS. Cancun
+      // incorporate_child_on_error merges gas_left only, so a failed CREATE
+      // must not propagate the child's refund to the parent.
       if (ExecResult.status_code != EVMC_SUCCESS) {
         restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
         auto SenderIt = accounts.find(Msg.sender);
@@ -907,7 +910,7 @@ public:
             (Msg.kind == EVMC_CREATE || Msg.kind == EVMC_CREATE2)) {
           SenderIt->second.nonce++;
         }
-        evmc::Result Failure(ExecResult.status_code, RemainingGas, GasRefund);
+        evmc::Result Failure(ExecResult.status_code, RemainingGas, 0);
         if (ExecResult.status_code == EVMC_REVERT && !ReturnData.empty()) {
           Failure.output_data = ReturnData.data();
           Failure.output_size = ReturnData.size();
@@ -918,7 +921,7 @@ public:
       auto NewAccIt = accounts.find(NewAddr);
       if (NewAccIt == accounts.end()) {
         restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
-        evmc::Result Failure(EVMC_FAILURE, RemainingGas, GasRefund);
+        evmc::Result Failure(EVMC_FAILURE, RemainingGas, 0);
         Failure.create_address = NewAddr;
         return Failure;
       }
@@ -927,7 +930,7 @@ public:
       if (!ReturnData.empty()) {
         if (ReturnData.size() > MAX_CODE_SIZE) {
           restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
-          evmc::Result Failure(EVMC_FAILURE, RemainingGas, GasRefund);
+          evmc::Result Failure(EVMC_FAILURE, RemainingGas, 0);
           Failure.create_address = NewAddr;
           return Failure;
         }
