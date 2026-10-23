@@ -777,11 +777,14 @@ public:
       return evmc::Result{EVMC_FAILURE, OrigMsg.gas, 0, evmc::address{}};
     }
     evmc_message Msg = prepareMessage(OrigMsg);
+    evmc::address NewAddr = Msg.recipient;
     auto StateSnapshot = captureHostState();
     try {
       // 2 Check for address conflicts (if the address already exists and is not
       // empty, creation will fail)
-      evmc::address NewAddr = Msg.recipient;
+      // EIP-2929 / Cancun generic_create: the parent frame marks NewAddr warm
+      // before init runs. The mark belongs to the parent and must survive
+      // init failure (REVERT or exceptional halt).
       if (Revision >= EVMC_BERLIN) {
         access_account(NewAddr);
       }
@@ -816,7 +819,7 @@ public:
       auto ModRet =
           RT->loadEVMModule(ModName, InitcodePtr, InitcodeSize, Revision);
       if (!ModRet) {
-        restoreHostState(StateSnapshot);
+        restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
         ZEN_LOG_ERROR("Failed to load EVM module: %s", ModName.c_str());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
       }
@@ -825,7 +828,7 @@ public:
       IsolationPtr Iso(nullptr, IsolationDeleter{RT});
       Iso.reset(RT->createManagedIsolation());
       if (!Iso) {
-        restoreHostState(StateSnapshot);
+        restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
         ZEN_LOG_ERROR("Failed to create isolation for module: %s",
                       ModName.c_str());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
@@ -833,7 +836,7 @@ public:
 
       auto InstRet = Iso->createEVMInstance(*Mod, Msg.gas);
       if (!InstRet) {
-        restoreHostState(StateSnapshot);
+        restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
         ZEN_LOG_ERROR("Failed to create EVM instance for module: %s",
                       ModName.c_str());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, NewAddr};
@@ -856,6 +859,9 @@ public:
       intx::uint256 SenderBalance =
           intx::be::load<intx::uint256>(SenderAcc.balance);
       if (SenderBalance < Value) {
+        // Spec marks the create address warm only after the endowment /
+        // nonce / depth checks succeed. Rolling the mark back here matches
+        // that order: this path must not leave NewAddr warm.
         restoreHostState(StateSnapshot);
         const auto SenderBalanceStr = intx::to_string(SenderBalance);
         const auto ValueStr = intx::to_string(Value);
@@ -875,7 +881,7 @@ public:
       try {
         RT->callEVMMain(*Inst, CallMsg, ExecResult);
       } catch (const std::exception &E) {
-        restoreHostState(StateSnapshot);
+        restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
         ZEN_LOG_ERROR("Error in handleCreate execution: %s", E.what());
         return evmc::Result{EVMC_FAILURE, Msg.gas, 0, evmc::address{}};
       }
@@ -895,7 +901,7 @@ public:
 
       // 6 Deploy the contract code (the output is the runtime code)
       if (ExecResult.status_code != EVMC_SUCCESS) {
-        restoreHostState(StateSnapshot);
+        restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
         auto SenderIt = accounts.find(Msg.sender);
         if (SenderIt != accounts.end() &&
             (Msg.kind == EVMC_CREATE || Msg.kind == EVMC_CREATE2)) {
@@ -911,7 +917,7 @@ public:
       }
       auto NewAccIt = accounts.find(NewAddr);
       if (NewAccIt == accounts.end()) {
-        restoreHostState(StateSnapshot);
+        restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
         evmc::Result Failure(EVMC_FAILURE, RemainingGas, GasRefund);
         Failure.create_address = NewAddr;
         return Failure;
@@ -920,7 +926,7 @@ public:
 
       if (!ReturnData.empty()) {
         if (ReturnData.size() > MAX_CODE_SIZE) {
-          restoreHostState(StateSnapshot);
+          restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
           evmc::Result Failure(EVMC_FAILURE, RemainingGas, GasRefund);
           Failure.create_address = NewAddr;
           return Failure;
@@ -929,7 +935,7 @@ public:
         const uint64_t CodeDepositCost =
             CODE_DEPOSIT_COST_PER_BYTE * ReturnData.size();
         if (RemainingGas < static_cast<int64_t>(CodeDepositCost)) {
-          restoreHostState(StateSnapshot);
+          restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
           auto SenderIt = accounts.find(Msg.sender);
           if (SenderIt != accounts.end() &&
               (Msg.kind == EVMC_CREATE || Msg.kind == EVMC_CREATE2)) {
@@ -965,7 +971,7 @@ public:
       return CreateResult;
     } catch (const std::exception &E) {
       ZEN_LOG_ERROR("Error in handleCreate: %s", E.what());
-      restoreHostState(StateSnapshot);
+      restoreHostStateKeepingCreateAddressWarm(StateSnapshot, NewAddr);
       return evmc::Result{EVMC_FAILURE, Msg.gas, 0, evmc::address{}};
     }
   }
@@ -1040,6 +1046,21 @@ private:
     CreatedInTx = Snapshot.CreatedAccounts;
     PendingSelfdestructs = Snapshot.PendingSelfdestructsSnapshot;
     recorded_account_accesses = Snapshot.RecordedAccountAccesses;
+  }
+
+  // Cancun generic_create adds contract_address to the parent
+  // accessed_addresses, then copies that set into the child. On child error
+  // (REVERT or exceptional halt) incorporate_child_on_error restores gas only
+  // and does not merge the child's extra access marks, but the parent's
+  // contract_address mark must remain. The host snapshot is taken before that
+  // parent mark, so re-apply it after rollback.
+  void
+  restoreHostStateKeepingCreateAddressWarm(const HostStateSnapshot &Snapshot,
+                                           const evmc::address &NewAddr) {
+    restoreHostState(Snapshot);
+    if (Revision >= EVMC_BERLIN) {
+      access_account(NewAddr);
+    }
   }
 
   static bool shouldRevertState(evmc_status_code Status) {

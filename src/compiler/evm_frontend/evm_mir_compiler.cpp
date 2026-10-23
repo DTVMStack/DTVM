@@ -5688,7 +5688,7 @@ EVMMirBuilder::handleCreate(Operand ValueOp, Operand OffsetOp, Operand SizeOp) {
   syncGasToMemoryFull();
 #endif
   auto Result =
-      callRuntimeForWithErrorCheck<const uint8_t *, const intx::uint256 &,
+      callRuntimeForWithErrorCheck<const intx::uint256 *, const intx::uint256 &,
                                    uint64_t, uint64_t>(
           RuntimeFunctions.HandleCreate, ValueOp, OffsetOp, SizeOp);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
@@ -5708,7 +5708,7 @@ typename EVMMirBuilder::Operand EVMMirBuilder::handleCreate2(Operand ValueOp,
   syncGasToMemoryFull();
 #endif
   auto Result =
-      callRuntimeForWithErrorCheck<const uint8_t *, const intx::uint256 &,
+      callRuntimeForWithErrorCheck<const intx::uint256 *, const intx::uint256 &,
                                    uint64_t, uint64_t, const uint8_t *>(
           RuntimeFunctions.HandleCreate2, ValueOp, OffsetOp, SizeOp, SaltOp);
 #ifdef ZEN_ENABLE_EVM_GAS_REGISTER
