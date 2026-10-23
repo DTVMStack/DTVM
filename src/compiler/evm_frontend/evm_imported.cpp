@@ -62,8 +62,16 @@ static thread_local KeccakCache TLKeccakCache;
 namespace COMPILER {
 
 namespace {
+// Single thread-local slot shared by every helper that returns
+// const intx::uint256 * through storeUint256Result (~40 call sites).
+// A later helper overwrites this buffer.
 thread_local intx::uint256 Uint256ReturnBuffer;
 
+// Store Value in Uint256ReturnBuffer and return that pointer.
+// Invariant: the JIT call site must materialize the four limbs immediately
+// (convertCallResult) before any other storeUint256Result helper runs. Do
+// not leave this pointer as a live stack operand — that is the CREATE
+// last-writer-wins bug (#621).
 const intx::uint256 *storeUint256Result(const intx::uint256 &Value) {
   Uint256ReturnBuffer = Value;
   return &Uint256ReturnBuffer;

@@ -2773,6 +2773,7 @@ const char *runModeName(common::RunMode Mode) {
 
 void appendPush32Word(std::vector<uint8_t> &Bytecode,
                       const std::vector<uint8_t> &Prefix) {
+  ASSERT_LE(Prefix.size(), 32u) << "PUSH32 immediate must fit in 32 bytes";
   std::vector<uint8_t> Word(32, 0);
   std::memcpy(Word.data(), Prefix.data(), Prefix.size());
   Bytecode.push_back(0x7f);
