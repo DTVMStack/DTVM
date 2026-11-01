@@ -147,6 +147,10 @@
   (func (export "f13") (param i32) (result i32) (i32.eqz (i32.clz (i32.or (local.get 0) (i32.const 0x80000000)))))
   (func (export "f14") (param i32) (result i32) (i32.eq (i32.ctz (local.get 0)) (i32.const 4)))
   (func (export "f15") (param i32) (result i32) (i32.add (i32.const 2) (i32.const 3)))
+  (func (export "mul8") (param i32) (result i32)
+    (i32.mul (local.get 0) (i32.const 8)))
+  (func (export "add_reassoc") (param i32) (result i32)
+    (i32.add (i32.add (local.get 0) (i32.const 10408)) (i32.const 8)))
   (func (export "const_br_if_fallthrough") (param i32) (result i32)
     (local i32)
     (loop

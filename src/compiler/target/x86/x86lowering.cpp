@@ -1545,6 +1545,9 @@ static inline unsigned getMovRegToMemOpcode(MType::Kind TypeKind) {
 }
 
 CgRegister X86CgLowering::lowerLoadExpr(const LoadInstruction &Inst) {
+  // Index = add(i32_dyn, imm) is lowered as wrap-safe LEA64_32r, then used
+  // here. Do not fold that imm into Displacement: x86-64 EA is 64-bit
+  // zext(index)+disp, which is not wasm wrap32(index)+offset.
   unsigned Opcode =
       getMovMemToRegOpcode(Inst.getSrcType()->getKind(),
                            Inst.getDestType()->getKind(), Inst.getSext());
@@ -1737,6 +1740,63 @@ void X86CgLowering::lowerBrIfStmt(const BrIfInstruction &Inst) {
     fastEmitCondBranch(TrueMBB, TakenCC);
     startNewBlockAfterBranch();
   }
+}
+
+CgRegister X86CgLowering::tryLowerAddSubImmAsLEA(const MInstruction &Inst) {
+  const Opcode Opc = Inst.getOpcode();
+  if (Opc != OP_add && Opc != OP_sub) {
+    return 0;
+  }
+  const MType *Ty = Inst.getType();
+  // i32 only: LEA does not write CF. EVM 256-bit add uses i64 ADD then ADC
+  // (`handleAddU64Const` / limb 0 of `BO_ADD`); LEA64r would drop that carry.
+  if (!Ty || !Ty->isI32()) {
+    return 0;
+  }
+
+  const MInstruction *LHS = Inst.getOperand<0>();
+  const MInstruction *RHS = Inst.getOperand<1>();
+  const MInstruction *Dyn = LHS;
+  const auto *CI = dyn_cast<ConstantInstruction>(RHS);
+  const MConstantInt *IntC =
+      CI ? dyn_cast<MConstantInt>(&CI->getConstant()) : nullptr;
+  if (!IntC && Opc == OP_add) {
+    CI = dyn_cast<ConstantInstruction>(LHS);
+    IntC = CI ? dyn_cast<MConstantInt>(&CI->getConstant()) : nullptr;
+    if (IntC) {
+      Dyn = RHS;
+    }
+  }
+  if (!IntC) {
+    return 0;
+  }
+
+  llvm::APInt DispAP = IntC->getValue();
+  if (Opc == OP_sub) {
+    DispAP = -DispAP;
+  }
+  if (!DispAP.isSignedIntN(32) || DispAP.isZero()) {
+    return 0;
+  }
+  const int64_t Imm = DispAP.getSExtValue();
+
+  CgRegister SrcReg = lowerExpr(*Dyn);
+  // Zero-extend the i32 into a GR64 so LEA64_32r computes
+  // trunc32(zext32(x) + disp) == wrap32(x + disp).
+  CgRegister BaseReg =
+      fastEmitInst_subregtoreg(&X86::GR64RegClass, SrcReg, X86::sub_32bit);
+
+  CgRegister ResultReg = createReg(TLI.getRegClassFor(getMVT(*Ty)));
+  SmallVector<CgOperand, 6> LEAOperands{
+      CgOperand::createRegOperand(ResultReg, true),
+      CgOperand::createRegOperand(BaseReg, false),
+      CgOperand::createImmOperand(1),
+      CgOperand::createRegOperand(X86::NoRegister, false),
+      CgOperand::createImmOperand(Imm),
+      CgOperand::createRegOperand(X86::NoRegister, false),
+  };
+  MF->createCgInstruction(*CurBB, TII.get(X86::LEA64_32r), LEAOperands);
+  return ResultReg;
 }
 
 static unsigned getADDriOpcode(bool IsLP64, int64_t Imm) {

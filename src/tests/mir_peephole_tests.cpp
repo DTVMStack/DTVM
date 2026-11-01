@@ -778,6 +778,97 @@ TEST(MIRPeepholeLitmus, AlgebraIdentities) {
   }
 }
 
+TEST(MIRPeepholeLitmus, MulPow2FoldsToShl) {
+  MirBuilder B;
+  B.ret(B.bin(OP_mul, B.param(), B.iconst(8)));
+  B.run();
+  const std::string Dump = dumpFunc(B.F);
+  EXPECT_EQ(Dump.find("mul"), std::string::npos) << Dump;
+  EXPECT_NE(Dump.find("shl"), std::string::npos) << Dump;
+  EXPECT_NE(Dump.find("const.i32 3"), std::string::npos) << Dump;
+}
+
+TEST(MIRPeepholeLitmus, MulThreeDoesNotFoldToShl) {
+  MirBuilder B;
+  B.ret(B.bin(OP_mul, B.param(), B.iconst(3)));
+  B.run();
+  EXPECT_NE(dumpFunc(B.F).find("mul"), std::string::npos) << dumpFunc(B.F);
+}
+
+TEST(MIRPeepholeLitmus, AddImmReassoc) {
+  MirBuilder B;
+  auto *Inner = B.bin(OP_add, B.param(), B.iconst(10408));
+  B.ret(B.bin(OP_add, Inner, B.iconst(8)));
+  B.run();
+  const std::string Dump = dumpFunc(B.F);
+  EXPECT_NE(Dump.find("const.i32 10416"), std::string::npos) << Dump;
+}
+
+TEST(MIRPeepholeLitmus, SubImmCanonicalizesToAdd) {
+  MirBuilder B;
+  B.ret(B.bin(OP_sub, B.param(), B.iconst(8)));
+  B.run();
+  const std::string Dump = dumpFunc(B.F);
+  EXPECT_EQ(Dump.find("sub"), std::string::npos) << Dump;
+  EXPECT_NE(Dump.find("add"), std::string::npos) << Dump;
+}
+
+TEST(MIRPeepholeLitmus, SubImmI64PreservesBorrowProducer) {
+  CompileContext Ctx;
+  MType *I64 = &CompileContext::I64Type;
+  MFunction F(Ctx, 0);
+  F.setFunctionType(MFunctionType::create(Ctx, *I64, {I64}));
+  MBasicBlock *Entry = F.createBasicBlock();
+  F.appendBlock(Entry);
+  auto *X = F.createInstruction<DreadInstruction>(false, *Entry, I64, 0);
+  auto *One = F.createInstruction<ConstantInstruction>(
+      false, *Entry, I64, *MConstantInt::get(Ctx, *I64, 1));
+  auto *Sub = F.createInstruction<BinaryInstruction>(false, *Entry, OP_sub, I64,
+                                                     X, One);
+  F.createInstruction<ReturnInstruction>(true, *Entry, I64, Sub);
+  MIRPeephole Peep;
+  Peep.runOnMFunction(F);
+  const std::string Dump = dumpFunc(F);
+  EXPECT_NE(Dump.find("sub"), std::string::npos) << Dump;
+  EXPECT_EQ(Dump.find("add"), std::string::npos) << Dump;
+  finishLitmus(F);
+}
+
+TEST(MIRPeepholeLitmus, AddImmI64PreservesFinalCarryProducer) {
+  CompileContext Ctx;
+  MType *I64 = &CompileContext::I64Type;
+  MFunction F(Ctx, 0);
+  F.setFunctionType(MFunctionType::create(Ctx, *I64, {I64}));
+  MBasicBlock *Entry = F.createBasicBlock();
+  F.appendBlock(Entry);
+  auto *X = F.createInstruction<DreadInstruction>(false, *Entry, I64, 0);
+  auto makeConst = [&](uint64_t V) {
+    return F.createInstruction<ConstantInstruction>(
+        false, *Entry, I64, *MConstantInt::get(Ctx, *I64, V));
+  };
+  auto *Inner = F.createInstruction<BinaryInstruction>(false, *Entry, OP_add,
+                                                       I64, X, makeConst(10));
+  auto *Outer = F.createInstruction<BinaryInstruction>(
+      false, *Entry, OP_add, I64, Inner, makeConst(3));
+  F.createInstruction<ReturnInstruction>(true, *Entry, I64, Outer);
+  MIRPeephole Peep;
+  Peep.runOnMFunction(F);
+  const std::string Dump = dumpFunc(F);
+  EXPECT_NE(Dump.find("const.i64 10"), std::string::npos) << Dump;
+  EXPECT_NE(Dump.find("const.i64 3"), std::string::npos) << Dump;
+  EXPECT_EQ(Dump.find("const.i64 13"), std::string::npos) << Dump;
+  finishLitmus(F);
+}
+
+TEST(MIRPeepholeLitmus, AddThenSubImmReassoc) {
+  MirBuilder B;
+  auto *Inner = B.bin(OP_add, B.param(), B.iconst(10408));
+  B.ret(B.bin(OP_sub, Inner, B.iconst(8)));
+  B.run();
+  const std::string Dump = dumpFunc(B.F);
+  EXPECT_NE(Dump.find("const.i32 10400"), std::string::npos) << Dump;
+}
+
 TEST(PhiIncomingLayout, RemoveIncomingKeepsRemainingPairs) {
   CompileContext Ctx;
   MType *I32 = &CompileContext::I32Type;
@@ -1233,6 +1324,8 @@ TEST(MIRPeepholeWasm, MultipassMatchesExpected) {
       << "wasm div_u by 8 still emits DIV";
   EXPECT_TRUE(codeHasShrImm3(DivBytes, DivLen))
       << "wasm div_u by 8 should SHR by 3";
+  EXPECT_EQ(callI32(*RT, *Inst, "mul8", 3), 24);
+  EXPECT_EQ(callI32(*RT, *Inst, "add_reassoc", 1), 10417);
   EXPECT_EQ(callI32(*RT, *Inst, "count_lt", 0), 0);
   EXPECT_EQ(callI32(*RT, *Inst, "count_lt", 5), 5);
   EXPECT_EQ(callI32(*RT, *Inst, "count_lt", 1), 1);
@@ -1307,7 +1400,9 @@ TEST(MIRPeepholeWasm, SinglepassMatchesMultipass) {
 
   const int32_t Inputs[] = {0,  1,  2,  4,
                             16, -1, 42, static_cast<int32_t>(0x80000000u)};
-  const char *Fns[] = {"ctz_eqz",
+  const char *Fns[] = {"mul8",
+                       "add_reassoc",
+                       "ctz_eqz",
                        "clz_eqz",
                        "ctz_eq4",
                        "select_eq_true",

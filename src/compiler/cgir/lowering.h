@@ -425,6 +425,12 @@ protected:
     }
     llvm::MVT VT = getMVT(Type);
 
+    if (IsInteger && (Opcode == OP_add || Opcode == OP_sub)) {
+      if (CgRegister LeaReg = SELF.tryLowerAddSubImmAsLEA(Inst)) {
+        return LeaReg;
+      }
+    }
+
     if (auto *ConstInst = dyn_cast<ConstantInstruction>(LHS)) {
       if (auto *IntConst = dyn_cast<MConstantInt>(&ConstInst->getConstant())) {
         if (Inst.isCommutative()) {

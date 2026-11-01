@@ -548,6 +548,30 @@ INSTANTIATE_TEST_SUITE_P(
     GetTestName);
 
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
+TEST(EVMRegressionTest, SubWideConstPreservesLowLimbBorrow) {
+  // PUSH9 (2^64+1), PUSH0, CALLDATALOAD, SUB, return the 256-bit result.
+  // The wide constant bypasses handleSubU64Const and exercises SUB/SBB.
+  // Rewriting the first SUB to ADD(x,-1) inverts CF for these inputs.
+  auto Bytecode = zen::utils::fromHex("680100000000000000015f35035f5260205ff3");
+  ASSERT_TRUE(Bytecode);
+  const char *Cases[][2] = {
+      {"0000000000000000000000000000000000000000000000000000000000000000",
+       "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFFFFFFFFFF"},
+      {"0000000000000000000000000000000000000000000000000000000000000001",
+       "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000000000000000"},
+      {"000000000000000000000000000000000000000000000000ffffffffffffffff",
+       "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE"},
+      {"0000000000000000000000000000000100000000000000000000000000000000",
+       "00000000000000000000000000000000FFFFFFFFFFFFFFFEFFFFFFFFFFFFFFFF"},
+  };
+  for (const auto &Case : Cases) {
+    auto CallData = zen::utils::fromHex(Case[0]);
+    ASSERT_TRUE(CallData);
+    expectInterpMatchesMultipass("sub_wide_const_borrow", *Bytecode, *CallData,
+                                 EVMC_SUCCESS, Case[1]);
+  }
+}
+
 TEST(EVMMultipassLinearPrecheckTest, MemoryLinearMloadStepUsesNonZeroStride) {
   const auto FilePath =
       (getEvmAsmDirPath() / "memory_linear_mload_step.evm.hex").string();
