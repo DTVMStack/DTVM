@@ -4,6 +4,7 @@
 #include "action/bytecode_visitor.h"
 #include "compiler/mir/module.h"
 #include "compiler/mir/pointer.h"
+#include "llvm/Support/Casting.h"
 #include <unordered_map>
 #include <unordered_set>
 
@@ -877,6 +878,46 @@ void FunctionMirBuilder::handleGasCall(Operand Delta) {
   MInstruction *NewGasLeft = createInstruction<BinaryInstruction>(
       false, OP_sub, &Ctx.I64Type, GasLeft, DeltaValue);
   setInstanceElement(&Ctx.I64Type, NewGasLeft, Layout.GasOffset);
+}
+
+MInstruction *FunctionMirBuilder::tryFoldSignedPositivePow2Div(
+    MInstruction *LHS, MInstruction *RHS, MType *Mtype) {
+  ZEN_ASSERT(LHS && RHS && Mtype);
+  if (!Mtype->isInteger()) {
+    return nullptr;
+  }
+  const auto *ConstInst = llvm::dyn_cast<ConstantInstruction>(RHS);
+  if (!ConstInst) {
+    return nullptr;
+  }
+  const auto *CI = llvm::dyn_cast<MConstantInt>(&ConstInst->getConstant());
+  if (!CI) {
+    return nullptr;
+  }
+  const llvm::APInt Divisor = CI->getValue();
+  // Strictly positive power of two: excludes 0, negatives, and INT_MIN
+  // (unsigned 2^(w-1)), so overflow (INT_MIN / -1) is impossible.
+  if (!Divisor.isStrictlyPositive() || !Divisor.isPowerOf2()) {
+    return nullptr;
+  }
+  const unsigned ShiftAmt = Divisor.logBase2();
+  if (ShiftAmt == 0) {
+    return LHS;
+  }
+  const unsigned BitWidth = Mtype->getBitWidth();
+  ZEN_ASSERT(BitWidth == 32 || BitWidth == 64);
+  ZEN_ASSERT(ShiftAmt < BitWidth - 1);
+  const uint64_t BiasMask = (uint64_t(1) << ShiftAmt) - 1;
+  MInstruction *X = makeReusableValue(LHS, Mtype);
+  MInstruction *Sign = createInstruction<BinaryInstruction>(
+      false, OP_sshr, Mtype, X, createIntConstInstruction(Mtype, BitWidth - 1));
+  MInstruction *Bias = createInstruction<BinaryInstruction>(
+      false, OP_and, Mtype, Sign, createIntConstInstruction(Mtype, BiasMask));
+  MInstruction *Biased =
+      createInstruction<BinaryInstruction>(false, OP_add, Mtype, X, Bias);
+  return createInstruction<BinaryInstruction>(
+      false, OP_sshr, Mtype, Biased,
+      createIntConstInstruction(Mtype, ShiftAmt));
 }
 
 // ==================== MIR Opcode Methods ====================

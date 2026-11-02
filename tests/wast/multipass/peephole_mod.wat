@@ -281,4 +281,18 @@
     (if (f32.gt (f32.convert_i32_s (local.get 0)) (f32.const 2.0))
       (then (local.set $r (i32.const 7))))
     (local.get $r))
+  ;; Signed +pow2 division kernel (i32 / 8). Used for Greedy microbench.
+  (func (export "bench_div8") (param i32) (result i32)
+    (local $n i32) (local $x i32)
+    (local.set $n (local.get 0))
+    (local.set $x (i32.const 1))
+    (loop $L
+      (local.set $x
+        (i32.add (local.get $x)
+                 (i32.div_s (local.get $x) (i32.const 8))))
+      (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+      (br_if $L (local.get $n)))
+    (local.get $x))
+  (func (export "div8") (param i32) (result i32)
+    (i32.div_s (local.get 0) (i32.const 8)))
 )
