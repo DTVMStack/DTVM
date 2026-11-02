@@ -662,11 +662,25 @@ void LazyJITCompiler::dispatchCompileTasksInOrder(WasmFrontendContext &Ctx) {
 }
 
 void LazyJITCompiler::dispatchEntryCompileTasks(WasmFrontendContext &Ctx) {
-  // First strategy: dispatch compile tasks in depth-first order
-  dispatchCompileTasksDepthFirst(Ctx);
-
-  // Second strategy: dispatch compile tasks in order of function index
-  // dispatchCompileTasksInOrder(Ctx);
+  // Queue only start + exports; CallSeqMap also contains speculative
+  // call_indirect targets. Unexported callees stay on stubs until demanded.
+  (void)Ctx;
+  uint32_t NumImportFunctions = WasmMod->getNumImportFunctions();
+  if (uint32_t StartFuncIdx = WasmMod->getStartFuncIdx();
+      StartFuncIdx != -1u && StartFuncIdx >= NumImportFunctions) {
+    dispatchCompileTask(StartFuncIdx - NumImportFunctions);
+  }
+  // The loader appends the hinted entry to the end. Preserve the old DFS
+  // priority: start first, then entry, then remaining exports. Tasks are FIFO.
+  // dispatchCompileTask deduplicates aliases and a start exported by name.
+  const auto &ExportedFuncIdxs = WasmMod->getExportedFuncIdxs();
+  for (auto It = ExportedFuncIdxs.rbegin(); It != ExportedFuncIdxs.rend();
+       ++It) {
+    uint32_t FuncIdx = *It;
+    if (FuncIdx >= NumImportFunctions) {
+      dispatchCompileTask(FuncIdx - NumImportFunctions);
+    }
+  }
 }
 
 void LazyJITCompiler::precompile() {

@@ -93,6 +93,15 @@ In multithread LazyJIT, each function stub's `jmp` target is published monotonic
 - `getForegroundCompileCount` / `getBackgroundCompileCount` count entered compile attempts (incremented at path entry, before `Done` or stub patch). An acquire load of either is not a completion barrier
 - `getBackgroundPublishCount` counts completed background Greedy publications (incremented with release after canonical pointer, `Done`, and stub `xchg`). An acquire load that observes N happens-after those N publishes
 - Modules with exactly one internal function skip the FastRA/background-Greedy split as a measured policy for fib-like workloads: no `ThreadPool`, on-request compile uses the configured allocator (Greedy unless `DisableMultipassGreedyRA`), and the stub is published trampoline → compiled body with unconditional `xchg`. There is no concurrent FastRA publisher. This is not a claim that no one-function module can benefit from FastRA-first tiering.
+- Background GreedyRA is queued for the start function and exported functions
+  only. It must not DFS `CallSeqMap` (direct `call` plus every `call_indirect`
+  type's table functions). Unexported callees compile on demand when their stub
+  is first hit. Preserve scheduling priority: start first, then the hinted
+  entry (the loader appends it to the export list), then remaining exports in
+  reverse order. Import indices are skipped and aliases are deduplicated by
+  compile status. Unexported callees are not automatically promoted to Greedy
+  after FastRA compilation; long-running private helpers can lose throughput.
+  Eager multipass still compiles the whole module.
 
 ### Wasm linear-memory addressing
 
