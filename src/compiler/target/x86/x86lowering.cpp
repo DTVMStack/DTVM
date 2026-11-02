@@ -1545,6 +1545,9 @@ static inline unsigned getMovRegToMemOpcode(MType::Kind TypeKind) {
 }
 
 CgRegister X86CgLowering::lowerLoadExpr(const LoadInstruction &Inst) {
+  // Index = add(i32_dyn, imm) is lowered as wrap-safe LEA64_32r, then used
+  // here. Do not fold that imm into Displacement: x86-64 EA is 64-bit
+  // zext(index)+disp, which is not wasm wrap32(index)+offset.
   unsigned Opcode =
       getMovMemToRegOpcode(Inst.getSrcType()->getKind(),
                            Inst.getDestType()->getKind(), Inst.getSext());
@@ -1670,44 +1673,130 @@ static bool isShortDiamondTrueFallthrough(const BrIfInstruction &Inst) {
   return BrInst != nullptr && BrInst->getTargetBlock() == FalseBB;
 }
 
+static unsigned invertX86CC(unsigned CC) {
+  ZEN_ASSERT(CC <= X86::LAST_VALID_COND);
+  return CC ^ 1u;
+}
+
 void X86CgLowering::lowerBrIfStmt(const BrIfInstruction &Inst) {
   const MInstruction *Operand = Inst.getOperand<0>();
-  CgRegister OperandReg = lowerExpr(*Operand);
+  X86::CondCode TakenCC = X86::COND_NE;
+  bool UsedCmpFlags = false;
 
-  // Perform test instruction to determine whether the operand is zero.
-  unsigned TESTOpc;
-  if (Operand->getType()->isI8()) {
-    TESTOpc = X86::TEST8rr;
-  } else if (Operand->getType()->isI16()) {
-    TESTOpc = X86::TEST16rr;
-  } else if (Operand->getType()->isI64() || Operand->getType()->isPointer()) {
-    TESTOpc = X86::TEST64rr;
-  } else {
-    TESTOpc = X86::TEST32rr;
+  // Fold cmp + br_if to cmp + jcc when the compare result has not already
+  // been materialized (expression-cache miss). Skip FCMP_OEQ/UNE: those
+  // need two flag tests and stay on the setcc path.
+  if (const auto *CI = dyn_cast<CmpInstruction>(Operand);
+      CI && _expr_reg_map.find(CI) == _expr_reg_map.end()) {
+    const auto [CC, NeedSwap] = getX86ConditionCode(CI->getPredicate());
+    if (CC <= X86::LAST_VALID_COND) {
+      const MInstruction *CmpLHS = CI->getOperand<0>();
+      const MInstruction *CmpRHS = CI->getOperand<1>();
+      if (NeedSwap) {
+        std::swap(CmpLHS, CmpRHS);
+      }
+      lowerFastCompareExpr(CmpLHS, CmpRHS, getMVT(*CmpLHS->getType()));
+      TakenCC = CC;
+      UsedCmpFlags = true;
+    }
   }
-  fastEmitNoDefInst_rr(TESTOpc, OperandReg, OperandReg);
+
+  if (!UsedCmpFlags) {
+    CgRegister OperandReg = lowerExpr(*Operand);
+
+    // Perform test instruction to determine whether the operand is zero.
+    unsigned TESTOpc;
+    if (Operand->getType()->isI8()) {
+      TESTOpc = X86::TEST8rr;
+    } else if (Operand->getType()->isI16()) {
+      TESTOpc = X86::TEST16rr;
+    } else if (Operand->getType()->isI64() || Operand->getType()->isPointer()) {
+      TESTOpc = X86::TEST64rr;
+    } else {
+      TESTOpc = X86::TEST32rr;
+    }
+    fastEmitNoDefInst_rr(TESTOpc, OperandReg, OperandReg);
+    TakenCC = X86::COND_NE;
+  }
 
   CgBasicBlock *TrueMBB = getOrCreateCgBB(Inst.getTrueBlock());
   if (Inst.hasFalseBlock()) {
     CgBasicBlock *FalseMBB = getOrCreateCgBB(Inst.getFalseBlock());
     if (isShortDiamondTrueFallthrough(Inst)) {
       // Prefer falling through to the next laid-out block and branch away on
-      // the zero case when the MIR already forms a short diamond that rejoins
+      // the false case when the MIR already forms a short diamond that rejoins
       // immediately after the true block.
-      fastEmitCondBranch(FalseMBB, X86::CondCode::COND_E);
+      fastEmitCondBranch(FalseMBB, invertX86CC(TakenCC));
       CurBB->addSuccessorWithoutProb(TrueMBB);
       return;
     }
 
-    // Jump to the true basic block if the operand is not zero.
-    fastEmitCondBranch(TrueMBB, X86::CondCode::COND_NE);
-    // Jump to the false basic block if the operand is zero.
+    // Jump to the true basic block if the predicate holds.
+    fastEmitCondBranch(TrueMBB, TakenCC);
+    // Jump to the false basic block otherwise.
     fastEmitBranch(FalseMBB);
   } else {
-    // Jump to the true basic block if the operand is not zero.
-    fastEmitCondBranch(TrueMBB, X86::CondCode::COND_NE);
+    // Jump to the true basic block if the predicate holds.
+    fastEmitCondBranch(TrueMBB, TakenCC);
     startNewBlockAfterBranch();
   }
+}
+
+CgRegister X86CgLowering::tryLowerAddSubImmAsLEA(const MInstruction &Inst) {
+  const Opcode Opc = Inst.getOpcode();
+  if (Opc != OP_add && Opc != OP_sub) {
+    return 0;
+  }
+  const MType *Ty = Inst.getType();
+  // i32 only: LEA does not write CF. EVM 256-bit add uses i64 ADD then ADC
+  // (`handleAddU64Const` / limb 0 of `BO_ADD`); LEA64r would drop that carry.
+  if (!Ty || !Ty->isI32()) {
+    return 0;
+  }
+
+  const MInstruction *LHS = Inst.getOperand<0>();
+  const MInstruction *RHS = Inst.getOperand<1>();
+  const MInstruction *Dyn = LHS;
+  const auto *CI = dyn_cast<ConstantInstruction>(RHS);
+  const MConstantInt *IntC =
+      CI ? dyn_cast<MConstantInt>(&CI->getConstant()) : nullptr;
+  if (!IntC && Opc == OP_add) {
+    CI = dyn_cast<ConstantInstruction>(LHS);
+    IntC = CI ? dyn_cast<MConstantInt>(&CI->getConstant()) : nullptr;
+    if (IntC) {
+      Dyn = RHS;
+    }
+  }
+  if (!IntC) {
+    return 0;
+  }
+
+  llvm::APInt DispAP = IntC->getValue();
+  if (Opc == OP_sub) {
+    DispAP = -DispAP;
+  }
+  if (!DispAP.isSignedIntN(32) || DispAP.isZero()) {
+    return 0;
+  }
+  const int64_t Imm = DispAP.getSExtValue();
+
+  CgRegister SrcReg = lowerExpr(*Dyn);
+  // Zero-extend the i32 into a GR64 so LEA64_32r computes
+  // trunc32(zext32(x) + disp) == wrap32(x + disp).
+  CgRegister BaseReg =
+      fastEmitInst_subregtoreg(&X86::GR64RegClass, SrcReg, X86::sub_32bit);
+
+  CgRegister ResultReg = createReg(TLI.getRegClassFor(getMVT(*Ty)));
+  SmallVector<CgOperand, 6> LEAOperands{
+      CgOperand::createRegOperand(ResultReg, true),
+      CgOperand::createRegOperand(BaseReg, false),
+      CgOperand::createImmOperand(1),
+      CgOperand::createRegOperand(X86::NoRegister, false),
+      CgOperand::createImmOperand(Imm),
+      CgOperand::createRegOperand(X86::NoRegister, false),
+  };
+  MF->createCgInstruction(*CurBB, TII.get(X86::LEA64_32r), LEAOperands);
+  return ResultReg;
 }
 
 static unsigned getADDriOpcode(bool IsLP64, int64_t Imm) {

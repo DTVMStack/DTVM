@@ -662,21 +662,21 @@ void LazyJITCompiler::dispatchCompileTasksInOrder(WasmFrontendContext &Ctx) {
 }
 
 void LazyJITCompiler::dispatchEntryCompileTasks(WasmFrontendContext &Ctx) {
-  // Hot-path seeds only: start function + exports. Do not DFS CallSeqMap.
-  // CallSeq includes every call_indirect type's table functions, so a
-  // full-graph walk BG-Greedys hundreds of never-invoked bodies on short-lived
-  // WASI modules (cowsay: 381 Bg compiles vs 173 actually demanded). Unexported
-  // callees stay on the stub and compile on demand (FastRA) when first called.
-  // Long-running paper kernels are the exported entry (main / _start), so they
-  // still get background GreedyRA. Keep dispatchCompileTasksDepthFirst() for
-  // experiments; it is not the default.
+  // Queue only start + exports; CallSeqMap also contains speculative
+  // call_indirect targets. Unexported callees stay on stubs until demanded.
   (void)Ctx;
   uint32_t NumImportFunctions = WasmMod->getNumImportFunctions();
   if (uint32_t StartFuncIdx = WasmMod->getStartFuncIdx();
       StartFuncIdx != -1u && StartFuncIdx >= NumImportFunctions) {
     dispatchCompileTask(StartFuncIdx - NumImportFunctions);
   }
-  for (uint32_t FuncIdx : WasmMod->getExportedFuncIdxs()) {
+  // The loader appends the hinted entry to the end. Preserve the old DFS
+  // priority: start first, then entry, then remaining exports. Tasks are FIFO.
+  // dispatchCompileTask deduplicates aliases and a start exported by name.
+  const auto &ExportedFuncIdxs = WasmMod->getExportedFuncIdxs();
+  for (auto It = ExportedFuncIdxs.rbegin(); It != ExportedFuncIdxs.rend();
+       ++It) {
+    uint32_t FuncIdx = *It;
     if (FuncIdx >= NumImportFunctions) {
       dispatchCompileTask(FuncIdx - NumImportFunctions);
     }

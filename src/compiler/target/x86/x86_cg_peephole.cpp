@@ -5,6 +5,7 @@
 #include "compiler/cgir/pass/cg_register_info.h"
 #include "compiler/llvm-prebuild/Target/X86/X86Subtarget.h"
 #include "compiler/target/x86/x86_constants.h"
+#include "llvm/ADT/STLExtras.h"
 
 using namespace llvm;
 
@@ -85,16 +86,27 @@ void X86CgPeephole::optimizeCmp(CgBasicBlock &MBB,
   auto &Inst3 = *LocalMII;
   if (Inst3.getOpcode() != X86::JCC_1)
     return;
-  if (Inst3.getOperand(1).getImm() != X86::CondCode::COND_NE)
-    return; // TODO, other optimization, use opposite condition code
+  const unsigned JccCC = static_cast<unsigned>(Inst3.getOperand(1).getImm());
+  unsigned NewCC;
+  if (JccCC == X86::CondCode::COND_NE) {
+    NewCC = static_cast<unsigned>(CC);
+  } else if (JccCC == X86::CondCode::COND_E && CC <= X86::LAST_VALID_COND) {
+    // Diamond lowering jumps on the false (zero) path: invert SETCC's CC.
+    NewCC = static_cast<unsigned>(CC) ^ 1u;
+  } else {
+    return;
+  }
 
   // Ensure the SETCC/MOVZX registers have no uses beyond this chain.
-  // The lowering cache (_expr_reg_map) may share these virtual registers
-  // with other consumers; erasing them would leave dangling references.
+  // Count consumer instructions, not operands: TEST rr mentions the same
+  // vreg twice. The lowering cache (_expr_reg_map) may share these
+  // virtual registers with other consumers; erasing them would leave
+  // dangling references.
   const auto &RegInfo = MBB.getParent()->getRegInfo();
-  if (!RegInfo.hasOneNonDBGUse(Op1.getReg()))
+  if (!llvm::hasSingleElement(RegInfo.use_nodbg_instructions(Op1.getReg())))
     return;
-  if (MovzxInst != nullptr && !RegInfo.hasOneNonDBGUse(TestReg))
+  if (MovzxInst != nullptr &&
+      !llvm::hasSingleElement(RegInfo.use_nodbg_instructions(TestReg)))
     return;
 
   Inst1.eraseFromParent();
@@ -102,7 +114,7 @@ void X86CgPeephole::optimizeCmp(CgBasicBlock &MBB,
     MovzxInst->eraseFromParent();
   }
   TestInst.eraseFromParent();
-  Inst3.getOperand(1).setImm(CC);
+  Inst3.getOperand(1).setImm(NewCC);
 }
 } // namespace COMPILER
 

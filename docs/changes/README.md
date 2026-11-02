@@ -11,7 +11,7 @@ docs/changes/YYYY-MM-DD-<slug>/README.md
 ```
 
 - `YYYY-MM-DD`: date the proposal was created
-- `<slug>: short kebab-case description (e.g., add-risc-v-frontend)`
+- `<slug>`: short kebab-case description (e.g., `add-risc-v-frontend`)
 
 ## Status Definitions
 
@@ -43,31 +43,17 @@ Typical triggers:
 - Bug fixes with design implications
 - Non-breaking enhancements
 
-## Current Proposals
+## Finding Proposals
 
-| Date | Name | Status | Tier | Description |
-|------|------|--------|------|-------------|
-| 2026-11-01 | [lazy-demand-tiering](2026-11-01-lazy-demand-tiering/README.md) | Proposed | Light | Lazy MT BG-Greedy only start/exports; no CallSeq DFS prefetch |
-| 2026-10-31 | [lazy-greedy-ondemand-onefn](2026-10-31-lazy-greedy-ondemand-onefn/README.md) | Implemented | Light | Single-fn lazy modules compile Greedy on-demand (skip FastRA FG) |
-| 2026-10-31 | [eager-lazy-func-count](2026-10-31-eager-lazy-func-count/README.md) | Implemented | Light | Print eager function-body count vs lazy stub count in statistics |
-| 2026-10-31 | [mir-pow2-divrem-peep](2026-10-31-mir-pow2-divrem-peep/README.md) | Implemented | Light | Unsigned pow2 `udiv`/`urem` → `ushr`/`and`; keep zero-divisor traps |
-| 2026-10-31 | [wasm-add-imm-disp-fold](2026-10-31-wasm-add-imm-disp-fold/README.md) | Rejected | Light | Do not fold `i32.add(x,C)` into load/store disp; wrap32 ≠ 64-bit AM |
-| 2026-10-07 | [mir-codegen-peepholes](2026-10-07-mir-codegen-peepholes/README.md) | Accepted | Full | Wasmtime-inspired MIR peeps: ctz/clz, select-icmp, algebra, const-br |
-| 2026-03-10 | [evm-stack-ssa-lifting](2026-03-10-evm-stack-ssa-lifting/README.md) | Implemented | Full | True-SSA stack lifting for EVM multipass JIT |
-| 2026-04-11 | [evm-shared-jump-resolution](2026-04-11-evm-shared-jump-resolution/README.md) | Implemented | Light | Extract shared jump target resolution pass into bytecode cache |
-| 2026-04-14 | [handlecompare-bounds-check](2026-04-14-handlecompare-bounds-check/README.md) | Implemented | Light | Add bounds check before macro-fusion read in handleCompare |
-| 2026-04-14 | [from-raw-pointer-safety-checks](2026-04-14-from-raw-pointer-safety-checks/README.md) | Accepted | Light | Add null/alignment safety checks to `from_raw_pointer` in Rust bindings |
-| 2026-05-13 | [evm-ngram-macro-ops](2026-05-13-evm-ngram-macro-ops/README.md) | Implemented | Full | Initial EVM n-gram macro-op lowering and specialized keccak helpers for multipass JIT |
-| 2026-07-21 | [evm-memory-alias-and-expansion](2026-07-21-evm-memory-alias-and-expansion/README.md) | Implemented | Full | Stronger memory alias proofs, wider precheck/expansion coverage, DSE, load forwarding, grouping, and MCOPY roadmap |
-| 2026-07-28 | [ssa-shared-dynamic-dispatch](2026-07-28-ssa-shared-dynamic-dispatch/README.md) | Implemented | Light | Share unfiltered full-table dynamic dispatch in stack-SSA builds |
-| 2026-07-29 | [evm-stack-boundary-batch](2026-07-29-evm-stack-boundary-batch/README.md) | Validated | Full | Batch runtime-stack loads, drops, and stores at non-lifted EVM block boundaries |
-| 2026-08-22 | [evm-frontier-osaka-conformance](2026-08-22-evm-frontier-osaka-conformance/README.md) | Accepted | Full | Pinned dual-engine EVM conformance from Frontier through Osaka |
+There is intentionally no index table in this file. Each proposal's own
+header (`Status`, `Date`, `Tier`) is the single source of truth, so
+concurrent PRs never edit a shared file. Do not add a row here when creating
+or updating a proposal.
 
-Each active proposal lives in its own subdirectory. Browse `docs/changes/*/README.md`
-to see all current proposals, or use:
+List proposals and their status:
 
 ```bash
-ls docs/changes/*/README.md
+grep -m1 -H 'Status' docs/changes/*/README.md
 ```
 
 ## Workflow

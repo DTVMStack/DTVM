@@ -145,18 +145,21 @@ struct LoadedMod {
 };
 
 LoadedMod loadModule(const std::vector<uint8_t> &Bytes, const char *Name,
-                     bool Lazy, bool DisableGreedyRA, bool DisableMT) {
+                     bool Lazy, bool DisableGreedyRA, bool DisableMT,
+                     bool Instantiate = true) {
   LoadedMod Out;
   Out.RT = makeRuntime(Lazy, DisableGreedyRA, DisableMT);
   EXPECT_NE(Out.RT, nullptr);
   auto ModRet = Out.RT->loadModule(Name, Bytes.data(), Bytes.size());
   EXPECT_TRUE(ModRet) << ModRet.getError().getFormattedMessage();
   Out.Mod = *ModRet;
-  Isolation *Iso = Out.RT->createManagedIsolation();
-  EXPECT_NE(Iso, nullptr);
-  auto InstRet = Iso->createInstance(*Out.Mod);
-  EXPECT_TRUE(InstRet) << InstRet.getError().getFormattedMessage();
-  Out.Inst = *InstRet;
+  if (Instantiate) {
+    Isolation *Iso = Out.RT->createManagedIsolation();
+    EXPECT_NE(Iso, nullptr);
+    auto InstRet = Iso->createInstance(*Out.Mod);
+    EXPECT_TRUE(InstRet) << InstRet.getError().getFormattedMessage();
+    Out.Inst = *InstRet;
+  }
   if (Lazy) {
     Out.Lazy = Out.Mod->getLazyJITCompiler();
     EXPECT_NE(Out.Lazy, nullptr);
@@ -348,4 +351,67 @@ TEST(LazyJitGreedyOndemand, LazyStOneFnStillGreedy) {
   EXPECT_EQ(LazyST.Fib10, 55);
   EXPECT_EQ(LazyST.Shape.RbpStores, Greedy.Shape.RbpStores);
   EXPECT_EQ(LazyST.Shape.StackSub, Greedy.Shape.StackSub);
+}
+
+TEST(LazyJitGreedyOndemand, BackgroundSeedsExcludeDirectAndIndirectCallees) {
+  auto Bytes = loadWasmFile(LAZY_ENTRY_SEEDS_WASM_PATH);
+  ASSERT_FALSE(Bytes.empty());
+  LoadedMod LM = loadModule(Bytes, "seeds", /*Lazy=*/true,
+                            /*DisableGreedyRA=*/false, /*DisableMT=*/false,
+                            /*Instantiate=*/false);
+  ASSERT_NE(LM.Lazy, nullptr);
+  ASSERT_EQ(LM.Mod->getNumInternalFunctions(), 8u);
+  ASSERT_TRUE(LM.Lazy->hasBackgroundCompilePool());
+  ASSERT_TRUE(waitForBackgroundPublishes(*LM.Lazy, 2, 5000));
+  EXPECT_EQ(LM.Lazy->getBackgroundCompileCount(), 2u)
+      << "start + one unique exported function, despite two export names";
+  EXPECT_EQ(LM.Lazy->getForegroundCompileCount(), 0u);
+  for (uint32_t I : {0u, 7u}) {
+    EXPECT_FALSE(stubIsTrampoline(*LM.Mod, I));
+    EXPECT_EQ(resolvedJitBody(LM.Mod->getCodeEntry(I)->JITCodePtr),
+              LM.Lazy->getGreedyRACodePtr(I));
+  }
+  for (uint32_t I = 1; I < 7; ++I) {
+    EXPECT_TRUE(stubIsTrampoline(*LM.Mod, I)) << "func " << I;
+    EXPECT_EQ(LM.Lazy->getGreedyRACodePtr(I), nullptr) << "func " << I;
+  }
+
+  Isolation *Iso = LM.RT->createManagedIsolation();
+  ASSERT_NE(Iso, nullptr);
+  auto InstRet = Iso->createInstance(*LM.Mod);
+  ASSERT_TRUE(InstRet) << InstRet.getError().getFormattedMessage();
+  LM.Inst = *InstRet;
+  EXPECT_EQ(LM.Lazy->getForegroundCompileCount(), 1u)
+      << "only the unexported init helper is demanded at instantiation";
+  EXPECT_EQ(callI32(*LM.RT, *LM.Inst, "entry", 7), 32);
+  EXPECT_EQ(LM.Lazy->getForegroundCompileCount(), 4u)
+      << "init helper plus direct, leaf and selected indirect target";
+  EXPECT_EQ(callI32(*LM.RT, *LM.Inst, "entry_alias", 9), 38);
+  EXPECT_EQ(LM.Lazy->getForegroundCompileCount(), 4u)
+      << "repeated calls must reuse compiled bodies";
+  EXPECT_EQ(LM.Lazy->getBackgroundPublishCount(), 2u);
+  for (uint32_t I : {5u, 6u}) {
+    EXPECT_TRUE(stubIsTrampoline(*LM.Mod, I)) << "cold func " << I;
+    EXPECT_EQ(LM.Lazy->getGreedyRACodePtr(I), nullptr);
+  }
+}
+
+TEST(LazyJitGreedyOndemand, EntrySeedFixtureKeepsEagerAndSerialBehavior) {
+  auto Bytes = loadWasmFile(LAZY_ENTRY_SEEDS_WASM_PATH);
+  ASSERT_FALSE(Bytes.empty());
+  LoadedMod Eager = loadModule(Bytes, "seeds_eager", /*Lazy=*/false,
+                               /*DisableGreedyRA=*/false, /*DisableMT=*/true);
+  LoadedMod Serial = loadModule(Bytes, "seeds_serial", /*Lazy=*/true,
+                                /*DisableGreedyRA=*/false, /*DisableMT=*/true);
+  ASSERT_NE(Serial.Lazy, nullptr);
+  EXPECT_FALSE(Serial.Lazy->hasBackgroundCompilePool());
+  for (int32_t X : {0, 7, -1}) {
+    EXPECT_EQ(callI32(*Eager.RT, *Eager.Inst, "entry", X), 3 * X + 11);
+    EXPECT_EQ(callI32(*Serial.RT, *Serial.Inst, "entry_alias", X), 3 * X + 11);
+  }
+  EXPECT_EQ(Serial.Lazy->getBackgroundCompileCount(), 0u);
+  for (uint32_t I : {5u, 6u}) {
+    EXPECT_TRUE(stubIsTrampoline(*Serial.Mod, I));
+    EXPECT_FALSE(stubIsTrampoline(*Eager.Mod, I));
+  }
 }

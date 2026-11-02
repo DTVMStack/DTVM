@@ -30,8 +30,8 @@ The compiler module is responsible for DTVM's multi-pass JIT compilation pipelin
 ### Multi-pass Compilation Pipeline
 
 1. **Frontend→dMIR**: `WasmMirBuilder` / `EVMMirBuilder` translate source/bytecode to `MModule` + `MFunction` (dMIR)
-2. **dMIR optimization**: `MVerifier`, `MIRPeephole` (ctz/clz-eq-0, select+icmp, local algebra, unsigned pow2 `udiv`/`urem`, constant `br_if`), `DeadMBasicBlockElim`, re-`MVerifier`
-3. **dMIR→CgIR**: `X86CgLowering`, `X86CgPeephole`
+2. **dMIR optimization**: `MVerifier`, `MIRPeephole` (ctz/clz-eq-0, select+icmp, local algebra, unsigned pow2 `udiv`/`urem`, add-imm reassoc, constant `br_if`, entry-wide FP-const hoist), `DeadMBasicBlockElim`, re-`MVerifier`
+3. **dMIR→CgIR**: `X86CgLowering` (i32 add/sub-imm → wrap-safe three-address `LEA64_32r`; cmp+`br_if` → cmp+jcc when the compare result has not already been materialized), `X86CgPeephole`
 4. **Register allocation**: `FastRA` or `CgRAGreedy` + `CgRegisterCoalescer`, `CgVirtRegMap`, `CgLiveIntervals`, etc.
 5. **Post-RA processing**: `PrologEpilogInserter`, `ExpandPostRAPseudos`
 6. **Machine code emission**: `X86MCLowering` → ELF `.text` section
@@ -96,7 +96,12 @@ In multithread LazyJIT, each function stub's `jmp` target is published monotonic
 - Background GreedyRA is queued for the start function and exported functions
   only. It must not DFS `CallSeqMap` (direct `call` plus every `call_indirect`
   type's table functions). Unexported callees compile on demand when their stub
-  is first hit. Eager multipass still compiles the whole module.
+  is first hit. Preserve scheduling priority: start first, then the hinted
+  entry (the loader appends it to the export list), then remaining exports in
+  reverse order. Import indices are skipped and aliases are deduplicated by
+  compile status. Unexported callees are not automatically promoted to Greedy
+  after FastRA compilation; long-running private helpers can lose throughput.
+  Eager multipass still compiles the whole module.
 
 ### Wasm linear-memory addressing
 
@@ -114,12 +119,21 @@ OOB). Load/store Scale stays 1. See
 - `MBasicBlock`s in `MFunction` are connected by control flow; `MInstruction`s belong to an `MBasicBlock` or are embedded as expressions in another `MInstruction`
 - `MVerifier` must pass before entering CgIR lowering
 - `MIRPeephole` is function-local and deterministic: it rewrites nested
-  integer expression trees and constant `br_if` terminators only. It must
+  integer expression trees and constant `br_if` terminators, and hoists
+  non-zero FP constants used outside the entry block into an entry
+  `dassign`. The hoist is entry-wide: it does not run loop/preheader or
+  use-frequency analysis, skips `+0.0` (x86 `FLD0`), and skips an entry
+  with predecessors so a backedge cannot re-execute the init. Growing
+  the frame and live ranges is an unmeasured tradeoff (jacobi assembly
+  has been seen to grow `0x28` → `0x58`). It must
   not fold `sdiv`/`srem`, `udiv`/`urem` by zero (wasm traps), or `ctz`/`clz`
   compares against a non-zero constant. Unsigned `udiv`/`urem` by a
   nonzero constant power of two may become `ushr`/`and`. Const-const
   `udiv`/`urem` with any nonzero divisor may fold to a constant (this
-  does not require a power of two). Discarding a subtree requires a
+  does not require a power of two). It may reassociate i32 `add(add(x,C1),C2)`,
+  canonicalize i32 `sub(x,C)` to `add(x,-C)`, and rewrite `mul` by a power
+  of two to `shl`. i64 ADD/SUB must retain their carry/borrow flags for EVM ADC/SBB chains.
+  Discarding a subtree requires a
   proven-pure **and nontrapping** tree (`isPureExpr` rejects load / call /
   wasm-check but not integer div/rem, `wasm_fptosi`/`wasm_fptoui`, i128
   overflow ops, or `EVM_UDIV128_BY64`; those must stay). Wasm `handleIDiv`
@@ -136,6 +150,10 @@ OOB). Load/store Scale stays 1. See
   `freeMem` must use `_operand_cap` (allocation width), not the live
   `_operand_num`. Pred/succ removal is swap-pop: `vector::erase` on a
   bump-allocated `CompileVector` can memmove into the LLVM ASan red zone.
+
+- x86 i32 add/sub-immediates use `LEA64_32r` to preserve wrap32 without
+  folding dynamic addends into memory displacements. i64 keeps ADD/SUB
+  because EVM ADC/SBB consume their carry/borrow flags.
 
 ### EVM JIT Invariants
 

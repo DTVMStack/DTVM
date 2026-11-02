@@ -74,6 +74,7 @@ Choose a tier:
 - **Light**: single-module improvements, well-scoped enhancements
 
 See `docs/changes/README.md` for naming conventions and status definitions.
+Track status only in the proposal's own header; do not add index rows to `docs/changes/README.md`.
 
 ## Module Consultation
 

@@ -73,8 +73,17 @@ Following the paper's `avg_compile_time.py`, the inferred formula is `ttfi_est =
 | `infer_lazy_timing.py` | multi-metric inference vs the paper |
 | `compare_lazy_runtime_ratios.sh` | ratio comparison |
 
+## Unified wall harness (Phase 1.5 JSON)
+
+For a single DTVM-vs-Wasmtime wall-clock matrix covering PolyBench, fib,
+overflow, and WAPM, use [`../harness/`](../harness/) (`run.py`, `smoke.sh`).
+That runner pins modes (`interp` / `singlepass` / `multipass-G-ST` /
+`lazy-F-ST`), CPU (`taskset`), and Wasmtime cache-off, and records fairness
+(`same-wasm` vs `dtvm-hostapi-only`). The scripts in this directory remain
+the CSV / TTFI / xlsx-oriented drivers.
+
 ## Missing
 
-- [ ] the original `test_lazy.sh` wall-clock script (absent from the archive; `run_lazy_ttfi_est.sh` currently serves as the statistics-metric reproduction)
+- [ ] the original `test_lazy.sh` wall-clock script (absent from the archive; `run_lazy_ttfi_est.sh` currently serves as the statistics-metric reproduction; `harness/run.py --preset wapm` covers wall-clock)
 - [ ] contract benchmark runner script (the runner lives in the testbed)
 - [ ] version-collection script (writes `runtimes/*/version.txt`)

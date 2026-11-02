@@ -421,7 +421,9 @@ if(ZEN_ENABLE_SPEC_TEST)
   endif()
 
   if(ZEN_ENABLE_MULTIPASS_JIT AND ZEN_BUILD_TARGET_X86_64)
-    add_executable(mirPeepholeTests mir_peephole_tests.cpp)
+    add_executable(
+      mirPeepholeTests mir_peephole_tests.cpp x86_cg_lowering_tests.cpp
+    )
     target_include_directories(
       mirPeepholeTests PRIVATE ${googletest_SOURCE_DIR}/googletest/include
     )
@@ -519,6 +521,12 @@ if(ZEN_ENABLE_SPEC_TEST)
         "${CMAKE_SOURCE_DIR}/tests/wast/multipass/fib_iter_twofn.wat"
     )
     set(FIB_ITER_TWOFN_WASM "${CMAKE_CURRENT_BINARY_DIR}/fib_iter_twofn.wasm")
+    set(LAZY_ENTRY_SEEDS_WAT
+        "${CMAKE_SOURCE_DIR}/tests/wast/multipass/lazy_entry_seeds.wat"
+    )
+    set(LAZY_ENTRY_SEEDS_WASM
+        "${CMAKE_CURRENT_BINARY_DIR}/lazy_entry_seeds.wasm"
+    )
     add_custom_command(
       OUTPUT ${FIB_ITER_ONEFN_WASM}
       COMMAND wat2wasm ${FIB_ITER_ONEFN_WAT} -o ${FIB_ITER_ONEFN_WASM}
@@ -534,11 +542,20 @@ if(ZEN_ENABLE_SPEC_TEST)
     add_custom_target(
       fib_iter_lazy_wasm DEPENDS ${FIB_ITER_ONEFN_WASM} ${FIB_ITER_TWOFN_WASM}
     )
+    add_custom_command(
+      OUTPUT ${LAZY_ENTRY_SEEDS_WASM}
+      COMMAND wat2wasm ${LAZY_ENTRY_SEEDS_WAT} -o ${LAZY_ENTRY_SEEDS_WASM}
+      DEPENDS ${LAZY_ENTRY_SEEDS_WAT}
+      VERBATIM
+    )
+    add_custom_target(lazy_entry_seeds_wasm DEPENDS ${LAZY_ENTRY_SEEDS_WASM})
     add_dependencies(lazyJitGreedyOndemandTests fib_iter_lazy_wasm)
+    add_dependencies(lazyJitGreedyOndemandTests lazy_entry_seeds_wasm)
     target_compile_definitions(
       lazyJitGreedyOndemandTests
       PRIVATE FIB_ITER_ONEFN_WASM_PATH="${FIB_ITER_ONEFN_WASM}"
               FIB_ITER_TWOFN_WASM_PATH="${FIB_ITER_TWOFN_WASM}"
+              LAZY_ENTRY_SEEDS_WASM_PATH="${LAZY_ENTRY_SEEDS_WASM}"
     )
     if(ZEN_TEST_ENABLE_ASAN)
       target_compile_options(

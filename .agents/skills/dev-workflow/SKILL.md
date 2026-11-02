@@ -18,6 +18,7 @@ End-to-end workflow for implementing changes: propose, plan, execute, verify, an
    - Light tier: copy `docs/changes/template-light.md` to `docs/changes/YYYY-MM-DD-<slug>/README.md`
 
 3. Fill in the document and set status to `Proposed`
+   - Do not add an index row to `docs/changes/README.md`; the proposal header is the only status record
 
 ## Phase B - Plan
 

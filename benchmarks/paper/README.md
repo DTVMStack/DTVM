@@ -23,6 +23,7 @@ benchmarks/paper/
 │   ├── wapm/            # 21 WAPM wasm files (paper's 20 cases + fortune) + confs + SHA256SUMS
 │   ├── overflow/        # integer-overflow (swap-style) + fib(30) 5-way: C++ source + wasm + scripts
 │   └── fib/             # standalone fib / md5 (C/Solidity sources + wasm)
+├── harness/             # Phase 1.5 JSON wall harness vs Wasmtime (same .wasm where fair)
 └── scripts/             # benchmark drivers and table generators (incl. testsuite runner)
 
 `raw_data/` is created by the scripts at run time and is gitignored; this package ships cases and methodology only, no result data.
@@ -34,8 +35,8 @@ benchmarks/paper/
 |---|---|---|---|
 | Fig. "Ethereum Ecosystem" (Fig. 5) | DTVM vs evmone contract latency | `benchmarks/contracts/` (Merkle-MiMC, GenerativeNFT, ERC1155, Counter, ERC20/721, UniswapV2, fib) | `benchmarks/contracts/REPRODUCE.md` |
 | Fig. "JIT improvement over Interp" (Fig. 6) | DTVM JIT vs interpreter | `benchmarks/contracts/` + `benchmarks/fib/` | same + `benchmarks/fib/` |
-| Fig. "general-purpose Wasm VMs" (Fig. 7) | fib(30) / integer-overflow latency | `benchmarks/overflow/`, `benchmarks/fib/` | `benchmarks/overflow/REPRODUCE_fib_overflow_5way.md` |
-| Fig. 8(a) + Appendix PolyBench table | PolyBench 30-case latency | `benchmarks/polybenchc/` | `docs/POLYBENCH_REPRODUCE.md` |
+| Fig. "general-purpose Wasm VMs" (Fig. 7) | fib(30) / integer-overflow latency | `benchmarks/overflow/`, `benchmarks/fib/` | `harness/` (same-wasm) or `benchmarks/overflow/REPRODUCE_fib_overflow_5way.md` |
+| Fig. 8(a) + Appendix PolyBench table | PolyBench 30-case latency | `benchmarks/polybenchc/` | `harness/` (wall JSON) or `docs/POLYBENCH_REPRODUCE.md` |
 | Fig. 8(b) + Appendix PolyBench TTFI | PolyBench time-to-first-invocation | `benchmarks/polybenchc/` | `docs/POLYBENCH_TTFI_REPRODUCE.md` |
 | Fig. 8(b) + Appendix WAPM table | WAPM 20-case TTFI | `benchmarks/wapm/` | `docs/WAPM_TTFI_REPRODUCTION.md`, `benchmarks/wapm/WAPM_REPRODUCE.md` |
 | Deterministic-execution table | cross-arch stack-overflow determinism | `tests/wast/dwasm/call_stack_exceed.wast` (already in this repo) | `docs/testing/` |
@@ -43,6 +44,21 @@ benchmarks/paper/
 
 
 ## Quick Start
+
+Preferred **wall-clock vs Wasmtime** path (Phase 1.5 JSON schema, CPU pin, fairness labels):
+
+```bash
+# from the DTVM repo root
+./benchmarks/paper/harness/build_dtvm.sh
+./benchmarks/paper/harness/fetch_wasmtime.sh
+python3 benchmarks/paper/harness/run.py --selftest
+./benchmarks/paper/harness/smoke.sh
+# larger matrices: --preset phase15 | polybench | fib | overflow | wapm
+```
+
+See [`harness/README.md`](harness/README.md) and [`harness/SCHEMA.md`](harness/SCHEMA.md).
+
+Older per-suite CSV / TTFI scripts remain:
 
 ```bash
 cd benchmarks/paper

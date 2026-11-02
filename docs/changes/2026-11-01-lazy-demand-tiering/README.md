@@ -12,7 +12,23 @@ Stop multithread LazyJIT from background-Greedy compiling every function that is
 
 `CallSeqMap` records direct `call` targets **and** every table function whose type matches a `call_indirect`. DFS from exports therefore BG-Greedys most of libc on short-lived WASI modules. On this box, cowsay (821 internal functions) compiled **381** bodies in the background vs **173** actually demanded; wall median 767 ms vs lazy-F-ST 137 ms vs interpreter 10 ms. Echo/md5/figlet show the same compile-dominated shape.
 
-Long-running paper kernels (`main` / `_start`) are the exported entry, so they still get background GreedyRA. Eager multipass is unchanged.
+The start function and exported entries still get background GreedyRA. This
+does not guarantee Greedy code for the actual hot loop: an exported wrapper
+may spend its time in an unexported helper, which remains FastRA after first
+use. This is a startup/compilation policy, not hotness-based tier promotion.
+Long-running workloads need throughput measurements; eager multipass is
+unchanged.
+
+## Review fixes and coverage
+
+- Keep the old scheduling priority: start first, hinted entry next (the loader
+  places it last), then the remaining exports in reverse order. The original
+  forward loop queued the likely entry behind other exports on the FIFO pool.
+- Remove the obsolete shared proposal-index edit when integrating current main.
+- Add `lazy_entry_seeds.wat` and JIT regression tests for an unexported start,
+  export aliases, direct callees, used/unused indirect table targets, repeated
+  calls, and eager/serial-lazy compatibility. Publication counters provide the
+  completion barrier; tests do not rely on arbitrary sleeps.
 
 ## Impact
 
@@ -24,6 +40,6 @@ Long-running paper kernels (`main` / `_start`) are the exported entry, so they s
 ## Checklist
 
 - [x] Implementation complete
-- [ ] Tests added/updated (policy change; WAPM wall + statistics re-run on the spike)
+- [x] Tests added/updated (`lazyJitGreedyOndemandTests`, `lazy_entry_seeds.wat`)
 - [x] Module specs in `docs/modules/` updated (if affected)
 - [ ] Build and tests pass

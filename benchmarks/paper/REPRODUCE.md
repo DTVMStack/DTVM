@@ -67,6 +67,26 @@ cd runtimes/wamr-1.2.3 && ./build.sh all
 
 ## Step 2 — Main Experiment Groups
 
+### 2.0 Unified wall harness (PolyBench / fib / overflow / WAPM vs Wasmtime)
+
+Preferred entry for **same-`.wasm` wall times** with CPU pinning and a JSON
+schema matching the Phase 1.5 notes:
+
+```bash
+# from the DTVM repo root
+./benchmarks/paper/harness/build_dtvm.sh
+./benchmarks/paper/harness/fetch_wasmtime.sh
+python3 benchmarks/paper/harness/run.py --preset smoke
+python3 benchmarks/paper/harness/run.py --preset phase15 --repeats 3
+```
+
+Fairness: PolyBench, fib iterative, and WAPM use the identical module on
+DTVM and Wasmtime 45 (cache disabled). Overflow is **different-wasm** by
+construction (DTVM `checked_i64_*` hostapi vs emscripten `0xfc` modules
+Wasmtime can load). Details: [`harness/README.md`](harness/README.md).
+
+The sections below keep the older CSV / TTFI scripts.
+
 ### 2.1 PolyBench wall-clock (30 cases)
 
 ```bash

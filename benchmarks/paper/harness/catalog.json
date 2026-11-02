@@ -1,0 +1,312 @@
+{
+  "schema_version": "phase15-v1",
+  "notes": {
+    "fair_same_wasm": "DTVM and Wasmtime execute the identical .wasm with equivalent entry/args/dir/stdin. Wasmtime module cache is disabled.",
+    "dtvm_hostapi_only": "DTVM overflow path imports env::checked_i64_*; Wasmtime cannot run that module. Not a same-wasm comparison.",
+    "different_wasm": "Wasmtime overflow uses emscripten wasm with opcode 0xfc / bulk-memory that DTVM cannot load. Paper overflow table is different-wasm by construction.",
+    "zuk_standin": "Paper WAPM row 'zuk' is reproduced with fortune.wasm (same as scripts/run_lazy_20.sh).",
+    "scales": "fib/overflow 'dev' matches Phase 1.5 (1e6 iters). 'paper' matches REPRODUCE_fib_overflow_5way.md (500M fib / 100M overflow)."
+  },
+  "polybench": {
+    "dir": "benchmarks/polybenchc",
+    "kind": "wasi-main",
+    "fairness": "same-wasm",
+    "skip_interp": [
+      "2mm",
+      "3mm",
+      "adi",
+      "correlation",
+      "covariance",
+      "deriche",
+      "doitgen",
+      "fdtd-2d",
+      "floyd-warshall",
+      "gemm",
+      "gramschmidt",
+      "heat-3d",
+      "jacobi-2d",
+      "lu",
+      "ludcmp",
+      "nussinov",
+      "seidel-2d",
+      "symm",
+      "syr2k",
+      "syrk",
+      "trmm"
+    ]
+  },
+  "cases": [
+    {
+      "id": "fib_iter_dev",
+      "suite": "fib",
+      "scale": "dev",
+      "wasm": "benchmarks/overflow/perf_test_fib_iter_invoke.wasm",
+      "kind": "reactor",
+      "function": "test_fib_iter",
+      "args": ["1000000", "30"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "fib_iter_paper",
+      "suite": "fib",
+      "scale": "paper",
+      "wasm": "benchmarks/overflow/perf_test_fib_iter_invoke.wasm",
+      "kind": "reactor",
+      "function": "test_fib_iter",
+      "args": ["500000000", "30"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "fib_iter_unrolled_dev",
+      "suite": "fib",
+      "scale": "dev",
+      "wasm": "benchmarks/overflow/perf_test_fib_iter_unrolled.wasm",
+      "kind": "reactor",
+      "function": "test_fib_iter",
+      "args": ["1000000", "30"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "fib_iter_unrolled_paper",
+      "suite": "fib",
+      "scale": "paper",
+      "wasm": "benchmarks/overflow/perf_test_fib_iter_unrolled.wasm",
+      "kind": "reactor",
+      "function": "test_fib_iter",
+      "args": ["500000000", "30"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "overflow_non_dtvm_dev",
+      "suite": "overflow",
+      "scale": "dev",
+      "wasm": "benchmarks/overflow/perf_test_swap_pool_non_dtvm_O2.wasm",
+      "kind": "reactor",
+      "function": "test_traditional",
+      "args": ["1000000", "2000000"],
+      "fairness": "different-wasm",
+      "runtimes": ["wasmtime"]
+    },
+    {
+      "id": "overflow_non_dtvm_paper",
+      "suite": "overflow",
+      "scale": "paper",
+      "wasm": "benchmarks/overflow/perf_test_swap_pool_non_dtvm_O2.wasm",
+      "kind": "reactor",
+      "function": "test_traditional",
+      "args": ["100000000", "2000000"],
+      "fairness": "different-wasm",
+      "runtimes": ["wasmtime"]
+    },
+    {
+      "id": "overflow_dtvm_dev",
+      "suite": "overflow",
+      "scale": "dev",
+      "wasm": "benchmarks/overflow/perf_test_swap_pool_dtvm_O2.wasm",
+      "kind": "reactor",
+      "function": "test_dtvm",
+      "args": ["1000000", "2000000"],
+      "fairness": "dtvm-hostapi-only",
+      "runtimes": ["dtvm"]
+    },
+    {
+      "id": "overflow_dtvm_paper",
+      "suite": "overflow",
+      "scale": "paper",
+      "wasm": "benchmarks/overflow/perf_test_swap_pool_dtvm_O2.wasm",
+      "kind": "reactor",
+      "function": "test_dtvm",
+      "args": ["100000000", "2000000"],
+      "fairness": "dtvm-hostapi-only",
+      "runtimes": ["dtvm"]
+    },
+    {
+      "id": "amirali",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/amirali.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "base64cli",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/base64cli.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": ["encode", "helloworld"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "chkfont",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/chkfont.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "dirs": ["fonts"],
+      "args": ["fonts/small.flf"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "code-stock",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/code-stock.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "cowsay",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/cowsay.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": ["hello"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "dice",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/dice.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "stdin": "help\n",
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "echo",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/echo.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": ["1234567890"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "erdtree",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/erdtree.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "dirs": ["."],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "figlet",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/figlet.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "dirs": ["fonts"],
+      "args": ["hello"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "fortune",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/fortune.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "fairness": "same-wasm",
+      "paper_row": "zuk"
+    },
+    {
+      "id": "irb",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/irb.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "stdin": "3+4\n",
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "md5",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/md5.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": ["helloworld"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "pi",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/pi.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": ["1"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "pkg1",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/pkg1.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "qr2text",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/qr2text.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": ["https://wapm.io"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "sam",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/sam.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": ["-debug", "sam.wav"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "suggest",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/suggest.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": ["instakk", "update", "install"],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "tpl",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/tpl.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "stdin": "Δ is 123456-123455.\n",
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "uuid",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/uuid.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "viu",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/viu.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "dirs": ["."],
+      "args": ["parallel-small.png"],
+      "fairness": "same-wasm"
+    }
+  ],
+  "presets": {
+    "smoke": ["atax", "fib_iter_dev", "overflow_dtvm_dev", "overflow_non_dtvm_dev", "figlet"],
+    "phase15": ["fib_iter_dev", "atax", "jacobi-2d", "overflow_dtvm_dev", "figlet"],
+    "polybench": "polybench",
+    "fib": ["fib_iter_dev", "fib_iter_unrolled_dev"],
+    "overflow": ["overflow_non_dtvm_dev", "overflow_dtvm_dev"],
+    "wapm": "wapm",
+    "all": "all"
+  }
+}

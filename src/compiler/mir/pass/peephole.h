@@ -8,7 +8,9 @@
 
 namespace COMPILER {
 
-/// Local algebraic / terminator peepholes on dMIR trees (Wasmtime-inspired).
+/// Local algebraic / terminator peepholes on dMIR trees (Wasmtime-inspired),
+/// plus entry-wide hoisting of non-zero FP constants used outside the entry
+/// block (no loop/preheader or use-frequency analysis).
 /// Function-local, deterministic, no shared mutable state.
 class MIRPeephole {
 public:
@@ -22,6 +24,7 @@ private:
   void rewriteBlock(MBasicBlock &BB);
   MInstruction *rewriteExpr(MInstruction *Inst);
   MInstruction *foldExpr(MInstruction *Inst);
+  void hoistNonEntryFPConsts(MFunction &Func);
 
   MInstruction *foldBitCountEqZero(MInstruction *Inst);
   MInstruction *foldSelectICmp(MInstruction *Inst);
@@ -35,6 +38,8 @@ private:
                          MInstruction *LHS, MInstruction *RHS);
   MInstruction *makeAnd(MType *Ty, MInstruction *LHS, MInstruction *RHS);
   MInstruction *makeUShr(MType *Ty, MInstruction *LHS, MInstruction *RHS);
+  MInstruction *makeAdd(MType *Ty, MInstruction *LHS, MInstruction *RHS);
+  MInstruction *makeShl(MType *Ty, MInstruction *LHS, MInstruction *RHS);
 
   bool matchIntConst(const MInstruction *Inst, llvm::APInt &Val) const;
   // Same-block dassign of a ConstantInstruction through dread.
@@ -43,6 +48,8 @@ private:
   // wasm handleIDiv temps peep. Not wired into isIntZero/foldConstBrIf:
   // those must not rewrite signed-overflow or stack-check CFG.
   bool matchAssignedIntConst(const MInstruction *Inst, llvm::APInt &Val) const;
+  bool matchAddImm(MInstruction *Inst, MInstruction *&Dyn,
+                   llvm::APInt &Imm) const;
   bool isIntZero(const MInstruction *Inst) const;
   bool isIntOne(const MInstruction *Inst) const;
   bool isIntAllOnes(const MInstruction *Inst) const;
