@@ -107,6 +107,9 @@ MInstruction *MIRPeephole::foldExpr(MInstruction *Inst) {
     }
     return New;
   }
+  if (MInstruction *New = foldSignedPositivePow2Div(Inst)) {
+    return New;
+  }
   return Inst;
 }
 
@@ -643,7 +646,12 @@ MInstruction *MIRPeephole::makeICmp(CmpInstruction::Predicate Pred, MType *Ty,
 
 MInstruction *MIRPeephole::makeAnd(MType *Ty, MInstruction *LHS,
                                    MInstruction *RHS) {
-  return F->createInstruction<BinaryInstruction>(false, *CurBB, OP_and, Ty, LHS,
+  return makeBin(OP_and, Ty, LHS, RHS);
+}
+
+MInstruction *MIRPeephole::makeBin(Opcode Opc, MType *Ty, MInstruction *LHS,
+                                   MInstruction *RHS) {
+  return F->createInstruction<BinaryInstruction>(false, *CurBB, Opc, Ty, LHS,
                                                  RHS);
 }
 
@@ -679,6 +687,43 @@ bool MIRPeephole::matchAddImm(MInstruction *Inst, MInstruction *&Dyn,
     return true;
   }
   return false;
+}
+
+MInstruction *MIRPeephole::foldSignedPositivePow2Div(MInstruction *Inst) {
+  if (Inst->getOpcode() != OP_sdiv) {
+    return nullptr;
+  }
+  if (!Inst->getType()->isInteger()) {
+    return nullptr;
+  }
+  MInstruction *LHS = Inst->getOperand<0>();
+  MInstruction *RHS = Inst->getOperand<1>();
+  unsigned ShiftAmt = 0;
+  if (!matchPositivePow2Const(RHS, ShiftAmt) || !isPureExpr(RHS)) {
+    return nullptr;
+  }
+  // /1 is identity. Discarding the constant rhs is safe.
+  if (ShiftAmt == 0) {
+    return LHS;
+  }
+  // LHS is evaluated twice in the bias formula; refuse loads/calls.
+  if (!isPureExpr(LHS)) {
+    return nullptr;
+  }
+  MType *Ty = Inst->getType();
+  const unsigned BitWidth = Ty->getBitWidth();
+  if (BitWidth != 32 && BitWidth != 64) {
+    return nullptr;
+  }
+  if (ShiftAmt >= BitWidth - 1) {
+    return nullptr;
+  }
+  const uint64_t BiasMask = (uint64_t(1) << ShiftAmt) - 1;
+  MInstruction *Sign =
+      makeBin(OP_sshr, Ty, LHS, makeIntConst(Ty, BitWidth - 1));
+  MInstruction *Bias = makeBin(OP_and, Ty, Sign, makeIntConst(Ty, BiasMask));
+  MInstruction *Biased = makeBin(OP_add, Ty, LHS, Bias);
+  return makeBin(OP_sshr, Ty, Biased, makeIntConst(Ty, ShiftAmt));
 }
 
 bool MIRPeephole::matchIntConst(const MInstruction *Inst,
@@ -717,6 +762,16 @@ bool MIRPeephole::matchAssignedIntConst(const MInstruction *Inst,
     }
   }
   return matchIntConst(LastAssign, Val);
+}
+
+bool MIRPeephole::matchPositivePow2Const(const MInstruction *Inst,
+                                         unsigned &ShiftAmt) const {
+  llvm::APInt V;
+  if (!matchIntConst(Inst, V) || !V.isStrictlyPositive() || !V.isPowerOf2()) {
+    return false;
+  }
+  ShiftAmt = V.logBase2();
+  return true;
 }
 
 bool MIRPeephole::isIntZero(const MInstruction *Inst) const {

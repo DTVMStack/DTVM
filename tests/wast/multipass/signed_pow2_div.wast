@@ -1,0 +1,105 @@
+;; Signed division by a compile-time positive power of two.
+;; Frontend must preserve toward-zero semantics, INT_MIN / 2^k (no overflow),
+;; and still trap on /0 and INT_MIN / -1. Distinct from unsigned pow2 udiv/urem.
+
+(module
+  (func (export "div8") (param i32) (result i32)
+    (i32.div_s (local.get 0) (i32.const 8)))
+  (func (export "div2") (param i32) (result i32)
+    (i32.div_s (local.get 0) (i32.const 2)))
+  (func (export "div1") (param i32) (result i32)
+    (i32.div_s (local.get 0) (i32.const 1)))
+  (func (export "div_2_30") (param i32) (result i32)
+    (i32.div_s (local.get 0) (i32.const 0x40000000)))
+  (func (export "div7") (param i32) (result i32)
+    (i32.div_s (local.get 0) (i32.const 7)))
+  (func (export "div_neg8") (param i32) (result i32)
+    (i32.div_s (local.get 0) (i32.const -8)))
+  (func (export "div0") (param i32) (result i32)
+    (i32.div_s (local.get 0) (i32.const 0)))
+  (func (export "overflow_const") (result i32)
+    (i32.div_s (i32.const 0x80000000) (i32.const -1)))
+  (func (export "overflow_var") (param i32 i32) (result i32)
+    (i32.div_s (local.get 0) (local.get 1)))
+  (func (export "i64_div8") (param i64) (result i64)
+    (i64.div_s (local.get 0) (i64.const 8)))
+  (func (export "i64_div1") (param i64) (result i64)
+    (i64.div_s (local.get 0) (i64.const 1)))
+  (func (export "i64_div0") (param i64) (result i64)
+    (i64.div_s (local.get 0) (i64.const 0)))
+  (func (export "i64_overflow_const") (result i64)
+    (i64.div_s (i64.const 0x8000000000000000) (i64.const -1)))
+  (func (export "i64_div_2_62") (param i64) (result i64)
+    (i64.div_s (local.get 0) (i64.const 0x4000000000000000)))
+  (func (export "div_min") (param i32) (result i32)
+    (i32.div_s (local.get 0) (i32.const 0x80000000)))
+  (func (export "i64_div_min") (param i64) (result i64)
+    (i64.div_s (local.get 0) (i64.const 0x8000000000000000)))
+  ;; Dropping an optimized result must still evaluate its trapping dividend.
+  (func (export "drop_div1") (param i32)
+    (drop (i32.div_s
+      (i32.div_s (i32.const 1) (local.get 0)) (i32.const 1))))
+  (func (export "drop_div8") (param i32)
+    (drop (i32.div_s
+      (i32.div_s (i32.const 1) (local.get 0)) (i32.const 8))))
+
+)
+
+;; i32 / 8 (positive pow2)
+(assert_return (invoke "div8" (i32.const 0)) (i32.const 0))
+(assert_return (invoke "div8" (i32.const 1)) (i32.const 0))
+(assert_return (invoke "div8" (i32.const 7)) (i32.const 0))
+(assert_return (invoke "div8" (i32.const 8)) (i32.const 1))
+(assert_return (invoke "div8" (i32.const 9)) (i32.const 1))
+(assert_return (invoke "div8" (i32.const -1)) (i32.const 0))
+(assert_return (invoke "div8" (i32.const -7)) (i32.const 0))
+(assert_return (invoke "div8" (i32.const -8)) (i32.const -1))
+(assert_return (invoke "div8" (i32.const -9)) (i32.const -1))
+(assert_return (invoke "div8" (i32.const 0x7fffffff)) (i32.const 0x0fffffff))
+(assert_return (invoke "div8" (i32.const 0x80000000)) (i32.const 0xf0000000))
+
+;; i32 / 2 and / 1
+(assert_return (invoke "div2" (i32.const -5)) (i32.const -2))
+(assert_return (invoke "div2" (i32.const 5)) (i32.const 2))
+(assert_return (invoke "div2" (i32.const 0x80000000)) (i32.const 0xc0000000))
+(assert_return (invoke "div1" (i32.const 42)) (i32.const 42))
+(assert_return (invoke "div1" (i32.const -42)) (i32.const -42))
+(assert_return (invoke "div1" (i32.const 0x80000000)) (i32.const 0x80000000))
+(assert_return (invoke "div_2_30" (i32.const 0x80000000)) (i32.const -2))
+(assert_return (invoke "div_2_30" (i32.const 0x7fffffff)) (i32.const 1))
+
+;; Negative / non-pow2 still compute correctly (not claimed by this fold).
+(assert_return (invoke "div7" (i32.const -7)) (i32.const -1))
+(assert_return (invoke "div7" (i32.const 20)) (i32.const 2))
+(assert_return (invoke "div_neg8" (i32.const -8)) (i32.const 1))
+(assert_return (invoke "div_neg8" (i32.const 8)) (i32.const -1))
+(assert_return (invoke "div_neg8" (i32.const -9)) (i32.const 1))
+(assert_return (invoke "div_neg8" (i32.const 0x80000000)) (i32.const 0x10000000))
+
+;; Traps must remain.
+(assert_trap (invoke "div0" (i32.const 1)) "integer divide by zero")
+(assert_trap (invoke "div0" (i32.const 0x80000000)) "integer divide by zero")
+(assert_trap (invoke "overflow_const") "integer overflow")
+(assert_trap (invoke "overflow_var" (i32.const 0x80000000) (i32.const -1)) "integer overflow")
+(assert_trap (invoke "overflow_var" (i32.const 1) (i32.const 0)) "integer divide by zero")
+
+;; i64 / 8
+(assert_return (invoke "i64_div8" (i64.const 0)) (i64.const 0))
+(assert_return (invoke "i64_div8" (i64.const 8)) (i64.const 1))
+(assert_return (invoke "i64_div8" (i64.const -1)) (i64.const 0))
+(assert_return (invoke "i64_div8" (i64.const -9)) (i64.const -1))
+(assert_return (invoke "i64_div8" (i64.const 0x8000000000000000)) (i64.const 0xf000000000000000))
+(assert_return (invoke "i64_div1" (i64.const -99)) (i64.const -99))
+(assert_trap (invoke "i64_div0" (i64.const 1)) "integer divide by zero")
+(assert_trap (invoke "i64_overflow_const") "integer overflow")
+
+;; Largest positive power and the sign-bit-only negative divisor.
+(assert_return (invoke "i64_div_2_62" (i64.const 0x8000000000000000)) (i64.const -2))
+(assert_return (invoke "i64_div_2_62" (i64.const 0x7fffffffffffffff)) (i64.const 1))
+(assert_return (invoke "i64_div_2_62" (i64.const -1)) (i64.const 0))
+(assert_return (invoke "div_min" (i32.const 0x80000000)) (i32.const 1))
+(assert_return (invoke "div_min" (i32.const 0x7fffffff)) (i32.const 0))
+(assert_return (invoke "i64_div_min" (i64.const 0x8000000000000000)) (i64.const 1))
+(assert_return (invoke "i64_div_min" (i64.const 0x7fffffffffffffff)) (i64.const 0))
+(assert_trap (invoke "drop_div1" (i32.const 0)) "integer divide by zero")
+(assert_trap (invoke "drop_div8" (i32.const 0)) "integer divide by zero")
