@@ -32,7 +32,10 @@ private:
   MInstruction *foldConstCmp(MInstruction *Inst);
   MInstruction *foldSelectConstCond(MInstruction *Inst);
   MInstruction *foldSignedPositivePow2Div(MInstruction *Inst);
+  MInstruction *foldU32MagicUDiv(MInstruction *Inst);
   bool foldConstBrIf(MBasicBlock &BB, BrIfInstruction &BrIf);
+
+  MInstruction *makeConv(Opcode Opc, MType *Ty, MInstruction *Op);
 
   MInstruction *makeIntConst(MType *Ty, uint64_t Val);
   MInstruction *makeICmp(CmpInstruction::Predicate Pred, MType *Ty,
@@ -55,6 +58,8 @@ private:
                    llvm::APInt &Imm) const;
   bool matchPositivePow2Const(const MInstruction *Inst,
                               unsigned &ShiftAmt) const;
+  bool matchIntConstLookThrough(const MInstruction *Inst,
+                                llvm::APInt &Val) const;
   bool isIntZero(const MInstruction *Inst) const;
   bool isIntOne(const MInstruction *Inst) const;
   bool isIntAllOnes(const MInstruction *Inst) const;

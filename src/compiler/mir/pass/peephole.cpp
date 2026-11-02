@@ -9,6 +9,7 @@
 #include "compiler/mir/instructions.h"
 #include "compiler/mir/opcode.h"
 #include "compiler/mir/variable.h"
+#include "compiler/utils/magic_div.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
@@ -108,6 +109,9 @@ MInstruction *MIRPeephole::foldExpr(MInstruction *Inst) {
     return New;
   }
   if (MInstruction *New = foldSignedPositivePow2Div(Inst)) {
+    return New;
+  }
+  if (MInstruction *New = foldU32MagicUDiv(Inst)) {
     return New;
   }
   return Inst;
@@ -632,10 +636,63 @@ bool MIRPeephole::foldConstBrIf(MBasicBlock &BB, BrIfInstruction &BrIf) {
   return true;
 }
 
+MInstruction *MIRPeephole::foldU32MagicUDiv(MInstruction *Inst) {
+  if (Inst->getOpcode() != OP_udiv) {
+    return nullptr;
+  }
+  MType *Ty = Inst->getType();
+  if (!Ty || !Ty->isI32()) {
+    return nullptr;
+  }
+  MInstruction *LHS = Inst->getOperand<0>();
+  MInstruction *RHS = Inst->getOperand<1>();
+  llvm::APInt RV;
+  if (!matchIntConstLookThrough(RHS, RV) || RV.isZero()) {
+    return nullptr;
+  }
+  if (RV.getBitWidth() != 32) {
+    return nullptr;
+  }
+  const auto Mag = tryU32MagicUDiv(static_cast<uint32_t>(RV.getZExtValue()));
+  if (!Mag) {
+    return nullptr;
+  }
+  // The add-indicator expansion shares LHS and its high product. Keep
+  // effectful expression trees intact, as in the signed pow2 fold;
+  // frontend dividends already materialized in locals remain eligible.
+  if (Mag->IsAdd && !isPureExpr(LHS)) {
+    return nullptr;
+  }
+
+  MType *I64 = &CompileContext::I64Type;
+  MInstruction *X64 = makeConv(OP_uext, I64, LHS);
+  MInstruction *Prod = makeBin(OP_mul, I64, X64, makeIntConst(I64, Mag->Magic));
+  if (!Mag->IsAdd) {
+    MInstruction *Shifted =
+        makeBin(OP_ushr, I64, Prod, makeIntConst(I64, 32u + Mag->ShiftAmount));
+    return makeConv(OP_trunc, Ty, Shifted);
+  }
+
+  MInstruction *Hi = makeConv(
+      OP_trunc, Ty, makeBin(OP_ushr, I64, Prod, makeIntConst(I64, 32)));
+  MInstruction *Half =
+      makeBin(OP_ushr, Ty, makeBin(OP_sub, Ty, LHS, Hi), makeIntConst(Ty, 1));
+  MInstruction *Sum = makeBin(OP_add, Ty, Half, Hi);
+  if (Mag->ShiftAmount <= 1) {
+    return Sum;
+  }
+  return makeBin(OP_ushr, Ty, Sum, makeIntConst(Ty, Mag->ShiftAmount - 1));
+}
+
 MInstruction *MIRPeephole::makeIntConst(MType *Ty, uint64_t Val) {
   ZEN_ASSERT(F && CurBB && Ty);
   MConstantInt *C = MConstantInt::get(F->getContext(), *Ty, Val);
   return F->createInstruction<ConstantInstruction>(false, *CurBB, Ty, *C);
+}
+
+MInstruction *MIRPeephole::makeConv(Opcode Opc, MType *Ty, MInstruction *Op) {
+  return F->createInstruction<ConversionInstruction>(false, *CurBB, Opc, Ty,
+                                                     Op);
 }
 
 MInstruction *MIRPeephole::makeICmp(CmpInstruction::Predicate Pred, MType *Ty,
@@ -772,6 +829,11 @@ bool MIRPeephole::matchPositivePow2Const(const MInstruction *Inst,
   }
   ShiftAmt = V.logBase2();
   return true;
+}
+
+bool MIRPeephole::matchIntConstLookThrough(const MInstruction *Inst,
+                                           llvm::APInt &Val) const {
+  return matchIntConst(Inst, Val) || matchAssignedIntConst(Inst, Val);
 }
 
 bool MIRPeephole::isIntZero(const MInstruction *Inst) const {
