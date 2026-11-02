@@ -27,7 +27,7 @@ HARNESS_DIR = Path(__file__).resolve().parent
 PAPER_ROOT = HARNESS_DIR.parent
 REPO_ROOT = PAPER_ROOT.parent.parent
 CATALOG_PATH = HARNESS_DIR / "catalog.json"
-SCHEMA_VERSION = "phase15-v1"
+SCHEMA_VERSION = "paper-bench-v1"
 
 DTVM_MODE_FLAGS = {
     # Phase 1.5 names. GreedyRA is the dtvm default; FastRA is --disable-multipass-greedyra.
@@ -54,11 +54,43 @@ DTVM_MODE_FLAGS = {
         "--enable-multipass-lazy",
         "--disable-multipass-multithread",
     ],
+    # TTFI scripts' "greedy RA + multithread fully on" (not Phase 1.5 serial).
+    "multipass-G-MT": ["-m", "multipass"],
+    "lazy-G-MT": ["-m", "multipass", "--enable-multipass-lazy"],
 }
 
 DEFAULT_DTVM_MODES = ["interp", "singlepass", "multipass-G-ST", "lazy-F-ST"]
 PAPER_DTVM_MODES = ["multipass-F-ST", "lazy-F-ST"]
 WASMTIME_MODE = "cranelift-nocache"
+
+# Older CSV/TTFI script profile names → canonical schema modes.
+MODE_ALIASES = {
+    "interpreter": "interp",
+    "interp": "interp",
+    "sp": "singlepass",
+    "singlepass": "singlepass",
+    "lazy": "lazy-F-ST",
+    "dtvm multipass + lazy": "lazy-F-ST",
+    "lazy-f-st": "lazy-F-ST",
+    "multipass": "multipass-F-ST",
+    "multipass-f-st": "multipass-F-ST",
+    "multipass-g-st": "multipass-G-ST",
+    "multipass_greedy_mt": "multipass-G-MT",
+    "lazy_greedy_mt": "lazy-G-MT",
+    "default": WASMTIME_MODE,
+    "wasmtime": WASMTIME_MODE,
+    "cranelift": WASMTIME_MODE,
+    "cranelift-nocache": WASMTIME_MODE,
+    "nocache": WASMTIME_MODE,
+}
+
+TTFI_COMPILE_RE = re.compile(
+    r"Total compilation time:\s*(\d+)\s*ms\s*\((\d+)\s*[μµ]s\)"
+)
+TTFI_EXEC_RE = re.compile(r"Execution\s+\d+:\s*([\d.]+)\s*ms")
+STAT_COUNT_TOTAL_RE = re.compile(
+    r"JIT Lazy Compilation\(Fg\):\s+(\d+) times,.*?total ([\d.]+)ms"
+)
 
 STAT_FIELDS = {
     "load_ms": re.compile(r"Load:\s+\d+ times,.*?total ([\d.]+)ms"),
@@ -102,6 +134,20 @@ def median(xs: Sequence[float]) -> Optional[float]:
     return float(statistics.median(xs))
 
 
+def canonicalize_mode(name: str) -> str:
+    key = name.strip()
+    mapped = MODE_ALIASES.get(key) or MODE_ALIASES.get(key.lower())
+    if mapped:
+        return mapped
+    if key in DTVM_MODE_FLAGS or key == WASMTIME_MODE:
+        return key
+    die(
+        f"unknown mode {name!r}; canonical: "
+        f"{sorted(set(DTVM_MODE_FLAGS) | {WASMTIME_MODE})}"
+    )
+    raise AssertionError("unreachable")
+
+
 def parse_dtvm_stats(text: str) -> Optional[Dict[str, float]]:
     if "ZetaEngine Statistics" not in text and "JIT Compilation:" not in text:
         return None
@@ -110,7 +156,53 @@ def parse_dtvm_stats(text: str) -> Optional[Dict[str, float]]:
         m = cre.search(text)
         if m:
             out[key] = float(m.group(1))
+    fg = STAT_COUNT_TOTAL_RE.search(text)
+    if fg:
+        out["jit_lazy_fg_count"] = float(fg.group(1))
+        out["jit_lazy_fg_ms"] = float(fg.group(2))
+        count = int(fg.group(1))
+        if count > 0 and all(
+            key in out for key in ("load_ms", "jit_lazy_precompile_ms", "instantiation_ms")
+        ):
+            out["ttfi_est_ms"] = (
+                out["load_ms"]
+                + out["jit_lazy_precompile_ms"]
+                + out["instantiation_ms"]
+                + (out["jit_lazy_fg_ms"] / count)
+            )
     return out or None
+
+
+def empty_ttfi(reason: str) -> Dict[str, Any]:
+    return {
+        "ttfi_ms": None,
+        "ttfi_source": None,
+        "compile_ms": None,
+        "ttfi_est_ms": None,
+        "execution_ms": None,
+        "ttfi_unavailable": reason,
+    }
+
+
+def parse_ttfi(text: str, stats: Optional[Dict[str, float]]) -> Dict[str, Any]:
+    """Keep compilation time and the legacy lazy estimate separate from TTFI.
+
+    Neither total compilation nor average foreground JIT measures the interval
+    to the first invocation. No currently supported report measures that
+    interval, so ttfi_ms remains null, even when diagnostics are available.
+    """
+    rec = empty_ttfi("not-instrumented")
+    cm = TTFI_COMPILE_RE.search(text)
+    if cm:
+        rec["compile_ms"] = int(cm.group(2)) / 1000.0
+    em = TTFI_EXEC_RE.search(text)
+    if em:
+        rec["execution_ms"] = float(em.group(1))
+    if stats and stats.get("ttfi_est_ms") is not None:
+        rec["ttfi_est_ms"] = float(stats["ttfi_est_ms"])
+    if rec["compile_ms"] is not None or rec["ttfi_est_ms"] is not None:
+        rec["ttfi_unavailable"] = "not-measured"
+    return rec
 
 
 def host_info() -> Dict[str, str]:
@@ -178,25 +270,51 @@ def resolve_dtvm(explicit: Optional[str]) -> Path:
     raise AssertionError("unreachable")
 
 
-def resolve_wasmtime(explicit: Optional[str]) -> Path:
-    chosen = explicit or os.environ.get("WASMTIME")
-    if chosen:
-        path = Path(chosen)
-        if path.is_file() and os.access(path, os.X_OK):
-            return path.resolve()
-        die(f"requested wasmtime binary is missing or not executable: {chosen}")
-    candidates = []
-    which = shutil.which("wasmtime")
-    if which:
-        candidates.append(Path(which))
-    candidates.append(PAPER_ROOT / "runtimes" / "wasmtime-45.0.0" / "out" / "wasmtime")
+def find_executable(explicit: Optional[str], extra: Sequence[Path]) -> Optional[Path]:
+    candidates: List[Path] = []
+    if explicit:
+        candidates.append(Path(explicit))
+    for c in extra:
+        candidates.append(c)
     for c in candidates:
         if c.is_file() and os.access(c, os.X_OK):
             return c.resolve()
-    die(
-        "wasmtime binary not found. Run harness/fetch_wasmtime.sh or set --wasmtime / $WASMTIME"
+    return None
+
+
+def find_wasmtime(explicit: Optional[str]) -> Optional[Path]:
+    # An explicit or env path that is not executable is a miss (skip, do not
+    # silently pick another binary or invent timings).
+    if explicit:
+        return find_executable(explicit, [])
+    env = os.environ.get("WASMTIME")
+    if env:
+        return find_executable(env, [])
+    extra: List[Path] = []
+    which = shutil.which("wasmtime")
+    if which:
+        extra.append(Path(which))
+    extra.append(PAPER_ROOT / "runtimes" / "wasmtime-45.0.0" / "out" / "wasmtime")
+    return find_executable(None, extra)
+
+
+def find_wasmer(explicit: Optional[str] = None) -> Optional[Path]:
+    if explicit:
+        return find_executable(explicit, [])
+    env = os.environ.get("WASMER")
+    if env:
+        return find_executable(env, [])
+    extra: List[Path] = []
+    which = shutil.which("wasmer")
+    if which:
+        extra.append(Path(which))
+    extra.extend(
+        [
+            PAPER_ROOT / "runtimes" / "wasmer-7.1.0" / "out" / "bin" / "wasmer",
+            PAPER_ROOT / "runtimes" / "wasmer-7.1.0" / "out" / "wasmer",
+        ]
     )
-    raise AssertionError("unreachable")
+    return find_executable(None, extra)
 
 
 def paper_join(rel: str) -> Path:
@@ -443,6 +561,7 @@ def run_cell(
     samples: List[float] = []
     exits: List[Optional[int]] = []
     stats_samples: List[Dict[str, float]] = []
+    ttfi_samples: List[Dict[str, Any]] = []
     timed_out_samples = 0
     last_output = ""
     last_failure_output = ""
@@ -466,6 +585,7 @@ def run_cell(
             "min_s": None,
             "max_s": None,
             "statistics": None,
+            "ttfi": empty_ttfi("warmup-failed"),
             "output_tail": last_output[-4000:],
         }
     for _ in range(repeats):
@@ -480,6 +600,7 @@ def run_cell(
             parsed = parse_dtvm_stats(r["output"])
             if parsed:
                 stats_samples.append(parsed)
+            ttfi_samples.append(parse_ttfi(r["output"], parsed))
     stats_med: Optional[Dict[str, float]] = None
     if stats_samples:
         keys = sorted({k for s in stats_samples for k in s})
@@ -488,6 +609,22 @@ def run_cell(
             for k in keys
             if any(k in s for s in stats_samples)
         }
+    ttfi_med = empty_ttfi("not-instrumented")
+    metric_samples = {}
+    # Do not publish a median from only the subset that emitted a metric.
+    # Wall measurements may still succeed when optional diagnostics are absent.
+    for key in ("ttfi_ms", "compile_ms", "ttfi_est_ms", "execution_ms"):
+        vals = [t[key] for t in ttfi_samples if t.get(key) is not None]
+        metric_samples[key] = len(vals)
+        if len(vals) == repeats and repeats > 0:
+            ttfi_med[key] = float(statistics.median(vals))
+    if len(samples) != repeats:
+        ttfi_med["ttfi_unavailable"] = "incomplete-measurements"
+    elif ttfi_med["compile_ms"] is not None or ttfi_med["ttfi_est_ms"] is not None:
+        ttfi_med["ttfi_unavailable"] = "not-measured"
+    elif any(metric_samples.values()):
+        ttfi_med["ttfi_unavailable"] = "incomplete-metric-samples"
+    ttfi_med["metric_samples"] = metric_samples
     return {
         "ok": len(samples) == repeats and repeats > 0,
         "exit": exits[-1] if exits else None,
@@ -500,10 +637,31 @@ def run_cell(
         "min_s": min(samples) if samples else None,
         "max_s": max(samples) if samples else None,
         "statistics": stats_med,
+        "ttfi": ttfi_med,
         "output_tail": (
             (last_failure_output or last_output)[-4000:]
             if keep_output or len(samples) != repeats else ""
         ),
+    }
+
+
+def skipped_cell(reason: str) -> Dict[str, Any]:
+    return {
+        "ok": False,
+        "skipped": True,
+        "skip_reason": reason,
+        "exit": None,
+        "timeout": False,
+        "sample_exits": [],
+        "failed_samples": 0,
+        "timed_out_samples": 0,
+        "samples_s": [],
+        "median_s": None,
+        "min_s": None,
+        "max_s": None,
+        "statistics": None,
+        "ttfi": empty_ttfi(reason),
+        "output_tail": "",
     }
 
 
@@ -621,6 +779,56 @@ def selftest() -> int:
     assert parsed["execution_ms"] == 72.1
     assert parsed["total_ms"] == 160.1
 
+    assert canonicalize_mode("lazy") == "lazy-F-ST"
+    assert canonicalize_mode("multipass") == "multipass-F-ST"
+    assert canonicalize_mode("multipass_greedy_mt") == "multipass-G-MT"
+    assert canonicalize_mode("default") == WASMTIME_MODE
+
+    ttfi_line = "Total compilation time: 12 ms (12345 μs)\nExecution 0: 3.5 ms\n"
+    ttfi = parse_ttfi(ttfi_line, None)
+    assert ttfi["compile_ms"] == 12.345
+    assert ttfi["ttfi_ms"] is None
+    assert ttfi["ttfi_unavailable"] == "not-measured"
+    assert ttfi["execution_ms"] == 3.5
+    stock = parse_ttfi("wasmtime 45.0.0\n", None)
+    assert stock["ttfi_ms"] is None
+    assert stock["ttfi_unavailable"] == "not-instrumented"
+    lazy_stats_txt = (
+        "Load:\t\t\t1 times, avg 1.000ms, total 1.200ms, 1.00%\n"
+        "JIT Lazy Precompilation:\t1 times, avg 0.400ms, total 0.400ms, 1.00%\n"
+        "JIT Lazy Compilation(Fg):\t2 times, avg 3.000ms, total 6.000ms, 1.00%\n"
+        "Instantiation:\t\t1 times, avg 0.100ms, total 0.100ms, 1.00%\n"
+        "================  [Begin] ZetaEngine Statistics  ================\n"
+    )
+    lazy_stats = parse_dtvm_stats(lazy_stats_txt)
+    assert lazy_stats is not None
+    assert abs(lazy_stats["ttfi_est_ms"] - (1.2 + 0.4 + 0.1 + 6.0 / 2)) < 1e-9
+    est = parse_ttfi("no compile line", lazy_stats)
+    assert est["ttfi_est_ms"] == lazy_stats["ttfi_est_ms"]
+    assert est["ttfi_ms"] is None
+
+    assert find_wasmtime("/no-such-wasmtime-binary") is None
+
+    skip = skipped_cell("wasmtime-not-found")
+    assert skip["skipped"] is True
+    assert skip["median_s"] is None
+    assert skip["ttfi"]["ttfi_ms"] is None
+
+    skip_md = markdown_table(
+        [
+            {
+                "bench": "atax",
+                "fairness": "same-wasm",
+                "runtime": "wasmtime",
+                "mode": WASMTIME_MODE,
+                "median_s": None,
+                "skipped": True,
+            }
+        ]
+    )
+    assert "skip" in skip_md
+    assert "0.0" not in skip_md
+
     assert median([3.0, 1.0, 2.0]) == 2.0
     assert median([1.0, 2.0]) == 1.5
     assert median([]) is None
@@ -686,11 +894,15 @@ def build_argparser() -> argparse.ArgumentParser:
         choices=["dev", "paper"],
         help="fib/overflow iteration scale (dev=1e6, paper=500M/100M)",
     )
-    p.add_argument("--runtimes", default="dtvm,wasmtime")
+    p.add_argument(
+        "--runtimes",
+        default="dtvm,wasmtime",
+        help="comma-separated: dtvm,wasmtime,wasmer (wasmer is skip-only unless present)",
+    )
     p.add_argument(
         "--dtvm-modes",
         default=",".join(DEFAULT_DTVM_MODES),
-        help="comma-separated dtvm modes",
+        help="comma-separated dtvm modes (aliases: lazy, multipass, multipass_greedy_mt)",
     )
     p.add_argument(
         "--paper-modes",
@@ -706,8 +918,20 @@ def build_argparser() -> argparse.ArgumentParser:
         action="store_true",
         help="collect DTVM statistics in a separate instrumented pass",
     )
+    p.add_argument(
+        "--metric",
+        default="wall",
+        choices=["wall", "ttfi", "both"],
+        help="wall = process seconds; ttfi/both also collect compile and lazy-estimate diagnostics; measured TTFI remains unavailable",
+    )
+    p.add_argument(
+        "--require-wasmtime",
+        action="store_true",
+        help="exit 2 if a Wasmtime binary is required but missing (default: skip, no invented numbers)",
+    )
     p.add_argument("--dtvm")
     p.add_argument("--wasmtime")
+    p.add_argument("--wasmer")
     p.add_argument("--out", help="output directory (default raw_data/harness/<stamp>)")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--selftest", action="store_true")
@@ -736,37 +960,87 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     selected = select_cases(all_cases, args.preset, catalog, only, args.scale, suites)
     if not selected:
         die("no cases selected")
-    if not args.dry_run:
-        for case in selected:
-            require_wasm(paper_join(case["wasm"]))
 
     runtimes = [s.strip() for s in args.runtimes.split(",") if s.strip()]
     for rt in runtimes:
-        if rt not in ("dtvm", "wasmtime"):
-            die(f"unsupported runtime {rt!r} (dtvm|wasmtime)")
+        if rt not in ("dtvm", "wasmtime", "wasmer"):
+            die(f"unsupported runtime {rt!r} (dtvm|wasmtime|wasmer)")
     dtvm_modes = (
         list(PAPER_DTVM_MODES)
         if args.paper_modes
-        else [s.strip() for s in args.dtvm_modes.split(",") if s.strip()]
+        else [
+            canonicalize_mode(s.strip())
+            for s in args.dtvm_modes.split(",")
+            if s.strip()
+        ]
     )
     for mode in dtvm_modes:
         if mode not in DTVM_MODE_FLAGS:
             die(f"unknown dtvm mode {mode!r}; known: {sorted(DTVM_MODE_FLAGS)}")
 
+    want_stats = bool(args.stats) or args.metric in ("ttfi", "both")
     cpu = None if args.cpu < 0 else args.cpu
     prefix = pin_prefix(cpu)
 
     dtvm_bin = None
     wt_bin = None
+    skipped_runtimes: List[Dict[str, Any]] = []
     if "dtvm" in runtimes and not args.dry_run:
         dtvm_bin = resolve_dtvm(args.dtvm)
         warn_if_debug_dtvm(dtvm_bin)
     elif "dtvm" in runtimes:
         dtvm_bin = Path(args.dtvm) if args.dtvm else Path("${DTVM}")
-    if "wasmtime" in runtimes and not args.dry_run:
-        wt_bin = resolve_wasmtime(args.wasmtime)
-    elif "wasmtime" in runtimes:
-        wt_bin = Path(args.wasmtime) if args.wasmtime else Path("${WASMTIME}")
+    if "wasmtime" in runtimes:
+        if args.dry_run:
+            found = find_wasmtime(args.wasmtime)
+            wt_bin = found if found else (
+                Path(args.wasmtime) if args.wasmtime else Path("${WASMTIME}")
+            )
+        else:
+            wt_bin = find_wasmtime(args.wasmtime)
+            if wt_bin is None:
+                reason = "wasmtime-not-found"
+                skipped_runtimes.append({"runtime": "wasmtime", "reason": reason})
+                print(
+                    "warning: Wasmtime binary not found; skipping Wasmtime cells "
+                    "(no invented numbers). Fetch with harness/fetch_wasmtime.sh "
+                    "or pass --wasmtime. Use --require-wasmtime to fail instead.",
+                    file=sys.stderr,
+                )
+                if args.require_wasmtime:
+                    die(reason)
+    if "wasmer" in runtimes:
+        wm = find_wasmer(args.wasmer)
+        if wm is None:
+            skipped_runtimes.append(
+                {"runtime": "wasmer", "reason": "wasmer-not-found"}
+            )
+            print(
+                "warning: Wasmer binary not found; skipping Wasmer "
+                "(no invented numbers).",
+                file=sys.stderr,
+            )
+        else:
+            skipped_runtimes.append(
+                {
+                    "runtime": "wasmer",
+                    "reason": "wasmer-runner-not-in-this-harness",
+                    "binary": str(wm),
+                }
+            )
+            print(
+                "warning: Wasmer is present but this harness does not emit "
+                "Wasmer timings (avoid mixing unrun numbers).",
+                file=sys.stderr,
+            )
+
+    will_execute = (not args.dry_run) and (
+        ("dtvm" in runtimes and dtvm_bin is not None)
+        or ("wasmtime" in runtimes and wt_bin is not None)
+    )
+    if will_execute:
+        for case in selected:
+            require_wasm(paper_join(case["wasm"]))
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = (
@@ -779,29 +1053,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     plan = []
     for case in selected:
         for rt in runtimes:
+            if rt == "wasmer":
+                continue
             if not allowed_runtime(case, rt):
                 continue
             if rt == "dtvm":
                 modes = list(dtvm_modes)
                 if case.get("skip_interp") and not args.include_interp_heavy:
                     modes = [m for m in modes if m != "interp"]
-            else:
+            elif rt == "wasmtime":
                 modes = [WASMTIME_MODE]
+            else:
+                continue
             for mode in modes:
+                skip_reason = None
+                env = None
                 if rt == "dtvm":
+                    # Published wall samples must never include statistics overhead.
                     cmd = dtvm_cmd(dtvm_bin, case, mode, stats=False)
-                    env = None
+                elif wt_bin is None and not args.dry_run:
+                    cmd = []
+                    skip_reason = "wasmtime-not-found"
                 else:
                     cmd = wasmtime_cmd(wt_bin, case)
                     env = {"WASMTIME_CACHE": "0"}
-                full = prefix + cmd
-                plan.append((case, rt, mode, full, env))
+                full = prefix + cmd if cmd else []
+                plan.append((case, rt, mode, full, env, skip_reason))
 
     if args.dry_run:
         payload = {
             "schema_version": SCHEMA_VERSION,
             "preset": args.preset,
             "scale": args.scale,
+            "metric": args.metric,
             "commands": [
                 {
                     "bench": case["id"],
@@ -813,11 +1097,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     "command": full,
                     "instrumented_command": (
                         prefix + dtvm_cmd(dtvm_bin, case, mode, stats=True)
-                        if rt == "dtvm" and args.stats else None
+                        if rt == "dtvm" and want_stats else None
                     ),
                     "stdin": case.get("stdin"),
+                    "skip_reason": skip_reason,
                 }
-                for case, rt, mode, full, _env in plan
+                for case, rt, mode, full, _env, skip_reason in plan
             ],
         }
         write_json(out_dir / "commands.json", payload)
@@ -827,27 +1112,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     runs = []
     total = len(plan)
-    for i, (case, rt, mode, cmd, env) in enumerate(plan, 1):
+    for i, (case, rt, mode, cmd, env, skip_reason) in enumerate(plan, 1):
+        instrumented_cmd = (
+            prefix + dtvm_cmd(dtvm_bin, case, mode, stats=True)
+            if rt == "dtvm" and want_stats and not skip_reason else None
+        )
         print(
             f"[{i}/{total}] {rt}/{mode} {case['id']}",
             flush=True,
         )
-        cell = run_cell(
-            cmd,
-            case_cwd(case),
-            case.get("stdin"),
-            args.warmup,
-            args.repeats,
-            args.timeout,
-            env,
-            args.keep_output,
-        )
+        if skip_reason:
+            cell = skipped_cell(skip_reason)
+        else:
+            cell = run_cell(
+                cmd,
+                case_cwd(case),
+                case.get("stdin"),
+                args.warmup,
+                args.repeats,
+                args.timeout,
+                env,
+                args.keep_output,
+            )
         instrumented = None
-        if rt == "dtvm" and args.stats and cell["ok"]:
-            instrumented_cmd = prefix + dtvm_cmd(dtvm_bin, case, mode, stats=True)
+        if instrumented_cmd and cell["ok"]:
             instrumented = run_cell(
-                instrumented_cmd, case_cwd(case), case.get("stdin"),
-                args.warmup, args.repeats, args.timeout, env, args.keep_output
+                instrumented_cmd,
+                case_cwd(case),
+                case.get("stdin"),
+                args.warmup,
+                args.repeats,
+                args.timeout,
+                env,
+                args.keep_output,
             )
             instrumented["command"] = instrumented_cmd
         rec = {
@@ -857,7 +1154,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "fairness": case.get("fairness", "same-wasm"),
             "runtime": rt,
             "mode": mode,
-            "command": cmd,
+            "command": cmd or None,
             "cwd": str(case_cwd(case)),
             "exit": cell["exit"],
             "timeout": cell["timeout"] or bool(instrumented and instrumented["timeout"]),
@@ -866,11 +1163,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "timed_out_samples": cell["timed_out_samples"],
             "ok": cell["ok"] and (instrumented is None or instrumented["ok"]),
             "wall_ok": cell["ok"],
+            "skipped": bool(cell.get("skipped")),
+            "skip_reason": cell.get("skip_reason"),
             "samples_s": cell["samples_s"],
             "median_s": cell["median_s"],
             "min_s": cell["min_s"],
             "max_s": cell["max_s"],
             "statistics": (instrumented or cell)["statistics"],
+            "ttfi": (instrumented or cell).get("ttfi"),
             "instrumented": instrumented,
         }
         if cell.get("output_tail") and (args.keep_output or not cell["ok"]):
@@ -878,12 +1178,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if instrumented and instrumented.get("output_tail"):
             rec["output_tail"] = instrumented["output_tail"]
         runs.append(rec)
-        med = rec["median_s"] if rec["ok"] else None
-        print(
-            f"    median_s={med if med is not None else 'fail'} "
-            f"n={len(rec['samples_s'])} fairness={rec['fairness']}",
-            flush=True,
-        )
+        if rec.get("skipped"):
+            print(
+                f"    skipped ({rec['skip_reason']}) fairness={rec['fairness']}",
+                flush=True,
+            )
+        else:
+            med = rec["median_s"] if rec["ok"] else None
+            print(
+                f"    median_s={med if med is not None else 'fail'} "
+                f"n={len(rec['samples_s'])} fairness={rec['fairness']}",
+                flush=True,
+            )
 
     result = {
         "schema_version": SCHEMA_VERSION,
@@ -892,16 +1198,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "config": {
             "preset": args.preset,
             "scale": args.scale,
+            "metric": args.metric,
             "cpu": cpu,
             "warmup": args.warmup,
             "repeats": args.repeats,
             "timeout_s": args.timeout,
-            "stats": bool(args.stats),
-            "statistics_separate_pass": bool(args.stats),
+            "stats": want_stats,
+            "statistics_separate_pass": want_stats,
             "dtvm": str(dtvm_bin) if dtvm_bin else None,
             "wasmtime": str(wt_bin) if wt_bin else None,
+            "wasmtime_present": bool(
+                wt_bin and str(wt_bin) != "${WASMTIME}"
+            ),
             "dtvm_modes": dtvm_modes,
             "runtimes": runtimes,
+            "skipped_runtimes": skipped_runtimes,
+            "mode_aliases": MODE_ALIASES,
             "repo": str(REPO_ROOT),
         },
         "fairness_notes": catalog.get("notes", {}),
@@ -914,7 +1226,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"wrote {raw_path}")
     print(f"wrote {md_path}")
     print(markdown_table(runs))
-    failed = [r for r in runs if not r["ok"]]
+    failed = [r for r in runs if not r["ok"] and not r.get("skipped")]
+    skipped = [r for r in runs if r.get("skipped")]
+    if skipped:
+        print(
+            f"note: {len(skipped)} skipped cells (missing runtime / not invented)",
+            file=sys.stderr,
+        )
     if failed:
         print(f"warning: {len(failed)} failed cells", file=sys.stderr)
         return 1

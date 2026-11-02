@@ -105,8 +105,15 @@ class HarnessTests(unittest.TestCase):
             binary.write_text("#!/nonexistent/paper-bench-interpreter\n")
             binary.chmod(0o755)
             out = tmp / "results"
+            # This test exercises real launch errors, not Wasm loading.
+            # Avoid requiring large LFS payloads in the Python-only CI job.
+            bootstrap = (
+                f"import sys; sys.path.insert(0, {str(harness.HARNESS_DIR)!r}); "
+                "import run as h; h.require_wasm = lambda path: None; "
+                "raise SystemExit(h.main())"
+            )
             proc = subprocess.run([
-                sys.executable, str(Path(harness.__file__).resolve()),
+                sys.executable, "-c", bootstrap,
                 "--cases", "atax", "--runtimes", "dtvm",
                 "--dtvm", str(binary), "--dtvm-modes", "interp,singlepass",
                 "--cpu", "-1", "--warmup", "0", "--repeats", "1",
@@ -137,7 +144,8 @@ class HarnessTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                 with patch.object(harness, "time_once", side_effect=samples), \
                         patch.object(harness, "require_wasm"), \
-                        patch.object(harness, "resolve_wasmtime", return_value=wasmtime), \
+                        patch.object(harness, "find_wasmtime", return_value=wasmtime), \
+                        patch.object(harness, "find_wasmer", return_value=None), \
                         patch.object(harness, "resolve_dtvm", return_value=Path("/fake/dtvm")):
                     code = harness.main([
                         "--cases", "atax", "--cpu", "-1", "--warmup", "0",
@@ -146,7 +154,21 @@ class HarnessTests(unittest.TestCase):
             filename = "commands.json" if "--dry-run" in args else "results.json"
             return code, json.loads((Path(out) / filename).read_text())
 
+    def test_skipped_only_runs_fail(self):
+        for runtime in ("wasmtime", "wasmer"):
+            with self.subTest(runtime=runtime):
+                code, result = self.run_main(["--runtimes", runtime])
+                self.assertEqual(code, 1)
+                self.assertFalse(any(r["ok"] for r in result["runs"]))
 
+    def test_missing_optional_runtime_does_not_fail_successful_dtvm(self):
+        code, result = self.run_main(
+            ["--runtimes", "dtvm,wasmtime", "--dtvm-modes", "interp"],
+            [self.sample()] * 3
+        )
+        self.assertEqual(code, 0)
+        self.assertTrue(result["runs"][0]["ok"])
+        self.assertTrue(result["runs"][1]["skipped"])
 
     def test_empty_execution_plan_fails(self):
         code, result = self.run_main([
@@ -167,7 +189,7 @@ class HarnessTests(unittest.TestCase):
         self.assertIn("measurement failed", result["runs"][0]["output_tail"])
 
     def test_statistics_use_separate_samples_and_commands(self):
-        for flags in (["--stats"],):
+        for flags in (["--metric", "both"], ["--metric", "ttfi"], ["--stats"]):
             commands = []
 
             def sample(cmd, *args):
@@ -190,28 +212,91 @@ class HarnessTests(unittest.TestCase):
                 cell = result["runs"][0]
                 self.assertEqual(cell["samples_s"], [0.1] * 3)
                 self.assertEqual(cell["median_s"], 0.1)
+                self.assertIsNone(cell["ttfi"]["ttfi_ms"])
+                self.assertEqual(cell["ttfi"]["compile_ms"], 12.345)
                 self.assertEqual(cell["instrumented"]["median_s"], 9.0)
 
+    def test_compile_time_does_not_become_measured_ttfi(self):
+        for unit in ("μ", "µ"):
+            metric = harness.parse_ttfi(
+                f"Total compilation time: 12 ms (12345 {unit}s)", None
+            )
+            self.assertEqual(metric["compile_ms"], 12.345)
+            self.assertIsNone(metric["ttfi_ms"])
+            self.assertEqual(metric["ttfi_unavailable"], "not-measured")
+
+    def test_lazy_estimate_requires_all_stages_and_positive_count(self):
+        stages = [
+            "Load: 1 times, avg 1.0ms, total 1.2ms",
+            "JIT Lazy Precompilation: 1 times, avg 0.4ms, total 0.4ms",
+            "Instantiation: 1 times, avg 0.1ms, total 0.1ms",
+            "JIT Lazy Compilation(Fg): 2 times, avg 3.0ms, total 6.0ms",
+        ]
+        def parse(lines):
+            return harness.parse_dtvm_stats("ZetaEngine Statistics\n" + "\n".join(lines))
+        stats = parse(stages)
+        self.assertAlmostEqual(stats["ttfi_est_ms"], 4.7)
+        metric = harness.parse_ttfi("", stats)
+        self.assertIsNone(metric["ttfi_ms"])
+        self.assertAlmostEqual(metric["ttfi_est_ms"], 4.7)
+        for i in range(4):
+            self.assertNotIn("ttfi_est_ms", parse(stages[:i] + stages[i + 1:]))
+        stages[-1] = "JIT Lazy Compilation(Fg): 0 times, avg 0ms, total 0ms"
+        self.assertNotIn("ttfi_est_ms", parse(stages))
+
+    def test_missing_metric_samples_do_not_publish_subset_median(self):
+        measured = self.sample()
+        measured["output"] = "Total compilation time: 12 ms (12345 μs)"
+        cell = self.measure([measured, self.sample(), measured])
+        self.assertTrue(cell["ok"])
+        self.assertIsNone(cell["ttfi"]["compile_ms"])
+        self.assertEqual(cell["ttfi"]["metric_samples"]["compile_ms"], 2)
+        self.assertEqual(cell["ttfi"]["ttfi_unavailable"], "incomplete-metric-samples")
+
+    def test_missing_wasmtime_is_required_only_when_requested(self):
+        with self.assertRaises(SystemExit) as exc:
+            self.run_main(["--runtimes", "wasmtime", "--require-wasmtime"])
+        self.assertEqual(exc.exception.code, 2)
+
+    def test_aliases_and_canonical_modes(self):
+        self.assertEqual(harness.canonicalize_mode(" lazy "), "lazy-F-ST")
+        self.assertEqual(harness.canonicalize_mode("multipass"), "multipass-F-ST")
+        for mode in harness.DTVM_MODE_FLAGS:
+            self.assertEqual(harness.canonicalize_mode(mode), mode)
+
+    def test_instrumented_failure_fails_cell_without_polluting_wall_samples(self):
+        code, result = self.run_main(
+            ["--runtimes", "dtvm", "--dtvm-modes", "interp", "--metric", "both"],
+            [self.sample()] * 3 + [self.sample(False, True)] * 3
+        )
+        self.assertEqual(code, 1)
+        cell = result["runs"][0]
+        self.assertFalse(cell["ok"])
+        self.assertTrue(cell["wall_ok"])
+        self.assertTrue(cell["timeout"])
+        self.assertEqual(cell["median_s"], 0.1)
+        self.assertEqual(cell["instrumented"]["failed_samples"], 3)
+        self.assertIn("measurement failed", cell["output_tail"])
 
     def test_failed_wall_pass_does_not_start_instrumented_pass(self):
         code, result = self.run_main(
-            ["--runtimes", "dtvm", "--dtvm-modes", "interp", "--stats"],
+            ["--runtimes", "dtvm", "--dtvm-modes", "interp", "--metric", "both"],
             [self.sample(False)] * 3
         )
         self.assertEqual(code, 1)
         self.assertIsNone(result["runs"][0]["instrumented"])
 
-    def test_stats_dry_run_exposes_both_commands(self):
+    def test_both_dry_run_exposes_both_commands(self):
         code, result = self.run_main([
             "--runtimes", "dtvm", "--dtvm-modes", "interp",
-            "--stats", "--dry-run"
+            "--metric", "both", "--dry-run"
         ])
         self.assertEqual(code, 0)
         cmd = result["commands"][0]
         self.assertNotIn("--enable-statistics", cmd["command"])
         self.assertIn("--enable-statistics", cmd["instrumented_command"])
 
-    def test_stats_keeps_wasmtime_on_one_uninstrumented_pass(self):
+    def test_both_keeps_wasmtime_on_one_uninstrumented_pass(self):
         commands = []
 
         def sample(cmd, *args):
@@ -220,7 +305,7 @@ class HarnessTests(unittest.TestCase):
 
         code, result = self.run_main(
             ["--runtimes", "dtvm,wasmtime", "--dtvm-modes", "interp",
-             "--stats"], sample, Path("/fake/wasmtime")
+             "--metric", "both"], sample, Path("/fake/wasmtime")
         )
         self.assertEqual(code, 0)
         self.assertEqual(len(commands), 9)
@@ -230,8 +315,7 @@ class HarnessTests(unittest.TestCase):
 
 
     def test_explicit_runtime_paths_do_not_fall_back(self):
-        for resolver, var in ((harness.resolve_dtvm, "DTVM"),
-                              (harness.resolve_wasmtime, "WASMTIME")):
+        for resolver, var in ((harness.resolve_dtvm, "DTVM"),):
             with self.subTest(runtime=var):
                 with patch.dict(os.environ, {var: sys.executable}):
                     with contextlib.redirect_stderr(io.StringIO()):
@@ -243,6 +327,7 @@ class HarnessTests(unittest.TestCase):
                     with contextlib.redirect_stderr(io.StringIO()):
                         with self.assertRaises(SystemExit):
                             resolver(None)
+
 
     def test_build_script_can_run_outside_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -266,6 +351,7 @@ class HarnessTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             args = json.loads((tmp / "cmake.jsonl").read_text().splitlines()[0])
             self.assertEqual(args[args.index("-S") + 1], str(harness.REPO_ROOT))
+
 
 
 if __name__ == "__main__":
