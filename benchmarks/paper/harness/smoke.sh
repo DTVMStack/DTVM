@@ -16,9 +16,8 @@ if [[ ! -x "$DTVM" ]]; then
   export DTVM="${BUILD_DIR:-$REPO/build-paper-bench}/dtvm"
 fi
 if [[ ! -x "$WASMTIME" ]]; then
-  echo "fetching wasmtime via $HARNESS/fetch_wasmtime.sh" >&2
-  "$HARNESS/fetch_wasmtime.sh"
-  export WASMTIME="$PAPER/runtimes/wasmtime-45.0.0/out/wasmtime"
+  echo "note: Wasmtime not at $WASMTIME; smoke will skip those cells (no invented numbers)." >&2
+  echo "      Optional: $HARNESS/fetch_wasmtime.sh" >&2
 fi
 
 exec python3 "$HARNESS/run.py" --preset smoke --repeats "${REPEATS:-1}" --warmup "${WARMUP:-1}" --cpu "${CPU:-0}" "$@"

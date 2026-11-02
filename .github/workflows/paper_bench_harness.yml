@@ -1,0 +1,31 @@
+name: Paper benchmark harness
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/paper/harness/**'
+      - '.github/workflows/paper_bench_harness.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'benchmarks/paper/harness/**'
+      - '.github/workflows/paper_bench_harness.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test paper benchmark schema and harness
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run harness regression tests
+        run: python3 -m unittest discover -s benchmarks/paper/harness -p 'test_*.py'
+      - name: Check catalog and command construction
+        run: python3 benchmarks/paper/harness/run.py --selftest
