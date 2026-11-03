@@ -12,6 +12,7 @@
 #include <cstring>
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
+#include <tuple>
 #include <vector>
 
 namespace {
@@ -73,6 +74,8 @@ namespace {
 // const intx::uint256 * through storeUint256Result (~40 call sites).
 // A later helper overwrites this buffer.
 thread_local intx::uint256 Uint256ReturnBuffer;
+static constexpr auto Bn254Modulus = intx::from_string<intx::uint256>(
+    "21888242871839275222246405745257275088548364400416034343698204186575808495617");
 
 // Store Value in Uint256ReturnBuffer and return that pointer.
 // Invariant: the JIT call site must materialize the four limbs immediately
@@ -82,6 +85,64 @@ thread_local intx::uint256 Uint256ReturnBuffer;
 const intx::uint256 *storeUint256Result(const intx::uint256 &Value) {
   Uint256ReturnBuffer = Value;
   return &Uint256ReturnBuffer;
+}
+
+// Exploratory BN254 fast path: retain intx's division algorithm, but reuse the
+// top-word reciprocal that is otherwise recomputed for every MULMOD.
+intx::uint256 mulmodBn254(const intx::uint256 &X, const intx::uint256 &Y) {
+  static const auto NormalizedModulus =
+      Bn254Modulus << intx::internal::clz_nonzero(Bn254Modulus[3]);
+  static const auto Top =
+      intx::uint128{NormalizedModulus[2], NormalizedModulus[3]};
+  static const auto Reciprocal = intx::reciprocal_3by2(Top);
+
+  const auto Product = intx::umul(X, Y);
+  auto Args = intx::internal::normalize(Product, Bn254Modulus);
+  if (Args.num_numerator_words <= Args.num_divisor_words)
+    return static_cast<intx::uint256>(Product);
+
+  auto *Numerator = intx::as_words(Args.numerator);
+  const auto *Divisor = intx::as_words(Args.divisor);
+  const auto DivisorLen = Args.num_divisor_words;
+  for (int J = Args.num_numerator_words - DivisorLen - 1; J >= 0; --J) {
+    const auto U2 = Numerator[J + DivisorLen];
+    const auto U1 = Numerator[J + DivisorLen - 1];
+    const auto U0 = Numerator[J + DivisorLen - 2];
+    if (INTX_UNLIKELY((intx::uint128{U1, U2}) == Top)) {
+      const auto Quotient = ~uint64_t{0};
+      Numerator[J + DivisorLen] =
+          U2 - intx::internal::submul(&Numerator[J], &Numerator[J], Divisor,
+                                     DivisorLen, Quotient);
+    } else {
+      intx::uint128 Remainder;
+      uint64_t Quotient;
+      std::tie(Quotient, Remainder) =
+          intx::udivrem_3by2(U2, U1, U0, Top, Reciprocal);
+      bool Carry{};
+      const auto Overflow = intx::internal::submul(
+          &Numerator[J], &Numerator[J], Divisor, DivisorLen - 2, Quotient);
+      std::tie(Numerator[J + DivisorLen - 2], Carry) =
+          intx::subc(Remainder[0], Overflow);
+      std::tie(Numerator[J + DivisorLen - 1], Carry) =
+          intx::subc(Remainder[1], Carry);
+      if (INTX_UNLIKELY(Carry)) {
+        --Quotient;
+        Numerator[J + DivisorLen - 1] +=
+            Top[1] + intx::internal::add(&Numerator[J], &Numerator[J], Divisor,
+                                         DivisorLen - 1);
+      }
+    }
+  }
+
+  intx::uint256 Result;
+  auto *ResultWords = intx::as_words(Result);
+  for (int I = 0; I < DivisorLen - 1; ++I)
+    ResultWords[I] = Args.shift
+                         ? (Numerator[I] >> Args.shift) |
+                               (Numerator[I + 1] << (64 - Args.shift))
+                         : Numerator[I];
+  ResultWords[DivisorLen - 1] = Numerator[DivisorLen - 1] >> Args.shift;
+  return Result;
 }
 
 evmc::address loadAddressFromLE(const uint8_t *AddressLE) {
@@ -388,7 +449,9 @@ const intx::uint256 *evmGetMulMod(zen::runtime::EVMInstance *Instance,
 
   // intx::mulmod uses a full-width product before reduction, avoiding the
   // overflow that a uint256 multiplication would introduce.
-  intx::uint256 Result = intx::mulmod(Multiplicand, Multiplier, Modulus);
+  intx::uint256 Result = Modulus == Bn254Modulus
+                             ? mulmodBn254(Multiplicand, Multiplier)
+                             : intx::mulmod(Multiplicand, Multiplier, Modulus);
   return storeUint256Result(Result);
 }
 
