@@ -67,6 +67,21 @@ Paper xlsx DTVM flags (`multipass-F-ST` + `lazy-F-ST`) instead of Phase 1.5:
 python3 benchmarks/paper/harness/run.py --preset polybench --paper-modes --runtimes dtvm,wasmtime
 ```
 
+## Dedicated Singlepass build
+
+For a separate one-shot deployment experiment, build without Multipass/LLVM:
+
+```bash
+bash benchmarks/paper/harness/build_singlepass.sh
+python3 benchmarks/paper/harness/run.py --preset wapm \
+  --dtvm build-paper-singlepass/dtvm --dtvm-modes singlepass
+```
+
+Keep this binary's results separate from `singlepass` mode in the mixed
+Singlepass/Multipass binary. Record both binary hashes; feature pruning changes
+startup cost and does not establish a faster JIT kernel. The dedicated build
+does not support Multipass modes.
+
 ## Outputs
 
 Default directory: `benchmarks/paper/raw_data/harness/<preset>_<UTC>/` (gitignored).
