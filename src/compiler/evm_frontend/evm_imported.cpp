@@ -16,8 +16,9 @@
 
 namespace {
 
-static constexpr uint32_t KeccakCacheSlots = 16;
+static constexpr uint32_t KeccakCacheSlots = 256;
 static constexpr uint32_t KeccakCacheMaxInputLen = 128;
+static_assert((KeccakCacheSlots & (KeccakCacheSlots - 1)) == 0);
 
 struct KeccakCacheEntry {
   uint8_t Input[KeccakCacheMaxInputLen];
@@ -28,17 +29,23 @@ struct KeccakCacheEntry {
 
 struct KeccakCache {
   KeccakCacheEntry Slots[KeccakCacheSlots];
-  uint32_t NextSlot = 0;
+
+  static uint32_t slot(const uint8_t *Data, uint32_t Len) {
+    // Direct-mapped cache: bound lookup cost even when every hash is unique.
+    uint64_t Hash = 14695981039346656037ULL;
+    for (uint32_t I = 0; I < Len; ++I) {
+      Hash = (Hash ^ Data[I]) * 1099511628211ULL;
+    }
+    return static_cast<uint32_t>(Hash) & (KeccakCacheSlots - 1);
+  }
 
   const evmc::bytes32 *lookup(const uint8_t *Data, uint32_t Len) const {
     if (Len > KeccakCacheMaxInputLen)
       return nullptr;
-    for (uint32_t I = 0; I < KeccakCacheSlots; ++I) {
-      auto &S = Slots[I];
-      if (S.Valid && S.InputLen == Len &&
-          std::memcmp(S.Input, Data, Len) == 0) {
-        return &S.Result;
-      }
+    const auto &S = Slots[slot(Data, Len)];
+    if (S.Valid && S.InputLen == Len &&
+        (Len == 0 || std::memcmp(S.Input, Data, Len) == 0)) {
+      return &S.Result;
     }
     return nullptr;
   }
@@ -46,12 +53,12 @@ struct KeccakCache {
   void insert(const uint8_t *Data, uint32_t Len, const evmc::bytes32 &Result) {
     if (Len > KeccakCacheMaxInputLen)
       return;
-    auto &S = Slots[NextSlot];
-    std::memcpy(S.Input, Data, Len);
+    auto &S = Slots[slot(Data, Len)];
+    if (Len != 0)
+      std::memcpy(S.Input, Data, Len);
     S.InputLen = Len;
     S.Result = Result;
     S.Valid = true;
-    NextSlot = (NextSlot + 1) % KeccakCacheSlots;
   }
 };
 
@@ -115,15 +122,19 @@ const uint8_t *cacheKeccak256Result(zen::runtime::EVMInstance *Instance,
                                     const uint8_t *InputData, uint64_t Length) {
   auto &ExecCache = Instance->getMessageCache();
 
-  uint32_t Len32 = static_cast<uint32_t>(Length);
-  if (const evmc::bytes32 *Cached = TLKeccakCache.lookup(InputData, Len32)) {
-    ExecCache.Keccak256Results.push_back(*Cached);
-    return ExecCache.Keccak256Results.back().bytes;
+  const bool Cacheable = Length <= KeccakCacheMaxInputLen;
+  const uint32_t Len32 = Cacheable ? static_cast<uint32_t>(Length) : 0;
+  if (Cacheable) {
+    if (const evmc::bytes32 *Cached = TLKeccakCache.lookup(InputData, Len32)) {
+      ExecCache.Keccak256Results.push_back(*Cached);
+      return ExecCache.Keccak256Results.back().bytes;
+    }
   }
 
   evmc::bytes32 HashResult;
   zen::host::evm::crypto::keccak256(InputData, Length, HashResult.bytes);
-  TLKeccakCache.insert(InputData, Len32, HashResult);
+  if (Cacheable)
+    TLKeccakCache.insert(InputData, Len32, HashResult);
   ExecCache.Keccak256Results.push_back(HashResult);
   return ExecCache.Keccak256Results.back().bytes;
 }
@@ -375,11 +386,9 @@ const intx::uint256 *evmGetMulMod(zen::runtime::EVMInstance *Instance,
     return storeUint256Result(intx::uint256{0});
   }
 
-  // (Multiplicand * Multiplier) % Modulus
-  // Use 512-bit intermediate to prevent overflow
-  intx::uint512 Product =
-      intx::uint512(Multiplicand) * intx::uint512(Multiplier);
-  intx::uint256 Result = intx::uint256(Product % Modulus);
+  // intx::mulmod uses a full-width product before reduction, avoiding the
+  // overflow that a uint256 multiplication would introduce.
+  intx::uint256 Result = intx::mulmod(Multiplicand, Multiplier, Modulus);
   return storeUint256Result(Result);
 }
 
