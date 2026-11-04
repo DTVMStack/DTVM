@@ -160,6 +160,19 @@ OOB). Load/store Scale stays 1. See
   folding dynamic addends into memory displacements. i64 keeps ADD/SUB
   because EVM ADC/SBB consume their carry/borrow flags.
 
+### Scalar x86 conversion dependency breaking
+
+At final x86 MC emission, register forms `CVTSI2SSrr`, `CVTSI2SDrr`,
+`CVTSI642SSrr` and `CVTSI642SDrr` are preceded by `XORPS dst,dst`.
+These instructions define fresh scalar values while legacy SSE preserves upper
+lanes physically. Clearing the allocated destination breaks false dependencies
+on its previous value without changing the integer source, scalar rounding or
+EFLAGS. The allocator does not independently allocate live upper XMM lanes for
+these scalar definitions. Vector-preserving `_Int`, memory and AVX forms are
+excluded. No AVX requirement, FP reassociation or FMA is introduced. Added
+instructions pass through normal MC label layout and relocation; this affects
+both FastRA and GreedyRA, not Singlepass.
+
 ### EVM JIT Invariants
 
 - Only Multipass mode is supported; Singlepass does not provide EVM JIT
