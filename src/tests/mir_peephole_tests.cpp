@@ -1995,6 +1995,10 @@ TEST(MIRPeepholeWasm, FastRARegmaskPreservesLongIntegerAndFloatCallChains) {
     ASSERT_TRUE(Inst);
     for (unsigned Repeat = 0; Repeat < 2; ++Repeat) {
       EXPECT_EQ(callI32NoArg(*RT, **Inst, "i32_calls"), 512);
+      // Keep several integer/FP values live across both call kinds. This
+      // exercises physical aliases and displacement ordering in the large set.
+      // Distinct checksum weights also detect permutations of live values.
+      EXPECT_EQ(callI32NoArg(*RT, **Inst, "mixed_calls"), 2468416);
       std::vector<TypedValue> Results;
       ASSERT_TRUE(RT->callWasmFunction(**Inst, "f64_calls", {}, Results));
       ASSERT_FALSE((*Inst)->hasError());

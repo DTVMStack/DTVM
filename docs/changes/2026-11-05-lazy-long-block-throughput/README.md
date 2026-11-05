@@ -5,56 +5,62 @@
 - **Tier**: Light
 
 Long MIR blocks repeatedly scan earlier statements to resolve local constants;
-FastRA repeatedly scans spilled virtual entries at call regmasks. Both searches
-can grow quadratically in a straight-line call chain. This change indexes the
-nearest completed direct assignment for blocks with at least 32 statements and
-bounds large FastRA clobber discovery by physical register units.
+FastRA repeatedly scans spilled virtual entries at call regmasks. Index nearest
+completed assignments in blocks with at least 32 statements, and discover large
+clobber sets through the physical-unit map. Use full-width sparse indices so
+live-entry lookup does not itself scan a truncated-index chain.
 
-Updates occur after rewriting assignment operands, including self-updates;
-dynamic writes and block/function transitions invalidate the constant index.
-FastRA deduplicates aliases and preserves original dense-set spill order. Small
-blocks/live sets use the existing paths. No MC reset, ABI, tiering, publication,
-trap check or teardown policy changes are included.
+Updates occur after rewriting assignment operands; dynamic writes and block/function
+transitions invalidate the index. FastRA deduplicates aliases and preserves dense-set
+spill order. Small blocks/live sets retain their prior paths. No MC reset, ABI,
+tiering, publication, trap check or teardown policy changes are included.
 
-The user authorized a focused, measured PR. Full source provenance, raw samples,
-reproduction scripts, assembly, rejected directions, compatibility inventory and
-regression logs are in the [immutable evidence snapshot](https://github.com/zoowii/DTVM/blob/345fab10b2ae851d86a96881d3a1ce91f3675d0e/docs/changes/2026-11-05-lazy-long-block-throughput/README.md). The production
-and test source in that snapshot is identical to this PR; the large raw dataset
-is maintained separately from the implementation diff.
+## Review fixes
 
-## Measured results
+[PR #640](https://github.com/DTVMStack/DTVM/pull/640) review found two issues:
 
-Median total fresh-process milliseconds, pinned to CPU 0, cache disabled for
-Wasmtime. Main is f4b8507. Previous research 28ad2de additionally contains
-experimental MC reuse and is not the PR base. Same-row engines were interleaved
-within randomized rounds; serial FastRA and default background-Greedy results
-must not be pooled.
+- Default uint8_t LLVM SparseSet indices probe in strides of 256 in large sets,
+  leaving a residual quadratic lookup cost. Use uint32_t dense indices. The sparse
+  array costs three extra bytes per virtual-register universe entry; dense order
+  and generated-code decisions are unchanged.
+- CMake fixture formatting blocked CI before compilation or benchmarking. Run
+  cmake-format and the complete tools/format.sh check with CI-matching versions.
+  The no-summary regression comment on the original run was not measured data.
 
-| Mode and case | Main | Previous research | This PR | WT45 | WT49 |
+Extend the 512-step test with mixed integer/FP values across alternating calls;
+use distinct checksum weights to detect permuted live values. Source, diagnostic
+probe, raw data and test logs are in the [review evidence snapshot](https://github.com/zoowii/DTVM/blob/c59e4e39a9c7d07bbc9c15a1775e42d61942c99a/docs/changes/2026-11-05-lazy-long-block-throughput/review/README.md).
+The [pre-review snapshot](https://github.com/zoowii/DTVM/blob/345fab10b2ae851d86a96881d3a1ce91f3675d0e/docs/changes/2026-11-05-lazy-long-block-throughput/README.md)
+captures 6a6ede1 and earlier broad WAPM checks; its source/results are not relabeled
+as the post-review version. Production/test source matches the review snapshot.
+
+## Measured results after review
+
+Fresh-process median milliseconds, CPU 0 affinity, Wasmtime cache disabled.
+Main is f4b8507; before is the exact pre-review PR commit 6a6ede1. Same-row engines
+were interleaved in randomized rounds. Do not pool serial and default-MT modes.
+
+| Mode and case | Main | Before 6a6ede1 | After review | WT45 | WT49 |
 |---|---:|---:|---:|---:|---:|
-| Serial lazy, 5000 helpers | 577.169 | 314.363 | 352.983 | 484.925 | 486.277 |
-| Serial lazy, 10000 helpers | 1852.595 | 739.298 | 821.089 | 1806.611 | 1816.429 |
-| Serial lazy, 10000 calls to one helper | 1222.430 | 245.034 | 247.839 | 1431.906 | 1425.543 |
-| Default lazy MT, 10000 calls to one helper | 2721.288 | 801.650 | 820.709 | 1463.086 | 1484.858 |
+| Serial lazy, 10000 helpers | 1775.269 | 797.832 | 682.116 | 1692.673 | 1684.379 |
+| Serial lazy, 10000 calls to one helper | 1229.603 | 254.124 | 160.796 | 1444.639 | 1449.402 |
+| Default lazy MT, 10000 calls to one helper | 2678.437 | 795.807 | 707.066 | 1468.155 | 1445.391 |
 
-Relative to main, the one-helper call chain improves 79.73% in serial mode and
-69.84% in default lazy mode, with paired 95% intervals excluding zero. Serial
-mode has 21 measured rounds; default mode has 15. This is compilation-plus-one-
-execution latency for generated long blocks, not steady-state guest throughput
-or a universal application claim. Wasmtime compiles the whole module while lazy
-DTVM may defer work.
-
-Twelve WAPM cases were checked. They do not establish general speedups. An initial
-dice regression signal was not reproduced as stable in an independent 51-round
-check (+1.07%, interval [-1.44%, +5.94%]); this does not prove zero overhead.
-Main/candidate JIT buffers match on the representative call chain after masking
-three checked absolute address operands. Guest instruction sequences are unchanged.
+Against the pre-review PR, the one-helper chain improves 36.73% serial and 11.15%
+default lazy MT, with paired 95% intervals excluding zero. Serial has 15 measured
+rounds; default MT has 21. These are generated long-block compilation-plus-one-
+execution cases, not steady-state throughput or universal application gains.
+Post-review dice/echo intervals cross zero. Wasmtime compiles the whole module;
+lazy DTVM may defer work. Captured representative guest code matches before/after
+following normalization of three checked absolute address operands.
 
 ## Verification
 
-Five new tests cover local-dataflow ordering/isolation and 512-call integer/FP
-chains under eager and lazy FastRA. All seven CTest suites, 97 WAST groups in each
-of three configurations, and 26 harness tests passed. All 2100 formal-phase
-processes exited successfully with matching captured outputs; 1995 are measured
-samples and 105 warmups. Source formatting and whitespace checks passed.
-ASan and optional EVM/SGX/Linux-perf feature configurations were not tested.
+Seven CTest suites and 97 WAST groups in each of three configurations passed.
+After strengthening the mixed checksum, all 98 tests in the affected MIR/codegen
+target passed. The complete tools/format.sh check passes with clang-format 15.0.6
+and cmake-format 0.6.13; generated fixture bytes are unchanged by formatting.
+All 490 post-review formal-phase processes succeeded with matching outputs:
+465 measured samples and 25 warmups. Earlier 2100 runs remain in their versioned
+archive. Diff whitespace checks pass. ASan and optional EVM/SGX/Linux-perf feature
+configurations were not tested locally; remote CI status is separate.

@@ -91,7 +91,10 @@ public:
 
   SmallVector<CgInstruction *, 32> coalesced;
 
-  using LiveRegMap = SparseSet<LiveReg>;
+  // The default 8-bit sparse index probes the dense set in strides of 256.
+  // Use full-width indices so large-block clobber discovery stays bounded by
+  // physical units rather than reintroducing a virtual-live-set scan.
+  using LiveRegMap = SparseSet<LiveReg, identity<unsigned>, uint32_t>;
   LiveRegMap LiveVirtRegs;
 
   BitVector MayLiveAcrossBlocks;

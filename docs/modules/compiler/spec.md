@@ -92,7 +92,9 @@ FastRA regmask displacement uses the original live-set scan for small sets. When
 the virtual set exceeds the physical register-unit count, discover assigned
 values from the bounded unit-state map, deduplicate aliases, and restore original
 dense-array order before displacement. Spills must not insert or erase live-set
-entries while discovered pointers are used. Allocation choices, spill order,
+entries while discovered pointers are used. Use full-width sparse indices so
+unit-to-live-entry lookup stays constant time for large sets; truncated sparse
+indices can require a dense-set probe walk. Allocation choices, spill order,
 publication and guest call-clobber behavior remain unchanged.
 
 ### LazyJIT stub publish monotonicity
