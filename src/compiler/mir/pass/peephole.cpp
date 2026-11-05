@@ -19,6 +19,9 @@ using namespace COMPILER;
 
 void MIRPeephole::runOnMFunction(MFunction &Func) {
   F = &Func;
+  LastAssignments.clear();
+  CacheBlockAssignments = false;
+  AssignedVars.clear();
   for (MBasicBlock *BB : Func) {
     rewriteBlock(*BB);
   }
@@ -32,6 +35,16 @@ void MIRPeephole::runOnMFunction(MFunction &Func) {
 
 void MIRPeephole::rewriteBlock(MBasicBlock &BB) {
   CurBB = &BB;
+  for (uint32_t Var : AssignedVars) {
+    LastAssignments[Var] = nullptr;
+  }
+  AssignedVars.clear();
+  // Short blocks make prefix scans cheap. Allocate the index only when a
+  // sufficiently long block can otherwise exhibit quadratic lookup work.
+  CacheBlockAssignments = BB.getNumStatements() >= 32;
+  if (CacheBlockAssignments && LastAssignments.empty()) {
+    LastAssignments.assign(F->getNumVariables(), nullptr);
+  }
   // Snapshot on the host heap. A CompileVector here shares the LLVM
   // bump slab with IR and can read ASan red zones on growth.
   llvm::SmallVector<MInstruction *, 16> Stmts;
@@ -54,6 +67,15 @@ void MIRPeephole::rewriteBlock(MBasicBlock &BB) {
       if (NewOp != Op) {
         Inst->setOperand(I, NewOp);
       }
+    }
+    // Update after rewriting operands: x = x + 1 must see the old x.
+    if (auto *DA = llvm::dyn_cast<DassignInstruction>(Inst);
+        CacheBlockAssignments && DA) {
+      const uint32_t Var = DA->getVarIdx();
+      if (LastAssignments[Var] == nullptr) {
+        AssignedVars.push_back(Var);
+      }
+      LastAssignments[Var] = DA;
     }
     if (auto *BrIf = llvm::dyn_cast<BrIfInstruction>(Inst)) {
       if (foldConstBrIf(BB, *BrIf)) {
@@ -807,18 +829,23 @@ bool MIRPeephole::matchAssignedIntConst(const MInstruction *Inst,
     return false;
   }
   const uint32_t VarIdx = Dr->getVarIdx();
-  const MInstruction *LastAssign = nullptr;
-  for (MInstruction *Stmt : *CurBB) {
-    if (Stmt == CurStmt) {
-      break;
-    }
-    if (const auto *DA = llvm::dyn_cast<DassignInstruction>(Stmt)) {
-      if (DA->getVarIdx() == VarIdx) {
-        LastAssign = DA->getOperand<0>();
+  if (!CacheBlockAssignments) {
+    const MInstruction *LastAssign = nullptr;
+    for (MInstruction *Stmt : *CurBB) {
+      if (Stmt == CurStmt) {
+        break;
+      }
+      if (const auto *DA = llvm::dyn_cast<DassignInstruction>(Stmt)) {
+        if (DA->getVarIdx() == VarIdx) {
+          LastAssign = DA->getOperand<0>();
+        }
       }
     }
+    return matchIntConst(LastAssign, Val);
   }
-  return matchIntConst(LastAssign, Val);
+  ZEN_ASSERT(VarIdx < LastAssignments.size());
+  const DassignInstruction *DA = LastAssignments[VarIdx];
+  return DA && matchIntConst(DA->getOperand<0>(), Val);
 }
 
 bool MIRPeephole::matchPositivePow2Const(const MInstruction *Inst,

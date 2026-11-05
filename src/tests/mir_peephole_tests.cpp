@@ -1861,3 +1861,149 @@ TEST(MIRPeepholePerf, Microbenchmarks) {
                 SumMs / 3.0);
   }
 }
+
+// The long-block constant index must have the same local dataflow semantics as
+// prefix scans. Exercise both short and long blocks, including repeated writes.
+TEST(MIRPeepholeLitmus, AssignmentLookupUsesPreviousValueDuringSelfUpdate) {
+  for (unsigned Padding : {0u, 48u}) {
+    SCOPED_TRACE(Padding);
+    MirBuilder B;
+    B.F.createVariable(B.I32);
+    B.F.createVariable(B.I32);
+    auto Assign = [&](uint32_t Var, MInstruction *Value) {
+      B.F.createInstruction<DassignInstruction>(true, *B.Entry, &B.Ctx.VoidType,
+                                                Value, Var);
+    };
+    Assign(1, B.iconst(7));
+    for (unsigned I = 0; I < Padding; ++I) {
+      Assign(2, B.iconst(I));
+    }
+    auto Read = [&] {
+      return B.F.createInstruction<DreadInstruction>(false, *B.Entry, B.I32, 1);
+    };
+    Assign(1, B.bin(OP_add, Read(), B.iconst(5)));
+    B.ret(B.bin(OP_add, Read(), B.iconst(2)));
+    B.run();
+    auto *Ret = llvm::cast<ReturnInstruction>(*std::prev(B.Entry->end()));
+    auto *C = llvm::dyn_cast<ConstantInstruction>(Ret->getOperand<0>());
+    ASSERT_NE(C, nullptr) << dumpFunc(B.F);
+    EXPECT_EQ(
+        llvm::cast<MConstantInt>(C->getConstant()).getValue().getZExtValue(),
+        14u);
+  }
+}
+
+TEST(MIRPeepholeLitmus, DynamicAssignmentKillsEarlierConstant) {
+  for (unsigned Padding : {0u, 48u}) {
+    SCOPED_TRACE(Padding);
+    MirBuilder B;
+    B.F.createVariable(B.I32);
+    B.F.createVariable(B.I32);
+    B.F.createInstruction<DassignInstruction>(true, *B.Entry, &B.Ctx.VoidType,
+                                              B.iconst(7), 1);
+    for (unsigned I = 0; I < Padding; ++I) {
+      B.F.createInstruction<DassignInstruction>(true, *B.Entry, &B.Ctx.VoidType,
+                                                B.iconst(I), 2);
+    }
+    B.F.createInstruction<DassignInstruction>(true, *B.Entry, &B.Ctx.VoidType,
+                                              B.param(), 1);
+    auto *Read =
+        B.F.createInstruction<DreadInstruction>(false, *B.Entry, B.I32, 1);
+    B.ret(B.bin(OP_add, Read, B.iconst(5)));
+    B.run();
+    auto *Ret = llvm::cast<ReturnInstruction>(*std::prev(B.Entry->end()));
+    EXPECT_TRUE(Ret->getOperand<0>()->getKind() == MInstruction::BINARY)
+        << dumpFunc(B.F);
+  }
+}
+
+TEST(MIRPeepholeLitmus, AssignmentIndexDoesNotCrossBlockBoundary) {
+  MirBuilder B;
+  B.F.createVariable(B.I32);
+  B.F.createVariable(B.I32);
+  B.F.createInstruction<DassignInstruction>(true, *B.Entry, &B.Ctx.VoidType,
+                                            B.iconst(7), 1);
+  for (unsigned I = 0; I < 48; ++I) {
+    B.F.createInstruction<DassignInstruction>(true, *B.Entry, &B.Ctx.VoidType,
+                                              B.iconst(I), 2);
+  }
+  auto *Next = B.F.createBasicBlock();
+  B.F.appendBlock(Next);
+  B.Entry->addSuccessor(Next);
+  B.F.createInstruction<BrInstruction>(true, *B.Entry, B.Ctx, Next);
+  for (unsigned I = 0; I < 48; ++I) {
+    B.F.createInstruction<DassignInstruction>(true, *Next, &B.Ctx.VoidType,
+                                              B.iconst(I), 2);
+  }
+  auto *Read = B.F.createInstruction<DreadInstruction>(false, *Next, B.I32, 1);
+  auto *Sum = B.F.createInstruction<BinaryInstruction>(
+      false, *Next, OP_add, B.I32, Read, B.iconst(5));
+  auto *Ret = B.F.createInstruction<ReturnInstruction>(true, *Next, B.I32, Sum);
+  B.run();
+  EXPECT_TRUE(Ret->getOperand<0>()->getKind() == MInstruction::BINARY)
+      << dumpFunc(B.F);
+}
+
+TEST(MIRPeepholeLitmus, ReusedPassDoesNotReuseAssignmentFromPreviousFunction) {
+  MirBuilder A;
+  MirBuilder B;
+  auto Prepare = [](MirBuilder &M, bool Known) {
+    M.F.createVariable(M.I32);
+    M.F.createVariable(M.I32);
+    if (Known) {
+      M.F.createInstruction<DassignInstruction>(true, *M.Entry, &M.Ctx.VoidType,
+                                                M.iconst(7), 1);
+    }
+    for (unsigned I = 0; I < 48; ++I) {
+      M.F.createInstruction<DassignInstruction>(true, *M.Entry, &M.Ctx.VoidType,
+                                                M.iconst(I), 2);
+    }
+    auto *Read =
+        M.F.createInstruction<DreadInstruction>(false, *M.Entry, M.I32, 1);
+    M.ret(M.bin(OP_add, Read, M.iconst(5)));
+  };
+  Prepare(A, true);
+  Prepare(B, false);
+  MIRPeephole Pass;
+  Pass.runOnMFunction(A.F);
+  Pass.runOnMFunction(B.F);
+  auto *Ret = llvm::cast<ReturnInstruction>(*std::prev(B.Entry->end()));
+  EXPECT_TRUE(Ret->getOperand<0>()->getKind() == MInstruction::BINARY)
+      << dumpFunc(B.F);
+}
+
+TEST(MIRPeepholeWasm, FastRARegmaskPreservesLongIntegerAndFloatCallChains) {
+  std::ifstream In(REGMASK_STRESS_WASM_PATH, std::ios::binary);
+  ASSERT_TRUE(In);
+  std::vector<uint8_t> Bytes((std::istreambuf_iterator<char>(In)),
+                             std::istreambuf_iterator<char>());
+  for (bool Lazy : {false, true}) {
+    RuntimeConfig Cfg;
+    Cfg.Mode = RunMode::MultipassMode;
+#ifdef ZEN_ENABLE_BUILTIN_WASI
+    Cfg.DisableWASI = true;
+#endif
+    Cfg.DisableMultipassMultithread = true;
+    Cfg.DisableMultipassGreedyRA = true;
+    Cfg.EnableMultipassLazy = Lazy;
+    auto RT = Runtime::newRuntime(Cfg);
+    ASSERT_NE(RT, nullptr);
+    auto Mod = RT->loadModule("regmask-stress", Bytes.data(), Bytes.size());
+    ASSERT_TRUE(Mod);
+    auto *Iso = RT->createManagedIsolation();
+    auto Inst = Iso->createInstance(**Mod);
+    ASSERT_TRUE(Inst);
+    for (unsigned Repeat = 0; Repeat < 2; ++Repeat) {
+      EXPECT_EQ(callI32NoArg(*RT, **Inst, "i32_calls"), 512);
+      // Keep several integer/FP values live across both call kinds. This
+      // exercises physical aliases and displacement ordering in the large set.
+      // Distinct checksum weights also detect permutations of live values.
+      EXPECT_EQ(callI32NoArg(*RT, **Inst, "mixed_calls"), 2468416);
+      std::vector<TypedValue> Results;
+      ASSERT_TRUE(RT->callWasmFunction(**Inst, "f64_calls", {}, Results));
+      ASSERT_FALSE((*Inst)->hasError());
+      ASSERT_EQ(Results.size(), 1u);
+      EXPECT_DOUBLE_EQ(Results[0].Value.F64, 640.0);
+    }
+  }
+}
