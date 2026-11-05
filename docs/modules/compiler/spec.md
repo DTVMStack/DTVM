@@ -81,6 +81,20 @@ The compiler module is responsible for DTVM's multi-pass JIT compilation pipelin
 - When `CompileContext::Inited == true`, `MemPool`, `CodePtr`, `FuncOffsetMap`, etc. are in a valid state
 - `EVMFrontendContext` must have `Bytecode`, `BytecodeSize`, `GasMeteringEnabled`, `GasChunkInfo` (if chunk metering is enabled) set before `compile()`
 
+MIR local constant lookup in blocks with at least 32 statements indexes the
+nearest completed direct assignment. Publish the entry only after rewriting its
+operands, including self-updates; a dynamic assignment invalidates an earlier
+constant. Reset touched entries between blocks and all entries between functions.
+Read the current RHS through the assignment pointer. Short blocks retain prefix
+scans, and the index must preserve their local dataflow semantics.
+
+FastRA regmask displacement uses the original live-set scan for small sets. When
+the virtual set exceeds the physical register-unit count, discover assigned
+values from the bounded unit-state map, deduplicate aliases, and restore original
+dense-array order before displacement. Spills must not insert or erase live-set
+entries while discovered pointers are used. Allocation choices, spill order,
+publication and guest call-clobber behavior remain unchanged.
+
 ### LazyJIT stub publish monotonicity
 
 In multithread LazyJIT, each function stub's `jmp` target is published monotonically:

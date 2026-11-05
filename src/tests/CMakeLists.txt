@@ -442,6 +442,32 @@ if(ZEN_ENABLE_SPEC_TEST)
     target_compile_definitions(
       mirPeepholeTests PRIVATE PEEP_WASM_PATH="${PEEP_MOD_WASM}"
     )
+    # Keep the long call chains generated, so the spill-stress fixture stays
+    # readable without hundreds of duplicated statements in source control.
+    string(REPEAT "(local.set $s (i32.add (local.get $s) (call $one)))\n" 512
+           REGMASK_I32_CHAIN)
+    string(REPEAT "(local.set $s (f64.add (local.get $s) (call $fp)))\n" 512
+           REGMASK_F64_CHAIN)
+    set(REGMASK_STRESS_WAT "${CMAKE_CURRENT_BINARY_DIR}/regmask_stress.wat")
+    set(REGMASK_STRESS_WASM "${CMAKE_CURRENT_BINARY_DIR}/regmask_stress.wasm")
+    file(WRITE ${REGMASK_STRESS_WAT}
+         "(module (func $one (result i32) i32.const 1)\n"
+         "(func $fp (result f64) f64.const 1.25)\n"
+         "(func (export \"i32_calls\") (result i32) (local $s i32)\n"
+         "${REGMASK_I32_CHAIN}(local.get $s))\n"
+         "(func (export \"f64_calls\") (result f64) (local $s f64)\n"
+         "${REGMASK_F64_CHAIN}(local.get $s)))\n")
+    add_custom_command(
+      OUTPUT ${REGMASK_STRESS_WASM}
+      COMMAND wat2wasm ${REGMASK_STRESS_WAT} -o ${REGMASK_STRESS_WASM}
+      DEPENDS ${REGMASK_STRESS_WAT}
+      VERBATIM
+    )
+    add_custom_target(regmask_stress_wasm DEPENDS ${REGMASK_STRESS_WASM})
+    add_dependencies(mirPeepholeTests regmask_stress_wasm)
+    target_compile_definitions(
+      mirPeepholeTests PRIVATE REGMASK_STRESS_WASM_PATH="${REGMASK_STRESS_WASM}"
+    )
     if(ZEN_TEST_ENABLE_ASAN)
       target_compile_options(mirPeepholeTests PRIVATE -fsanitize=address)
       if(ZEN_BUILD_PLATFORM_DARWIN)

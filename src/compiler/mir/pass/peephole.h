@@ -5,6 +5,7 @@
 #include "compiler/mir/function.h"
 #include "compiler/mir/instructions.h"
 #include "llvm/ADT/APInt.h"
+#include "llvm/ADT/SmallVector.h"
 
 namespace COMPILER {
 
@@ -20,6 +21,12 @@ private:
   MFunction *F = nullptr;
   MBasicBlock *CurBB = nullptr;
   MInstruction *CurStmt = nullptr;
+  // Last completed direct assignment in the current block. Clear only touched
+  // slots between blocks so lookup is O(1) without O(variables * blocks)
+  // resets.
+  llvm::SmallVector<const DassignInstruction *, 16> LastAssignments;
+  llvm::SmallVector<uint32_t, 16> AssignedVars;
+  bool CacheBlockAssignments = false;
 
   void rewriteBlock(MBasicBlock &BB);
   MInstruction *rewriteExpr(MInstruction *Inst);

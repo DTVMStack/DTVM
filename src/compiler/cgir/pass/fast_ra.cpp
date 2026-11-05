@@ -921,11 +921,36 @@ void FastRA::Impl::allocateCgInstruction(CgInstruction &MI) {
       MRI->addPhysRegsUsedFromRegMask(RM);
     }
 
-    // Displace clobbered registers.
-    for (const LiveReg &LR : LiveVirtRegs) {
-      MCPhysReg PhysReg = LR.PhysReg;
-      if (PhysReg != 0 && isClobberedByRegMasks(PhysReg)) {
-        displacePhysReg(MI, PhysReg);
+    // Spilled values remain in LiveVirtRegs with PhysReg == 0. Scanning all
+    // of them at every call can become quadratic in a long block. For large
+    // sets, discover assigned values through the bounded physical-unit map.
+    if (LiveVirtRegs.size() > RegUnitStates.size()) {
+      SmallVector<LiveReg *, 16> Clobbered;
+      for (unsigned State : RegUnitStates) {
+        if (!Register::isVirtualRegister(State))
+          continue;
+        auto LRI = findLiveVirtReg(State);
+        ZEN_ASSERT(LRI != LiveVirtRegs.end());
+        MCPhysReg PhysReg = LRI->PhysReg;
+        if (PhysReg != 0 && isClobberedByRegMasks(PhysReg))
+          Clobbered.push_back(&*LRI);
+      }
+      // SparseSet's dense entries are contiguous. Preserve the original scan
+      // order and handle multi-unit physical registers only once. Displacement
+      // clears assignments but does not insert/erase LiveVirtRegs entries.
+      llvm::sort(Clobbered);
+      Clobbered.erase(std::unique(Clobbered.begin(), Clobbered.end()),
+                      Clobbered.end());
+      for (const LiveReg *LR : Clobbered) {
+        if (LR->PhysReg != 0)
+          displacePhysReg(MI, LR->PhysReg);
+      }
+    } else {
+      for (const LiveReg &LR : LiveVirtRegs) {
+        MCPhysReg PhysReg = LR.PhysReg;
+        if (PhysReg != 0 && isClobberedByRegMasks(PhysReg)) {
+          displacePhysReg(MI, PhysReg);
+        }
       }
     }
   }
