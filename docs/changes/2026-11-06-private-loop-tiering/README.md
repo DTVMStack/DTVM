@@ -100,6 +100,41 @@ Spec fixtures are generated after applying `tests/wast/spec.patch`; the patch is
 reversed in the submodule after tests. Production benchmarking has SPEC/ASAN/EVM/
 profiler/logging disabled; tests use a separate SPEC-enabled build.
 
+## Build reference
+
+The original 17-case advantage table used main `193b8d2`, not this opt-in
+policy. The saved CMake cache corresponds to the following Release build
+(GCC 14.2, LLVM 15; substitute your LLVM installation path). Build main and
+candidate checkouts separately with identical options:
+
+```sh
+cmake -S . -B build-release -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
+  -DLLVM_DIR=/path/to/llvm-15/lib/cmake/llvm \
+  -DZEN_ENABLE_MULTIPASS_JIT=ON -DZEN_ENABLE_SINGLEPASS_JIT=ON \
+  -DZEN_ENABLE_CHECKED_ARITHMETIC=ON -DZEN_ENABLE_BUILTIN_WASI=ON \
+  -DZEN_ENABLE_SPEC_TEST=OFF -DZEN_ENABLE_ASAN=OFF -DZEN_ENABLE_EVM=OFF \
+  -DZEN_ENABLE_PROFILER=OFF -DZEN_ENABLE_JIT_LOGGING=OFF \
+  -DZEN_ENABLE_LINUX_PERF=OFF
+cmake --build build-release --target dtvm -j 2
+```
+
+Release C++ flags are `-O3 -DNDEBUG`. For the original table, select lazy MT
+at runtime without the new private-tiering flag:
+
+```sh
+taskset -c 0 ./build-release/dtvm -m multipass --enable-multipass-lazy \
+  benchmarks/paper/benchmarks/wapm/base64cli.wasm --args encode helloworld
+WASMTIME_CACHE=0 taskset -c 0 /path/to/wasmtime-45 run -C cache=n \
+  benchmarks/paper/benchmarks/wapm/base64cli.wasm encode helloworld
+```
+
+Wasmtime was the existing `wasmtime 45.0.0 (377cd917a 2026-05-21)` artifact,
+not rebuilt in this study. Its repository build script runs `cargo build
+--release -j6` inside the Wasmtime source checkout. This describes the script,
+not independently verified provenance of every build option in that artifact.
+
 ## Experimental protocol
 
 Frozen upstream main is `193b8d2e8ddeb54af974bc8a2b9cc52b838de8b2`.
