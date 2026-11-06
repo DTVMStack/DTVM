@@ -432,13 +432,23 @@ void FunctionMirBuilder::handleElse(const BlockInfo &Info) {
 }
 
 void FunctionMirBuilder::handleEnd(const BlockInfo &Info) {
-  ControlStack.pop_back();
+  // Info aliases the top frame; snapshot before ending its lifetime.
   MBasicBlock *NextBlock = Info.getNextBlock();
-  if (!NextBlock) {
+  if (!NextBlock)
     NextBlock = Info.getJumpBlock();
+  const bool Reachable = Info.reachable();
+  const bool HasFP = ControlStack.back().hasFPArithmetic();
+  const bool HasCall = ControlStack.back().hasGuestCall();
+  if (Info.getKind() == CtrlBlockKind::LOOP) {
+    ZEN_ASSERT(LoopDepth > 0);
+    if (LoopDepth >= 2 && HasFP && !HasCall)
+      HasCallFreeNestedFPLoop = true;
+    --LoopDepth;
   }
-
-  if (Info.reachable()) {
+  ControlStack.pop_back();
+  if (!ControlStack.empty())
+    ControlStack.back().mergeLoopEffects(HasFP, HasCall);
+  if (Reachable) {
     createInstruction<BrInstruction>(true, Ctx, NextBlock);
     addSuccessor(NextBlock);
   }
@@ -548,6 +558,7 @@ FunctionMirBuilder::Operand FunctionMirBuilder::handleCall(
     uint32_t FuncIdx, uintptr_t Target, bool IsImport, bool FarCall,
     const ArgumentInfo &ArgInfo, const std::vector<Operand> &Args) {
   ++Ctx.NumGuestCalls;
+  ControlStack.back().noteGuestCall();
 
   if (IsImport) {
     MInstruction *FuncAddr = createIntConstInstruction(&Ctx.I64Type, Target);
@@ -564,6 +575,7 @@ FunctionMirBuilder::Operand FunctionMirBuilder::handleCallIndirect(
     uint32_t TypeIdx, Operand IndirectFuncIdxOp, uint32_t TblIdx,
     const ArgumentInfo &ArgInfo, const std::vector<Operand> &Args) {
   ++Ctx.NumGuestCalls;
+  ControlStack.back().noteGuestCall();
 
   MInstruction *IndirectFuncIdx = extractOperand(IndirectFuncIdxOp);
   MInstruction *ResuableIndirectFuncIdx =

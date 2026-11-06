@@ -652,6 +652,22 @@ if(ZEN_ENABLE_SPEC_TEST)
       lazyJitGreedyOndemandTests
       PRIVATE PRIVATE_TIER_WASM_PATH="${PRIVATE_TIER_WASM}"
     )
+    set(NUMERIC_LOOP_WAT
+        "${CMAKE_SOURCE_DIR}/tests/wast/multipass/lazy_numeric_loops.wat"
+    )
+    set(NUMERIC_LOOP_WASM "${CMAKE_CURRENT_BINARY_DIR}/lazy_numeric_loops.wasm")
+    add_custom_command(
+      OUTPUT ${NUMERIC_LOOP_WASM}
+      COMMAND wat2wasm ${NUMERIC_LOOP_WAT} -o ${NUMERIC_LOOP_WASM}
+      DEPENDS ${NUMERIC_LOOP_WAT}
+      VERBATIM
+    )
+    add_custom_target(lazy_numeric_loop_wasm DEPENDS ${NUMERIC_LOOP_WASM})
+    add_dependencies(lazyJitGreedyOndemandTests lazy_numeric_loop_wasm)
+    target_compile_definitions(
+      lazyJitGreedyOndemandTests
+      PRIVATE NUMERIC_LOOP_WASM_PATH="${NUMERIC_LOOP_WASM}"
+    )
     add_test(NAME lazyJitGreedyOndemandTests COMMAND lazyJitGreedyOndemandTests)
   endif()
 

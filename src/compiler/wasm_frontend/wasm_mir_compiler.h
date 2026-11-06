@@ -73,6 +73,8 @@ public:
 
   FunctionMirBuilder(CompilerContext &Context, MFunction &MFunc);
 
+  bool hasCallFreeNestedFPLoop() const { return HasCallFreeNestedFPLoop; }
+
   class Operand {
   public:
     Operand() = default;
@@ -110,6 +112,16 @@ public:
         : Kind(Kind), Result(Result), StackSize(StackSize),
           JumpBlock(JumpBlock), NextBlock(NextBlock), BranchInstr(BranchInst) {}
 
+    // Compile-time effects are merged upwards when a structured block ends.
+    void noteFPArithmetic() { HasFPArithmetic = true; }
+    void noteGuestCall() { HasGuestCall = true; }
+    bool hasFPArithmetic() const { return HasFPArithmetic; }
+    bool hasGuestCall() const { return HasGuestCall; }
+    void mergeLoopEffects(bool FP, bool Calls) {
+      HasFPArithmetic |= FP;
+      HasGuestCall |= Calls;
+    }
+
     CtrlBlockKind getKind() const { return Kind; }
 
     Operand getResult() const { return Result; }
@@ -139,6 +151,8 @@ public:
     MBasicBlock *NextBlock = nullptr;
     BrIfInstruction *BranchInstr = nullptr;
     bool Reachable = true;
+    bool HasFPArithmetic = false;
+    bool HasGuestCall = false;
   };
 
   class ArgumentInfo {
@@ -322,6 +336,9 @@ public:
 
   template <WASMType Type, BinaryOperator Opeator>
   Operand handleBinaryOp(Operand LHSOp, Operand RHSOp) {
+    if constexpr (Type == WASMType::F32 || Type == WASMType::F64)
+      if (LoopDepth >= 2)
+        ControlStack.back().noteFPArithmetic();
     MInstruction *LHS = extractOperand(LHSOp);
     MInstruction *RHS = extractOperand(RHSOp);
     MInstruction *Ret = createInstruction<BinaryInstruction>(
@@ -439,6 +456,8 @@ public:
 
   template <WASMType Type, BinaryOperator Opeator>
   Operand handleFDiv(Operand LHSOp, Operand RHSOp) {
+    if (LoopDepth >= 2)
+      ControlStack.back().noteFPArithmetic();
     MInstruction *LHS = extractOperand(LHSOp);
     MInstruction *RHS = extractOperand(RHSOp);
     auto *Ret = createInstruction<BinaryInstruction>(
@@ -646,6 +665,8 @@ private:
                   BrIfInstruction *BranchInst = nullptr) {
     auto BlockResult =
         (Type == WASMType::VOID) ? Operand() : createTempStackOperand(Type);
+    if (Kind == CtrlBlockKind::LOOP)
+      ++LoopDepth;
     ControlStack.emplace_back(Kind, BlockResult, StackSize, JumpBlock,
                               NextBlock, BranchInst);
   }
@@ -840,6 +861,8 @@ private:
     }
   }
 
+  uint32_t LoopDepth = 0;
+  bool HasCallFreeNestedFPLoop = false;
   CompilerContext &Ctx;
   CompileVector<BlockInfo> ControlStack; // manage nested block
   MFunction *CurFunc = nullptr;

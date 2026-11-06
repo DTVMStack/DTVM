@@ -116,8 +116,32 @@ In multithread LazyJIT, each function stub's `jmp` target is published monotonic
   entry (the loader appends it to the export list), then remaining exports in
   reverse order. Import indices are skipped and aliases are deduplicated by
   compile status. Unexported callees are not automatically promoted to Greedy
-  after FastRA compilation; long-running private helpers can lose throughput.
+  after compilation. Demand compilation can initially choose Greedy for
+  bounded numeric loop nests, as described below; other private helpers can
+  still lose throughput.
   Eager multipass still compiles the whole module.
+
+### Initial allocator for demanded numeric loop nests
+
+Lazy MT may choose Greedy for a demanded function's first invocation when its
+body is at most 2048 source bytes (excluding local declarations) and frontend
+construction visits f32/f64 add/sub/mul/div inside at least two simultaneously
+nested WASM loops with no guest call/call_indirect in that loop subtree.
+Block effects merge on structured exits, so calls outside the qualifying loop
+do not exclude a function; calls later in the same loop do. Sibling loops and nested non-loop blocks do not qualify.
+The signal is accumulated in constant time during existing MIR construction;
+it inserts no guest counters, requires no second compilation, and queues no
+additional background functions. It repairs one-shot kernels that cannot
+benefit from later stub upgrades. No function names, IDs or file paths matter.
+
+Functions initially selected for Greedy bypass opt-in private FastRA profiling.
+Eager and serial lazy allocator choices and explicit FastRA remain unchanged.
+Foreground publication still CASes only from the trampoline; canonical
+background publication remains monotonic. `getForegroundLoopGreedyCount`
+counts finished selected compiles before stub publication and is not a
+publication barrier. The size/depth rule is a static tradeoff, not a guarantee
+of runtime heat. Integer-only loops, oversized bodies and short loop nests
+remain limitations; startup and throughput must be measured together.
 
 ### Opt-in private loop tiering
 

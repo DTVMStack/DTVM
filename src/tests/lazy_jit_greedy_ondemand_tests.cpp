@@ -38,7 +38,8 @@ std::vector<uint8_t> loadWasmFile(const char *Path) {
 }
 
 std::unique_ptr<Runtime> makeRuntime(bool Lazy, bool DisableGreedyRA,
-                                     bool DisableMT) {
+                                     bool DisableMT,
+                                     bool PrivateTiering = false) {
   RuntimeConfig Cfg;
   Cfg.Mode = RunMode::MultipassMode;
 #ifdef ZEN_ENABLE_BUILTIN_WASI
@@ -46,6 +47,7 @@ std::unique_ptr<Runtime> makeRuntime(bool Lazy, bool DisableGreedyRA,
 #endif
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
   Cfg.EnableMultipassLazy = Lazy;
+  Cfg.EnableLazyPrivateTiering = PrivateTiering;
   Cfg.DisableMultipassGreedyRA = DisableGreedyRA;
   Cfg.DisableMultipassMultithread = DisableMT;
   Cfg.NumMultipassThreads = 4;
@@ -146,9 +148,9 @@ struct LoadedMod {
 
 LoadedMod loadModule(const std::vector<uint8_t> &Bytes, const char *Name,
                      bool Lazy, bool DisableGreedyRA, bool DisableMT,
-                     bool Instantiate = true) {
+                     bool Instantiate = true, bool PrivateTiering = false) {
   LoadedMod Out;
-  Out.RT = makeRuntime(Lazy, DisableGreedyRA, DisableMT);
+  Out.RT = makeRuntime(Lazy, DisableGreedyRA, DisableMT, PrivateTiering);
   EXPECT_NE(Out.RT, nullptr);
   auto ModRet = Out.RT->loadModule(Name, Bytes.data(), Bytes.size());
   EXPECT_TRUE(ModRet) << ModRet.getError().getFormattedMessage();
@@ -413,5 +415,55 @@ TEST(LazyJitGreedyOndemand, EntrySeedFixtureKeepsEagerAndSerialBehavior) {
   for (uint32_t I : {5u, 6u}) {
     EXPECT_TRUE(stubIsTrampoline(*Serial.Mod, I));
     EXPECT_FALSE(stubIsTrampoline(*Eager.Mod, I));
+  }
+}
+
+TEST(LazyJitGreedyOndemand, NumericNestsChooseGreedyOnFirstDemandOnly) {
+  for (bool PrivateTiering : {false, true}) {
+    auto Bytes = loadWasmFile(NUMERIC_LOOP_WASM_PATH);
+    ASSERT_FALSE(Bytes.empty());
+    LoadedMod LM =
+        loadModule(Bytes, "numeric", true, false, false, true, PrivateTiering);
+    ASSERT_TRUE(waitForBackgroundPublishes(*LM.Lazy, 1, 5000));
+    ASSERT_EQ(LM.Lazy->getBackgroundPublishCount(), 1u);
+    ASSERT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), 0u);
+    for (uint32_t I = 0; I < 7; ++I)
+      EXPECT_TRUE(stubIsTrampoline(*LM.Mod, I));
+    ASSERT_GT(LM.Mod->getCodeEntry(5)->CodeSize, 2048u);
+    ASSERT_LE(LM.Mod->getCodeEntry(5)->CodeSize, 4096u);
+    const double Expected[] = {9, 6, 3, 9.5, 9, 9, 9, 9};
+    const uint32_t Selected[] = {1, 1, 1, 1, 2, 2, 2, 2};
+    for (uint32_t I = 0; I < 8; ++I) {
+      std::vector<TypedValue> Results;
+      ASSERT_TRUE(LM.RT->callWasmFunction(*LM.Inst, "entry",
+                                          {std::to_string(I), "3"}, Results));
+      ASSERT_EQ(Results.size(), 1u);
+      EXPECT_DOUBLE_EQ(Results[0].Value.F64, Expected[I]);
+      EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), Selected[I]);
+      EXPECT_TRUE(stubIsTrampoline(*LM.Mod, 6));
+    }
+    EXPECT_EQ(LM.Lazy->getBackgroundPublishCount(), 1u);
+    const auto Compiles = LM.Lazy->getForegroundCompileCount();
+    std::vector<TypedValue> Results;
+    ASSERT_TRUE(
+        LM.RT->callWasmFunction(*LM.Inst, "alias", {"0", "3"}, Results));
+    EXPECT_DOUBLE_EQ(Results[0].Value.F64, 9);
+    EXPECT_EQ(LM.Lazy->getForegroundCompileCount(), Compiles);
+    EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), 2u);
+  }
+}
+
+TEST(LazyJitGreedyOndemand, NumericNestKeepsExplicitFastEagerAndSerialChoices) {
+  auto Bytes = loadWasmFile(NUMERIC_LOOP_WASM_PATH);
+  for (unsigned Mode = 0; Mode < 3; ++Mode) {
+    LoadedMod LM =
+        loadModule(Bytes, "numeric_modes", Mode != 1, Mode == 0, Mode != 0);
+    std::vector<TypedValue> Results;
+    ASSERT_TRUE(
+        LM.RT->callWasmFunction(*LM.Inst, "entry", {"0", "3"}, Results));
+    ASSERT_EQ(Results.size(), 1u);
+    EXPECT_DOUBLE_EQ(Results[0].Value.F64, 9);
+    if (LM.Lazy)
+      EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), 0u);
   }
 }

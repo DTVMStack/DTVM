@@ -40,8 +40,9 @@ protected:
 
   ~WasmJITCompiler() override = default;
 
-  void compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod, uint32_t FuncIdx,
-                       bool DisableGreedyRA, uint8_t *LoopTick = nullptr);
+  bool compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod, uint32_t FuncIdx,
+                       bool DisableGreedyRA, uint8_t *LoopTick = nullptr,
+                       bool AllowLoopGreedy = false);
 
   runtime::Module *WasmMod;
   const uint32_t NumInternalFunctions;
@@ -75,7 +76,9 @@ public:
   void precompile();
 
   uint8_t *compileFunction(WasmFrontendContext &Ctx, uint32_t FuncIdx,
-                           bool DisableGreedyRA, uint8_t *LoopTick = nullptr);
+                           bool DisableGreedyRA, uint8_t *LoopTick = nullptr,
+                           bool AllowLoopGreedy = false,
+                           bool *SelectedLoopGreedy = nullptr);
 
   void compileFunctionInBackgroud(WasmFrontendContext &Ctx, uint32_t FuncIdx);
 
@@ -93,6 +96,11 @@ public:
   /// completed background Greedy publication.
   uint32_t getForegroundCompileCount() const {
     return ForegroundCompileCount.load(std::memory_order_acquire);
+  }
+  // Finished foreground compiles selected by the numeric-loop policy.
+  // This is not a stub-publication barrier; inspect after the call returns.
+  uint32_t getForegroundLoopGreedyCount() const {
+    return ForegroundLoopGreedyCount.load(std::memory_order_acquire);
   }
   uint32_t getBackgroundCompileCount() const {
     return BackgroundCompileCount.load(std::memory_order_acquire);
@@ -199,6 +207,7 @@ private:
   std::unique_ptr<std::atomic<uint8_t *>[]> GreedyRACodePtrs;
   std::unique_ptr<common::ThreadPool<WasmFrontendContext>> ThreadPool;
   std::atomic<uint32_t> ForegroundCompileCount{0};
+  std::atomic<uint32_t> ForegroundLoopGreedyCount{0};
   std::atomic<uint32_t> BackgroundCompileCount{0};
   std::atomic<uint32_t> BackgroundPublishCount{0};
 };
