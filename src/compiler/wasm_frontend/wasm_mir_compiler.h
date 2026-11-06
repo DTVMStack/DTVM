@@ -39,6 +39,7 @@ public:
 
   void setCurFunc(uint32_t FuncIdx, runtime::TypeEntry *FuncType,
                   runtime::CodeEntry *FuncCode) {
+    NumWasmLoops = NumGuestCalls = 0;
     CurFuncIdx = FuncIdx;
     WasmFuncType = FuncType;
     WasmFuncCode = FuncCode;
@@ -49,6 +50,10 @@ public:
   const runtime::TypeEntry &getWasmFuncType() const { return *WasmFuncType; }
 
   const runtime::CodeEntry &getWasmFuncCode() const { return *WasmFuncCode; }
+
+  uint8_t *LoopTick = nullptr;
+  uint32_t NumWasmLoops = 0;
+  uint32_t NumGuestCalls = 0;
 
   const bool UseSoftMemCheck;
 

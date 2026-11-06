@@ -14,6 +14,7 @@
 #include "compiler/cgir/pass/register_coalescer.h"
 #include "compiler/context.h"
 #include "compiler/frontend/parser.h"
+#include "compiler/lazy_promotion_budget.h"
 #include "compiler/mir/function.h"
 #include "compiler/mir/module.h"
 #include "compiler/mir/pass/dead_basicblock_elim.h"
@@ -26,7 +27,9 @@
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/SmallVectorMemoryBuffer.h"
+#include <chrono>
 #include <deque>
+#include <limits>
 
 #if defined(ZEN_ENABLE_MULTIPASS_JIT_LOGGING) || defined(ZEN_ENABLE_LINUX_PERF)
 #include "utils/asm_dump.h"
@@ -139,6 +142,12 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
   MF.dump();
 #endif
 
+  MF.getContext().LastSpillSlots = 0;
+  if (MF.getContext().CollectTieringMetadata)
+    for (int I = MF.getFrameInfo().getObjectIndexBegin();
+         I < MF.getFrameInfo().getObjectIndexEnd(); ++I)
+      if (MF.getFrameInfo().isSpillSlotObjectIndex(I))
+        ++MF.getContext().LastSpillSlots;
   PrologEpilogInserter PEInserter;
   PEInserter.runOnCgFunction(MF);
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING
@@ -377,7 +386,8 @@ void JITCompilerBase::emitObjectBuffer(CompileContext *Ctx) {
 }
 
 void WasmJITCompiler::compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod,
-                                      uint32_t FuncIdx, bool DisableGreedyRA) {
+                                      uint32_t FuncIdx, bool DisableGreedyRA,
+                                      uint8_t *LoopTick) {
   if (Ctx.Inited) {
     // Release all memory allocated by previous function compilation
     Ctx.MemPool = CompileMemPool();
@@ -388,6 +398,9 @@ void WasmJITCompiler::compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod,
     Ctx.initialize();
   }
 
+  Ctx.LoopTick = LoopTick;
+  Ctx.CollectTieringMetadata =
+      Config.EnableLazyPrivateTiering && DisableGreedyRA;
   uint32_t RealFuncIdx = FuncIdx + WasmMod->getNumImportFunctions();
   TypeEntry *FuncType = WasmMod->getFunctionType(RealFuncIdx);
   ZEN_ASSERT(FuncType);
@@ -591,11 +604,49 @@ LazyJITCompiler::LazyJITCompiler(Module *WasmMod)
       GreedyRACodePtrs[I] = nullptr;
     }
   }
+
+#if !defined(ZEN_ENABLE_SGX)
+  if (ThreadPool && Config.EnableLazyPrivateTiering &&
+      !Config.DisableMultipassGreedyRA && Config.LazyTierMaxFunctions &&
+      Config.LazyTierMaxBytes && Config.LazyTierBudgetMs) {
+    PrivateBudget = std::make_unique<LazyPromotionBudget>(
+        Config.LazyTierMaxFunctions, Config.LazyTierMaxBytes,
+        uint64_t(Config.LazyTierBudgetMs) * 1000000);
+    PrivateFunctions =
+        std::make_unique<PrivateFunction[]>(NumInternalFunctions);
+    for (uint32_t I = 0; I < NumInternalFunctions; ++I) {
+      PrivateFunctions[I].Owner = this;
+      PrivateFunctions[I].Index = I;
+      PrivateFunctions[I].Eligible = isPrivateCandidate(I);
+    }
+  }
+#endif
 }
 
 LazyJITCompiler::~LazyJITCompiler() {
   if (ThreadPool) {
     ThreadPool->interrupt();
+  }
+  if (PrivateBudget && Config.EnableStatistics) {
+    const auto S = getPrivateTieringStats();
+    ZEN_LOG_INFO(
+        "Private tiering: admitted=%u bytes=%llu compile_ms=%.3f profiles=%u "
+        "greedy=%u",
+        S.AdmittedFunctions, static_cast<unsigned long long>(S.AdmittedBytes),
+        S.CompileTimeNs / 1000000.0, S.ProfilingPublishes, S.GreedyPublishes);
+    for (uint32_t I = 0; I < NumInternalFunctions; ++I) {
+      const auto &P = PrivateFunctions[I];
+      if (P.OriginalFast)
+        ZEN_LOG_INFO("Private tier function: internal=%u spills=%u "
+                     "observed_loops=%llu estimated_loops=%llu "
+                     "sample_calls=%llu fast_ns=%llu profile_ns=%llu",
+                     I, P.SpillSlots,
+                     static_cast<unsigned long long>(P.ObservedLoops),
+                     static_cast<unsigned long long>(P.EstimatedLoops),
+                     static_cast<unsigned long long>(P.SampledCalls),
+                     static_cast<unsigned long long>(P.FastCompileNs),
+                     static_cast<unsigned long long>(P.ProfileCompileNs));
+    }
   }
   MainContext->ThreadMemPool.deleteObject(Mod);
   delete MainContext;
@@ -713,8 +764,9 @@ void LazyJITCompiler::precompile() {
 
 uint8_t *LazyJITCompiler::compileFunction(WasmFrontendContext &Ctx,
                                           uint32_t FuncIdx,
-                                          bool DisableGreedyRA) {
-  compileWasmToMC(Ctx, *Mod, FuncIdx, DisableGreedyRA);
+                                          bool DisableGreedyRA,
+                                          uint8_t *LoopTick) {
+  compileWasmToMC(Ctx, *Mod, FuncIdx, DisableGreedyRA, LoopTick);
   emitObjectBuffer(&Ctx);
   uint8_t *JITCode = const_cast<uint8_t *>(Ctx.CodeMPool->getMemStart());
   for (const auto &Reloc : Ctx.ExternRelocs) {
@@ -762,6 +814,11 @@ void LazyJITCompiler::compileFunctionInBackgroud(WasmFrontendContext &Ctx,
 
 uint8_t *LazyJITCompiler::compileFunctionOnRequest(uint8_t *FuncStubCodePtr) {
   uint32_t FuncIdx = StubBuilder.getFuncIdxByStubCodePtr(FuncStubCodePtr);
+  std::unique_lock<std::mutex> ForegroundGuard;
+  if (PrivateFunctions)
+    ForegroundGuard = std::unique_lock<std::mutex>(ForegroundMutex);
+  if (PrivateFunctions && PrivateFunctions[FuncIdx].OriginalFast)
+    return handlePrivateEntry(FuncIdx);
   if (!ThreadPool) {
     // Single-thread lazy, or single-internal-function modules (no FastRA
     // FG / Greedy BG split). Configured allocator on-demand (Greedy unless
@@ -787,8 +844,44 @@ uint8_t *LazyJITCompiler::compileFunctionOnRequest(uint8_t *FuncStubCodePtr) {
   // Compile the function with fastRA for faster compilation. Parallel
   // foreground compiles of the same FuncIdx may each produce a FastRA body;
   // at least this caller gets a runnable pointer even if stub CAS loses.
+  const auto PrivateStart = PrivateFunctions
+                                ? std::chrono::steady_clock::now()
+                                : std::chrono::steady_clock::time_point{};
   uint8_t *JITFuncCodePtr = compileFunction(*MainContext, FuncIdx, true);
+  const auto PrivateNs =
+      PrivateFunctions ? std::chrono::duration_cast<std::chrono::nanoseconds>(
+                             std::chrono::steady_clock::now() - PrivateStart)
+                             .count()
+                       : 0;
   Stats.stopRecord(Timer);
+  if (PrivateFunctions && PrivateFunctions[FuncIdx].Eligible &&
+      MainContext->NumWasmLoops && !MainContext->NumGuestCalls &&
+      MainContext->LastSpillSlots >= 2 &&
+      PrivateEntryGates.load(std::memory_order_relaxed) <
+          std::min<uint64_t>(64, uint64_t(Config.LazyTierMaxFunctions) * 4) &&
+      PrivateBudget->getTimeNs() <
+          uint64_t(Config.LazyTierBudgetMs) * 1000000) {
+    std::lock_guard<std::mutex> PrivateLock(PrivateMutex);
+    auto &P = PrivateFunctions[FuncIdx];
+    P.OriginalFast = JITFuncCodePtr;
+    P.SpillSlots = MainContext->LastSpillSlots;
+    P.FastCompileNs = static_cast<uint64_t>(PrivateNs);
+    P.EntryQuantum = Config.LazyTierCallThreshold;
+    P.EntryRemaining.store(P.EntryQuantum, std::memory_order_relaxed);
+    static_assert(sizeof(std::atomic<uint64_t>) == sizeof(uint64_t));
+    static_assert(std::atomic<uint64_t>::is_always_lock_free);
+    PrivateEntryGates.fetch_add(1, std::memory_order_relaxed);
+    P.EntryGate = StubBuilder.compileEntryCounterGate(
+        reinterpret_cast<uint64_t *>(&P.EntryRemaining), JITFuncCodePtr,
+        FuncStubCodePtr);
+    if (CompileStatuses[FuncIdx] == CompileStatus::Done)
+      return GreedyRACodePtrs[FuncIdx];
+    JITStubBuilder::tryUpdateStubJmpTargetIfTrampoline(FuncStubCodePtr,
+                                                       P.EntryGate);
+    if (CompileStatuses[FuncIdx] == CompileStatus::Done)
+      return GreedyRACodePtrs[FuncIdx];
+    return JITFuncCodePtr;
+  }
   // Re-check immediately before any FastRA stub publish. Litmus this closes:
   //   FG: FastRA compile; load Done == false
   //   BG: store GreedyRA ptr; store Done; xchg stub -> GreedyRA
@@ -804,6 +897,276 @@ uint8_t *LazyJITCompiler::compileFunctionOnRequest(uint8_t *FuncStubCodePtr) {
     return GreedyRACodePtrs[FuncIdx];
   }
   return JITFuncCodePtr;
+}
+
+namespace {
+uint64_t saturatedProduct(uint64_t A, uint64_t B) {
+  const auto Max = std::numeric_limits<uint64_t>::max();
+  return B && A > Max / B ? Max : A * B;
+}
+uint64_t saturatedSum(uint64_t A, uint64_t B) {
+  const auto Max = std::numeric_limits<uint64_t>::max();
+  return A > Max - B ? Max : A + B;
+}
+} // namespace
+
+bool LazyJITCompiler::isPrivateCandidate(uint32_t FuncIdx) const {
+  const uint32_t Imports = WasmMod->getNumImportFunctions();
+  const uint32_t Real = FuncIdx + Imports;
+  const auto *Code = WasmMod->getCodeEntry(Real);
+  if (Code->CodeSize > Config.LazyTierMaxFunctionBytes ||
+      Code->CodeSize > Config.LazyTierMaxBytes || Code->NumLocals > 32 ||
+      Code->Stats != Module::SF_none || Real == WasmMod->getStartFuncIdx())
+    return false;
+  for (uint32_t Export : WasmMod->getExportedFuncIdxs())
+    if (Export == Real)
+      return false;
+  return true;
+}
+
+uint8_t *LazyJITCompiler::handlePrivateEntry(uint32_t FuncIdx) {
+  auto &P = PrivateFunctions[FuncIdx];
+  auto *Stub = StubBuilder.getFuncStubCodePtr(FuncIdx);
+  if (CompileStatuses[FuncIdx] == CompileStatus::Done)
+    return GreedyRACodePtrs[FuncIdx];
+  bool Queue = false;
+  {
+    std::lock_guard<std::mutex> Lock(PrivateMutex);
+    const auto Remaining = P.EntryRemaining.load(std::memory_order_relaxed);
+    // A caller which raced initial trampoline publication is not a heat event.
+    if ((P.Status == PrivateStatus::Cold ||
+         P.Status == PrivateStatus::WaitingHeat) &&
+        (Remaining == 0 || Remaining > P.EntryQuantum)) {
+      stub_jmp::tryUpdateTarget(Stub, P.EntryGate, P.OriginalFast);
+      const uint32_t Bytes =
+          WasmMod->getCodeEntry(FuncIdx + WasmMod->getNumImportFunctions())
+              ->CodeSize;
+      P.CountedCalls = saturatedSum(P.CountedCalls, P.EntryQuantum);
+      if (P.Status == PrivateStatus::Cold) {
+        if (PrivateBudget->tryReserve(Bytes)) {
+          P.Status =
+              Config.LazyTierPolicy == runtime::LazyPrivateTierPolicy::Calls
+                  ? PrivateStatus::GreedyPending
+                  : PrivateStatus::ProfilingPending;
+          Queue = true;
+        } else
+          P.Status = PrivateStatus::Stopped;
+      } else {
+        P.EstimatedLoops = saturatedSum(
+            P.EstimatedLoops,
+            saturatedProduct(P.EntryQuantum, P.SampledLoops) / P.SampledCalls);
+        P.Status = PrivateStatus::GreedyPending;
+        Queue = true;
+      }
+    }
+  }
+  if (Queue)
+    ThreadPool->pushTask([this, FuncIdx](WasmFrontendContext *Ctx) {
+      bool Greedy;
+      {
+        std::lock_guard<std::mutex> Lock(PrivateMutex);
+        Greedy =
+            PrivateFunctions[FuncIdx].Status == PrivateStatus::GreedyPending;
+      }
+      if (Greedy)
+        compilePrivateGreedy(*Ctx, FuncIdx);
+      else
+        compilePrivateProfile(*Ctx, FuncIdx);
+    });
+  if (CompileStatuses[FuncIdx] == CompileStatus::Done)
+    return GreedyRACodePtrs[FuncIdx];
+  return P.OriginalFast;
+}
+
+void LazyJITCompiler::stopPrivateProfiling(uint32_t FuncIdx) {
+  std::lock_guard<std::mutex> Lock(PrivateMutex);
+  auto &P = PrivateFunctions[FuncIdx];
+  if (!P.OriginalFast || P.Status == PrivateStatus::Done ||
+      CompileStatuses[FuncIdx] == CompileStatus::Done)
+    return;
+  P.Status = PrivateStatus::Stopped;
+  if (P.LoopGate)
+    StubBuilder.stopLoopCounterGate(P.LoopGate);
+  auto *Stub = StubBuilder.getFuncStubCodePtr(FuncIdx);
+  if (P.ProfileEntryGate)
+    stub_jmp::tryUpdateTarget(Stub, P.ProfileEntryGate, P.OriginalFast);
+  if (P.EntryGate)
+    stub_jmp::tryUpdateTarget(Stub, P.EntryGate, P.OriginalFast);
+}
+
+void LazyJITCompiler::retireExhaustedProfilers() {
+  if (PrivateBudget->getTimeNs() <
+          uint64_t(Config.LazyTierBudgetMs) * 1000000 ||
+      PrivateProfilersRetired.exchange(true, std::memory_order_acq_rel))
+    return;
+  for (uint32_t I = 0; I < NumInternalFunctions; ++I)
+    stopPrivateProfiling(I);
+}
+
+void LazyJITCompiler::compilePrivateProfile(WasmFrontendContext &Ctx,
+                                            uint32_t FuncIdx) {
+  try {
+    const bool Ran = PrivateBudget->runIfTimeAvailable([&] {
+      auto &P = PrivateFunctions[FuncIdx];
+      const auto Start = std::chrono::steady_clock::now();
+      P.LoopRemaining.store(
+          std::min<uint64_t>(Config.LazyTierLoopThreshold, 4096),
+          std::memory_order_relaxed);
+      auto *Gate = StubBuilder.compileLoopCounterGate(
+          reinterpret_cast<uint64_t *>(&P.LoopRemaining), &P,
+          privateLoopCallback);
+      auto *Body = compileFunction(Ctx, FuncIdx, true, Gate);
+      P.SampleEntries.store(std::numeric_limits<uint64_t>::max(),
+                            std::memory_order_relaxed);
+      auto *SampleGate = StubBuilder.compileEntryCounterGate(
+          reinterpret_cast<uint64_t *>(&P.SampleEntries), Body,
+          StubBuilder.getFuncStubCodePtr(FuncIdx));
+      const auto Ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                          std::chrono::steady_clock::now() - Start)
+                          .count();
+      std::lock_guard<std::mutex> Lock(PrivateMutex);
+      P.LoopGate = Gate;
+      P.ProfileEntryGate = SampleGate;
+      P.ProfileFast = Body;
+      P.ProfileCompileNs = static_cast<uint64_t>(Ns);
+      P.Status = PrivateStatus::Profiling;
+      if (stub_jmp::tryUpdateTarget(StubBuilder.getFuncStubCodePtr(FuncIdx),
+                                    P.OriginalFast, SampleGate))
+        PrivateProfilePublishes.fetch_add(1, std::memory_order_release);
+      else {
+        P.Status = PrivateStatus::Stopped;
+        StubBuilder.stopLoopCounterGate(Gate);
+      }
+    });
+    if (!Ran)
+      stopPrivateProfiling(FuncIdx);
+    retireExhaustedProfilers();
+  } catch (...) {
+    stopPrivateProfiling(FuncIdx);
+    retireExhaustedProfilers();
+  }
+}
+
+void LazyJITCompiler::privateLoopCallback(void *Cookie) noexcept {
+  auto *P = static_cast<PrivateFunction *>(Cookie);
+  P->Owner->recordPrivateLoops(P->Index);
+}
+
+void LazyJITCompiler::recordPrivateLoops(uint32_t FuncIdx) noexcept {
+  try {
+    bool Queue = false;
+    {
+      std::lock_guard<std::mutex> Lock(PrivateMutex);
+      auto &P = PrivateFunctions[FuncIdx];
+      if (P.Status != PrivateStatus::Profiling)
+        return;
+      StubBuilder.stopLoopCounterGate(P.LoopGate);
+      auto *Stub = StubBuilder.getFuncStubCodePtr(FuncIdx);
+      stub_jmp::tryUpdateTarget(Stub, P.ProfileEntryGate, P.OriginalFast);
+      P.SampledLoops = std::min<uint64_t>(Config.LazyTierLoopThreshold, 4096);
+      P.SampledCalls = std::max<uint64_t>(
+          1, std::numeric_limits<uint64_t>::max() -
+                 P.SampleEntries.load(std::memory_order_relaxed));
+      P.ObservedLoops = P.SampledLoops;
+      P.EstimatedLoops = P.SampledLoops;
+      // Infer future loop work from a bounded sample, then restore unprofiled
+      // FastRA. Counter values are lower-bound samples during concurrent use.
+      const uint64_t SavedOps =
+          std::min<uint64_t>(uint64_t(P.SpillSlots) * 2, 16);
+      const uint64_t SavedPerCallNs =
+          saturatedProduct(P.SampledLoops, SavedOps) /
+          saturatedProduct(P.SampledCalls, 3);
+      constexpr uint64_t EntryTickNs = 8; // conservative nominal fast-gate cost
+      const uint64_t GreedyCost =
+          std::max<uint64_t>(saturatedProduct(P.FastCompileNs, 32), 100000);
+      const uint64_t CompileCost =
+          saturatedProduct(saturatedSum(P.ProfileCompileNs, GreedyCost),
+                           Config.LazyTierBenefitRatio);
+      const uint64_t ProbeCost =
+          saturatedSum(saturatedProduct(P.SampledLoops, 30),
+                       saturatedProduct(P.CountedCalls, EntryTickNs));
+      if (SavedPerCallNs <= EntryTickNs &&
+          Config.LazyTierPolicy == runtime::LazyPrivateTierPolicy::Budgeted) {
+        P.Status = PrivateStatus::Stopped;
+      } else {
+        auto CeilDiv = [](uint64_t N, uint64_t D) {
+          return N / D + (N % D != 0);
+        };
+        const uint64_t HeatCalls =
+            P.SampledLoops >= Config.LazyTierLoopThreshold
+                ? 0
+                : CeilDiv(saturatedProduct(Config.LazyTierLoopThreshold -
+                                               P.SampledLoops,
+                                           P.SampledCalls),
+                          P.SampledLoops);
+        uint64_t ProfitCalls = 0;
+        if (Config.LazyTierPolicy == runtime::LazyPrivateTierPolicy::Budgeted)
+          ProfitCalls = CeilDiv(saturatedSum(CompileCost, ProbeCost),
+                                SavedPerCallNs - EntryTickNs);
+        const uint64_t Calls = std::max(HeatCalls, ProfitCalls);
+        if (Calls == 0) {
+          P.Status = PrivateStatus::GreedyPending;
+          Queue = true;
+        } else {
+          P.EntryQuantum = Calls;
+          P.EntryRemaining.store(Calls, std::memory_order_relaxed);
+          P.Status = PrivateStatus::WaitingHeat;
+          stub_jmp::tryUpdateTarget(Stub, P.OriginalFast, P.EntryGate);
+        }
+      }
+    }
+    if (Queue)
+      ThreadPool->pushTask([this, FuncIdx](WasmFrontendContext *Ctx) {
+        compilePrivateGreedy(*Ctx, FuncIdx);
+      });
+  } catch (...) {
+    // No C++ exception may unwind through the generated register-saving thunk.
+    try {
+      stopPrivateProfiling(FuncIdx);
+    } catch (...) {
+    }
+  }
+}
+
+void LazyJITCompiler::compilePrivateGreedy(WasmFrontendContext &Ctx,
+                                           uint32_t FuncIdx) {
+  try {
+    const bool Ran = PrivateBudget->runIfTimeAvailable([&] {
+      compileFunctionInBackgroud(Ctx, FuncIdx);
+      std::lock_guard<std::mutex> Lock(PrivateMutex);
+      PrivateFunctions[FuncIdx].Status = PrivateStatus::Done;
+      PrivateGreedyPublishes.fetch_add(1, std::memory_order_release);
+    });
+    if (!Ran)
+      stopPrivateProfiling(FuncIdx);
+    retireExhaustedProfilers();
+  } catch (...) {
+    auto Expected = CompileStatus::InProgress;
+    CompileStatuses[FuncIdx].compare_exchange_strong(Expected,
+                                                     CompileStatus::None);
+    stopPrivateProfiling(FuncIdx);
+    retireExhaustedProfilers();
+  }
+}
+
+LazyJITCompiler::PrivateTieringStats
+LazyJITCompiler::getPrivateTieringStats() const {
+  PrivateTieringStats S;
+  if (PrivateBudget) {
+    S.AdmittedFunctions = PrivateBudget->getFunctions();
+    S.AdmittedBytes = PrivateBudget->getBytes();
+    S.CompileTimeNs = PrivateBudget->getTimeNs();
+    S.ProfilingPublishes =
+        PrivateProfilePublishes.load(std::memory_order_acquire);
+    S.GreedyPublishes = PrivateGreedyPublishes.load(std::memory_order_acquire);
+  }
+  return S;
+}
+uint64_t LazyJITCompiler::getObservedLoopHeat(uint32_t FuncIdx) const {
+  if (!PrivateFunctions || FuncIdx >= NumInternalFunctions)
+    return 0;
+  std::lock_guard<std::mutex> Lock(PrivateMutex);
+  return PrivateFunctions[FuncIdx].ObservedLoops;
 }
 
 std::pair<std::unique_ptr<MModule>, std::vector<void *>>

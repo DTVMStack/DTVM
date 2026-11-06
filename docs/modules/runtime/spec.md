@@ -117,3 +117,13 @@ runtime propagates errors via `common::Error` / `common::ErrorCode`; common runt
 | cli | Runtime, Module, Instance, Isolation, HostModule |
 | vm-interface | EVMModule, EVMInstance, managed isolation, callEVMMain |
 | tests | Execution environment and instances |
+
+### Private helper tiering configuration
+
+Multipass `RuntimeConfig` offers opt-in `EnableLazyPrivateTiering` (default false)
+and `LazyTierPolicy` (`Calls`, `Loops`, default `Budgeted`). Defaults: 10,000 calls,
+1,000,000 estimated loop visits, 4 admitted functions, 16,384 source bytes,
+768 bytes per helper, 20 ms soft elapsed compile time, benefit ratio 2.
+Thresholds and ratio must be positive. Zero function/byte/time budgets disable
+profiling. Serial, explicitly FastRA and SGX configurations do not activate it.
+See the compiler specification for eligibility, lifetime and publication rules.

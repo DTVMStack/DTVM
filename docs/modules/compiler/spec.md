@@ -119,6 +119,29 @@ In multithread LazyJIT, each function stub's `jmp` target is published monotonic
   after FastRA compilation; long-running private helpers can lose throughput.
   Eager multipass still compiles the whole module.
 
+### Opt-in private loop tiering
+
+`EnableLazyPrivateTiering` permits demand-compiled private WASM helpers to
+upgrade under lazy MT (non-SGX, Greedy enabled). Eligibility requires no exported
+or start/entry role, no guest calls or memory/global/table effects, at least one
+loop and two FastRA spill slots, at most 32 locals and the configured source size.
+A native entry gate first measures calls. `calls` queues Greedy directly;
+`loops` and `budgeted` first compile a profiling FastRA body and measure at most
+4096 loop-header visits (including first entries, not only backedges).
+They restore the original FastRA body, infer loop work per call, and count a
+further call quantum before upgrading. `budgeted` also requires projected
+savings to cover estimated compile and probe costs. Estimates and elapsed time
+affect scheduling only; guest results and trap behavior must remain identical.
+
+Unique-function and source-byte admission limits are hard, module-lifetime
+limits. Private profiling and Greedy tasks share one serialized soft elapsed
+compile budget; one active task may overrun. A bounded number of entry gates
+is allocated. Exhaustion retires profiling gates; failures retain FastRA.
+Profile transitions use expected-target CAS and may never overwrite canonical
+Greedy. Workers join before counters/cookies are freed. Native loop callbacks
+preserve GPR/x87/SSE state, with arithmetic flags modeled as clobbered. There is
+no OSR: a live profiling frame can keep inactive CALL/RET ticks until return.
+
 ### Wasm linear-memory addressing
 
 Wasm32 effective address is `zext64(wrap32(base)) + memarg_offset`, then

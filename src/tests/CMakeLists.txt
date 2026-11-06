@@ -633,6 +633,25 @@ if(ZEN_ENABLE_SPEC_TEST)
         PUBLIC ${GTEST_BOTH_LIBRARIES}
       )
     endif()
+    set(PRIVATE_TIER_WAT
+        "${CMAKE_SOURCE_DIR}/tests/wast/multipass/private_tiering.wat"
+    )
+    set(PRIVATE_TIER_WASM "${CMAKE_CURRENT_BINARY_DIR}/private_tiering.wasm")
+    add_custom_command(
+      OUTPUT ${PRIVATE_TIER_WASM}
+      COMMAND wat2wasm ${PRIVATE_TIER_WAT} -o ${PRIVATE_TIER_WASM}
+      DEPENDS ${PRIVATE_TIER_WAT}
+      VERBATIM
+    )
+    add_custom_target(private_tier_wasm DEPENDS ${PRIVATE_TIER_WASM})
+    add_dependencies(lazyJitGreedyOndemandTests private_tier_wasm)
+    target_sources(
+      lazyJitGreedyOndemandTests PRIVATE lazy_private_tiering_tests.cpp
+    )
+    target_compile_definitions(
+      lazyJitGreedyOndemandTests
+      PRIVATE PRIVATE_TIER_WASM_PATH="${PRIVATE_TIER_WASM}"
+    )
     add_test(NAME lazyJitGreedyOndemandTests COMMAND lazyJitGreedyOndemandTests)
   endif()
 

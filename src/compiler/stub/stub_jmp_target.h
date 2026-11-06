@@ -43,8 +43,8 @@ inline void updateTarget(uint8_t *CurStubCodePtr, uint8_t *TargetPtr) {
   /// \note x86_64 only
   asm volatile(
       "xchgl %0, 1(%1)" // +1 because the jmp instruction's first byte is opcode
-      :
-      : "r"(CallRelOffsetI32), "r"(CurStubCodePtr)
+      : "+r"(CallRelOffsetI32)
+      : "r"(CurStubCodePtr)
       : "memory");
 }
 
@@ -66,6 +66,19 @@ inline bool tryUpdateTargetIfTrampoline(uint8_t *CurStubCodePtr,
                "sete %0"
                : "=q"(Success), "+a"(Expected)
                : "r"(Desired), "r"(CurStubCodePtr)
+               : "memory", "cc");
+  return Success != 0;
+}
+
+// Change only a known tier target; never overwrite a concurrent Greedy publish.
+inline bool tryUpdateTarget(uint8_t *Stub, const uint8_t *ExpectedTarget,
+                            uint8_t *Target) {
+  int32_t Expected = computeRel32(Stub, ExpectedTarget);
+  const int32_t Desired = computeRel32(Stub, Target);
+  uint8_t Success;
+  asm volatile("lock cmpxchgl %2, 1(%3)\n\tsete %0"
+               : "=q"(Success), "+a"(Expected)
+               : "r"(Desired), "r"(Stub)
                : "memory", "cc");
   return Success != 0;
 }

@@ -446,6 +446,10 @@ private:
 
 class CallInstructionBase : public DynamicOperandInstruction {
 public:
+  // Internal no-argument/void profiling thunk; preserves all allocatable regs.
+  bool isPreserveAll() const { return PreserveAll; }
+  void setPreserveAll() { PreserveAll = true; }
+
   template <typename T, typename Callee>
   static T *create(CompileMemPool &MemPool, MType *type, Callee callee,
                    llvm::ArrayRef<MInstruction *> args) {
@@ -456,6 +460,9 @@ public:
   static bool classof(const MInstruction *inst) {
     return inst->getKind() == CALL;
   }
+
+private:
+  bool PreserveAll = false;
 
 protected:
   CallInstructionBase(MType *type, Opcode opcode,

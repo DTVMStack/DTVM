@@ -76,6 +76,18 @@ Consult: [docs/user-guide.md](docs/user-guide.md) for other CMake options.
 
 Note: Lazy JIT currently only supports the x86-64 target.
 
+Private WASM loop helpers can optionally upgrade from FastRA to Greedy using
+call heat, bounded loop sampling and a per-module compilation budget:
+
+```sh
+dtvm -m multipass --enable-multipass-lazy --enable-lazy-private-tiering program.wasm
+```
+
+This experimental policy is disabled by default. Use `--lazy-tier-policy`
+(`calls`, `loops`, `budgeted`) for comparisons; see the
+[design and measurements](docs/changes/2026-11-06-private-loop-tiering/README.md)
+for eligibility, budget controls and limitations.
+
 ### Other Modes
 
 DTVM also provides a standalone singlepass JIT and an interpreter by default. User can try this simple version via below instructions

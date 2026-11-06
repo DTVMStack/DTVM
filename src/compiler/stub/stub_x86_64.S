@@ -116,6 +116,64 @@ _stubTemplateEnd:
 stubTemplateEnd:
 #endif
 
+
+    .text
+    .align 4
+#ifdef ZEN_BUILD_PLATFORM_DARWIN
+#define PRIVATE_SYM(x) _##x
+#else
+#define PRIVATE_SYM(x) x
+#endif
+    .globl PRIVATE_SYM(privateLoopCold)
+PRIVATE_SYM(privateLoopCold):
+    // Called at a regular aligned call site: entry RSP % 16 == 8.
+    push %rbp
+    mov %rsp, %rbp
+    push %rax
+    push %rbx
+    push %rcx
+    push %rdx
+    push %rdi
+    push %rsi
+    push %r8
+    push %r9
+    push %r10
+    push %r11
+    push %r12
+    push %r13
+    push %r14
+    push %r15
+    sub $512, %rsp
+    fxsave64 (%rsp)
+    .globl PRIVATE_SYM(privateLoopColdCookie)
+PRIVATE_SYM(privateLoopColdCookie):
+    movabsq $0, %rdi
+    .globl PRIVATE_SYM(privateLoopColdCallback)
+PRIVATE_SYM(privateLoopColdCallback):
+    movabsq $0, %rax
+    call *%rax
+    fxrstor64 (%rsp)
+    add $512, %rsp
+    pop %r15
+    pop %r14
+    pop %r13
+    pop %r12
+    pop %r11
+    pop %r10
+    pop %r9
+    pop %r8
+    pop %rsi
+    pop %rdi
+    pop %rdx
+    pop %rcx
+    pop %rbx
+    pop %rax
+    pop %rbp
+    ret
+    .globl PRIVATE_SYM(privateLoopColdEnd)
+PRIVATE_SYM(privateLoopColdEnd):
+#undef PRIVATE_SYM
+
 #ifndef ZEN_BUILD_PLATFORM_DARWIN
     .section .note.GNU-stack,"",@progbits
 #endif
