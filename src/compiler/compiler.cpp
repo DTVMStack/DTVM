@@ -410,13 +410,14 @@ bool WasmJITCompiler::compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod,
   MFunction MFunc(Ctx, FuncIdx);
   CgFunction CgFunc(Ctx, MFunc);
   MFunc.setFunctionType(Mod.getFuncType(FuncIdx));
-  FunctionMirBuilder MIRBuilder(Ctx, MFunc);
+  const bool CollectInitialRAHints = AllowLoopGreedy &&
+                                     !Config.DisableMultipassGreedyRA &&
+                                     FuncCode->CodeSize <= 2048;
+  FunctionMirBuilder MIRBuilder(Ctx, MFunc, CollectInitialRAHints);
   MIRBuilder.compile(&Ctx); // pass the ctx argument only for compatibility
-  runtime::Runtime *RT = WasmMod->getRuntime();
-  const runtime::RuntimeConfig &Config = RT->getConfig();
-  const bool LoopGreedy = AllowLoopGreedy && !Config.DisableMultipassGreedyRA &&
-                          MIRBuilder.hasCallFreeNestedFPLoop() &&
-                          FuncCode->CodeSize <= 2048;
+  const bool LoopGreedy =
+      CollectInitialRAHints && (MIRBuilder.hasCallFreeNestedFPLoop() ||
+                                MIRBuilder.hasCallFreeDeepWordLoop());
   if (LoopGreedy)
     DisableGreedyRA = false;
   compileMIRToCgIR(Mod, MFunc, CgFunc, DisableGreedyRA);

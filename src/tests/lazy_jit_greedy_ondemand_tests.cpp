@@ -48,6 +48,12 @@ std::unique_ptr<Runtime> makeRuntime(bool Lazy, bool DisableGreedyRA,
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
   Cfg.EnableMultipassLazy = Lazy;
   Cfg.EnableLazyPrivateTiering = PrivateTiering;
+  if (PrivateTiering) {
+    Cfg.LazyTierPolicy = zen::runtime::LazyPrivateTierPolicy::Loops;
+    Cfg.LazyTierCallThreshold = 1;
+    Cfg.LazyTierLoopThreshold = 1;
+    Cfg.LazyTierBudgetMs = 1000;
+  }
   Cfg.DisableMultipassGreedyRA = DisableGreedyRA;
   Cfg.DisableMultipassMultithread = DisableMT;
   Cfg.NumMultipassThreads = 4;
@@ -466,4 +472,67 @@ TEST(LazyJitGreedyOndemand, NumericNestKeepsExplicitFastEagerAndSerialChoices) {
     if (LM.Lazy)
       EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), 0u);
   }
+}
+
+TEST(LazyJitGreedyOndemand, DeepWordNestsChooseGreedyOnFirstDemandOnly) {
+  auto Bytes = loadWasmFile(WORD_LOOP_WASM_PATH);
+  ASSERT_FALSE(Bytes.empty());
+  LoadedMod LM = loadModule(Bytes, "words", true, false, false);
+  ASSERT_TRUE(waitForBackgroundPublishes(*LM.Lazy, 1, 5000));
+  ASSERT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), 0u);
+  for (uint32_t I = 0; I < 14; ++I)
+    EXPECT_TRUE(stubIsTrampoline(*LM.Mod, I));
+  ASSERT_GT(LM.Mod->getCodeEntry(9)->CodeSize, 2048u);
+  const uint32_t Expected[] = {27, 27, 9, 27, 27, 27, 3, 27, 27, 27, 27, 81};
+  const uint32_t Selected[] = {1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2};
+  for (uint32_t I = 0; I < 12; ++I) {
+    std::vector<TypedValue> Results;
+    ASSERT_TRUE(LM.RT->callWasmFunction(*LM.Inst, "entry",
+                                        {std::to_string(I), "3"}, Results));
+    ASSERT_EQ(Results.size(), 1u);
+    EXPECT_EQ(Results[0].Value.I32, Expected[I]);
+    EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), Selected[I]);
+    EXPECT_TRUE(stubIsTrampoline(*LM.Mod, 8));
+  }
+  EXPECT_EQ(LM.Lazy->getBackgroundPublishCount(), 1u);
+  const auto Compiles = LM.Lazy->getForegroundCompileCount();
+  std::vector<TypedValue> Results;
+  ASSERT_TRUE(LM.RT->callWasmFunction(*LM.Inst, "alias", {"0", "3"}, Results));
+  ASSERT_EQ(Results.size(), 1u);
+  EXPECT_EQ(Results[0].Value.I32, 27u);
+  EXPECT_EQ(LM.Lazy->getForegroundCompileCount(), Compiles);
+}
+
+TEST(LazyJitGreedyOndemand, DeepWordKeepsExplicitFastEagerAndSerialChoices) {
+  auto Bytes = loadWasmFile(WORD_LOOP_WASM_PATH);
+  for (unsigned Mode = 0; Mode < 3; ++Mode) {
+    LoadedMod LM =
+        loadModule(Bytes, "word_modes", Mode != 1, Mode == 0, Mode != 0);
+    std::vector<TypedValue> Results;
+    ASSERT_TRUE(
+        LM.RT->callWasmFunction(*LM.Inst, "entry", {"0", "3"}, Results));
+    ASSERT_EQ(Results.size(), 1u);
+    EXPECT_EQ(Results[0].Value.I32, 27u);
+    if (LM.Lazy)
+      EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), 0u);
+  }
+}
+
+TEST(LazyJitGreedyOndemand, InitialGreedyPressureSkipsPrivateFastProfiling) {
+  auto Bytes = loadWasmFile(NUMERIC_LOOP_WASM_PATH);
+  LoadedMod LM = loadModule(Bytes, "pressure", true, false, false, true, true);
+  ASSERT_TRUE(waitForBackgroundPublishes(*LM.Lazy, 1, 5000));
+  for (uint32_t I = 0; I < 10; ++I) {
+    std::vector<TypedValue> Results;
+    ASSERT_TRUE(
+        LM.RT->callWasmFunction(*LM.Inst, "entry", {"8", "3"}, Results));
+    ASSERT_EQ(Results.size(), 1u);
+    EXPECT_DOUBLE_EQ(Results[0].Value.F64, 390);
+  }
+  EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), 1u);
+  EXPECT_EQ(LM.Lazy->getForegroundCompileCount(), 1u);
+  const auto Stats = LM.Lazy->getPrivateTieringStats();
+  EXPECT_EQ(Stats.AdmittedFunctions, 0u);
+  EXPECT_EQ(Stats.ProfilingPublishes, 0u);
+  EXPECT_EQ(Stats.GreedyPublishes, 0u);
 }

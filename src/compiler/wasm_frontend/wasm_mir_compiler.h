@@ -71,9 +71,11 @@ class FunctionMirBuilder final {
 public:
   typedef WasmFrontendContext CompilerContext;
 
-  FunctionMirBuilder(CompilerContext &Context, MFunction &MFunc);
+  FunctionMirBuilder(CompilerContext &Context, MFunction &MFunc,
+                     bool CollectInitialRAHints = true);
 
   bool hasCallFreeNestedFPLoop() const { return HasCallFreeNestedFPLoop; }
+  bool hasCallFreeDeepWordLoop() const { return HasCallFreeDeepWordLoop; }
 
   class Operand {
   public:
@@ -115,11 +117,24 @@ public:
     // Compile-time effects are merged upwards when a structured block ends.
     void noteFPArithmetic() { HasFPArithmetic = true; }
     void noteGuestCall() { HasGuestCall = true; }
+    void noteWordLoad() {
+      if (WordLoads < 2)
+        ++WordLoads;
+    }
+    void noteWordStore() { HasWordStore = true; }
+    void noteOtherMemory() { HasOtherMemory = true; }
+    uint8_t getWordLoads() const { return WordLoads; }
+    bool hasWordStore() const { return HasWordStore; }
+    bool hasOtherMemory() const { return HasOtherMemory; }
     bool hasFPArithmetic() const { return HasFPArithmetic; }
     bool hasGuestCall() const { return HasGuestCall; }
-    void mergeLoopEffects(bool FP, bool Calls) {
+    void mergeLoopEffects(bool FP, bool Calls, uint8_t Loads, bool Stores,
+                          bool Other) {
       HasFPArithmetic |= FP;
       HasGuestCall |= Calls;
+      WordLoads = WordLoads + Loads >= 2 ? 2 : WordLoads + Loads;
+      HasWordStore |= Stores;
+      HasOtherMemory |= Other;
     }
 
     CtrlBlockKind getKind() const { return Kind; }
@@ -153,6 +168,9 @@ public:
     bool Reachable = true;
     bool HasFPArithmetic = false;
     bool HasGuestCall = false;
+    uint8_t WordLoads = 0;
+    bool HasWordStore = false;
+    bool HasOtherMemory = false;
   };
 
   class ArgumentInfo {
@@ -242,6 +260,12 @@ public:
   // Load from memory in SrcType and extend to DestType
   template <WASMType DestType, WASMType SrcType, bool Sext>
   Operand handleLoad(Operand Base, uint32_t Offset, uint32_t Align) {
+    if (LoopDepth >= 3) {
+      if constexpr (SrcType == WASMType::I32 || SrcType == WASMType::I64)
+        ControlStack.back().noteWordLoad();
+      else
+        ControlStack.back().noteOtherMemory();
+    }
     ZEN_ASSERT(DestType >= SrcType);
     MType *SrcMTy = Ctx.getMIRTypeFromWASMType(SrcType);
     MType *DestMTy = Ctx.getMIRTypeFromWASMType(DestType);
@@ -258,6 +282,12 @@ public:
   template <WASMType DestType>
   void handleStore(Operand Value, Operand Base, uint32_t Offset,
                    uint32_t Align) {
+    if (LoopDepth >= 3) {
+      if constexpr (DestType == WASMType::I32 || DestType == WASMType::I64)
+        ControlStack.back().noteWordStore();
+      else
+        ControlStack.back().noteOtherMemory();
+    }
     MType *MTy = Ctx.getMIRTypeFromWASMType(DestType);
     MInstruction *ValueInst = extractOperand(Value);
     if (Value.getType() > DestType) {
@@ -665,7 +695,7 @@ private:
                   BrIfInstruction *BranchInst = nullptr) {
     auto BlockResult =
         (Type == WASMType::VOID) ? Operand() : createTempStackOperand(Type);
-    if (Kind == CtrlBlockKind::LOOP)
+    if (CollectInitialRAHints && Kind == CtrlBlockKind::LOOP)
       ++LoopDepth;
     ControlStack.emplace_back(Kind, BlockResult, StackSize, JumpBlock,
                               NextBlock, BranchInst);
@@ -863,6 +893,8 @@ private:
 
   uint32_t LoopDepth = 0;
   bool HasCallFreeNestedFPLoop = false;
+  bool HasCallFreeDeepWordLoop = false;
+  const bool CollectInitialRAHints;
   CompilerContext &Ctx;
   CompileVector<BlockInfo> ControlStack; // manage nested block
   MFunction *CurFunc = nullptr;
