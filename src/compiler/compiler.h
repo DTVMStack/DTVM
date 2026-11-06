@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <mutex>
 
 namespace COMPILER {
 
@@ -17,6 +18,7 @@ class WasmFrontendContext;
 class MModule;
 class MFunction;
 class CgFunction;
+class LazyPromotionBudget;
 
 class JITCompilerBase : public NonCopyable {
 protected:
@@ -39,7 +41,7 @@ protected:
   ~WasmJITCompiler() override = default;
 
   void compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod, uint32_t FuncIdx,
-                       bool DisableGreedyRA);
+                       bool DisableGreedyRA, uint8_t *LoopTick = nullptr);
 
   runtime::Module *WasmMod;
   const uint32_t NumInternalFunctions;
@@ -73,7 +75,7 @@ public:
   void precompile();
 
   uint8_t *compileFunction(WasmFrontendContext &Ctx, uint32_t FuncIdx,
-                           bool DisableGreedyRA);
+                           bool DisableGreedyRA, uint8_t *LoopTick = nullptr);
 
   void compileFunctionInBackgroud(WasmFrontendContext &Ctx, uint32_t FuncIdx);
 
@@ -112,6 +114,16 @@ public:
     return GreedyRACodePtrs[FuncIdx].load(std::memory_order_acquire);
   }
 
+  struct PrivateTieringStats {
+    uint32_t AdmittedFunctions = 0;
+    uint64_t AdmittedBytes = 0;
+    uint64_t CompileTimeNs = 0;
+    uint32_t ProfilingPublishes = 0;
+    uint32_t GreedyPublishes = 0;
+  };
+  PrivateTieringStats getPrivateTieringStats() const;
+  uint64_t getObservedLoopHeat(uint32_t FuncIdx) const;
+
 private:
   enum class CompileStatus : uint8_t {
     None,
@@ -121,6 +133,55 @@ private:
     /// Done, foreground FastRA must not patch the stub (monotonic publish).
     Done,
   };
+
+  enum class PrivateStatus : uint8_t {
+    Cold,
+    ProfilingPending,
+    Profiling,
+    WaitingHeat,
+    GreedyPending,
+    Done,
+    Stopped
+  };
+  struct PrivateFunction {
+    LazyJITCompiler *Owner = nullptr;
+    uint32_t Index = 0;
+    bool Eligible = false;
+    PrivateStatus Status = PrivateStatus::Cold;
+    alignas(8) std::atomic<uint64_t> EntryRemaining{0};
+    alignas(8) std::atomic<uint64_t> LoopRemaining{0};
+    uint64_t ObservedLoops = 0;
+    uint64_t EstimatedLoops = 0;
+    uint64_t CountedCalls = 0;
+    uint64_t EntryQuantum = 0;
+    uint64_t SampledCalls = 0;
+    uint64_t SampledLoops = 0;
+    alignas(8) std::atomic<uint64_t> SampleEntries{0};
+    uint64_t FastCompileNs = 0;
+    uint64_t ProfileCompileNs = 0;
+    uint32_t SpillSlots = 0;
+    uint8_t *OriginalFast = nullptr;
+    uint8_t *ProfileFast = nullptr;
+    uint8_t *ProfileEntryGate = nullptr;
+    uint8_t *EntryGate = nullptr;
+    uint8_t *LoopGate = nullptr;
+  };
+  static void privateLoopCallback(void *Cookie) noexcept;
+  void recordPrivateLoops(uint32_t FuncIdx) noexcept;
+  uint8_t *handlePrivateEntry(uint32_t FuncIdx);
+  void stopPrivateProfiling(uint32_t FuncIdx);
+  void compilePrivateProfile(WasmFrontendContext &Ctx, uint32_t FuncIdx);
+  void compilePrivateGreedy(WasmFrontendContext &Ctx, uint32_t FuncIdx);
+  bool isPrivateCandidate(uint32_t FuncIdx) const;
+  void retireExhaustedProfilers();
+  mutable std::mutex PrivateMutex;
+  std::mutex ForegroundMutex;
+  std::unique_ptr<PrivateFunction[]> PrivateFunctions;
+  std::unique_ptr<LazyPromotionBudget> PrivateBudget;
+  std::atomic<uint32_t> PrivateEntryGates{0};
+  std::atomic<bool> PrivateProfilersRetired{false};
+  std::atomic<uint32_t> PrivateProfilePublishes{0};
+  std::atomic<uint32_t> PrivateGreedyPublishes{0};
 
   JITStubBuilder StubBuilder;
   WasmFrontendContext *MainContext;

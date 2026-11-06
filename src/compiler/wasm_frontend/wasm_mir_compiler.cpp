@@ -383,6 +383,7 @@ void FunctionMirBuilder::handleBlock(WASMType Type, uint32_t StackSize) {
 }
 
 void FunctionMirBuilder::handleLoop(WASMType Type, uint32_t StackSize) {
+  ++Ctx.NumWasmLoops;
   MBasicBlock *LoopBlock = createBasicBlock();
   MBasicBlock *EndBlock = createBasicBlock();
   createInstruction<BrInstruction>(true, Ctx, LoopBlock);
@@ -390,6 +391,13 @@ void FunctionMirBuilder::handleLoop(WASMType Type, uint32_t StackSize) {
 
   enterBlock(CtrlBlockKind::LOOP, Type, StackSize, LoopBlock, EndBlock);
   setInsertBlock(LoopBlock);
+  if (Ctx.LoopTick) {
+    auto *Addr = createIntConstInstruction(
+        &Ctx.I64Type, reinterpret_cast<uintptr_t>(Ctx.LoopTick));
+    auto *Tick = createInstruction<ICallInstruction>(
+        true, &Ctx.VoidType, Addr, llvm::ArrayRef<MInstruction *>{});
+    Tick->setPreserveAll();
+  }
 }
 
 void FunctionMirBuilder::handleIf(Operand CondOp, WASMType Type,
@@ -539,6 +547,7 @@ void FunctionMirBuilder::handleReturn(Operand Opnd) {
 FunctionMirBuilder::Operand FunctionMirBuilder::handleCall(
     uint32_t FuncIdx, uintptr_t Target, bool IsImport, bool FarCall,
     const ArgumentInfo &ArgInfo, const std::vector<Operand> &Args) {
+  ++Ctx.NumGuestCalls;
 
   if (IsImport) {
     MInstruction *FuncAddr = createIntConstInstruction(&Ctx.I64Type, Target);
@@ -554,6 +563,7 @@ FunctionMirBuilder::Operand FunctionMirBuilder::handleCall(
 FunctionMirBuilder::Operand FunctionMirBuilder::handleCallIndirect(
     uint32_t TypeIdx, Operand IndirectFuncIdxOp, uint32_t TblIdx,
     const ArgumentInfo &ArgInfo, const std::vector<Operand> &Args) {
+  ++Ctx.NumGuestCalls;
 
   MInstruction *IndirectFuncIdx = extractOperand(IndirectFuncIdxOp);
   MInstruction *ResuableIndirectFuncIdx =

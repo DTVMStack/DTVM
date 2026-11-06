@@ -9,6 +9,8 @@
 
 namespace zen::runtime {
 
+enum class LazyPrivateTierPolicy { Calls, Loops, Budgeted };
+
 struct RuntimeConfig {
   // Run time Format
   common::InputFormat Format = common::InputFormat::WASM;
@@ -39,6 +41,18 @@ struct RuntimeConfig {
   uint32_t NumMultipassThreads = 8;
   // Enable WASM multipass lazy compilation (segment-based lazy compile)
   bool EnableMultipassLazy = false;
+  // Opt-in private-helper profiling/tiering. Only active for lazy MT with
+  // Greedy enabled. Zero admission/time limits disable profiling entirely.
+  bool EnableLazyPrivateTiering = false;
+  LazyPrivateTierPolicy LazyTierPolicy = LazyPrivateTierPolicy::Budgeted;
+  uint64_t LazyTierCallThreshold = 10000;
+  uint64_t LazyTierLoopThreshold = 1000000;
+  uint32_t LazyTierMaxFunctions = 4;
+  uint64_t LazyTierMaxBytes = 16384;
+  uint32_t LazyTierMaxFunctionBytes = 768;
+  uint32_t LazyTierBudgetMs = 20;
+  uint32_t LazyTierBenefitRatio = 2;
+
   // Enable profile-guided JIT:
   // contracts start in interpreter mode; runtime profiling (sliding window
   // of recent calls) determines which contracts are hot enough to trigger
@@ -75,6 +89,13 @@ struct RuntimeConfig {
 
     case common::RunMode::MultipassMode:
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
+      if (EnableLazyPrivateTiering &&
+          (LazyTierCallThreshold == 0 || LazyTierLoopThreshold == 0 ||
+           LazyTierBenefitRatio == 0)) {
+        ZEN_LOG_ERROR(
+            "private tiering thresholds and benefit ratio must be positive");
+        return false;
+      }
       if (!DisableMultipassMultithread && NumMultipassThreads == 0) {
         ZEN_LOG_FATAL(
             "multipass JIT multithread enabled but thread number is 0");

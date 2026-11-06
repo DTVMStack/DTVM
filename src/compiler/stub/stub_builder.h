@@ -29,6 +29,16 @@ public:
     return stub_jmp::tryUpdateTargetIfTrampoline(CurStubCodePtr, TargetPtr);
   }
 
+  // Counter gates occupy separate pages; a loop gate is called with no
+  // arguments and preserves all GPR/x87/SSE state except arithmetic flags.
+  uint8_t *compileEntryCounterGate(uint64_t *Counter, uint8_t *Fast,
+                                   uint8_t *Stub);
+  uint8_t *compileLoopCounterGate(uint64_t *Counter, void *Cookie,
+                                  void (*Callback)(void *) noexcept);
+  static void stopLoopCounterGate(uint8_t *Gate) {
+    updateStubJmpTargetPtr(Gate, Gate + 29); // normal RET in the gate template
+  }
+
   void allocateStubSpace(uint32_t NumInternalFunctions);
 
   void compileStubResolver();
@@ -59,6 +69,10 @@ private:
 } // namespace COMPILER
 
 extern "C" {
+void privateLoopCold();
+void privateLoopColdCookie();
+void privateLoopColdCallback();
+void privateLoopColdEnd();
 void stubResolver();
 void stubResolverPatchPoint();
 void stubResolverEnd();

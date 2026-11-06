@@ -94,3 +94,64 @@ void JITStubBuilder::compileFunctionToStub(uint32_t FuncIdx) {
   int32_t CallRelOffsetI32 = static_cast<int32_t>(CallRelOffset);
   std::memcpy(NewStubTmplPatchPointPtr + 1, &CallRelOffsetI32, 4);
 }
+
+namespace {
+// JMP active; push r11; movabs counter,r11; lock decq (r11); pop r11;
+// JE cold; then a normal tail (RET for loops, JMP Fast for entry gates).
+void counterPrefix(uint8_t *Code, uint64_t *Counter) {
+  const uint8_t Bytes[] = {
+      0xe9, 0, 0,    0,    0,    0x41, 0x53, 0x49, 0xbb, 0,    0, 0, 0, 0, 0,
+      0,    0, 0xf0, 0x49, 0xff, 0x0b, 0x41, 0x5b, 0x0f, 0x84, 0, 0, 0, 0};
+  std::memcpy(Code, Bytes, sizeof(Bytes));
+  const auto Address = reinterpret_cast<uint64_t>(Counter);
+  std::memcpy(Code + 9, &Address, 8);
+}
+void relativeJump(uint8_t *At, uint8_t *Target) {
+  At[0] = 0xe9;
+  const int32_t Offset = stub_jmp::computeRel32(At, Target);
+  std::memcpy(At + 1, &Offset, 4);
+}
+} // namespace
+
+uint8_t *JITStubBuilder::compileEntryCounterGate(uint64_t *Counter,
+                                                 uint8_t *Fast, uint8_t *Stub) {
+  auto *Code = static_cast<uint8_t *>(CodeMPool.allocate(
+      common::CodeMemPool::PageSize, common::CodeMemPool::PageSize));
+  counterPrefix(Code, Counter);
+  // JE at 23 is six bytes; cold starts after the five-byte normal JMP.
+  const int32_t ColdOffset = 5;
+  std::memcpy(Code + 25, &ColdOffset, 4);
+  relativeJump(Code + 29, Fast);
+  relativeJump(Code + 34, Stub + 5); // existing register-saving resolver
+  platform::mprotect(Code, common::CodeMemPool::PageSize,
+                     PROT_READ | PROT_EXEC);
+  return Code;
+}
+
+uint8_t *
+JITStubBuilder::compileLoopCounterGate(uint64_t *Counter, void *Cookie,
+                                       void (*Callback)(void *) noexcept) {
+  auto *Code = static_cast<uint8_t *>(CodeMPool.allocate(
+      common::CodeMemPool::PageSize, common::CodeMemPool::PageSize));
+  counterPrefix(Code, Counter);
+  const int32_t ColdOffset = 1;
+  std::memcpy(Code + 25, &ColdOffset, 4);
+  Code[29] = 0xc3;
+  auto *Cold = reinterpret_cast<uint8_t *>(privateLoopCold);
+  const size_t Size = reinterpret_cast<uint8_t *>(privateLoopColdEnd) - Cold;
+  std::memcpy(Code + 30, Cold, Size);
+  const uint64_t CookieAddr = reinterpret_cast<uint64_t>(Cookie);
+  const uint64_t CallbackAddr = reinterpret_cast<uint64_t>(Callback);
+  std::memcpy(Code + 30 +
+                  (reinterpret_cast<uint8_t *>(privateLoopColdCookie) - Cold) +
+                  2,
+              &CookieAddr, 8);
+  std::memcpy(
+      Code + 30 +
+          (reinterpret_cast<uint8_t *>(privateLoopColdCallback) - Cold) + 2,
+      &CallbackAddr, 8);
+  // Only this gate's first jump is subsequently patched, just like lazy stubs.
+  platform::mprotect(Code, common::CodeMemPool::PageSize,
+                     PROT_READ | PROT_WRITE | PROT_EXEC);
+  return Code;
+}

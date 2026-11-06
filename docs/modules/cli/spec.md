@@ -121,3 +121,13 @@ Parsing or initialization failures return `EXIT_FAILURE` uniformly; `evmc_status
 - [utils module](../utils/spec.md): Logging, address parsing, hex conversion, state persistence
 - [evm module](../evm/spec.md): EVM execution, `evmc_revision`, `DEFAULT_REVISION`
 - [host module](../host/spec.md): WASI, env, evmabimock host modules
+
+### Private helper tiering options
+
+Multipass exposes `--enable-lazy-private-tiering`, `--lazy-tier-policy`
+(`calls|loops|budgeted`), `--lazy-tier-call-threshold`,
+`--lazy-tier-loop-threshold`, `--lazy-tier-max-functions`,
+`--lazy-tier-max-bytes`, `--lazy-tier-max-function-bytes`,
+`--lazy-tier-budget-ms` and `--lazy-tier-benefit-ratio`. The feature is off by
+default and requires lazy MT with Greedy enabled. Loop heat is inferred after a
+bounded sample; the budget is elapsed compilation time, not a hard deadline.

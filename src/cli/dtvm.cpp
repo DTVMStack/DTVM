@@ -287,6 +287,39 @@ int main(int argc, char *argv[]) {
         ->excludes(DMMOption);
     CLIParser->add_flag("--enable-multipass-lazy", Config.EnableMultipassLazy,
                         "Enable multipass lazy mode (on request compile)");
+    CLIParser->add_flag(
+        "--enable-lazy-private-tiering", Config.EnableLazyPrivateTiering,
+        "Profile and upgrade hot private loop helpers (lazy MT only)");
+    const std::map<std::string, zen::runtime::LazyPrivateTierPolicy>
+        TierPolicies{
+            {"calls", zen::runtime::LazyPrivateTierPolicy::Calls},
+            {"loops", zen::runtime::LazyPrivateTierPolicy::Loops},
+            {"budgeted", zen::runtime::LazyPrivateTierPolicy::Budgeted}};
+    CLIParser
+        ->add_option("--lazy-tier-policy", Config.LazyTierPolicy,
+                     "Private upgrade policy: calls, loops, budgeted")
+        ->transform(CLI::CheckedTransformer(TierPolicies, CLI::ignore_case));
+    CLIParser->add_option("--lazy-tier-call-threshold",
+                          Config.LazyTierCallThreshold,
+                          "Calls before admitting loop profiling");
+    CLIParser->add_option("--lazy-tier-loop-threshold",
+                          Config.LazyTierLoopThreshold,
+                          "Estimated loop visits before upgrading");
+    CLIParser->add_option("--lazy-tier-max-functions",
+                          Config.LazyTierMaxFunctions,
+                          "Maximum admitted private functions per module");
+    CLIParser->add_option("--lazy-tier-max-bytes", Config.LazyTierMaxBytes,
+                          "Maximum admitted private source bytes per module");
+    CLIParser->add_option("--lazy-tier-max-function-bytes",
+                          Config.LazyTierMaxFunctionBytes,
+                          "Maximum eligible private function source bytes");
+    CLIParser->add_option(
+        "--lazy-tier-budget-ms", Config.LazyTierBudgetMs,
+        "Soft elapsed private compilation budget in milliseconds");
+    CLIParser->add_option(
+        "--lazy-tier-benefit-ratio", Config.LazyTierBenefitRatio,
+        "Required projected saving / estimated compilation cost");
+
     CLIParser->add_flag("--enable-profile-guided-jit",
                         Config.EnableProfileGuidedJIT,
                         "Enable profile-guided JIT mode");

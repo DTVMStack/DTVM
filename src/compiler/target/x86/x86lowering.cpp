@@ -2067,7 +2067,29 @@ CgRegister X86CgLowering::lowerCall(const CallInstructionBase &Inst) {
   }
 
   // Add a register mask operand representing the call-preserved registers.
-  CallOperands.push_back(CgOperand::createRegMask(CSR_64_RegMask));
+  if (Inst.isPreserveAll()) {
+    ZEN_ASSERT(Inst.getType()->isVoid() && Inst.getNumOperands() == 0);
+    static const auto Mask = [] {
+      std::array<uint32_t, (X86::NUM_TARGET_REGS + 31) / 32> M;
+      M.fill(~uint32_t(0));
+      auto Clobber = [&](unsigned Reg) {
+        M[Reg / 32] &= ~(uint32_t(1) << (Reg % 32));
+      };
+      Clobber(X86::EFLAGS);
+      // FXSAVE64 preserves XMM0-15, not AVX/AVX-512 extensions. Keep
+      // wider values spillable if the target gains those features later.
+      for (unsigned Reg = X86::XMM16; Reg <= X86::ZMM31; ++Reg)
+        Clobber(Reg);
+      for (unsigned Reg = X86::K0; Reg <= X86::K7; ++Reg)
+        Clobber(Reg);
+      for (unsigned Reg = X86::K0_K1; Reg <= X86::K6_K7; ++Reg)
+        Clobber(Reg);
+      return M;
+    }();
+    CallOperands.push_back(CgOperand::createRegMask(Mask.data()));
+  } else {
+    CallOperands.push_back(CgOperand::createRegMask(CSR_64_RegMask));
+  }
 
   OperandNum NumOperands = Inst.getNumOperands();
   SmallVector<CgRegister, 6> ArgVirtRegs;

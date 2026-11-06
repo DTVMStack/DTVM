@@ -44,6 +44,10 @@ class CompileContext {
   };
 
 public:
+  // Per-function diagnostics used only by the optional private tiering policy.
+  uint32_t LastSpillSlots = 0;
+  bool CollectTieringMetadata = false;
+
   CompileContext();
 
   virtual ~CompileContext();
