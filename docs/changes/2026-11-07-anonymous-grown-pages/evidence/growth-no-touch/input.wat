@@ -1,0 +1,17 @@
+(module
+ (import "wasi_snapshot_preview1" "clock_time_get" (func $clock (param i32 i64 i32) (result i32)))
+ (import "wasi_snapshot_preview1" "fd_write" (func $write (param i32 i32 i32 i32) (result i32)))
+ (memory (export "memory") 1 512)
+ (func $grow (result i32) (local $i i32)
+   (loop $next
+     (drop (memory.grow (i32.const 1)))
+     (local.set $i (i32.add (local.get $i) (i32.const 1)))
+     (br_if $next (i32.lt_u (local.get $i) (i32.const 511))))
+   (memory.size))
+ (func (export "_start")
+   (drop (call $clock (i32.const 1) (i64.const 1) (i32.const 128)))
+   (i32.store (i32.const 144) (call $grow))
+   (drop (call $clock (i32.const 1) (i64.const 1) (i32.const 136)))
+   (i32.store (i32.const 160) (i32.const 128))
+   (i32.store (i32.const 164) (i32.const 20))
+   (drop (call $write (i32.const 1) (i32.const 160) (i32.const 1) (i32.const 168)))))

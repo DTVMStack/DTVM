@@ -1,0 +1,79 @@
+--- a/src/compiler/compiler.cpp
++++ b/src/compiler/compiler.cpp
+@@ -2,6 +2,9 @@
+ // SPDX-License-Identifier: Apache-2.0
+
+ #include "compiler/compiler.h"
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
+ #include "common/thread_pool.h"
+ #include "compiler/cgir/cg_function.h"
+ #include "compiler/cgir/pass/dead_cg_instruction_elim.h"
+@@ -777,6 +780,7 @@
+ uint8_t *LazyJITCompiler::compileFunction(
+     WasmFrontendContext &Ctx, uint32_t FuncIdx, bool DisableGreedyRA,
+     uint8_t *LoopTick, bool AllowLoopGreedy, bool *SelectedLoopGreedy) {
++  const auto ResearchStart = std::chrono::steady_clock::now();
+   LazyInitialRAPolicy::Timer BudgetTimer(InitialRAPolicy, AllowLoopGreedy);
+   const bool LoopGreedy =
+       compileWasmToMC(Ctx, *Mod, FuncIdx, DisableGreedyRA, LoopTick,
+@@ -800,6 +804,24 @@
+   uint8_t *JITFuncCodePtr = Ctx.CodePtr;
+   platform::mprotect(JITFuncCodePtr, TO_MPROTECT_CODE_SIZE(Ctx.CodeSize),
+                      PROT_READ | PROT_EXEC);
++  if (const char *Dir = std::getenv("DTVM_RESEARCH_NATIVE_DIR")) {
++    const auto ResearchEnd = std::chrono::steady_clock::now();
++    const auto StartNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
++        ResearchStart.time_since_epoch()).count();
++    const auto EndNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
++        ResearchEnd.time_since_epoch()).count();
++    const bool Greedy = !DisableGreedyRA || LoopGreedy;
++    char Path[4096];
++    std::snprintf(Path, sizeof(Path), "%s/func-%u-%s.bin", Dir, FuncIdx,
++                  Greedy ? "greedy" : "fast");
++    if (FILE *Out = std::fopen(Path, "wb")) {
++      std::fwrite(Ctx.CodePtr, 1, Ctx.CodeSize, Out);
++      std::fclose(Out);
++    }
++    std::fprintf(stderr, "RESEARCH_NATIVE idx=%u greedy=%d begin=%llu end=%llu size=%zu\n",
++        FuncIdx, Greedy, (unsigned long long)StartNs, (unsigned long long)EndNs,
++        size_t(Ctx.CodeSize));
++  }
+   if (LoopGreedy)
+     ForegroundLoopGreedyCount.fetch_add(1, std::memory_order_release);
+   return JITFuncCodePtr;
+--- a/src/compiler/target/x86/x86lowering.cpp
++++ b/src/compiler/target/x86/x86lowering.cpp
+@@ -1,3 +1,4 @@
++#include <cstdlib>
+ // Copyright (C) 2021-2023 the DTVM authors. All Rights Reserved.
+ // SPDX-License-Identifier: Apache-2.0
+ #include "compiler/target/x86/x86lowering.h"
+@@ -1768,7 +1769,7 @@
+     }
+   }
+   if (!IntC) {
+-    if (Opc != OP_add) {
++    if (Opc != OP_add || std::getenv("DTVM_RESEARCH_NO_VAR_LEA")) {
+       return 0;
+     }
+     // Keep i32 wrap before any subsequent Wasm memory offset. Both input
+--- a/src/runtime/memory.cpp
++++ b/src/runtime/memory.cpp
+@@ -8,6 +8,7 @@
+ #include "utils/others.h"
+ #include <cinttypes>
+ #include <cstdio>
++#include <cstdlib>
+
+ namespace zen::runtime {
+
+@@ -74,6 +75,7 @@
+     UseMmapBucket =
+         UseMmapBucket && verifyCanUseMmapBucketByModuleDataSegments(Mod);
+     UseMmapBucket = UseMmapBucket && utils::checkSupportRamDisk();
++    UseMmapBucket = UseMmapBucket && !std::getenv("DTVM_RESEARCH_SINGLE_MMAP");
+   try_use_mmap_init:
+     if (UseMmapBucket) {
+       utils::Statistics &Stats = Mod->getRuntime()->getStatistics();

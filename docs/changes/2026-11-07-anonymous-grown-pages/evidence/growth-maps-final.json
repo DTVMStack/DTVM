@@ -1,0 +1,48 @@
+[
+  {
+    "engine": "main",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/pr643/dtvm-pr643-d6f31ef",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/work/pr643-research/phases/atax-phases-r30.wasm"
+    ],
+    "exit": 0,
+    "maps": [
+      "55f926bfa000-55f92706e000 rw-p 00000000 00:00 0                          [heap]",
+      "7f1df8000000-7f1df9ea0000 rw-p 00000000 00:1a 42150                      /dev/shm/zetaengine_init_memory_94528585556224_0.memory (deleted)",
+      "7f1df9ea0000-7f1ff8000000 ---p 01ea0000 00:1a 42150                      /dev/shm/zetaengine_init_memory_94528585556224_0.memory (deleted)",
+      "7f1ff8000000-7f1ff8075000 rw-p 00000000 00:00 0 "
+    ],
+    "stdout_bytes": 1680,
+    "stderr_sha256": "30025df5b5a786184e4f1b5f2daa24153bd27c4536d09b45d62c81fec239444c"
+  },
+  {
+    "engine": "anonymous",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/pr643-research/dtvm-anon-grown-once",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/work/pr643-research/phases/atax-phases-r30.wasm"
+    ],
+    "exit": 0,
+    "maps": [
+      "7f5efc075000-7f5f00000000 ---p 00000000 00:00 0 ",
+      "7f5f013f8000-7f5f01418000 rw-p 00000000 00:1a 42151                      /dev/shm/zetaengine_init_memory_94146845761792_0.memory (deleted)",
+      "7f5f01418000-7f5f03298000 rw-p 00000000 00:00 0 ",
+      "7f5f03298000-7f5f033f8000 ---p 00000000 00:00 0 ",
+      "7f5f033f8000-7f61013f8000 ---p 02000000 00:1a 42151                      /dev/shm/zetaengine_init_memory_94146845761792_0.memory (deleted)",
+      "7f61013f8000-7f61013f9000 ---p 00000000 00:00 0 "
+    ],
+    "stdout_bytes": 1680,
+    "stderr_sha256": "30025df5b5a786184e4f1b5f2daa24153bd27c4536d09b45d62c81fec239444c"
+  }
+]

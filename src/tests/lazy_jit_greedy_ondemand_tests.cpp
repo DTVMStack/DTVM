@@ -4,6 +4,7 @@
 #include "compiler/compiler.h"
 #include "compiler/stub/stub_jmp_target.h"
 #include "runtime/isolation.h"
+#include "runtime/memory.h"
 #include "runtime/module.h"
 #include "runtime/runtime.h"
 #include "zetaengine.h"
@@ -568,4 +569,111 @@ TEST(LazyJitGreedyOndemand, InitialPolicySizeAndDisableGuards) {
     EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), Guard == 3 ? 1u : 0u);
     EXPECT_EQ(LM.Lazy->getBackgroundPublishCount(), 1u);
   }
+}
+
+TEST(WasmBucketMemory, GrowthPreservesPrefixZeroesAndInstanceIsolation) {
+  auto Bytes = loadWasmFile(BUCKET_GROW_WASM_PATH);
+  auto RT = makeRuntime(false, false, true);
+  ASSERT_NE(RT, nullptr);
+  auto ModRet = RT->loadModule("bucket_growth", Bytes.data(), Bytes.size());
+  ASSERT_TRUE(ModRet);
+  auto *Mod = *ModRet;
+  auto *Iso = RT->createManagedIsolation();
+  ASSERT_NE(Iso, nullptr);
+  auto ARet = Iso->createInstance(*Mod);
+  auto BRet = Iso->createInstance(*Mod);
+  ASSERT_TRUE(ARet);
+  ASSERT_TRUE(BRet);
+  auto *A = *ARet;
+  auto *B = *BRet;
+  if (A->getDefaultMemoryInst().Kind !=
+      zen::runtime::WM_MEMORY_DATA_TYPE_BUCKET_MMAP)
+    GTEST_SKIP() << "bucket mmap is unavailable on this platform";
+  auto Call = [&](Instance *Inst, const char *Name,
+                  std::vector<std::string> Args) -> uint32_t {
+    std::vector<TypedValue> Results;
+    const bool OK = RT->callWasmFunction(*Inst, Name, Args, Results);
+    EXPECT_TRUE(OK);
+    if (!OK || Results.empty())
+      return 0;
+    return Results[0].Value.I32;
+  };
+  auto Write = [&](Instance *Inst, const char *Addr, const char *Value) {
+    std::vector<TypedValue> Results;
+    EXPECT_TRUE(RT->callWasmFunction(*Inst, "write", {Addr, Value}, Results));
+  };
+  auto *Base = A->getDefaultMemoryInst().MemBase;
+  Write(A, "0", "123");
+  EXPECT_EQ(Call(A, "grow", {"2"}), 1u);
+  EXPECT_EQ(A->getDefaultMemoryInst().MemBase, Base);
+  EXPECT_EQ(Call(A, "read", {"0"}), 123u);
+  EXPECT_EQ(Call(B, "read", {"0"}), 42u);
+  EXPECT_EQ(Call(A, "read", {"65535"}), 222u);
+  EXPECT_EQ(Call(A, "scan", {"65536", "196608"}), 0u);
+  Write(A, "65536", "91");
+  Write(A, "196607", "92");
+  EXPECT_EQ(Call(B, "grow", {"2"}), 1u);
+  EXPECT_EQ(Call(B, "scan", {"65536", "196608"}), 0u);
+  Write(B, "65536", "177");
+  EXPECT_EQ(Call(A, "read", {"65536"}), 91u);
+  EXPECT_EQ(Call(B, "read", {"65536"}), 177u);
+  EXPECT_EQ(Call(A, "grow", {"0"}), 3u);
+  EXPECT_EQ(Call(A, "grow", {"1"}), 3u);
+  EXPECT_EQ(A->getDefaultMemoryInst().MemBase, Base);
+  EXPECT_EQ(Call(A, "read", {"196607"}), 92u);
+  EXPECT_EQ(Call(A, "scan", {"196608", "262144"}), 0u);
+  EXPECT_EQ(Call(A, "grow", {"2000"}), UINT32_MAX);
+  EXPECT_EQ(A->getDefaultMemoryInst().CurPages, 4u);
+  EXPECT_EQ(Call(A, "read", {"65536"}), 91u);
+  std::vector<TypedValue> Results;
+  EXPECT_FALSE(RT->callWasmFunction(*A, "read", {"262144"}, Results));
+  A->clearError();
+  EXPECT_EQ(Call(A, "read", {"65535"}), 222u);
+}
+
+TEST(WasmBucketMemory, SlotRetirementAndLargerMappingFallbackStayZero) {
+  auto Bytes = loadWasmFile(BUCKET_GROW_WASM_PATH);
+  auto RT = makeRuntime(false, false, true);
+  ASSERT_NE(RT, nullptr);
+  auto ModRet = RT->loadModule("bucket_retirement", Bytes.data(), Bytes.size());
+  ASSERT_TRUE(ModRet);
+  auto *Mod = *ModRet;
+  auto *Iso = RT->createManagedIsolation();
+  ASSERT_NE(Iso, nullptr);
+  auto Call = [&](Instance *Inst, const char *Name,
+                  std::vector<std::string> Args) -> uint32_t {
+    std::vector<TypedValue> Results;
+    const bool OK = RT->callWasmFunction(*Inst, Name, Args, Results);
+    EXPECT_TRUE(OK);
+    if (!OK || Results.empty())
+      return 0;
+    return Results[0].Value.I32;
+  };
+  for (unsigned I = 0; I < 12; ++I) {
+    auto Ret = Iso->createInstance(*Mod);
+    ASSERT_TRUE(Ret);
+    auto *Inst = *Ret;
+    if (Inst->getDefaultMemoryInst().Kind !=
+        zen::runtime::WM_MEMORY_DATA_TYPE_BUCKET_MMAP)
+      GTEST_SKIP() << "bucket mmap is unavailable on this platform";
+    EXPECT_EQ(Call(Inst, "read", {"0"}), 42u);
+    EXPECT_EQ(Call(Inst, "read", {"65535"}), 222u);
+    EXPECT_EQ(Call(Inst, "grow", {"1"}), 1u);
+    EXPECT_EQ(Call(Inst, "scan", {"65536", "131072"}), 0u);
+    std::vector<TypedValue> Results;
+    ASSERT_TRUE(RT->callWasmFunction(*Inst, "write", {"65536", "99"}, Results));
+    EXPECT_TRUE(Iso->deleteInstance(Inst));
+  }
+  auto Ret = Iso->createInstance(*Mod);
+  ASSERT_TRUE(Ret);
+  auto *Inst = *Ret;
+  auto *Base = Inst->getDefaultMemoryInst().MemBase;
+  EXPECT_EQ(Call(Inst, "grow", {"512"}), 1u);
+  EXPECT_EQ(Inst->getDefaultMemoryInst().Kind,
+            zen::runtime::WM_MEMORY_DATA_TYPE_SINGLE_MMAP);
+  EXPECT_NE(Inst->getDefaultMemoryInst().MemBase, Base);
+  EXPECT_EQ(Call(Inst, "read", {"0"}), 42u);
+  EXPECT_EQ(Call(Inst, "read", {"65535"}), 222u);
+  EXPECT_EQ(Call(Inst, "read", {"65536"}), 0u);
+  EXPECT_EQ(Call(Inst, "read", {"33619967"}), 0u);
 }

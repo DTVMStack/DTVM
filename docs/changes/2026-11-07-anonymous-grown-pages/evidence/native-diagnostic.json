@@ -1,0 +1,2414 @@
+[
+  {
+    "case": "atax",
+    "kind": "canonical",
+    "mode": "off",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/build-baseline/dtvm",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+    ],
+    "input_sha256": "796cdecca44721f058f182e5e4994649f45a5b2f394f449d6bb63b6415aadd66",
+    "diagnostic_sha256": "cc190fd02d38cb4d7cda1ba13aa069235c967ec1262741c2475e37141ce4015c",
+    "exit": 0,
+    "events": [
+      {
+        "index": 1,
+        "greedy": 0,
+        "begin_ns": 259259419569070,
+        "end_ns": 259259420553602,
+        "size": 145
+      },
+      {
+        "index": 0,
+        "greedy": 0,
+        "begin_ns": 259259420656003,
+        "end_ns": 259259420740207,
+        "size": 14
+      },
+      {
+        "index": 12,
+        "greedy": 0,
+        "begin_ns": 259259420782880,
+        "end_ns": 259259420867505,
+        "size": 33
+      },
+      {
+        "index": 14,
+        "greedy": 0,
+        "begin_ns": 259259420910428,
+        "end_ns": 259259421314124,
+        "size": 655
+      },
+      {
+        "index": 4,
+        "greedy": 0,
+        "begin_ns": 259259421371819,
+        "end_ns": 259259421473188,
+        "size": 33
+      },
+      {
+        "index": 1,
+        "greedy": 1,
+        "begin_ns": 259259424045061,
+        "end_ns": 259259424898920,
+        "size": 127
+      },
+      {
+        "index": 5,
+        "greedy": 0,
+        "begin_ns": 259259421517804,
+        "end_ns": 259259426681048,
+        "size": 9631
+      },
+      {
+        "index": 16,
+        "greedy": 0,
+        "begin_ns": 259259426740656,
+        "end_ns": 259259426933821,
+        "size": 244
+      },
+      {
+        "index": 8,
+        "greedy": 0,
+        "begin_ns": 259259426991647,
+        "end_ns": 259259427159915,
+        "size": 235
+      },
+      {
+        "index": 44,
+        "greedy": 0,
+        "begin_ns": 259259427210289,
+        "end_ns": 259259427511053,
+        "size": 627
+      },
+      {
+        "index": 2,
+        "greedy": 1,
+        "begin_ns": 259259427559454,
+        "end_ns": 259259428868164,
+        "size": 1029
+      },
+      {
+        "index": 3,
+        "greedy": 0,
+        "begin_ns": 259259428925048,
+        "end_ns": 259259429111974,
+        "size": 288
+      },
+      {
+        "index": 10,
+        "greedy": 0,
+        "begin_ns": 259259429167355,
+        "end_ns": 259259429435581,
+        "size": 242
+      },
+      {
+        "index": 11,
+        "greedy": 0,
+        "begin_ns": 259259429487357,
+        "end_ns": 259259429906165,
+        "size": 744
+      },
+      {
+        "index": 9,
+        "greedy": 0,
+        "begin_ns": 259259429977300,
+        "end_ns": 259259430860743,
+        "size": 2568
+      },
+      {
+        "index": 22,
+        "greedy": 0,
+        "begin_ns": 259259458953414,
+        "end_ns": 259259459539859,
+        "size": 899
+      },
+      {
+        "index": 20,
+        "greedy": 0,
+        "begin_ns": 259259459661087,
+        "end_ns": 259259459817568,
+        "size": 162
+      },
+      {
+        "index": 28,
+        "greedy": 0,
+        "begin_ns": 259259459869114,
+        "end_ns": 259259460197308,
+        "size": 634
+      },
+      {
+        "index": 27,
+        "greedy": 0,
+        "begin_ns": 259259460264788,
+        "end_ns": 259259460425895,
+        "size": 273
+      },
+      {
+        "index": 37,
+        "greedy": 0,
+        "begin_ns": 259259460482168,
+        "end_ns": 259259460597378,
+        "size": 106
+      },
+      {
+        "index": 33,
+        "greedy": 0,
+        "begin_ns": 259259460644738,
+        "end_ns": 259259460962056,
+        "size": 847
+      },
+      {
+        "index": 34,
+        "greedy": 0,
+        "begin_ns": 259259461013933,
+        "end_ns": 259259466434877,
+        "size": 20444
+      },
+      {
+        "index": 21,
+        "greedy": 0,
+        "begin_ns": 259259466505181,
+        "end_ns": 259259466873284,
+        "size": 816
+      },
+      {
+        "index": 43,
+        "greedy": 0,
+        "begin_ns": 259259466926422,
+        "end_ns": 259259467696037,
+        "size": 1999
+      },
+      {
+        "index": 35,
+        "greedy": 0,
+        "begin_ns": 259259467747573,
+        "end_ns": 259259468156016,
+        "size": 984
+      },
+      {
+        "index": 42,
+        "greedy": 0,
+        "begin_ns": 259259468203906,
+        "end_ns": 259259468342601,
+        "size": 62
+      },
+      {
+        "index": 46,
+        "greedy": 0,
+        "begin_ns": 259259468391092,
+        "end_ns": 259259468606350,
+        "size": 400
+      },
+      {
+        "index": 30,
+        "greedy": 0,
+        "begin_ns": 259259468659208,
+        "end_ns": 259259468798583,
+        "size": 171
+      },
+      {
+        "index": 29,
+        "greedy": 0,
+        "begin_ns": 259259468846865,
+        "end_ns": 259259469084956,
+        "size": 516
+      },
+      {
+        "index": 51,
+        "greedy": 0,
+        "begin_ns": 259259469132937,
+        "end_ns": 259259469328505,
+        "size": 296
+      },
+      {
+        "index": 6,
+        "greedy": 0,
+        "begin_ns": 259259470507574,
+        "end_ns": 259259470600221,
+        "size": 19
+      },
+      {
+        "index": 7,
+        "greedy": 0,
+        "begin_ns": 259259470648572,
+        "end_ns": 259259471552194,
+        "size": 2735
+      },
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259259471606134,
+        "end_ns": 259259471710358,
+        "size": 40
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259259471759861,
+        "end_ns": 259259471831857,
+        "size": 14
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259259471872257,
+        "end_ns": 259259472475176,
+        "size": 1816
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259259472527202,
+        "end_ns": 259259472619869,
+        "size": 33
+      }
+    ],
+    "stderr_sha256": "ac3b860c44406820ff163e473839df10788e08ed67da778df6f7c5311addb7bb"
+  },
+  {
+    "case": "atax",
+    "kind": "canonical",
+    "mode": "on",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/build-baseline/dtvm",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+    ],
+    "input_sha256": "796cdecca44721f058f182e5e4994649f45a5b2f394f449d6bb63b6415aadd66",
+    "diagnostic_sha256": "cc190fd02d38cb4d7cda1ba13aa069235c967ec1262741c2475e37141ce4015c",
+    "exit": 0,
+    "events": [
+      {
+        "index": 1,
+        "greedy": 0,
+        "begin_ns": 259259531212496,
+        "end_ns": 259259532424413,
+        "size": 145
+      },
+      {
+        "index": 0,
+        "greedy": 0,
+        "begin_ns": 259259532509919,
+        "end_ns": 259259532594264,
+        "size": 14
+      },
+      {
+        "index": 12,
+        "greedy": 0,
+        "begin_ns": 259259532636987,
+        "end_ns": 259259532798515,
+        "size": 33
+      },
+      {
+        "index": 14,
+        "greedy": 0,
+        "begin_ns": 259259532845334,
+        "end_ns": 259259533132808,
+        "size": 655
+      },
+      {
+        "index": 4,
+        "greedy": 0,
+        "begin_ns": 259259533188911,
+        "end_ns": 259259533374514,
+        "size": 33
+      },
+      {
+        "index": 1,
+        "greedy": 1,
+        "begin_ns": 259259536056600,
+        "end_ns": 259259536865593,
+        "size": 127
+      },
+      {
+        "index": 5,
+        "greedy": 0,
+        "begin_ns": 259259534002561,
+        "end_ns": 259259539586916,
+        "size": 9705
+      },
+      {
+        "index": 16,
+        "greedy": 0,
+        "begin_ns": 259259539651842,
+        "end_ns": 259259539877785,
+        "size": 244
+      },
+      {
+        "index": 8,
+        "greedy": 0,
+        "begin_ns": 259259539934849,
+        "end_ns": 259259540148194,
+        "size": 235
+      },
+      {
+        "index": 44,
+        "greedy": 0,
+        "begin_ns": 259259540198128,
+        "end_ns": 259259540527043,
+        "size": 634
+      },
+      {
+        "index": 2,
+        "greedy": 1,
+        "begin_ns": 259259540582925,
+        "end_ns": 259259542283894,
+        "size": 1027
+      },
+      {
+        "index": 3,
+        "greedy": 0,
+        "begin_ns": 259259542335690,
+        "end_ns": 259259542528064,
+        "size": 288
+      },
+      {
+        "index": 10,
+        "greedy": 0,
+        "begin_ns": 259259542575434,
+        "end_ns": 259259542743291,
+        "size": 242
+      },
+      {
+        "index": 11,
+        "greedy": 0,
+        "begin_ns": 259259542790140,
+        "end_ns": 259259543422633,
+        "size": 750
+      },
+      {
+        "index": 9,
+        "greedy": 0,
+        "begin_ns": 259259543544613,
+        "end_ns": 259259544800635,
+        "size": 2579
+      },
+      {
+        "index": 22,
+        "greedy": 0,
+        "begin_ns": 259259579302488,
+        "end_ns": 259259580413646,
+        "size": 906
+      },
+      {
+        "index": 20,
+        "greedy": 0,
+        "begin_ns": 259259580719838,
+        "end_ns": 259259580947804,
+        "size": 163
+      },
+      {
+        "index": 28,
+        "greedy": 0,
+        "begin_ns": 259259581000642,
+        "end_ns": 259259581414773,
+        "size": 639
+      },
+      {
+        "index": 27,
+        "greedy": 0,
+        "begin_ns": 259259581469273,
+        "end_ns": 259259581633766,
+        "size": 273
+      },
+      {
+        "index": 37,
+        "greedy": 0,
+        "begin_ns": 259259581691231,
+        "end_ns": 259259581815754,
+        "size": 106
+      },
+      {
+        "index": 33,
+        "greedy": 0,
+        "begin_ns": 259259581929953,
+        "end_ns": 259259582364153,
+        "size": 847
+      },
+      {
+        "index": 34,
+        "greedy": 0,
+        "begin_ns": 259259582415739,
+        "end_ns": 259259589659052,
+        "size": 20488
+      },
+      {
+        "index": 21,
+        "greedy": 0,
+        "begin_ns": 259259589818066,
+        "end_ns": 259259590360196,
+        "size": 820
+      },
+      {
+        "index": 43,
+        "greedy": 0,
+        "begin_ns": 259259590415747,
+        "end_ns": 259259591496922,
+        "size": 2011
+      },
+      {
+        "index": 35,
+        "greedy": 0,
+        "begin_ns": 259259591615797,
+        "end_ns": 259259592042897,
+        "size": 984
+      },
+      {
+        "index": 42,
+        "greedy": 0,
+        "begin_ns": 259259592090017,
+        "end_ns": 259259592552218,
+        "size": 62
+      },
+      {
+        "index": 46,
+        "greedy": 0,
+        "begin_ns": 259259592658315,
+        "end_ns": 259259592891729,
+        "size": 400
+      },
+      {
+        "index": 30,
+        "greedy": 0,
+        "begin_ns": 259259592946420,
+        "end_ns": 259259593088950,
+        "size": 171
+      },
+      {
+        "index": 29,
+        "greedy": 0,
+        "begin_ns": 259259593134147,
+        "end_ns": 259259593468680,
+        "size": 516
+      },
+      {
+        "index": 51,
+        "greedy": 0,
+        "begin_ns": 259259593524422,
+        "end_ns": 259259593704658,
+        "size": 296
+      },
+      {
+        "index": 6,
+        "greedy": 0,
+        "begin_ns": 259259595112634,
+        "end_ns": 259259595220474,
+        "size": 19
+      },
+      {
+        "index": 7,
+        "greedy": 0,
+        "begin_ns": 259259595311798,
+        "end_ns": 259259596497056,
+        "size": 2747
+      },
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259259596606367,
+        "end_ns": 259259596722939,
+        "size": 40
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259259596772813,
+        "end_ns": 259259596849085,
+        "size": 14
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259259596887953,
+        "end_ns": 259259597439877,
+        "size": 1816
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259259597536800,
+        "end_ns": 259259597632991,
+        "size": 33
+      }
+    ],
+    "stderr_sha256": "ac3b860c44406820ff163e473839df10788e08ed67da778df6f7c5311addb7bb"
+  },
+  {
+    "case": "atax",
+    "kind": "phase1",
+    "mode": "off",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/build-baseline/dtvm",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/work/pr643-research/phases/atax-phases-r1.wasm"
+    ],
+    "input_sha256": "b1d7035883869954027179cdbfcce99198ec9965d8a9a18b551182528bae7b44",
+    "diagnostic_sha256": "cc190fd02d38cb4d7cda1ba13aa069235c967ec1262741c2475e37141ce4015c",
+    "exit": 0,
+    "events": [
+      {
+        "index": 1,
+        "greedy": 0,
+        "begin_ns": 259259654367442,
+        "end_ns": 259259655380096,
+        "size": 189
+      },
+      {
+        "index": 0,
+        "greedy": 0,
+        "begin_ns": 259259655470179,
+        "end_ns": 259259655560912,
+        "size": 14
+      },
+      {
+        "index": 52,
+        "greedy": 0,
+        "begin_ns": 259259655601392,
+        "end_ns": 259259655715460,
+        "size": 127
+      },
+      {
+        "index": 12,
+        "greedy": 0,
+        "begin_ns": 259259655768669,
+        "end_ns": 259259655852783,
+        "size": 33
+      },
+      {
+        "index": 1,
+        "greedy": 1,
+        "begin_ns": 259259656176350,
+        "end_ns": 259259657063258,
+        "size": 174
+      },
+      {
+        "index": 14,
+        "greedy": 0,
+        "begin_ns": 259259655894304,
+        "end_ns": 259259657491890,
+        "size": 655
+      },
+      {
+        "index": 4,
+        "greedy": 0,
+        "begin_ns": 259259657549605,
+        "end_ns": 259259657715610,
+        "size": 33
+      },
+      {
+        "index": 5,
+        "greedy": 0,
+        "begin_ns": 259259657816128,
+        "end_ns": 259259663195191,
+        "size": 9631
+      },
+      {
+        "index": 16,
+        "greedy": 0,
+        "begin_ns": 259259663303010,
+        "end_ns": 259259663540310,
+        "size": 244
+      },
+      {
+        "index": 8,
+        "greedy": 0,
+        "begin_ns": 259259663610424,
+        "end_ns": 259259663874403,
+        "size": 235
+      },
+      {
+        "index": 44,
+        "greedy": 0,
+        "begin_ns": 259259663931157,
+        "end_ns": 259259664473056,
+        "size": 627
+      },
+      {
+        "index": 2,
+        "greedy": 1,
+        "begin_ns": 259259664529499,
+        "end_ns": 259259666035961,
+        "size": 1135
+      },
+      {
+        "index": 3,
+        "greedy": 0,
+        "begin_ns": 259259666094988,
+        "end_ns": 259259666345017,
+        "size": 288
+      },
+      {
+        "index": 10,
+        "greedy": 0,
+        "begin_ns": 259259666398456,
+        "end_ns": 259259666589397,
+        "size": 242
+      },
+      {
+        "index": 11,
+        "greedy": 0,
+        "begin_ns": 259259666699890,
+        "end_ns": 259259667048384,
+        "size": 744
+      },
+      {
+        "index": 9,
+        "greedy": 0,
+        "begin_ns": 259259667119149,
+        "end_ns": 259259668206502,
+        "size": 2568
+      },
+      {
+        "index": 22,
+        "greedy": 0,
+        "begin_ns": 259259698642228,
+        "end_ns": 259259699220360,
+        "size": 899
+      },
+      {
+        "index": 20,
+        "greedy": 0,
+        "begin_ns": 259259699422238,
+        "end_ns": 259259699718525,
+        "size": 162
+      },
+      {
+        "index": 28,
+        "greedy": 0,
+        "begin_ns": 259259699770612,
+        "end_ns": 259259700187827,
+        "size": 634
+      },
+      {
+        "index": 27,
+        "greedy": 0,
+        "begin_ns": 259259700310488,
+        "end_ns": 259259700536722,
+        "size": 273
+      },
+      {
+        "index": 37,
+        "greedy": 0,
+        "begin_ns": 259259700607997,
+        "end_ns": 259259700801652,
+        "size": 106
+      },
+      {
+        "index": 33,
+        "greedy": 0,
+        "begin_ns": 259259700857054,
+        "end_ns": 259259701291975,
+        "size": 847
+      },
+      {
+        "index": 34,
+        "greedy": 0,
+        "begin_ns": 259259701347647,
+        "end_ns": 259259708206052,
+        "size": 20380
+      },
+      {
+        "index": 21,
+        "greedy": 0,
+        "begin_ns": 259259708357906,
+        "end_ns": 259259708999923,
+        "size": 816
+      },
+      {
+        "index": 43,
+        "greedy": 0,
+        "begin_ns": 259259709052591,
+        "end_ns": 259259709886040,
+        "size": 1999
+      },
+      {
+        "index": 35,
+        "greedy": 0,
+        "begin_ns": 259259710019357,
+        "end_ns": 259259710506205,
+        "size": 984
+      },
+      {
+        "index": 42,
+        "greedy": 0,
+        "begin_ns": 259259710561456,
+        "end_ns": 259259710701012,
+        "size": 62
+      },
+      {
+        "index": 46,
+        "greedy": 0,
+        "begin_ns": 259259710755723,
+        "end_ns": 259259711116615,
+        "size": 400
+      },
+      {
+        "index": 30,
+        "greedy": 0,
+        "begin_ns": 259259711174550,
+        "end_ns": 259259711438580,
+        "size": 171
+      },
+      {
+        "index": 29,
+        "greedy": 0,
+        "begin_ns": 259259711492219,
+        "end_ns": 259259711747345,
+        "size": 516
+      },
+      {
+        "index": 51,
+        "greedy": 0,
+        "begin_ns": 259259711903245,
+        "end_ns": 259259712333519,
+        "size": 296
+      },
+      {
+        "index": 6,
+        "greedy": 0,
+        "begin_ns": 259259714467917,
+        "end_ns": 259259714584049,
+        "size": 19
+      },
+      {
+        "index": 7,
+        "greedy": 0,
+        "begin_ns": 259259714642755,
+        "end_ns": 259259715708918,
+        "size": 2735
+      },
+      {
+        "index": 53,
+        "greedy": 0,
+        "begin_ns": 259259715766803,
+        "end_ns": 259259715940129,
+        "size": 199
+      },
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259259716033276,
+        "end_ns": 259259716150859,
+        "size": 40
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259259716209406,
+        "end_ns": 259259716339247,
+        "size": 14
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259259716390122,
+        "end_ns": 259259717016175,
+        "size": 1816
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259259717092648,
+        "end_ns": 259259717214658,
+        "size": 33
+      }
+    ],
+    "stderr_sha256": "ac3b860c44406820ff163e473839df10788e08ed67da778df6f7c5311addb7bb",
+    "stamps_ns": [
+      259259655762900,
+      259259666093606,
+      259259668316625,
+      259259668328312,
+      259259691541385,
+      259259698624491,
+      259259715995700
+    ],
+    "after_result_compiles": [
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259259716033276,
+        "end_ns": 259259716150859,
+        "size": 40,
+        "elapsed_ms": 0.117583
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259259716209406,
+        "end_ns": 259259716339247,
+        "size": 14,
+        "elapsed_ms": 0.129841
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259259716390122,
+        "end_ns": 259259717016175,
+        "size": 1816,
+        "elapsed_ms": 0.626053
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259259717092648,
+        "end_ns": 259259717214658,
+        "size": 33,
+        "elapsed_ms": 0.12201
+      }
+    ]
+  },
+  {
+    "case": "atax",
+    "kind": "phase1",
+    "mode": "on",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/build-baseline/dtvm",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/work/pr643-research/phases/atax-phases-r1.wasm"
+    ],
+    "input_sha256": "b1d7035883869954027179cdbfcce99198ec9965d8a9a18b551182528bae7b44",
+    "diagnostic_sha256": "cc190fd02d38cb4d7cda1ba13aa069235c967ec1262741c2475e37141ce4015c",
+    "exit": 0,
+    "events": [
+      {
+        "index": 1,
+        "greedy": 1,
+        "begin_ns": 259259780198375,
+        "end_ns": 259259781787940,
+        "size": 174
+      },
+      {
+        "index": 1,
+        "greedy": 0,
+        "begin_ns": 259259779819637,
+        "end_ns": 259259782507771,
+        "size": 189
+      },
+      {
+        "index": 0,
+        "greedy": 0,
+        "begin_ns": 259259782564285,
+        "end_ns": 259259782646005,
+        "size": 14
+      },
+      {
+        "index": 52,
+        "greedy": 0,
+        "begin_ns": 259259782685293,
+        "end_ns": 259259782795646,
+        "size": 127
+      },
+      {
+        "index": 12,
+        "greedy": 0,
+        "begin_ns": 259259782846190,
+        "end_ns": 259259782927651,
+        "size": 33
+      },
+      {
+        "index": 14,
+        "greedy": 0,
+        "begin_ns": 259259782968851,
+        "end_ns": 259259783412325,
+        "size": 655
+      },
+      {
+        "index": 4,
+        "greedy": 0,
+        "begin_ns": 259259783469500,
+        "end_ns": 259259783563759,
+        "size": 33
+      },
+      {
+        "index": 5,
+        "greedy": 0,
+        "begin_ns": 259259783654252,
+        "end_ns": 259259788633856,
+        "size": 9705
+      },
+      {
+        "index": 16,
+        "greedy": 0,
+        "begin_ns": 259259788773172,
+        "end_ns": 259259789049860,
+        "size": 244
+      },
+      {
+        "index": 8,
+        "greedy": 0,
+        "begin_ns": 259259789348851,
+        "end_ns": 259259789535906,
+        "size": 235
+      },
+      {
+        "index": 44,
+        "greedy": 0,
+        "begin_ns": 259259789709432,
+        "end_ns": 259259790009625,
+        "size": 634
+      },
+      {
+        "index": 2,
+        "greedy": 1,
+        "begin_ns": 259259790067320,
+        "end_ns": 259259791361549,
+        "size": 1130
+      },
+      {
+        "index": 3,
+        "greedy": 0,
+        "begin_ns": 259259791419725,
+        "end_ns": 259259791619039,
+        "size": 288
+      },
+      {
+        "index": 10,
+        "greedy": 0,
+        "begin_ns": 259259791668662,
+        "end_ns": 259259791924970,
+        "size": 242
+      },
+      {
+        "index": 11,
+        "greedy": 0,
+        "begin_ns": 259259792078767,
+        "end_ns": 259259792588919,
+        "size": 750
+      },
+      {
+        "index": 9,
+        "greedy": 0,
+        "begin_ns": 259259792806931,
+        "end_ns": 259259793920553,
+        "size": 2579
+      },
+      {
+        "index": 22,
+        "greedy": 0,
+        "begin_ns": 259259823840798,
+        "end_ns": 259259824632726,
+        "size": 906
+      },
+      {
+        "index": 20,
+        "greedy": 0,
+        "begin_ns": 259259824754636,
+        "end_ns": 259259824925898,
+        "size": 163
+      },
+      {
+        "index": 28,
+        "greedy": 0,
+        "begin_ns": 259259825026647,
+        "end_ns": 259259825367720,
+        "size": 639
+      },
+      {
+        "index": 27,
+        "greedy": 0,
+        "begin_ns": 259259825418755,
+        "end_ns": 259259825720811,
+        "size": 273
+      },
+      {
+        "index": 37,
+        "greedy": 0,
+        "begin_ns": 259259825777985,
+        "end_ns": 259259825909589,
+        "size": 106
+      },
+      {
+        "index": 33,
+        "greedy": 0,
+        "begin_ns": 259259825952112,
+        "end_ns": 259259826330971,
+        "size": 847
+      },
+      {
+        "index": 34,
+        "greedy": 0,
+        "begin_ns": 259259826428254,
+        "end_ns": 259259832751059,
+        "size": 20420
+      },
+      {
+        "index": 21,
+        "greedy": 0,
+        "begin_ns": 259259832843395,
+        "end_ns": 259259833267971,
+        "size": 820
+      },
+      {
+        "index": 43,
+        "greedy": 0,
+        "begin_ns": 259259833321520,
+        "end_ns": 259259834434512,
+        "size": 2011
+      },
+      {
+        "index": 35,
+        "greedy": 0,
+        "begin_ns": 259259834484465,
+        "end_ns": 259259835120083,
+        "size": 984
+      },
+      {
+        "index": 42,
+        "greedy": 0,
+        "begin_ns": 259259835175254,
+        "end_ns": 259259835333397,
+        "size": 62
+      },
+      {
+        "index": 46,
+        "greedy": 0,
+        "begin_ns": 259259835382039,
+        "end_ns": 259259835605459,
+        "size": 400
+      },
+      {
+        "index": 30,
+        "greedy": 0,
+        "begin_ns": 259259835659138,
+        "end_ns": 259259835800346,
+        "size": 171
+      },
+      {
+        "index": 29,
+        "greedy": 0,
+        "begin_ns": 259259835846905,
+        "end_ns": 259259836114680,
+        "size": 516
+      },
+      {
+        "index": 51,
+        "greedy": 0,
+        "begin_ns": 259259836210621,
+        "end_ns": 259259836981478,
+        "size": 296
+      },
+      {
+        "index": 6,
+        "greedy": 0,
+        "begin_ns": 259259838446178,
+        "end_ns": 259259838561969,
+        "size": 19
+      },
+      {
+        "index": 7,
+        "greedy": 0,
+        "begin_ns": 259259838618993,
+        "end_ns": 259259839912080,
+        "size": 2747
+      },
+      {
+        "index": 53,
+        "greedy": 0,
+        "begin_ns": 259259839967712,
+        "end_ns": 259259840163741,
+        "size": 199
+      },
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259259840285000,
+        "end_ns": 259259840388563,
+        "size": 40
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259259840784767,
+        "end_ns": 259259840909271,
+        "size": 14
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259259840968318,
+        "end_ns": 259259842348113,
+        "size": 1816
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259259842500497,
+        "end_ns": 259259842640644,
+        "size": 33
+      }
+    ],
+    "stderr_sha256": "ac3b860c44406820ff163e473839df10788e08ed67da778df6f7c5311addb7bb",
+    "stamps_ns": [
+      259259782840822,
+      259259791418152,
+      259259794003105,
+      259259794011828,
+      259259816432352,
+      259259823822882,
+      259259840279021
+    ],
+    "after_result_compiles": [
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259259840285000,
+        "end_ns": 259259840388563,
+        "size": 40,
+        "elapsed_ms": 0.103563
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259259840784767,
+        "end_ns": 259259840909271,
+        "size": 14,
+        "elapsed_ms": 0.124504
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259259840968318,
+        "end_ns": 259259842348113,
+        "size": 1816,
+        "elapsed_ms": 1.379795
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259259842500497,
+        "end_ns": 259259842640644,
+        "size": 33,
+        "elapsed_ms": 0.140147
+      }
+    ]
+  },
+  {
+    "case": "bicg",
+    "kind": "canonical",
+    "mode": "off",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/build-baseline/dtvm",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+    ],
+    "input_sha256": "5017122c17ebff6f927d7fd6785fadb154ebfda6a8fb1c1f4721b734cbd1febe",
+    "diagnostic_sha256": "cc190fd02d38cb4d7cda1ba13aa069235c967ec1262741c2475e37141ce4015c",
+    "exit": 0,
+    "events": [
+      {
+        "index": 1,
+        "greedy": 0,
+        "begin_ns": 259259993115727,
+        "end_ns": 259259994335576,
+        "size": 145
+      },
+      {
+        "index": 0,
+        "greedy": 0,
+        "begin_ns": 259259994424287,
+        "end_ns": 259259994530684,
+        "size": 14
+      },
+      {
+        "index": 12,
+        "greedy": 0,
+        "begin_ns": 259259994657431,
+        "end_ns": 259259994770618,
+        "size": 33
+      },
+      {
+        "index": 14,
+        "greedy": 0,
+        "begin_ns": 259259994822775,
+        "end_ns": 259259995179561,
+        "size": 655
+      },
+      {
+        "index": 4,
+        "greedy": 0,
+        "begin_ns": 259259995257335,
+        "end_ns": 259259995373297,
+        "size": 33
+      },
+      {
+        "index": 1,
+        "greedy": 1,
+        "begin_ns": 259259996070284,
+        "end_ns": 259259996833831,
+        "size": 127
+      },
+      {
+        "index": 5,
+        "greedy": 0,
+        "begin_ns": 259259995425413,
+        "end_ns": 259260000147327,
+        "size": 9631
+      },
+      {
+        "index": 16,
+        "greedy": 0,
+        "begin_ns": 259260000213665,
+        "end_ns": 259260000455151,
+        "size": 244
+      },
+      {
+        "index": 8,
+        "greedy": 0,
+        "begin_ns": 259260000525795,
+        "end_ns": 259260000714654,
+        "size": 235
+      },
+      {
+        "index": 44,
+        "greedy": 0,
+        "begin_ns": 259260000809934,
+        "end_ns": 259260001126802,
+        "size": 627
+      },
+      {
+        "index": 2,
+        "greedy": 1,
+        "begin_ns": 259260001181112,
+        "end_ns": 259260002522550,
+        "size": 1251
+      },
+      {
+        "index": 3,
+        "greedy": 0,
+        "begin_ns": 259260002580506,
+        "end_ns": 259260002790756,
+        "size": 288
+      },
+      {
+        "index": 10,
+        "greedy": 0,
+        "begin_ns": 259260002846368,
+        "end_ns": 259260003035156,
+        "size": 242
+      },
+      {
+        "index": 11,
+        "greedy": 0,
+        "begin_ns": 259260003089937,
+        "end_ns": 259260003485110,
+        "size": 744
+      },
+      {
+        "index": 9,
+        "greedy": 0,
+        "begin_ns": 259260003556976,
+        "end_ns": 259260004563921,
+        "size": 2568
+      },
+      {
+        "index": 22,
+        "greedy": 0,
+        "begin_ns": 259260040284941,
+        "end_ns": 259260040926167,
+        "size": 899
+      },
+      {
+        "index": 20,
+        "greedy": 0,
+        "begin_ns": 259260041054376,
+        "end_ns": 259260041281200,
+        "size": 162
+      },
+      {
+        "index": 28,
+        "greedy": 0,
+        "begin_ns": 259260041340868,
+        "end_ns": 259260041666008,
+        "size": 634
+      },
+      {
+        "index": 27,
+        "greedy": 0,
+        "begin_ns": 259260041725025,
+        "end_ns": 259260041905060,
+        "size": 273
+      },
+      {
+        "index": 37,
+        "greedy": 0,
+        "begin_ns": 259260041975094,
+        "end_ns": 259260042110363,
+        "size": 106
+      },
+      {
+        "index": 33,
+        "greedy": 0,
+        "begin_ns": 259260042168419,
+        "end_ns": 259260042539075,
+        "size": 847
+      },
+      {
+        "index": 34,
+        "greedy": 0,
+        "begin_ns": 259260042597321,
+        "end_ns": 259260048482110,
+        "size": 20444
+      },
+      {
+        "index": 21,
+        "greedy": 0,
+        "begin_ns": 259260048549740,
+        "end_ns": 259260048943380,
+        "size": 816
+      },
+      {
+        "index": 43,
+        "greedy": 0,
+        "begin_ns": 259260049004000,
+        "end_ns": 259260049816969,
+        "size": 1999
+      },
+      {
+        "index": 35,
+        "greedy": 0,
+        "begin_ns": 259260049878089,
+        "end_ns": 259260050322214,
+        "size": 984
+      },
+      {
+        "index": 42,
+        "greedy": 0,
+        "begin_ns": 259260050424214,
+        "end_ns": 259260050564381,
+        "size": 62
+      },
+      {
+        "index": 46,
+        "greedy": 0,
+        "begin_ns": 259260050618851,
+        "end_ns": 259260050861319,
+        "size": 400
+      },
+      {
+        "index": 30,
+        "greedy": 0,
+        "begin_ns": 259260050920907,
+        "end_ns": 259260051085810,
+        "size": 171
+      },
+      {
+        "index": 29,
+        "greedy": 0,
+        "begin_ns": 259260051146159,
+        "end_ns": 259260051464609,
+        "size": 516
+      },
+      {
+        "index": 51,
+        "greedy": 0,
+        "begin_ns": 259260051520702,
+        "end_ns": 259260051716210,
+        "size": 296
+      },
+      {
+        "index": 6,
+        "greedy": 0,
+        "begin_ns": 259260055710991,
+        "end_ns": 259260055838519,
+        "size": 19
+      },
+      {
+        "index": 7,
+        "greedy": 0,
+        "begin_ns": 259260055901683,
+        "end_ns": 259260057070987,
+        "size": 2735
+      },
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259260057165436,
+        "end_ns": 259260057326203,
+        "size": 40
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259260057384550,
+        "end_ns": 259260057484908,
+        "size": 14
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259260057533980,
+        "end_ns": 259260058165391,
+        "size": 1816
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259260058285128,
+        "end_ns": 259260058406657,
+        "size": 33
+      }
+    ],
+    "stderr_sha256": "f4240f815266c81d8d601c97dbf590dc3a764ddd328ce0c3e883079e0d7a89d1"
+  },
+  {
+    "case": "bicg",
+    "kind": "canonical",
+    "mode": "on",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/build-baseline/dtvm",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+    ],
+    "input_sha256": "5017122c17ebff6f927d7fd6785fadb154ebfda6a8fb1c1f4721b734cbd1febe",
+    "diagnostic_sha256": "cc190fd02d38cb4d7cda1ba13aa069235c967ec1262741c2475e37141ce4015c",
+    "exit": 0,
+    "events": [
+      {
+        "index": 1,
+        "greedy": 0,
+        "begin_ns": 259260109597602,
+        "end_ns": 259260110455307,
+        "size": 145
+      },
+      {
+        "index": 0,
+        "greedy": 0,
+        "begin_ns": 259260110636244,
+        "end_ns": 259260110747688,
+        "size": 14
+      },
+      {
+        "index": 12,
+        "greedy": 0,
+        "begin_ns": 259260110799124,
+        "end_ns": 259260110919171,
+        "size": 33
+      },
+      {
+        "index": 14,
+        "greedy": 0,
+        "begin_ns": 259260110976125,
+        "end_ns": 259260111341875,
+        "size": 655
+      },
+      {
+        "index": 4,
+        "greedy": 0,
+        "begin_ns": 259260111498616,
+        "end_ns": 259260111637390,
+        "size": 33
+      },
+      {
+        "index": 1,
+        "greedy": 1,
+        "begin_ns": 259260112059313,
+        "end_ns": 259260112921534,
+        "size": 127
+      },
+      {
+        "index": 5,
+        "greedy": 0,
+        "begin_ns": 259260111689728,
+        "end_ns": 259260117111213,
+        "size": 9705
+      },
+      {
+        "index": 16,
+        "greedy": 0,
+        "begin_ns": 259260117177952,
+        "end_ns": 259260117504303,
+        "size": 244
+      },
+      {
+        "index": 8,
+        "greedy": 0,
+        "begin_ns": 259260117563420,
+        "end_ns": 259260117757016,
+        "size": 235
+      },
+      {
+        "index": 44,
+        "greedy": 0,
+        "begin_ns": 259260117811156,
+        "end_ns": 259260118116165,
+        "size": 634
+      },
+      {
+        "index": 2,
+        "greedy": 1,
+        "begin_ns": 259260118179779,
+        "end_ns": 259260119644870,
+        "size": 1244
+      },
+      {
+        "index": 3,
+        "greedy": 0,
+        "begin_ns": 259260119741843,
+        "end_ns": 259260119950721,
+        "size": 288
+      },
+      {
+        "index": 10,
+        "greedy": 0,
+        "begin_ns": 259260120151727,
+        "end_ns": 259260120360676,
+        "size": 242
+      },
+      {
+        "index": 11,
+        "greedy": 0,
+        "begin_ns": 259260120416308,
+        "end_ns": 259260120778782,
+        "size": 750
+      },
+      {
+        "index": 9,
+        "greedy": 0,
+        "begin_ns": 259260120855766,
+        "end_ns": 259260121744266,
+        "size": 2579
+      },
+      {
+        "index": 22,
+        "greedy": 0,
+        "begin_ns": 259260158395268,
+        "end_ns": 259260159029123,
+        "size": 906
+      },
+      {
+        "index": 20,
+        "greedy": 0,
+        "begin_ns": 259260159148158,
+        "end_ns": 259260159354072,
+        "size": 163
+      },
+      {
+        "index": 28,
+        "greedy": 0,
+        "begin_ns": 259260159410996,
+        "end_ns": 259260159734443,
+        "size": 639
+      },
+      {
+        "index": 27,
+        "greedy": 0,
+        "begin_ns": 259260159795162,
+        "end_ns": 259260159974517,
+        "size": 273
+      },
+      {
+        "index": 37,
+        "greedy": 0,
+        "begin_ns": 259260160074474,
+        "end_ns": 259260160211817,
+        "size": 106
+      },
+      {
+        "index": 33,
+        "greedy": 0,
+        "begin_ns": 259260160299716,
+        "end_ns": 259260160650093,
+        "size": 847
+      },
+      {
+        "index": 34,
+        "greedy": 0,
+        "begin_ns": 259260160707358,
+        "end_ns": 259260166330431,
+        "size": 20488
+      },
+      {
+        "index": 21,
+        "greedy": 0,
+        "begin_ns": 259260166398531,
+        "end_ns": 259260166789718,
+        "size": 820
+      },
+      {
+        "index": 43,
+        "greedy": 0,
+        "begin_ns": 259260166845811,
+        "end_ns": 259260167658499,
+        "size": 2011
+      },
+      {
+        "index": 35,
+        "greedy": 0,
+        "begin_ns": 259260167764646,
+        "end_ns": 259260168219967,
+        "size": 984
+      },
+      {
+        "index": 42,
+        "greedy": 0,
+        "begin_ns": 259260168309780,
+        "end_ns": 259260168447092,
+        "size": 62
+      },
+      {
+        "index": 46,
+        "greedy": 0,
+        "begin_ns": 259260168507391,
+        "end_ns": 259260168894582,
+        "size": 400
+      },
+      {
+        "index": 30,
+        "greedy": 0,
+        "begin_ns": 259260168952908,
+        "end_ns": 259260169119384,
+        "size": 171
+      },
+      {
+        "index": 29,
+        "greedy": 0,
+        "begin_ns": 259260169174185,
+        "end_ns": 259260169445635,
+        "size": 516
+      },
+      {
+        "index": 51,
+        "greedy": 0,
+        "begin_ns": 259260169504802,
+        "end_ns": 259260169700461,
+        "size": 296
+      },
+      {
+        "index": 6,
+        "greedy": 0,
+        "begin_ns": 259260173779647,
+        "end_ns": 259260173904200,
+        "size": 19
+      },
+      {
+        "index": 7,
+        "greedy": 0,
+        "begin_ns": 259260174000512,
+        "end_ns": 259260174968280,
+        "size": 2747
+      },
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259260175027948,
+        "end_ns": 259260175159422,
+        "size": 40
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259260175214963,
+        "end_ns": 259260175332076,
+        "size": 14
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259260175383552,
+        "end_ns": 259260176118155,
+        "size": 1816
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259260176172345,
+        "end_ns": 259260176311621,
+        "size": 33
+      }
+    ],
+    "stderr_sha256": "f4240f815266c81d8d601c97dbf590dc3a764ddd328ce0c3e883079e0d7a89d1"
+  },
+  {
+    "case": "bicg",
+    "kind": "phase1",
+    "mode": "off",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/build-baseline/dtvm",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r1.wasm"
+    ],
+    "input_sha256": "8f57cbe198759597e7f7126aee945b67c8d70d9dcea880cec1d09a15148757d4",
+    "diagnostic_sha256": "cc190fd02d38cb4d7cda1ba13aa069235c967ec1262741c2475e37141ce4015c",
+    "exit": 0,
+    "events": [
+      {
+        "index": 1,
+        "greedy": 0,
+        "begin_ns": 259260230656768,
+        "end_ns": 259260231545458,
+        "size": 189
+      },
+      {
+        "index": 0,
+        "greedy": 0,
+        "begin_ns": 259260231624966,
+        "end_ns": 259260231735138,
+        "size": 14
+      },
+      {
+        "index": 52,
+        "greedy": 0,
+        "begin_ns": 259260231786975,
+        "end_ns": 259260231937707,
+        "size": 127
+      },
+      {
+        "index": 1,
+        "greedy": 1,
+        "begin_ns": 259260232063222,
+        "end_ns": 259260232939304,
+        "size": 174
+      },
+      {
+        "index": 12,
+        "greedy": 0,
+        "begin_ns": 259260233086732,
+        "end_ns": 259260233206408,
+        "size": 33
+      },
+      {
+        "index": 14,
+        "greedy": 0,
+        "begin_ns": 259260233283582,
+        "end_ns": 259260233590585,
+        "size": 655
+      },
+      {
+        "index": 4,
+        "greedy": 0,
+        "begin_ns": 259260233651304,
+        "end_ns": 259260233772733,
+        "size": 33
+      },
+      {
+        "index": 5,
+        "greedy": 0,
+        "begin_ns": 259260233824069,
+        "end_ns": 259260237572627,
+        "size": 9631
+      },
+      {
+        "index": 16,
+        "greedy": 0,
+        "begin_ns": 259260237639005,
+        "end_ns": 259260237857087,
+        "size": 244
+      },
+      {
+        "index": 8,
+        "greedy": 0,
+        "begin_ns": 259260237923104,
+        "end_ns": 259260238111933,
+        "size": 235
+      },
+      {
+        "index": 44,
+        "greedy": 0,
+        "begin_ns": 259260238166253,
+        "end_ns": 259260238498833,
+        "size": 627
+      },
+      {
+        "index": 2,
+        "greedy": 1,
+        "begin_ns": 259260238589808,
+        "end_ns": 259260239985225,
+        "size": 1371
+      },
+      {
+        "index": 3,
+        "greedy": 0,
+        "begin_ns": 259260240100976,
+        "end_ns": 259260240335111,
+        "size": 288
+      },
+      {
+        "index": 10,
+        "greedy": 0,
+        "begin_ns": 259260240391274,
+        "end_ns": 259260240583868,
+        "size": 242
+      },
+      {
+        "index": 11,
+        "greedy": 0,
+        "begin_ns": 259260240671047,
+        "end_ns": 259260241366863,
+        "size": 744
+      },
+      {
+        "index": 9,
+        "greedy": 0,
+        "begin_ns": 259260241442995,
+        "end_ns": 259260242344215,
+        "size": 2568
+      },
+      {
+        "index": 22,
+        "greedy": 0,
+        "begin_ns": 259260279606828,
+        "end_ns": 259260280392307,
+        "size": 899
+      },
+      {
+        "index": 20,
+        "greedy": 0,
+        "begin_ns": 259260280519995,
+        "end_ns": 259260280684347,
+        "size": 162
+      },
+      {
+        "index": 28,
+        "greedy": 0,
+        "begin_ns": 259260280735343,
+        "end_ns": 259260281028575,
+        "size": 634
+      },
+      {
+        "index": 27,
+        "greedy": 0,
+        "begin_ns": 259260281083616,
+        "end_ns": 259260281360925,
+        "size": 273
+      },
+      {
+        "index": 37,
+        "greedy": 0,
+        "begin_ns": 259260281533760,
+        "end_ns": 259260281656812,
+        "size": 106
+      },
+      {
+        "index": 33,
+        "greedy": 0,
+        "begin_ns": 259260281702639,
+        "end_ns": 259260282029321,
+        "size": 847
+      },
+      {
+        "index": 34,
+        "greedy": 0,
+        "begin_ns": 259260282078634,
+        "end_ns": 259260287949342,
+        "size": 20380
+      },
+      {
+        "index": 21,
+        "greedy": 0,
+        "begin_ns": 259260288038223,
+        "end_ns": 259260288431082,
+        "size": 816
+      },
+      {
+        "index": 43,
+        "greedy": 0,
+        "begin_ns": 259260288522657,
+        "end_ns": 259260289377899,
+        "size": 1999
+      },
+      {
+        "index": 35,
+        "greedy": 0,
+        "begin_ns": 259260289426240,
+        "end_ns": 259260289814823,
+        "size": 984
+      },
+      {
+        "index": 42,
+        "greedy": 0,
+        "begin_ns": 259260289865097,
+        "end_ns": 259260289978434,
+        "size": 62
+      },
+      {
+        "index": 46,
+        "greedy": 0,
+        "begin_ns": 259260290124299,
+        "end_ns": 259260290404503,
+        "size": 400
+      },
+      {
+        "index": 30,
+        "greedy": 0,
+        "begin_ns": 259260290462488,
+        "end_ns": 259260290634632,
+        "size": 171
+      },
+      {
+        "index": 29,
+        "greedy": 0,
+        "begin_ns": 259260290688201,
+        "end_ns": 259260290935716,
+        "size": 516
+      },
+      {
+        "index": 51,
+        "greedy": 0,
+        "begin_ns": 259260290993321,
+        "end_ns": 259260291187998,
+        "size": 296
+      },
+      {
+        "index": 6,
+        "greedy": 0,
+        "begin_ns": 259260295366791,
+        "end_ns": 259260295488751,
+        "size": 19
+      },
+      {
+        "index": 7,
+        "greedy": 0,
+        "begin_ns": 259260295552104,
+        "end_ns": 259260296586500,
+        "size": 2735
+      },
+      {
+        "index": 53,
+        "greedy": 0,
+        "begin_ns": 259260296647330,
+        "end_ns": 259260296820064,
+        "size": 199
+      },
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259260296880403,
+        "end_ns": 259260296996615,
+        "size": 40
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259260297055842,
+        "end_ns": 259260297154367,
+        "size": 14
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259260297202598,
+        "end_ns": 259260297689507,
+        "size": 1816
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259260297744317,
+        "end_ns": 259260297860058,
+        "size": 33
+      }
+    ],
+    "stderr_sha256": "f4240f815266c81d8d601c97dbf590dc3a764ddd328ce0c3e883079e0d7a89d1",
+    "stamps_ns": [
+      259260231994811,
+      259260240099204,
+      259260242429430,
+      259260242441198,
+      259260264905147,
+      259260279587800,
+      259260296875406
+    ],
+    "after_result_compiles": [
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259260296880403,
+        "end_ns": 259260296996615,
+        "size": 40,
+        "elapsed_ms": 0.116212
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259260297055842,
+        "end_ns": 259260297154367,
+        "size": 14,
+        "elapsed_ms": 0.098525
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259260297202598,
+        "end_ns": 259260297689507,
+        "size": 1816,
+        "elapsed_ms": 0.486909
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259260297744317,
+        "end_ns": 259260297860058,
+        "size": 33,
+        "elapsed_ms": 0.115741
+      }
+    ]
+  },
+  {
+    "case": "bicg",
+    "kind": "phase1",
+    "mode": "on",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/build-baseline/dtvm",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r1.wasm"
+    ],
+    "input_sha256": "8f57cbe198759597e7f7126aee945b67c8d70d9dcea880cec1d09a15148757d4",
+    "diagnostic_sha256": "cc190fd02d38cb4d7cda1ba13aa069235c967ec1262741c2475e37141ce4015c",
+    "exit": 0,
+    "events": [
+      {
+        "index": 1,
+        "greedy": 0,
+        "begin_ns": 259260348480622,
+        "end_ns": 259260349373419,
+        "size": 189
+      },
+      {
+        "index": 0,
+        "greedy": 0,
+        "begin_ns": 259260349451364,
+        "end_ns": 259260349561176,
+        "size": 14
+      },
+      {
+        "index": 52,
+        "greedy": 0,
+        "begin_ns": 259260349614625,
+        "end_ns": 259260349763304,
+        "size": 127
+      },
+      {
+        "index": 12,
+        "greedy": 0,
+        "begin_ns": 259260349822601,
+        "end_ns": 259260349942067,
+        "size": 33
+      },
+      {
+        "index": 14,
+        "greedy": 0,
+        "begin_ns": 259260350151046,
+        "end_ns": 259260350492750,
+        "size": 655
+      },
+      {
+        "index": 4,
+        "greedy": 0,
+        "begin_ns": 259260350718402,
+        "end_ns": 259260350833482,
+        "size": 33
+      },
+      {
+        "index": 1,
+        "greedy": 1,
+        "begin_ns": 259260352045039,
+        "end_ns": 259260352887381,
+        "size": 174
+      },
+      {
+        "index": 5,
+        "greedy": 0,
+        "begin_ns": 259260350882134,
+        "end_ns": 259260356165906,
+        "size": 9705
+      },
+      {
+        "index": 16,
+        "greedy": 0,
+        "begin_ns": 259260356252925,
+        "end_ns": 259260356464507,
+        "size": 244
+      },
+      {
+        "index": 8,
+        "greedy": 0,
+        "begin_ns": 259260356523173,
+        "end_ns": 259260356696359,
+        "size": 235
+      },
+      {
+        "index": 44,
+        "greedy": 0,
+        "begin_ns": 259260356751901,
+        "end_ns": 259260357033927,
+        "size": 634
+      },
+      {
+        "index": 2,
+        "greedy": 1,
+        "begin_ns": 259260357084070,
+        "end_ns": 259260358459409,
+        "size": 1366
+      },
+      {
+        "index": 3,
+        "greedy": 0,
+        "begin_ns": 259260358514240,
+        "end_ns": 259260358699583,
+        "size": 288
+      },
+      {
+        "index": 10,
+        "greedy": 0,
+        "begin_ns": 259260358745361,
+        "end_ns": 259260358911806,
+        "size": 242
+      },
+      {
+        "index": 11,
+        "greedy": 0,
+        "begin_ns": 259260358996120,
+        "end_ns": 259260359364994,
+        "size": 750
+      },
+      {
+        "index": 9,
+        "greedy": 0,
+        "begin_ns": 259260359430060,
+        "end_ns": 259260360349346,
+        "size": 2579
+      },
+      {
+        "index": 22,
+        "greedy": 0,
+        "begin_ns": 259260396854564,
+        "end_ns": 259260397516720,
+        "size": 906
+      },
+      {
+        "index": 20,
+        "greedy": 0,
+        "begin_ns": 259260397625471,
+        "end_ns": 259260397783424,
+        "size": 163
+      },
+      {
+        "index": 28,
+        "greedy": 0,
+        "begin_ns": 259260397832135,
+        "end_ns": 259260398158867,
+        "size": 639
+      },
+      {
+        "index": 27,
+        "greedy": 0,
+        "begin_ns": 259260398383108,
+        "end_ns": 259260398570304,
+        "size": 273
+      },
+      {
+        "index": 37,
+        "greedy": 0,
+        "begin_ns": 259260398636111,
+        "end_ns": 259260398773183,
+        "size": 106
+      },
+      {
+        "index": 33,
+        "greedy": 0,
+        "begin_ns": 259260398826221,
+        "end_ns": 259260399171410,
+        "size": 847
+      },
+      {
+        "index": 34,
+        "greedy": 0,
+        "begin_ns": 259260399247112,
+        "end_ns": 259260405286618,
+        "size": 20420
+      },
+      {
+        "index": 21,
+        "greedy": 0,
+        "begin_ns": 259260405357172,
+        "end_ns": 259260405756722,
+        "size": 820
+      },
+      {
+        "index": 43,
+        "greedy": 0,
+        "begin_ns": 259260405815498,
+        "end_ns": 259260406903082,
+        "size": 2011
+      },
+      {
+        "index": 35,
+        "greedy": 0,
+        "begin_ns": 259260406959305,
+        "end_ns": 259260407472382,
+        "size": 984
+      },
+      {
+        "index": 42,
+        "greedy": 0,
+        "begin_ns": 259260407534524,
+        "end_ns": 259260407673549,
+        "size": 62
+      },
+      {
+        "index": 46,
+        "greedy": 0,
+        "begin_ns": 259260407869287,
+        "end_ns": 259260408165064,
+        "size": 400
+      },
+      {
+        "index": 30,
+        "greedy": 0,
+        "begin_ns": 259260408365539,
+        "end_ns": 259260408537863,
+        "size": 171
+      },
+      {
+        "index": 29,
+        "greedy": 0,
+        "begin_ns": 259260408590942,
+        "end_ns": 259260408840019,
+        "size": 516
+      },
+      {
+        "index": 51,
+        "greedy": 0,
+        "begin_ns": 259260408897694,
+        "end_ns": 259260409094955,
+        "size": 296
+      },
+      {
+        "index": 6,
+        "greedy": 0,
+        "begin_ns": 259260413168653,
+        "end_ns": 259260413337812,
+        "size": 19
+      },
+      {
+        "index": 7,
+        "greedy": 0,
+        "begin_ns": 259260413400925,
+        "end_ns": 259260414384025,
+        "size": 2747
+      },
+      {
+        "index": 53,
+        "greedy": 0,
+        "begin_ns": 259260414440879,
+        "end_ns": 259260414611471,
+        "size": 199
+      },
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259260414789664,
+        "end_ns": 259260414905294,
+        "size": 40
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259260414957351,
+        "end_ns": 259260415053913,
+        "size": 14
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259260415102956,
+        "end_ns": 259260415593519,
+        "size": 1816
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259260415648059,
+        "end_ns": 259260415764021,
+        "size": 33
+      }
+    ],
+    "stderr_sha256": "f4240f815266c81d8d601c97dbf590dc3a764ddd328ce0c3e883079e0d7a89d1",
+    "stamps_ns": [
+      259260349815831,
+      259260358512978,
+      259260360418929,
+      259260360428212,
+      259260382056770,
+      259260396837318,
+      259260414783935
+    ],
+    "after_result_compiles": [
+      {
+        "index": 18,
+        "greedy": 0,
+        "begin_ns": 259260414789664,
+        "end_ns": 259260414905294,
+        "size": 40,
+        "elapsed_ms": 0.11563
+      },
+      {
+        "index": 17,
+        "greedy": 0,
+        "begin_ns": 259260414957351,
+        "end_ns": 259260415053913,
+        "size": 14,
+        "elapsed_ms": 0.096562
+      },
+      {
+        "index": 25,
+        "greedy": 0,
+        "begin_ns": 259260415102956,
+        "end_ns": 259260415593519,
+        "size": 1816,
+        "elapsed_ms": 0.490563
+      },
+      {
+        "index": 26,
+        "greedy": 0,
+        "begin_ns": 259260415648059,
+        "end_ns": 259260415764021,
+        "size": 33,
+        "elapsed_ms": 0.115962
+      }
+    ]
+  }
+]

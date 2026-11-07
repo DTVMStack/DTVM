@@ -130,3 +130,13 @@ See the compiler specification for eligibility, lifetime and publication rules.
 
 `Module::getBinarySize()` returns the byte size of its retained input binary.
 Initial lazy allocation policy uses it for an optional whole-module size gate.
+
+Bucket memory growth retains the initial file-backed data prefix. Outside SGX,
+on the first positive in-bucket growth (old size equals the module's initial
+size), remap the
+unused, page-aligned zero tail through that owned item boundary as private
+anonymous PROT_NONE pages. Existing mprotect exposes exactly the requested size;
+later growth reuses the reservation, since Wasm memory never shrinks. Existing
+contents, neighbouring items and guard permissions stay unchanged. Accounting,
+protection and bucket retirement operate across both mapping types. Growth past
+the bucket limit retains the existing allocate/copy fallback.

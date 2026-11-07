@@ -1,0 +1,47 @@
+[
+  {
+    "engine": "main",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/pr643/dtvm-pr643-d6f31ef",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/work/pr643-research/phases/atax-phases-r30.wasm"
+    ],
+    "exit": 0,
+    "maps": [
+      "7fd7be998000-7fd7be9f8000 rw-p 00000000 00:00 0 ",
+      "7fd7be9f8000-7fd7c0898000 rw-p 00000000 00:1a 40593                      /dev/shm/zetaengine_init_memory_93825193738496_0.memory (deleted)",
+      "7fd7c0898000-7fd9be9f8000 ---p 01ea0000 00:1a 40593                      /dev/shm/zetaengine_init_memory_93825193738496_0.memory (deleted)",
+      "7fd9be9f8000-7fd9be9f9000 ---p 00000000 00:00 0 "
+    ],
+    "stdout_bytes": 1680,
+    "stderr_sha256": "30025df5b5a786184e4f1b5f2daa24153bd27c4536d09b45d62c81fec239444c"
+  },
+  {
+    "engine": "anonymous",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/pr643-research/dtvm-anon-grown-pages",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/work/pr643-research/phases/atax-phases-r30.wasm"
+    ],
+    "exit": 0,
+    "maps": [
+      "7fc8251c8000-7fc8251f8000 rw-p 00000000 00:00 0 ",
+      "7fc8251f8000-7fc825218000 rw-p 00000000 00:1a 40594                      /dev/shm/zetaengine_init_memory_93971598700800_0.memory (deleted)",
+      "7fc825218000-7fc827098000 rw-p 00000000 00:00 0 ",
+      "7fc827098000-7fca251f8000 ---p 01ea0000 00:1a 40594                      /dev/shm/zetaengine_init_memory_93971598700800_0.memory (deleted)",
+      "7fca251f8000-7fca251f9000 ---p 00000000 00:00 0 "
+    ],
+    "stdout_bytes": 1680,
+    "stderr_sha256": "30025df5b5a786184e4f1b5f2daa24153bd27c4536d09b45d62c81fec239444c"
+  }
+]

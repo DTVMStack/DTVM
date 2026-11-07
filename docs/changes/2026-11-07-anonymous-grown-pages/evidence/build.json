@@ -1,0 +1,67 @@
+{
+  "candidate_source": "7cbf6294adb37f5e0ee1aa81a2e076fca240d346",
+  "main_source": "3cb4f2e30c4024c95390c1b72147c2c7ea155632",
+  "main_binary_built_at": "19af308; src identical to d6f31ef and merged main 3cb4f2e (verified git diff)",
+  "old_control": "af4b07b",
+  "lea_prototype": "405aa1a",
+  "diagnostic_patch_base": "405aa1a",
+  "toolchain": "GCC14.2 LLVM15 Release; WT45 preexisting artifact",
+  "host": "AMD EPYC9V74, two-core cgroup quota, engine/workers CPU0; phase collector CPU1",
+  "asan": "Final source: 24 tests, Release -O1 -DNDEBUG ASAN=ON VIRTUAL_STACK=OFF, exit0; final Release:24 unit and97 spec cases in each of4 modes.",
+  "hugepages": "THP [madvise], shmem [never]; no hugepage advice added",
+  "limits": "One host; raw groups separate; source sizes and transform effects audited; no builds/tests/profiles concurrent with formal sampling",
+  "production_flags": {
+    "CMAKE_BUILD_TYPE:STRING": "Release",
+    "CMAKE_CXX_FLAGS_RELEASE:STRING": "-O3 -DNDEBUG",
+    "ZEN_ENABLE_ASAN:BOOL": "OFF",
+    "ZEN_ENABLE_ASSEMBLYSCRIPT_TEST:BOOL": "OFF",
+    "ZEN_ENABLE_BUILTIN_LIBC:BOOL": "ON",
+    "ZEN_ENABLE_BUILTIN_WASI:BOOL": "ON",
+    "ZEN_ENABLE_CHECKED_ARITHMETIC:BOOL": "ON",
+    "ZEN_ENABLE_CLI:BOOL": "ON",
+    "ZEN_ENABLE_COVERAGE:BOOL": "OFF",
+    "ZEN_ENABLE_CPU_EXCEPTION:BOOL": "ON",
+    "ZEN_ENABLE_DEBUG_GREEDY_RA:BOOL": "OFF",
+    "ZEN_ENABLE_DEBUG_INTERP:BOOL": "OFF",
+    "ZEN_ENABLE_DUMP_CALL_STACK:BOOL": "OFF",
+    "ZEN_ENABLE_DWASM:BOOL": "OFF",
+    "ZEN_ENABLE_EVM:BOOL": "OFF",
+    "ZEN_ENABLE_EVMABI_TEST:BOOL": "OFF",
+    "ZEN_ENABLE_EVM_GAS_REGISTER:BOOL": "OFF",
+    "ZEN_ENABLE_EVM_MEMORY_PLAN_FRAMEWORK:BOOL": "ON",
+    "ZEN_ENABLE_EVM_MEM_LARGE_STATIC_WORKSPACE_LOWERING:BOOL": "OFF",
+    "ZEN_ENABLE_EVM_STACK_SSA_LIFT:BOOL": "OFF",
+    "ZEN_ENABLE_JIT_FALLBACK_TEST:BOOL": "OFF",
+    "ZEN_ENABLE_JIT_LOGGING:BOOL": "OFF",
+    "ZEN_ENABLE_JIT_PRECOMPILE_FALLBACK:BOOL": "OFF",
+    "ZEN_ENABLE_LIBEVM:BOOL": "OFF",
+    "ZEN_ENABLE_LINUX_PERF:BOOL": "OFF",
+    "ZEN_ENABLE_MOCK_CHAIN_TEST:BOOL": "OFF",
+    "ZEN_ENABLE_MULTIPASS_JIT:BOOL": "ON",
+    "ZEN_ENABLE_PROFILER:BOOL": "OFF",
+    "ZEN_ENABLE_SGX:BOOL": "OFF",
+    "ZEN_ENABLE_SINGLEPASS_JIT:BOOL": "ON",
+    "ZEN_ENABLE_SPEC_TEST:BOOL": "OFF",
+    "ZEN_ENABLE_VIRTUAL_STACK:BOOL": "OFF",
+    "ZEN_EVM_CACHE_PROFILE:BOOL": "OFF"
+  },
+  "superseded_v1_source": "6cd5d65fcca16c0268388b42894084d22001da60",
+  "final_behavior": "First positive in-bucket grow reserves unused anonymous PROT_NONE tail once, then existing mprotect exposes requested size. No extra per-grow mmap.",
+  "frozen_binaries": {
+    "main": {
+      "path": "work/pr643/dtvm-pr643-d6f31ef",
+      "source": "3cb4f2e src-equivalent",
+      "sha256": "e4881cae3554aba193f565962874cd291571b0f08fb07a818d426330abfb1ddf"
+    },
+    "final": {
+      "path": "work/pr643-research/dtvm-anon-grown-once",
+      "source": "7cbf629",
+      "sha256": "978dc901886663b8acd5a6e216b28d345d4e0735701300d92c5a3c6a982ddf39"
+    },
+    "v1": {
+      "path": "work/pr643-research/dtvm-anon-grown-pages.gz",
+      "source": "6cd5d65",
+      "sha256": "b49c6df1a08a8f2685346efb3748ac85885c89c1563ebe22a963ade9baa04612"
+    }
+  }
+}

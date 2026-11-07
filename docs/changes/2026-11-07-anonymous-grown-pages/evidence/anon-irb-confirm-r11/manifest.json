@@ -1,0 +1,74 @@
+{
+  "commits": {
+    "main": "3cb4f2e",
+    "candidate": "6cd5d65",
+    "previous": "af4b07b"
+  },
+  "seed": 2026110773,
+  "rounds": 11,
+  "excluded_warmup": -1,
+  "timeout_s": 180,
+  "boundary": "Fresh process pre-spawn through exit; CPU0 including workers; warm page cache; WT45 cache disabled; output captured; no profiles/builds/tests conpreviously; private tiering default OFF",
+  "binaries": {
+    "main": {
+      "path": "/workspace/DTVM/work/pr643/dtvm-pr643-d6f31ef",
+      "sha256": "e4881cae3554aba193f565962874cd291571b0f08fb07a818d426330abfb1ddf"
+    },
+    "candidate": {
+      "path": "/workspace/DTVM/work/pr643-research/dtvm-anon-grown-pages",
+      "sha256": "b49c6df1a08a8f2685346efb3748ac85885c89c1563ebe22a963ade9baa04612"
+    },
+    "wt45": {
+      "path": "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "sha256": "d7b7317b34a717f4b809df14657975e2ce83221a697167219abdad6e44c7a12c"
+    }
+  },
+  "commands": {
+    "irb": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/pr643/dtvm-pr643-d6f31ef",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/irb.wasm"
+      ],
+      "candidate": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/pr643-research/dtvm-anon-grown-pages",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/irb.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/irb.wasm"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "irb",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/irb.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "stdin": "3+4\n",
+      "fairness": "same-wasm"
+    }
+  ],
+  "inputs": {
+    "irb": "257133432664662ce6bb17f1e6b75bd512e068a53523026eddd8518d2134676b"
+  }
+}

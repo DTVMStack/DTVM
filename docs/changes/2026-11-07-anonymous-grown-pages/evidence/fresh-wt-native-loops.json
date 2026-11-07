@@ -1,0 +1,90 @@
+{
+  "atax": [
+    {
+      "begin": "0xcb",
+      "end": "0x102",
+      "instructions": 11,
+      "frame": 1
+    },
+    {
+      "begin": "0x113",
+      "end": "0x15e",
+      "instructions": 16,
+      "frame": 0
+    },
+    {
+      "begin": "0x10e",
+      "end": "0x17b",
+      "instructions": 24,
+      "frame": 0
+    },
+    {
+      "begin": "0x1c1",
+      "end": "0x1fa",
+      "instructions": 13,
+      "frame": 1
+    },
+    {
+      "begin": "0x22b",
+      "end": "0x26d",
+      "instructions": 14,
+      "frame": 2
+    },
+    {
+      "begin": "0x1a9",
+      "end": "0x296",
+      "instructions": 48,
+      "frame": 7
+    },
+    {
+      "begin": "0x300",
+      "end": "0x388",
+      "instructions": 30,
+      "frame": 8
+    }
+  ],
+  "bicg": [
+    {
+      "begin": "0xdb",
+      "end": "0x12a",
+      "instructions": 17,
+      "frame": 0
+    },
+    {
+      "begin": "0x178",
+      "end": "0x1bf",
+      "instructions": 16,
+      "frame": 0
+    },
+    {
+      "begin": "0x136",
+      "end": "0x1dc",
+      "instructions": 36,
+      "frame": 1
+    },
+    {
+      "begin": "0x222",
+      "end": "0x28c",
+      "instructions": 21,
+      "frame": 3
+    },
+    {
+      "begin": "0x205",
+      "end": "0x2b5",
+      "instructions": 35,
+      "frame": 7
+    },
+    {
+      "begin": "0x31a",
+      "end": "0x397",
+      "instructions": 29,
+      "frame": 3
+    },
+    {
+      "begin": "0x3ef",
+      "end": "0x46c",
+      "instructions": 29,
+      "frame": 3
+    }
+  ]
+}

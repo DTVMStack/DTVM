@@ -545,6 +545,26 @@ WasmMemoryAllocator::enlargeWasmMemory(const WasmMemoryData &OldMemoryData,
           .NeedMprotect = false,
       };
       if (OldMemoryData.Type == WM_MEMORY_DATA_TYPE_BUCKET_MMAP) {
+#ifndef ZEN_ENABLE_SGX
+        // SGX's mmap shim does not implement fixed-address replacement.
+        const size_t InitialSize =
+            size_t(CurModule->getDefaultMemoryEntry().InitSize) *
+            DefaultBytesNumPerPage;
+        if (NewMemorySize > OldMemoryData.MemorySize &&
+            OldMemoryData.MemorySize == InitialSize) {
+          // Memory only grows: convert this item's unused zero tail once, on
+          // its first positive growth. Keep the initial data template intact.
+          // Reserve the whole tail as inaccessible anonymous pages; the
+          // existing mprotect below exposes exactly the requested size.
+          auto *Begin = OldMemoryData.MemoryData + InitialSize;
+          size_t Length = MmapMemoryBucketGrowMaxSize - InitialSize;
+          if (::mmap(Begin, Length, PROT_NONE,
+                     MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1,
+                     0) == MAP_FAILED) {
+            ZEN_ABORT();
+          }
+        }
+#endif
         auto *BucketMemAddr = (*MemoryAddrToMmapAddr)[OldMemoryData.MemoryData];
         auto *BucketInstance = ActiveBuckets[BucketMemAddr].get();
         auto IndexInBucket = (OldMemoryData.MemoryData - BucketMemAddr) /
