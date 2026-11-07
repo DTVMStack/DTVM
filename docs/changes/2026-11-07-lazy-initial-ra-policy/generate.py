@@ -90,3 +90,34 @@ for label, cold in [("small", 0), ("large", 3000)]:
     }
 (b / "modules.json").write_text(json.dumps(meta, indent=2) + "\n")
 print(meta)
+
+# Eight different private candidates, reached in a fixed order, then reused.
+parts = [common]
+parts += [kernel.replace("$kernel", f"$kernel{i}") for i in range(8)]
+parts.append(
+    """(func (export "_start") (local $n i32) (local $sum i32)
+ (drop (call $sizes (i32.const 512) (i32.const 516)))
+ (drop (call $args (i32.const 520) (i32.const 2048)))
+ (local.set $n (call $parse (i32.load (i32.const 524))))
+ (call $emit (i32.const 69))"""
+)
+for warm in (False, True):
+    parts.append("(local.set $sum (i32.const 0))")
+    for i in range(8):
+        begin, end = (107 + i, 65 + i) if warm else (75 + i, 97 + i)
+        parts.append(
+            f"""(local.set $sum (i32.add (local.get $sum)
+          (call $kernel{i} (local.get $n) (i32.const {begin}))))
+          (call $emit (i32.const {end}))"""
+        )
+    parts.append("(call $result (local.get $sum))")
+parts.append("))")
+wat, wasm = b / "burst.wat", b / "burst.wasm"
+wat.write_text("\n".join(parts))
+subprocess.run(["wat2wasm", str(wat), "-o", str(wasm)], check=True)
+meta["burst"] = {
+    "private_candidates": 8,
+    "wasm_bytes": wasm.stat().st_size,
+    "sha256": hashlib.sha256(wasm.read_bytes()).hexdigest(),
+}
+(b / "modules.json").write_text(json.dumps(meta, indent=2) + "\n")

@@ -152,7 +152,7 @@ Foreground publication still CASes only from the trampoline; canonical
 background publication remains monotonic. `getForegroundLoopGreedyCount`
 counts finished selected compiles before stub publication and is not a
 publication barrier. The size/depth rule is a static tradeoff, not a guarantee
-of runtime heat. Integer-only loops, oversized bodies and short loop nests
+of runtime heat. Other integer loop shapes, oversized bodies and low-trip loop nests
 remain limitations; startup and throughput must be measured together.
 
 Initial selection rules and guards live in `LazyInitialRAPolicy`; the frontend

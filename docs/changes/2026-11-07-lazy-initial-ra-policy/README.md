@@ -1,6 +1,6 @@
 # Change: Centralize lazy initial allocator policy
 
-- **Status**: In Progress
+- **Status**: Implemented
 - **Date**: 2026-11-07
 - **Tier**: Light
 
@@ -36,10 +36,16 @@ Elapsed time changes allocator scheduling only, never guest semantics.
 
 ## Validation
 
-- [ ] Build production and lazy tests
-- [ ] Existing lazy integration tests and deterministic policy boundary tests
-- [ ] Format/diff review
-- [ ] Separate first-call and full-process measurements against frozen main,
+- [x] Build production and lazy tests
+- [x] Existing lazy integration tests and deterministic policy boundary tests
+- [x] Format/diff review
+- [x] Separate first-call and full-process measurements against frozen main,
       previous candidate and Wasmtime 45
 
 Compiler contracts: [compiler spec](../../modules/compiler/spec.md).
+
+## Results
+
+[First-call measurements, guard tradeoffs, burst budget checks and IRB](REPORT.md).
+Retain existing defaults: static shape cannot predict dynamic loop trip counts,
+and whole-module size rejects useful hot functions when unrelated cold code grows.
