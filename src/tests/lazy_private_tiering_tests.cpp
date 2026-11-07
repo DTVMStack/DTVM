@@ -202,3 +202,57 @@ TEST(LazyPrivateGate, ConcurrentColdCrossingRunsCallbackOnce) {
     T.join();
   EXPECT_EQ(C.Hits.load(), 1u);
 }
+
+TEST(LazyInitialRAPolicy, LimitsAndDecisionPriority) {
+  using P = LazyInitialRAPolicy;
+  P Default({}, 10000000);
+  EXPECT_EQ(Default.select(true, 2048, true, false), P::Decision::GreedyFP);
+  EXPECT_EQ(Default.select(true, 2049, true, false), P::Decision::FunctionSize);
+  EXPECT_EQ(Default.select(false, 1, true, true), P::Decision::Disabled);
+  EXPECT_EQ(Default.select(true, 1, false, true), P::Decision::GreedyWord);
+  EXPECT_EQ(Default.select(true, 1, false, false), P::Decision::NoLoop);
+  P Bounded({true, 100, 10, 50}, 100);
+  EXPECT_EQ(Bounded.select(true, 10, false, true), P::Decision::GreedyWord);
+  EXPECT_EQ(Bounded.select(true, 11, true, true), P::Decision::FunctionSize);
+  Bounded.recordTime(30);
+  EXPECT_EQ(Bounded.select(true, 1, true, false, 19), P::Decision::GreedyFP);
+  EXPECT_EQ(Bounded.select(true, 1, true, false, 20), P::Decision::Budget);
+  Bounded.recordTime(30); // one admitted compile may overrun
+  EXPECT_EQ(Bounded.select(true, 1, true, false), P::Decision::Budget);
+  P Oversize({true, 99, 0, 0}, 100);
+  EXPECT_EQ(Oversize.select(true, 1, true, true), P::Decision::ModuleSize);
+  P Disabled({false, 0, 0, 0}, 100);
+  EXPECT_EQ(Disabled.select(true, 1, true, true), P::Decision::Disabled);
+  Default.recordTime(UINT64_MAX);
+  Default.recordTime(1);
+  EXPECT_EQ(Default.usedTime(), UINT64_MAX);
+  EXPECT_EQ(Default.select(true, 1, true, false), P::Decision::GreedyFP);
+}
+
+TEST(LazyInitialRAPolicy, StructuralRules) {
+  using P = LazyInitialRAPolicy;
+  EXPECT_EQ(P::addWordLoads(1, 1), 2u);
+  EXPECT_EQ(P::addWordLoads(2, 2), 2u);
+  EXPECT_FALSE(P::trackWord(2));
+  EXPECT_TRUE(P::trackWord(3));
+  P::Region R{3, false, false, 2, true, false};
+  EXPECT_TRUE(P::matchesWord(R));
+  R.Depth = 4;
+  EXPECT_FALSE(P::matchesWord(R));
+  R.Depth = 3;
+  R.OtherMemory = true;
+  EXPECT_FALSE(P::matchesWord(R));
+  R.OtherMemory = false;
+  R.WordLoads = 1;
+  EXPECT_FALSE(P::matchesWord(R));
+  R.WordLoads = 2;
+  R.Call = true;
+  R.FP = true;
+  EXPECT_FALSE(P::matchesWord(R));
+  EXPECT_FALSE(P::matchesFP(R));
+  R.Call = false;
+  R.Depth = 2;
+  EXPECT_TRUE(P::matchesFP(R));
+  R.Depth = 1;
+  EXPECT_FALSE(P::matchesFP(R));
+}

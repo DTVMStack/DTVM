@@ -129,6 +129,18 @@ construction visits f32/f64 add/sub/mul/div inside at least two simultaneously
 nested WASM loops with no guest call/call_indirect in that loop subtree.
 Block effects merge on structured exits, so calls outside the qualifying loop
 do not exclude a function; calls later in the same loop do. Sibling loops and nested non-loop blocks do not qualify.
+A second qualifying region is a third-level loop subtree (including any deeper
+loops) with at least two syntactic i32/i64 memory loads and one i32/i64 store,
+no other memory access widths/types, and no guest call/call_indirect. Counts
+saturate at two during frontend construction. This favors multi-input integer
+updates over read-only pointer scans and mixed byte-processing loops. A pure
+island below a callful/mixed third-level subtree does not qualify by itself.
+The same 2048-byte body bound applies. Shallow, register-only, single-load and
+read-only loops do not qualify. No benchmark names or indices are consulted.
+
+Hints are collected only when the foreground caller may select initial Greedy
+and the source body meets the size bound. This does not disable the independent
+loop/call metadata or loop callbacks used by opt-in private tiering.
 The signal is accumulated in constant time during existing MIR construction;
 it inserts no guest counters, requires no second compilation, and queues no
 additional background functions. It repairs one-shot kernels that cannot
@@ -140,8 +152,21 @@ Foreground publication still CASes only from the trampoline; canonical
 background publication remains monotonic. `getForegroundLoopGreedyCount`
 counts finished selected compiles before stub publication and is not a
 publication barrier. The size/depth rule is a static tradeoff, not a guarantee
-of runtime heat. Integer-only loops, oversized bodies and short loop nests
+of runtime heat. Other integer loop shapes, oversized bodies and low-trip loop nests
 remain limitations; startup and throughput must be measured together.
+
+Initial selection rules and guards live in `LazyInitialRAPolicy`; the frontend
+only collects structured effects. Defaults above are unchanged. Optional
+`LazyAutoGreedyMaxModuleBytes` (whole binary),
+`LazyAutoGreedyMaxFunctionBytes` (default 2048), and
+`LazyAutoGreedyBudgetMs` bound automatic selection; zero means unlimited.
+`DisableLazyAutoGreedy` disables automatic selection independently of configured
+Greedy. The soft module-lifetime elapsed budget charges stub precompilation and
+foreground compile attempts through code protection, including failures, and
+rechecks the current MIR prefix before choosing allocation. It excludes module
+loading, guest execution and background compilation; admitted/concurrent work
+can overrun. It is not a first-call deadline. Unlimited mode reads no budget
+clock. Eager, serial, one-function and background configured choices are exempt.
 
 ### Opt-in private loop tiering
 

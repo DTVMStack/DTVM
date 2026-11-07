@@ -127,3 +127,6 @@ and `LazyTierPolicy` (`Calls`, `Loops`, default `Budgeted`). Defaults: 10,000 ca
 Thresholds and ratio must be positive. Zero function/byte/time budgets disable
 profiling. Serial, explicitly FastRA and SGX configurations do not activate it.
 See the compiler specification for eligibility, lifetime and publication rules.
+
+`Module::getBinarySize()` returns the byte size of its retained input binary.
+Initial lazy allocation policy uses it for an optional whole-module size gate.

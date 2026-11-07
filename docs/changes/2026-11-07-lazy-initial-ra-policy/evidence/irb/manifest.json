@@ -1,0 +1,73 @@
+{
+  "commits": {
+    "main": "af4b07b22adf9f08586f9dd08adb1d57a07cce51",
+    "candidate": "19af308"
+  },
+  "seed": 2026110752,
+  "rounds": 7,
+  "excluded_warmup": -1,
+  "timeout_s": 180,
+  "boundary": "Fresh process pre-spawn through exit; CPU0 including workers; warm page cache; WT45 cache disabled; output captured; no profiles/builds/tests concurrently; private tiering default OFF",
+  "binaries": {
+    "main": {
+      "path": "/workspace/DTVM/work/pr642/dtvm-pr642-e678e1e",
+      "sha256": "7e0e041f0faaa461feb8f651df77886882167a68f73e50a43251354382965002"
+    },
+    "candidate": {
+      "path": "/workspace/DTVM/work/build-baseline/dtvm",
+      "sha256": "e4881cae3554aba193f565962874cd291571b0f08fb07a818d426330abfb1ddf"
+    },
+    "wt45": {
+      "path": "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "sha256": "d7b7317b34a717f4b809df14657975e2ce83221a697167219abdad6e44c7a12c"
+    }
+  },
+  "commands": {
+    "irb": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/pr642/dtvm-pr642-e678e1e",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/irb.wasm"
+      ],
+      "candidate": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/build-baseline/dtvm",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/irb.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/irb.wasm"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "irb",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/irb.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "stdin": "3+4\n",
+      "fairness": "same-wasm"
+    }
+  ],
+  "inputs": {
+    "irb": "257133432664662ce6bb17f1e6b75bd512e068a53523026eddd8518d2134676b"
+  }
+}

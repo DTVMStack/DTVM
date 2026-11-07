@@ -84,8 +84,10 @@ void buildAllMIRFuncTypes(WasmFrontendContext &Context, MModule &MMod,
 }
 
 FunctionMirBuilder::FunctionMirBuilder(CompilerContext &Context,
-                                       MFunction &MFunc)
-    : Ctx(Context), ControlStack(Context.MemPool), CurFunc(&MFunc) {}
+                                       MFunction &MFunc,
+                                       bool CollectInitialRAHints)
+    : CollectInitialRAHints(CollectInitialRAHints), Ctx(Context),
+      ControlStack(Context.MemPool), CurFunc(&MFunc) {}
 
 bool FunctionMirBuilder::compile([[maybe_unused]] CompilerContext *Context) {
   zen::action::WASMByteCodeVisitor<FunctionMirBuilder> Visitor(*this, &Ctx);
@@ -438,16 +440,22 @@ void FunctionMirBuilder::handleEnd(const BlockInfo &Info) {
     NextBlock = Info.getJumpBlock();
   const bool Reachable = Info.reachable();
   const bool HasFP = ControlStack.back().hasFPArithmetic();
-  const bool HasCall = ControlStack.back().hasGuestCall();
-  if (Info.getKind() == CtrlBlockKind::LOOP) {
+  const bool HasCall = Info.hasGuestCall();
+  const uint8_t WordLoads = Info.getWordLoads();
+  const bool HasStores = Info.hasWordStore();
+  const bool HasOtherMemory = Info.hasOtherMemory();
+  if (CollectInitialRAHints && Info.getKind() == CtrlBlockKind::LOOP) {
     ZEN_ASSERT(LoopDepth > 0);
-    if (LoopDepth >= 2 && HasFP && !HasCall)
-      HasCallFreeNestedFPLoop = true;
+    const LazyInitialRAPolicy::Region Region{
+        LoopDepth, HasFP, HasCall, WordLoads, HasStores, HasOtherMemory};
+    HasCallFreeNestedFPLoop |= LazyInitialRAPolicy::matchesFP(Region);
+    HasCallFreeDeepWordLoop |= LazyInitialRAPolicy::matchesWord(Region);
     --LoopDepth;
   }
   ControlStack.pop_back();
-  if (!ControlStack.empty())
-    ControlStack.back().mergeLoopEffects(HasFP, HasCall);
+  if (CollectInitialRAHints && !ControlStack.empty())
+    ControlStack.back().mergeLoopEffects(HasFP, HasCall, WordLoads, HasStores,
+                                         HasOtherMemory);
   if (Reachable) {
     createInstruction<BrInstruction>(true, Ctx, NextBlock);
     addSuccessor(NextBlock);
@@ -558,7 +566,8 @@ FunctionMirBuilder::Operand FunctionMirBuilder::handleCall(
     uint32_t FuncIdx, uintptr_t Target, bool IsImport, bool FarCall,
     const ArgumentInfo &ArgInfo, const std::vector<Operand> &Args) {
   ++Ctx.NumGuestCalls;
-  ControlStack.back().noteGuestCall();
+  if (CollectInitialRAHints)
+    ControlStack.back().noteGuestCall();
 
   if (IsImport) {
     MInstruction *FuncAddr = createIntConstInstruction(&Ctx.I64Type, Target);
@@ -575,7 +584,8 @@ FunctionMirBuilder::Operand FunctionMirBuilder::handleCallIndirect(
     uint32_t TypeIdx, Operand IndirectFuncIdxOp, uint32_t TblIdx,
     const ArgumentInfo &ArgInfo, const std::vector<Operand> &Args) {
   ++Ctx.NumGuestCalls;
-  ControlStack.back().noteGuestCall();
+  if (CollectInitialRAHints)
+    ControlStack.back().noteGuestCall();
 
   MInstruction *IndirectFuncIdx = extractOperand(IndirectFuncIdxOp);
   MInstruction *ResuableIndirectFuncIdx =

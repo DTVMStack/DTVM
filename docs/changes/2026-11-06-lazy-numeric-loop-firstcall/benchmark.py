@@ -21,6 +21,10 @@ p.add_argument("--cases", default="gemm,2mm")
 p.add_argument("--variants", default="main,eager,serial,wt45")
 p.add_argument("--candidate")
 p.add_argument("--main", default="work/wapm-followup/dtvm-main")
+p.add_argument("--main-commit", help="Source revision of --main; unknown if omitted")
+p.add_argument(
+    "--candidate-commit", help="Source revision of --candidate; unknown if omitted"
+)
 p.add_argument(
     "--wasmtime", default="benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime"
 )
@@ -64,7 +68,8 @@ cmds = {
     for c in cases
 }
 manifest = {
-    "main_commit": "193b8d2e8ddeb54af974bc8a2b9cc52b838de8b2",
+    "main_commit": a.main_commit,
+    "candidate_commit": a.candidate_commit,
     "seed": a.seed,
     "rounds": a.rounds,
     "excluded_warmup": -1,

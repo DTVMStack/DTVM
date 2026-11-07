@@ -52,6 +52,11 @@ struct RuntimeConfig {
   uint32_t LazyTierMaxFunctionBytes = 768;
   uint32_t LazyTierBudgetMs = 20;
   uint32_t LazyTierBenefitRatio = 2;
+  // Automatic first-demand Greedy selection; zero limits mean unlimited.
+  bool DisableLazyAutoGreedy = false;
+  uint64_t LazyAutoGreedyMaxModuleBytes = 0;
+  uint32_t LazyAutoGreedyMaxFunctionBytes = 2048;
+  uint32_t LazyAutoGreedyBudgetMs = 0;
 
   // Enable profile-guided JIT:
   // contracts start in interpreter mode; runtime profiling (sliding window

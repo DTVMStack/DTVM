@@ -5,6 +5,7 @@
 #define ZEN_COMPILER_COMPILER_H
 
 #include "compiler/common/common_defs.h"
+#include "compiler/lazy_initial_ra_policy.h"
 #include "compiler/stub/stub_builder.h"
 
 #include <atomic>
@@ -36,18 +37,26 @@ protected:
       : WasmMod(WasmMod),
         NumInternalFunctions(WasmMod->getNumInternalFunctions()),
         Config(WasmMod->getRuntime()->getConfig()),
-        Stats(WasmMod->getRuntime()->getStatistics()) {}
+        Stats(WasmMod->getRuntime()->getStatistics()),
+        InitialRAPolicy({!Config.DisableLazyAutoGreedy,
+                         Config.LazyAutoGreedyMaxModuleBytes,
+                         Config.LazyAutoGreedyMaxFunctionBytes,
+                         uint64_t(Config.LazyAutoGreedyBudgetMs) * 1000000},
+                        WasmMod->getBinarySize()) {}
 
   ~WasmJITCompiler() override = default;
 
-  bool compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod, uint32_t FuncIdx,
-                       bool DisableGreedyRA, uint8_t *LoopTick = nullptr,
-                       bool AllowLoopGreedy = false);
+  bool
+  compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod, uint32_t FuncIdx,
+                  bool DisableGreedyRA, uint8_t *LoopTick = nullptr,
+                  bool AllowLoopGreedy = false,
+                  const LazyInitialRAPolicy::Timer *CompileTimer = nullptr);
 
   runtime::Module *WasmMod;
   const uint32_t NumInternalFunctions;
   const runtime::RuntimeConfig &Config;
   utils::Statistics &Stats;
+  LazyInitialRAPolicy InitialRAPolicy;
 };
 
 class EagerJITCompiler final : public WasmJITCompiler {

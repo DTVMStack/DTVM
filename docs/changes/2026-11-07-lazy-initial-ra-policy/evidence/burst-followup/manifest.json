@@ -1,0 +1,82 @@
+{
+  "seed": 2026110755,
+  "rounds": 41,
+  "warmup": -1,
+  "modules": {
+    "small": {
+      "cold_table_functions": 0,
+      "wasm_bytes": 901,
+      "sha256": "2e8dc33eb5fee53e6183f9e1d461d72962e76b4912a0c8285f5b633695ab31e8"
+    },
+    "large": {
+      "cold_table_functions": 3000,
+      "wasm_bytes": 1545815,
+      "sha256": "f657604b97b768e7838b8447746acb4f1ab1b674882ccc253e52c7b04bd1a015"
+    },
+    "burst": {
+      "private_candidates": 8,
+      "wasm_bytes": 4745,
+      "sha256": "1b8f00a821c1473fb8ac37f117bfd7635de067d464836c73e182e119511a7e36"
+    }
+  },
+  "engines": {
+    "main": {
+      "command": [
+        "/workspace/DTVM/work/pr642/dtvm-pr642-e678e1e",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy"
+      ],
+      "sha256": "7e0e041f0faaa461feb8f651df77886882167a68f73e50a43251354382965002"
+    },
+    "previous": {
+      "command": [
+        "/workspace/DTVM/work/pr642/dtvm-word-v2",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy"
+      ],
+      "sha256": "580305bd1e92b0953e67637f7a6955e208e9a3b9c6a5e2caff846780c2d82ad2"
+    },
+    "policy": {
+      "command": [
+        "/workspace/DTVM/work/build-baseline/dtvm",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy"
+      ],
+      "sha256": "e4881cae3554aba193f565962874cd291571b0f08fb07a818d426330abfb1ddf"
+    },
+    "budget-5ms": {
+      "command": [
+        "/workspace/DTVM/work/build-baseline/dtvm",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "--lazy-auto-greedy-budget-ms",
+        "5"
+      ],
+      "sha256": "e4881cae3554aba193f565962874cd291571b0f08fb07a818d426330abfb1ddf"
+    },
+    "budget-10ms": {
+      "command": [
+        "/workspace/DTVM/work/build-baseline/dtvm",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "--lazy-auto-greedy-budget-ms",
+        "10"
+      ],
+      "sha256": "e4881cae3554aba193f565962874cd291571b0f08fb07a818d426330abfb1ddf"
+    },
+    "wt45": {
+      "command": [
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n"
+      ],
+      "sha256": "d7b7317b34a717f4b809df14657975e2ce83221a697167219abdad6e44c7a12c"
+    }
+  }
+}
