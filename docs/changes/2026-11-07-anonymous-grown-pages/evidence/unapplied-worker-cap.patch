@@ -1,0 +1,172 @@
+--- a/src/common/thread_pool.h
++++ b/src/common/thread_pool.h
+@@ -58,6 +58,11 @@
+   size_t getTasksTotal() const { return TasksTotal; }
+ 
+   ConcurrencyT getThreadCount() const { return ThreadCount; }
++
++  // Inspect the existing zero-request policy without starting workers.
++  static ConcurrencyT getAutomaticThreadCount() {
++    return determineThreadCount(0);
++  }
+ 
+   void pushTask(std::function<void(ThreadContext *)> Task) {
+     {
+--- a/src/compiler/compiler.cpp
++++ b/src/compiler/compiler.cpp
+@@ -576,6 +576,28 @@
+   Stats.stopRecord(Timer);
+ }
+ 
++// Bound the ordinary lazy pool by work that entry-only scheduling can queue.
++// Count identities, not export names: aliases and an exported start deduplicate.
++static uint32_t getLazyEntryWorkerLimit(const Module &Mod) {
++  const uint32_t NumImports = Mod.getNumImportFunctions();
++  std::vector<uint32_t> Seeds;
++  const uint32_t Start = Mod.getStartFuncIdx();
++  if (Start != -1u && Start >= NumImports) {
++    Seeds.push_back(Start);
++  }
++  for (uint32_t Index : Mod.getExportedFuncIdxs()) {
++    if (Index >= NumImports) {
++      Seeds.push_back(Index);
++    }
++  }
++  std::sort(Seeds.begin(), Seeds.end());
++  const uint32_t Unique = static_cast<uint32_t>(
++      std::unique(Seeds.begin(), Seeds.end()) - Seeds.begin());
++  // Preserve the MT foreground/publication path even for an empty seed set.
++  // A zero request would also invoke ThreadPool's automatic sizing semantics.
++  return std::max(1u, Unique);
++}
++
+ LazyJITCompiler::LazyJITCompiler(Module *WasmMod)
+     : WasmJITCompiler(WasmMod), StubBuilder(WasmMod->getJITCodeMemPool()) {
+   MainContext = new WasmFrontendContext(*WasmMod);
+@@ -596,8 +618,20 @@
+   const bool UseBackgroundGreedy =
+       !Config.DisableMultipassMultithread && NumInternalFunctions > 1;
+   if (UseBackgroundGreedy) {
++    uint32_t MaxWorkers =
++        std::min(Config.NumMultipassThreads, NumInternalFunctions);
++    // Opt-in private tiering can add tasks after entry scheduling. Retain
++    // its configured concurrency even if its other admission gates are off.
++    if (!Config.EnableLazyPrivateTiering) {
++      const uint32_t EntryLimit = getLazyEntryWorkerLimit(*WasmMod);
++      // RuntimeConfig currently rejects zero. Preserve ThreadPool's existing
++      // automatic request semantics if this lower-level path is ever used.
++      const uint32_t Requested = MaxWorkers ? MaxWorkers :
++          common::ThreadPool<WasmFrontendContext>::getAutomaticThreadCount();
++      MaxWorkers = std::min(Requested, EntryLimit);
++    }
+     ThreadPool = std::make_unique<common::ThreadPool<WasmFrontendContext>>(
+-        std::min(Config.NumMultipassThreads, NumInternalFunctions));
++        MaxWorkers);
+     uint32_t NumThreads = ThreadPool->getThreadCount();
+     ZEN_LOG_DEBUG("using %u threads for multipass JIT background compilation",
+                   NumThreads);
+@@ -632,6 +666,10 @@
+     }
+   }
+ #endif
++}
++
++uint32_t LazyJITCompiler::getBackgroundWorkerCount() const {
++  return ThreadPool ? ThreadPool->getThreadCount() : 0;
+ }
+ 
+ LazyJITCompiler::~LazyJITCompiler() {
+--- a/src/compiler/compiler.h
++++ b/src/compiler/compiler.h
+@@ -98,6 +98,9 @@
+   bool hasBackgroundCompilePool() const {
+     return static_cast<bool>(ThreadPool);
+   }
++
++  // Worker allocation diagnostic; a count is not a publication barrier.
++  uint32_t getBackgroundWorkerCount() const;
+ 
+   /// Attempt/start counts: incremented when a compile path is entered, before
+   /// the body is produced, `Done` is stored, or the stub is patched. An acquire
+--- a/src/tests/lazy_jit_greedy_ondemand_tests.cpp
++++ b/src/tests/lazy_jit_greedy_ondemand_tests.cpp
+@@ -2,6 +2,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ 
+ #include "compiler/compiler.h"
++#include "common/thread_pool.h"
+ #include "compiler/stub/stub_jmp_target.h"
+ #include "runtime/isolation.h"
+ #include "runtime/module.h"
+@@ -59,6 +60,7 @@
+   Cfg.DisableMultipassMultithread = DisableMT;
+   Cfg.NumMultipassThreads = 4;
+   if (PolicyConfig) {
++    Cfg.NumMultipassThreads = PolicyConfig->NumMultipassThreads;
+     Cfg.DisableLazyAutoGreedy = PolicyConfig->DisableLazyAutoGreedy;
+     Cfg.LazyAutoGreedyMaxModuleBytes =
+         PolicyConfig->LazyAutoGreedyMaxModuleBytes;
+@@ -569,3 +571,63 @@
+     EXPECT_EQ(LM.Lazy->getBackgroundPublishCount(), 1u);
+   }
+ }
++
++TEST(LazyJitGreedyOndemand, PoolWorkersCountUniqueEntrySeeds) {
++  auto Bytes = loadWasmFile(WORD_LOOP_WASM_PATH);
++  LoadedMod One = loadModule(Bytes, "one_seed_workers", true, false, false);
++  EXPECT_EQ(One.Lazy->getBackgroundWorkerCount(), 1u);
++  ASSERT_TRUE(waitForBackgroundPublishes(*One.Lazy, 1, 5000));
++  EXPECT_EQ(One.Lazy->getBackgroundCompileCount(), 1u);
++
++  Bytes = loadWasmFile(LAZY_ENTRY_SEEDS_WASM_PATH);
++  LoadedMod Two = loadModule(Bytes, "two_seed_workers", true, false, false);
++  EXPECT_EQ(Two.Lazy->getBackgroundWorkerCount(), 2u);
++  ASSERT_TRUE(waitForBackgroundPublishes(*Two.Lazy, 2, 5000));
++  EXPECT_EQ(Two.Lazy->getBackgroundCompileCount(), 2u);
++}
++
++TEST(LazyJitGreedyOndemand, PrivateTieringRetainsConfiguredWorkerLimit) {
++  auto Bytes = loadWasmFile(WORD_LOOP_WASM_PATH);
++  LoadedMod Private = loadModule(Bytes, "private_seed_workers", true, false,
++                                 false, true, true);
++  ASSERT_GE(Private.Mod->getNumInternalFunctions(), 4u);
++  // makeRuntime requests four workers; dynamic private work is not seed-bound.
++  EXPECT_EQ(Private.Lazy->getBackgroundWorkerCount(), 4u);
++  LoadedMod Serial = loadModule(Bytes, "serial_seed_workers", true, false, true);
++  EXPECT_EQ(Serial.Lazy->getBackgroundWorkerCount(), 0u);
++}
++
++TEST(LazyJitGreedyOndemand, EmptySeedSetRetainsOneWorkerAndLazyMtPath) {
++  // Two void internal functions, no exports and no Wasm start.
++  const std::vector<uint8_t> Bytes{
++      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
++      0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
++      0x03, 0x03, 0x02, 0x00, 0x00,
++      0x0a, 0x07, 0x02, 0x02, 0x00, 0x0b, 0x02, 0x00, 0x0b};
++  LoadedMod Empty = loadModule(Bytes, "empty_seed_workers", true, false, false);
++  EXPECT_TRUE(Empty.Lazy->hasBackgroundCompilePool());
++  EXPECT_EQ(Empty.Lazy->getBackgroundWorkerCount(), 1u);
++  EXPECT_EQ(Empty.Lazy->getBackgroundCompileCount(), 0u);
++}
++
++TEST(LazyJitGreedyOndemand, SeedWorkerCountHonorsConfiguredUpperBound) {
++  auto Bytes = loadWasmFile(LAZY_ENTRY_SEEDS_WASM_PATH);
++  RuntimeConfig Limit;
++  Limit.NumMultipassThreads = 1;
++  LoadedMod One = loadModule(Bytes, "one_worker_two_seeds", true, false, false,
++                             true, false, &Limit);
++  EXPECT_EQ(One.Lazy->getBackgroundWorkerCount(), 1u);
++  ASSERT_TRUE(waitForBackgroundPublishes(*One.Lazy, 2, 5000));
++  Limit.NumMultipassThreads = 20;
++  LoadedMod Two = loadModule(Bytes, "many_workers_two_seeds", true, false, false,
++                             true, false, &Limit);
++  EXPECT_EQ(Two.Lazy->getBackgroundWorkerCount(), 2u);
++  ASSERT_TRUE(waitForBackgroundPublishes(*Two.Lazy, 2, 5000));
++}
++
++TEST(LazyJitGreedyOndemand, AutomaticThreadCountMatchesExistingPoolPolicy) {
++  using Pool = zen::common::ThreadPool<WasmFrontendContext>;
++  Pool Automatic(0);
++  EXPECT_EQ(Automatic.getThreadCount(), Pool::getAutomaticThreadCount());
++  Automatic.interrupt();
++}

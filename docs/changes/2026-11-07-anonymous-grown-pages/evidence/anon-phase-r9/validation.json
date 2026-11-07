@@ -1,0 +1,146 @@
+[
+  {
+    "case": "atax",
+    "engine": "main",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/pr643/dtvm-pr643-d6f31ef",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+    ],
+    "exit": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "ac3b860c44406820ff163e473839df10788e08ed67da778df6f7c5311addb7bb",
+    "stderr_bytes": 19077
+  },
+  {
+    "case": "atax",
+    "engine": "main_control",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/pr642/dtvm-pr642-e678e1e",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+    ],
+    "exit": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "ac3b860c44406820ff163e473839df10788e08ed67da778df6f7c5311addb7bb",
+    "stderr_bytes": 19077
+  },
+  {
+    "case": "atax",
+    "engine": "candidate",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/pr643-research/dtvm-anon-grown-pages",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+    ],
+    "exit": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "ac3b860c44406820ff163e473839df10788e08ed67da778df6f7c5311addb7bb",
+    "stderr_bytes": 19077
+  },
+  {
+    "case": "atax",
+    "engine": "wasmtime",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "run",
+      "-C",
+      "cache=n",
+      "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+    ],
+    "exit": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "ac3b860c44406820ff163e473839df10788e08ed67da778df6f7c5311addb7bb",
+    "stderr_bytes": 19077
+  },
+  {
+    "case": "bicg",
+    "engine": "main",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/pr643/dtvm-pr643-d6f31ef",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+    ],
+    "exit": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "f4240f815266c81d8d601c97dbf590dc3a764ddd328ce0c3e883079e0d7a89d1",
+    "stderr_bytes": 28298
+  },
+  {
+    "case": "bicg",
+    "engine": "main_control",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/pr642/dtvm-pr642-e678e1e",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+    ],
+    "exit": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "f4240f815266c81d8d601c97dbf590dc3a764ddd328ce0c3e883079e0d7a89d1",
+    "stderr_bytes": 28298
+  },
+  {
+    "case": "bicg",
+    "engine": "candidate",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/pr643-research/dtvm-anon-grown-pages",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+    ],
+    "exit": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "f4240f815266c81d8d601c97dbf590dc3a764ddd328ce0c3e883079e0d7a89d1",
+    "stderr_bytes": 28298
+  },
+  {
+    "case": "bicg",
+    "engine": "wasmtime",
+    "command": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "run",
+      "-C",
+      "cache=n",
+      "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+    ],
+    "exit": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "f4240f815266c81d8d601c97dbf590dc3a764ddd328ce0c3e883079e0d7a89d1",
+    "stderr_bytes": 28298
+  }
+]

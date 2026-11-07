@@ -1,0 +1,119 @@
+{
+  "pr": "https://github.com/DTVMStack/DTVM/pull/643",
+  "head": "d6f31ef15445081b73d0bc0b35bde8176507af0c",
+  "merged": true,
+  "merge_commit": "3cb4f2e30c4024c95390c1b72147c2c7ea155632",
+  "workflows": [
+    {
+      "run": 42343846087,
+      "jobs": [
+        {
+          "id": 128317189625,
+          "name": "Build and test DTVM singlepass on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317189843,
+          "name": "Build and test DTVM interpreter on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317189845,
+          "name": "Build and test DTVM cli with evm abi hostapis on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317189864,
+          "name": "Build and test DTVM multipass on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "run": 42343846178,
+      "jobs": [
+        {
+          "id": 128317190123,
+          "name": "Test DTVM-EVM multipass with gas register in release mode on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317190305,
+          "name": "Test DTVM-EVM multipass in release mode with ctest on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317190339,
+          "name": "Test DTVM-EVM multipass in debug mode on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317190354,
+          "name": "Performance Regression Check (multipass)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317190383,
+          "name": "Test DTVM-EVM interpreter with CLI on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317190384,
+          "name": "Test DTVM-EVM multipass and interpreter using evmone statetests in release mode on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317190406,
+          "name": "Test DTVM-EVM JIT fallback in release mode with ctest on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317190408,
+          "name": "Test DTVM-EVM multipass evmtestsuite with gas register in release mode with ctest on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317190451,
+          "name": "Test DTVM-EVM multipass and interpreter using evmone unit tests in release mode on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317190457,
+          "name": "Test DTVM-EVM interpreter with ctest on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317190523,
+          "name": "Test DTVM-EVM profile-guided JIT on x86-64",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 128317190549,
+          "name": "Performance Regression Check (interpreter)",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "commit_lint": {
+    "run": 42343846198,
+    "conclusion": "success"
+  },
+  "review": "No reproducible CI failure or confirmed blocking defect; all 17 checks successful. No speculative fix was pushed to PR643."
+}

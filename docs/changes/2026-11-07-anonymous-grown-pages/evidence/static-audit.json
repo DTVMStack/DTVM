@@ -1,0 +1,406 @@
+{
+  "atax": {
+    "canonical": {
+      "selected_functions": {
+        "__wasm_call_ctors": {
+          "func_index": 7,
+          "locals": 0,
+          "body_payload_bytes": 2,
+          "code_bytes_excluding_locals": 1,
+          "internal_index": 0
+        },
+        "_start": {
+          "func_index": 8,
+          "locals": 1,
+          "body_payload_bytes": 41,
+          "code_bytes_excluding_locals": 38,
+          "internal_index": 1
+        },
+        "__original_main": {
+          "func_index": 19,
+          "locals": 0,
+          "body_payload_bytes": 8,
+          "code_bytes_excluding_locals": 7,
+          "internal_index": 12
+        },
+        "__main_void": {
+          "func_index": 21,
+          "locals": 4,
+          "body_payload_bytes": 217,
+          "code_bytes_excluding_locals": 214,
+          "internal_index": 14
+        },
+        "main": {
+          "func_index": 9,
+          "locals": 11,
+          "body_payload_bytes": 695,
+          "code_bytes_excluding_locals": 688,
+          "internal_index": 2
+        },
+        "dummy": {
+          "func_index": 54,
+          "locals": 0,
+          "body_payload_bytes": 4,
+          "code_bytes_excluding_locals": 3,
+          "internal_index": 47
+        },
+        "__wasm_call_dtors": {
+          "func_index": 25,
+          "locals": 0,
+          "body_payload_bytes": 14,
+          "code_bytes_excluding_locals": 13,
+          "internal_index": 18
+        },
+        "__stdio_exit": {
+          "func_index": 32,
+          "locals": 3,
+          "body_payload_bytes": 387,
+          "code_bytes_excluding_locals": 384,
+          "internal_index": 25
+        },
+        "__ofl_lock": {
+          "func_index": 33,
+          "locals": 0,
+          "body_payload_bytes": 8,
+          "code_bytes_excluding_locals": 7,
+          "internal_index": 26
+        },
+        "malloc": {
+          "func_index": 11,
+          "locals": 0,
+          "body_payload_bytes": 10,
+          "code_bytes_excluding_locals": 9,
+          "internal_index": 4
+        },
+        "calloc": {
+          "func_index": 15,
+          "locals": 2,
+          "body_payload_bytes": 107,
+          "code_bytes_excluding_locals": 102,
+          "internal_index": 8
+        },
+        "free": {
+          "func_index": 13,
+          "locals": 0,
+          "body_payload_bytes": 10,
+          "code_bytes_excluding_locals": 9,
+          "internal_index": 6
+        }
+      },
+      "main": {
+        "func_index": 9,
+        "locals": 11,
+        "body_payload_bytes": 695,
+        "code_bytes_excluding_locals": 688
+      },
+      "start": {
+        "func_index": 8,
+        "locals": 1,
+        "body_payload_bytes": 41,
+        "code_bytes_excluding_locals": 38
+      },
+      "data_segments": [
+        {
+          "offset": 1024,
+          "bytes": 2533
+        },
+        {
+          "offset": 3560,
+          "bytes": 236
+        }
+      ],
+      "num_function_imports": 7,
+      "main_under_2048": true,
+      "function_identity_note": "Canonical name section identifies main; derived Binaryen output strips names, original definition order is preserved (ctors,start,main)."
+    },
+    "derived": {
+      "1": {
+        "selected_functions": {},
+        "main": {
+          "func_index": 10,
+          "locals": 11,
+          "body_payload_bytes": 619,
+          "code_bytes_excluding_locals": 614
+        },
+        "start": {
+          "func_index": 9,
+          "locals": 2,
+          "body_payload_bytes": 54,
+          "code_bytes_excluding_locals": 51
+        },
+        "data_segments": [
+          {
+            "offset": 1024,
+            "bytes": 2533
+          },
+          {
+            "offset": 3560,
+            "bytes": 236
+          }
+        ],
+        "num_function_imports": 8,
+        "main_under_2048": true,
+        "function_identity_note": "Canonical name section identifies main; derived Binaryen output strips names, original definition order is preserved (ctors,start,main)."
+      },
+      "8": {
+        "selected_functions": {},
+        "main": {
+          "func_index": 10,
+          "locals": 11,
+          "body_payload_bytes": 619,
+          "code_bytes_excluding_locals": 614
+        },
+        "start": {
+          "func_index": 9,
+          "locals": 2,
+          "body_payload_bytes": 54,
+          "code_bytes_excluding_locals": 51
+        },
+        "data_segments": [
+          {
+            "offset": 1024,
+            "bytes": 2533
+          },
+          {
+            "offset": 3560,
+            "bytes": 236
+          }
+        ],
+        "num_function_imports": 8,
+        "main_under_2048": true,
+        "function_identity_note": "Canonical name section identifies main; derived Binaryen output strips names, original definition order is preserved (ctors,start,main)."
+      },
+      "30": {
+        "selected_functions": {},
+        "main": {
+          "func_index": 10,
+          "locals": 11,
+          "body_payload_bytes": 619,
+          "code_bytes_excluding_locals": 614
+        },
+        "start": {
+          "func_index": 9,
+          "locals": 2,
+          "body_payload_bytes": 54,
+          "code_bytes_excluding_locals": 51
+        },
+        "data_segments": [
+          {
+            "offset": 1024,
+            "bytes": 2533
+          },
+          {
+            "offset": 3560,
+            "bytes": 236
+          }
+        ],
+        "num_function_imports": 8,
+        "main_under_2048": true,
+        "function_identity_note": "Canonical name section identifies main; derived Binaryen output strips names, original definition order is preserved (ctors,start,main)."
+      }
+    },
+    "direct_constant_memory_below_1024": []
+  },
+  "bicg": {
+    "canonical": {
+      "selected_functions": {
+        "__wasm_call_ctors": {
+          "func_index": 7,
+          "locals": 0,
+          "body_payload_bytes": 2,
+          "code_bytes_excluding_locals": 1,
+          "internal_index": 0
+        },
+        "_start": {
+          "func_index": 8,
+          "locals": 1,
+          "body_payload_bytes": 41,
+          "code_bytes_excluding_locals": 38,
+          "internal_index": 1
+        },
+        "__original_main": {
+          "func_index": 19,
+          "locals": 0,
+          "body_payload_bytes": 8,
+          "code_bytes_excluding_locals": 7,
+          "internal_index": 12
+        },
+        "__main_void": {
+          "func_index": 21,
+          "locals": 4,
+          "body_payload_bytes": 217,
+          "code_bytes_excluding_locals": 214,
+          "internal_index": 14
+        },
+        "main": {
+          "func_index": 9,
+          "locals": 12,
+          "body_payload_bytes": 826,
+          "code_bytes_excluding_locals": 823,
+          "internal_index": 2
+        },
+        "dummy": {
+          "func_index": 54,
+          "locals": 0,
+          "body_payload_bytes": 4,
+          "code_bytes_excluding_locals": 3,
+          "internal_index": 47
+        },
+        "__wasm_call_dtors": {
+          "func_index": 25,
+          "locals": 0,
+          "body_payload_bytes": 14,
+          "code_bytes_excluding_locals": 13,
+          "internal_index": 18
+        },
+        "__stdio_exit": {
+          "func_index": 32,
+          "locals": 3,
+          "body_payload_bytes": 387,
+          "code_bytes_excluding_locals": 384,
+          "internal_index": 25
+        },
+        "__ofl_lock": {
+          "func_index": 33,
+          "locals": 0,
+          "body_payload_bytes": 8,
+          "code_bytes_excluding_locals": 7,
+          "internal_index": 26
+        },
+        "malloc": {
+          "func_index": 11,
+          "locals": 0,
+          "body_payload_bytes": 10,
+          "code_bytes_excluding_locals": 9,
+          "internal_index": 4
+        },
+        "calloc": {
+          "func_index": 15,
+          "locals": 2,
+          "body_payload_bytes": 107,
+          "code_bytes_excluding_locals": 102,
+          "internal_index": 8
+        },
+        "free": {
+          "func_index": 13,
+          "locals": 0,
+          "body_payload_bytes": 10,
+          "code_bytes_excluding_locals": 9,
+          "internal_index": 6
+        }
+      },
+      "main": {
+        "func_index": 9,
+        "locals": 12,
+        "body_payload_bytes": 826,
+        "code_bytes_excluding_locals": 823
+      },
+      "start": {
+        "func_index": 8,
+        "locals": 1,
+        "body_payload_bytes": 41,
+        "code_bytes_excluding_locals": 38
+      },
+      "data_segments": [
+        {
+          "offset": 1024,
+          "bytes": 2549
+        },
+        {
+          "offset": 3576,
+          "bytes": 236
+        }
+      ],
+      "num_function_imports": 7,
+      "main_under_2048": true,
+      "function_identity_note": "Canonical name section identifies main; derived Binaryen output strips names, original definition order is preserved (ctors,start,main)."
+    },
+    "derived": {
+      "1": {
+        "selected_functions": {},
+        "main": {
+          "func_index": 10,
+          "locals": 12,
+          "body_payload_bytes": 713,
+          "code_bytes_excluding_locals": 710
+        },
+        "start": {
+          "func_index": 9,
+          "locals": 2,
+          "body_payload_bytes": 54,
+          "code_bytes_excluding_locals": 51
+        },
+        "data_segments": [
+          {
+            "offset": 1024,
+            "bytes": 2549
+          },
+          {
+            "offset": 3576,
+            "bytes": 236
+          }
+        ],
+        "num_function_imports": 8,
+        "main_under_2048": true,
+        "function_identity_note": "Canonical name section identifies main; derived Binaryen output strips names, original definition order is preserved (ctors,start,main)."
+      },
+      "8": {
+        "selected_functions": {},
+        "main": {
+          "func_index": 10,
+          "locals": 12,
+          "body_payload_bytes": 713,
+          "code_bytes_excluding_locals": 710
+        },
+        "start": {
+          "func_index": 9,
+          "locals": 2,
+          "body_payload_bytes": 54,
+          "code_bytes_excluding_locals": 51
+        },
+        "data_segments": [
+          {
+            "offset": 1024,
+            "bytes": 2549
+          },
+          {
+            "offset": 3576,
+            "bytes": 236
+          }
+        ],
+        "num_function_imports": 8,
+        "main_under_2048": true,
+        "function_identity_note": "Canonical name section identifies main; derived Binaryen output strips names, original definition order is preserved (ctors,start,main)."
+      },
+      "30": {
+        "selected_functions": {},
+        "main": {
+          "func_index": 10,
+          "locals": 12,
+          "body_payload_bytes": 713,
+          "code_bytes_excluding_locals": 710
+        },
+        "start": {
+          "func_index": 9,
+          "locals": 2,
+          "body_payload_bytes": 54,
+          "code_bytes_excluding_locals": 51
+        },
+        "data_segments": [
+          {
+            "offset": 1024,
+            "bytes": 2549
+          },
+          {
+            "offset": 3576,
+            "bytes": 236
+          }
+        ],
+        "num_function_imports": 8,
+        "main_under_2048": true,
+        "function_identity_note": "Canonical name section identifies main; derived Binaryen output strips names, original definition order is preserved (ctors,start,main)."
+      }
+    },
+    "direct_constant_memory_below_1024": []
+  }
+}

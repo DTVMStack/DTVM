@@ -1,0 +1,48 @@
+[
+  {
+    "engine": "main",
+    "command": [
+      "strace",
+      "-f",
+      "-qq",
+      "-e",
+      "trace=mmap",
+      "-o",
+      "work/pr643-research/grow-control/main-mmap.strace",
+      "taskset",
+      "-c",
+      "0",
+      "work/pr643/dtvm-pr643-d6f31ef",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "work/pr643-research/grow-control/input.wasm"
+    ],
+    "exit": 0,
+    "fixed_anonymous_page_aligned_calls": []
+  },
+  {
+    "engine": "once",
+    "command": [
+      "strace",
+      "-f",
+      "-qq",
+      "-e",
+      "trace=mmap",
+      "-o",
+      "work/pr643-research/grow-control/once-mmap.strace",
+      "taskset",
+      "-c",
+      "0",
+      "work/pr643-research/dtvm-anon-grown-once",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy",
+      "work/pr643-research/grow-control/input.wasm"
+    ],
+    "exit": 0,
+    "fixed_anonymous_page_aligned_calls": [
+      "448615 mmap(0x7f5958010000, 33488896, PROT_NONE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0) = 0x7f5958010000"
+    ]
+  }
+]

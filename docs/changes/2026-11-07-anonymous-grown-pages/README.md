@@ -1,53 +1,31 @@
-# Change: Anonymous zero pages for bucket memory growth
+# Change: Anonymous zero tail for bucket memory growth
 
-- **Status**: In Progress
+- **Status**: Implemented
 - **Date**: 2026-11-07
 - **Tier**: Light
 
 ## Overview
 
-Keep the initial bucket prefix backed by its copy-on-write data template. On
-in-bucket memory.grow, replace only the newly accessible, page-aligned zero tail
-with private anonymous pages, within the existing owned reservation. Preserve
-base addresses, guard protection, slot accounting, data initialization and
-fallback when exceeding the bucket limit. No compiler/allocator-policy changes.
+Keep the initial file-backed data template. On first positive in-bucket growth,
+reserve the unused tail as private anonymous PROT_NONE pages. Existing mprotect
+exposes exactly the requested size; subsequent growth reuses the reservation.
+Memory is monotonic, so no additional state or workload threshold is needed.
+Preserve base, previous writes, guard permissions, other instances, retirement
+and existing beyond-bucket fallback. No compiler policy/ABI change.
 
-## Motivation
+## Motivation and scope
 
-A same-binary counterfactual disabling bucket mmap improved atax/bicg/gesummv/
-trisolv cold process time by roughly 10–16%, with matching outputs. Global
-bucket disabling also changes initial-data copying and is not the proposed
-implementation. Phase measurements show cold matrix initialization is much
-slower than repeated initialization. Test the narrower grown-tail hypothesis.
+Phase diagnosis and same-binary mapping controls identified cold initialization
+and cleanup costs. A rejected per-growth prototype added repeated syscall cost;
+the final once-only reservation fixes that negative control. Consult the
+[runtime specification](../../modules/runtime/spec.md).
 
-## Impact and plan
+- [x] Implementation and memory invariants reviewed
+- [x] Zero/prefix/guard/isolation/retirement/fallback tests
+- [x] 24 Release and 24 ASan tests pass
+- [x] 97 WAST cases pass in each of four execution modes
+- [x] 31-round targets, WAPM screen/followups, FP and phase controls
+- [x] Negative and alternative experiments preserved separately
 
-Consult [runtime memory contracts](../../modules/runtime/spec.md). Remapping is
-limited to growth, uses the existing POSIX reservation and abort-on-mapping-
-failure convention. Existing initial data and other instances are not remapped.
-Validate zero growth, repeated growth, prefix persistence, adjacent/independent
-instances, OOB/failure, bucket retirement and >32MB fallback. Then compare frozen
-main, PR643, production candidate and Wasmtime45, preserving failed experiments.
-PR643 itself has all 17 checks passing; this experiment is a separate branch.
-
-- [x] Build and memory semantics tests
-- [x] Existing spec suites in all engines
-- [x] Production fresh-process and same-instance measurements
-- [x] Independent confirmation and startup controls
-
-The LEA and worker-count studies remain separate, unproven alternatives.
-
-## Results
-
-[Production comparisons, phase diagnosis, rejected alternatives and raw evidence](REPORT.md).
-Four target cases improve versus merged main in31-round paired measurements.
-WAPM screen negatives and independent followups are retained. ASan24 and
-97 WAST cases in each of four execution modes pass. No new JIT pass is shipped.
-
-## Refinement before publication
-
-A no-touch 511-growth control found per-growth remapping overhead in v1.
-Convert the unused tail only on first positive growth, with PROT_NONE, then
-reuse it via existing mprotect. The module initial-size equality is a monotonic
-memory invariant, not a workload threshold. Revalidate this final source and
-retain v1 data separately.
+[Final measurements, first-result phases, rejected alternatives and raw data](REPORT.md).
+Based on merged upstream main 3cb4f2e after PR643 passed all 17 checks.
