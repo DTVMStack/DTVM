@@ -130,3 +130,11 @@ See the compiler specification for eligibility, lifetime and publication rules.
 
 `Module::getBinarySize()` returns the byte size of its retained input binary.
 Initial lazy allocation policy uses it for an optional whole-module size gate.
+
+Bucket memory growth retains the initial file-backed data prefix. Newly
+accessible, page-aligned tail pages inside the owned bucket item use private
+anonymous mappings, preserving zero initialization and the memory base. Only
+that extension is replaced; existing contents, neighbouring items and the
+following guard stay unchanged. Size accounting and whole-bucket protection
+still apply across the mixed mappings. Growth beyond the bucket limit retains
+the existing allocate/copy fallback. Bucket retirement unmaps both mapping types.

@@ -545,6 +545,20 @@ WasmMemoryAllocator::enlargeWasmMemory(const WasmMemoryData &OldMemoryData,
           .NeedMprotect = false,
       };
       if (OldMemoryData.Type == WM_MEMORY_DATA_TYPE_BUCKET_MMAP) {
+        if (NewMemorySize > OldMemoryData.MemorySize) {
+          // The initial prefix retains its shared data template. Newly grown
+          // bytes are zero by definition: use anonymous pages instead of
+          // faulting sparse tmpfs pages and then copying them on first write.
+          // This range is page-aligned and wholly inside our reserved bucket
+          // item; its base and the following guard region remain unchanged.
+          auto *Begin = OldMemoryData.MemoryData + OldMemoryData.MemorySize;
+          size_t Length = NewMemorySize - OldMemoryData.MemorySize;
+          if (::mmap(Begin, Length, PROT_READ | PROT_WRITE,
+                     MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1,
+                     0) == MAP_FAILED) {
+            ZEN_ABORT();
+          }
+        }
         auto *BucketMemAddr = (*MemoryAddrToMmapAddr)[OldMemoryData.MemoryData];
         auto *BucketInstance = ActiveBuckets[BucketMemAddr].get();
         auto IndexInBucket = (OldMemoryData.MemoryData - BucketMemAddr) /
