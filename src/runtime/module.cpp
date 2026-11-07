@@ -223,6 +223,8 @@ COMPILER::LazyJITCompiler *Module::newLazyJITCompiler() {
 
 // ==================== Metadata Methods ====================
 
+size_t Module::getBinarySize() const { return CodeHolder->getSize(); }
+
 const uint8_t *Module::getWASMBytecode() const {
   return static_cast<const uint8_t *>(CodeHolder->getData());
 }

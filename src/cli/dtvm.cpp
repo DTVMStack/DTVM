@@ -277,6 +277,19 @@ int main(int argc, char *argv[]) {
     CLIParser->add_flag("--disable-multipass-greedyra",
                         Config.DisableMultipassGreedyRA,
                         "Disable greedy register allocation of multipass JIT");
+    CLIParser->add_flag("--disable-lazy-auto-greedy",
+                        Config.DisableLazyAutoGreedy,
+                        "Disable automatic initial Greedy selection (lazy MT)");
+    CLIParser->add_option("--lazy-auto-greedy-max-module-bytes",
+                          Config.LazyAutoGreedyMaxModuleBytes,
+                          "Module byte limit for initial Greedy (0 unlimited)");
+    CLIParser->add_option(
+        "--lazy-auto-greedy-max-function-bytes",
+        Config.LazyAutoGreedyMaxFunctionBytes,
+        "Function body limit for initial Greedy (0 unlimited)");
+    CLIParser->add_option(
+        "--lazy-auto-greedy-budget-ms", Config.LazyAutoGreedyBudgetMs,
+        "Soft cumulative foreground compile budget (0 unlimited)");
     auto *DMMOption = CLIParser->add_flag(
         "--disable-multipass-multithread", Config.DisableMultipassMultithread,
         "Disable multithread compilation of multipass JIT");

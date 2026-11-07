@@ -5,6 +5,7 @@
 #define WASM_FRONTEND_WASM_MIR_COMPILER_H
 
 #include "compiler/context.h"
+#include "compiler/lazy_initial_ra_policy.h"
 #include "compiler/mir/constants.h"
 #include "compiler/mir/function.h"
 #include "compiler/mir/instructions.h"
@@ -118,8 +119,7 @@ public:
     void noteFPArithmetic() { HasFPArithmetic = true; }
     void noteGuestCall() { HasGuestCall = true; }
     void noteWordLoad() {
-      if (WordLoads < 2)
-        ++WordLoads;
+      WordLoads = LazyInitialRAPolicy::addWordLoads(WordLoads, 1);
     }
     void noteWordStore() { HasWordStore = true; }
     void noteOtherMemory() { HasOtherMemory = true; }
@@ -132,7 +132,7 @@ public:
                           bool Other) {
       HasFPArithmetic |= FP;
       HasGuestCall |= Calls;
-      WordLoads = WordLoads + Loads >= 2 ? 2 : WordLoads + Loads;
+      WordLoads = LazyInitialRAPolicy::addWordLoads(WordLoads, Loads);
       HasWordStore |= Stores;
       HasOtherMemory |= Other;
     }
@@ -260,7 +260,7 @@ public:
   // Load from memory in SrcType and extend to DestType
   template <WASMType DestType, WASMType SrcType, bool Sext>
   Operand handleLoad(Operand Base, uint32_t Offset, uint32_t Align) {
-    if (LoopDepth >= 3) {
+    if (LazyInitialRAPolicy::trackWord(LoopDepth)) {
       if constexpr (SrcType == WASMType::I32 || SrcType == WASMType::I64)
         ControlStack.back().noteWordLoad();
       else
@@ -282,7 +282,7 @@ public:
   template <WASMType DestType>
   void handleStore(Operand Value, Operand Base, uint32_t Offset,
                    uint32_t Align) {
-    if (LoopDepth >= 3) {
+    if (LazyInitialRAPolicy::trackWord(LoopDepth)) {
       if constexpr (DestType == WASMType::I32 || DestType == WASMType::I64)
         ControlStack.back().noteWordStore();
       else
@@ -367,7 +367,7 @@ public:
   template <WASMType Type, BinaryOperator Opeator>
   Operand handleBinaryOp(Operand LHSOp, Operand RHSOp) {
     if constexpr (Type == WASMType::F32 || Type == WASMType::F64)
-      if (LoopDepth >= 2)
+      if (LazyInitialRAPolicy::trackFP(LoopDepth))
         ControlStack.back().noteFPArithmetic();
     MInstruction *LHS = extractOperand(LHSOp);
     MInstruction *RHS = extractOperand(RHSOp);
@@ -486,7 +486,7 @@ public:
 
   template <WASMType Type, BinaryOperator Opeator>
   Operand handleFDiv(Operand LHSOp, Operand RHSOp) {
-    if (LoopDepth >= 2)
+    if (LazyInitialRAPolicy::trackFP(LoopDepth))
       ControlStack.back().noteFPArithmetic();
     MInstruction *LHS = extractOperand(LHSOp);
     MInstruction *RHS = extractOperand(RHSOp);

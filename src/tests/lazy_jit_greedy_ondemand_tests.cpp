@@ -37,9 +37,10 @@ std::vector<uint8_t> loadWasmFile(const char *Path) {
                               std::istreambuf_iterator<char>());
 }
 
-std::unique_ptr<Runtime> makeRuntime(bool Lazy, bool DisableGreedyRA,
-                                     bool DisableMT,
-                                     bool PrivateTiering = false) {
+std::unique_ptr<Runtime>
+makeRuntime(bool Lazy, bool DisableGreedyRA, bool DisableMT,
+            bool PrivateTiering = false,
+            const RuntimeConfig *PolicyConfig = nullptr) {
   RuntimeConfig Cfg;
   Cfg.Mode = RunMode::MultipassMode;
 #ifdef ZEN_ENABLE_BUILTIN_WASI
@@ -57,6 +58,14 @@ std::unique_ptr<Runtime> makeRuntime(bool Lazy, bool DisableGreedyRA,
   Cfg.DisableMultipassGreedyRA = DisableGreedyRA;
   Cfg.DisableMultipassMultithread = DisableMT;
   Cfg.NumMultipassThreads = 4;
+  if (PolicyConfig) {
+    Cfg.DisableLazyAutoGreedy = PolicyConfig->DisableLazyAutoGreedy;
+    Cfg.LazyAutoGreedyMaxModuleBytes =
+        PolicyConfig->LazyAutoGreedyMaxModuleBytes;
+    Cfg.LazyAutoGreedyMaxFunctionBytes =
+        PolicyConfig->LazyAutoGreedyMaxFunctionBytes;
+    Cfg.LazyAutoGreedyBudgetMs = PolicyConfig->LazyAutoGreedyBudgetMs;
+  }
 #endif
   return Runtime::newRuntime(Cfg);
 }
@@ -154,9 +163,11 @@ struct LoadedMod {
 
 LoadedMod loadModule(const std::vector<uint8_t> &Bytes, const char *Name,
                      bool Lazy, bool DisableGreedyRA, bool DisableMT,
-                     bool Instantiate = true, bool PrivateTiering = false) {
+                     bool Instantiate = true, bool PrivateTiering = false,
+                     const RuntimeConfig *PolicyConfig = nullptr) {
   LoadedMod Out;
-  Out.RT = makeRuntime(Lazy, DisableGreedyRA, DisableMT, PrivateTiering);
+  Out.RT = makeRuntime(Lazy, DisableGreedyRA, DisableMT, PrivateTiering,
+                       PolicyConfig);
   EXPECT_NE(Out.RT, nullptr);
   auto ModRet = Out.RT->loadModule(Name, Bytes.data(), Bytes.size());
   EXPECT_TRUE(ModRet) << ModRet.getError().getFormattedMessage();
@@ -535,4 +546,26 @@ TEST(LazyJitGreedyOndemand, InitialGreedyPressureSkipsPrivateFastProfiling) {
   EXPECT_EQ(Stats.AdmittedFunctions, 0u);
   EXPECT_EQ(Stats.ProfilingPublishes, 0u);
   EXPECT_EQ(Stats.GreedyPublishes, 0u);
+}
+
+TEST(LazyJitGreedyOndemand, InitialPolicySizeAndDisableGuards) {
+  auto Bytes = loadWasmFile(WORD_LOOP_WASM_PATH);
+  for (unsigned Guard = 0; Guard < 4; ++Guard) {
+    RuntimeConfig Policy;
+    Policy.DisableLazyAutoGreedy = Guard == 0;
+    Policy.LazyAutoGreedyMaxModuleBytes =
+        Guard == 1 ? Bytes.size() - 1 : Bytes.size();
+    Policy.LazyAutoGreedyMaxFunctionBytes = Guard == 2 ? 1 : 2048;
+    LoadedMod LM = loadModule(Bytes, "guarded_words", true, false, false, true,
+                              false, &Policy);
+    ASSERT_EQ(LM.Mod->getBinarySize(), Bytes.size());
+    ASSERT_TRUE(waitForBackgroundPublishes(*LM.Lazy, 1, 5000));
+    std::vector<TypedValue> Results;
+    ASSERT_TRUE(
+        LM.RT->callWasmFunction(*LM.Inst, "entry", {"0", "3"}, Results));
+    ASSERT_EQ(Results.size(), 1u);
+    EXPECT_EQ(Results[0].Value.I32, 27u);
+    EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), Guard == 3 ? 1u : 0u);
+    EXPECT_EQ(LM.Lazy->getBackgroundPublishCount(), 1u);
+  }
 }

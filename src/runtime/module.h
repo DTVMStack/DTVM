@@ -352,6 +352,8 @@ public:
 
   const uint8_t *getWASMBytecode() const;
 
+  size_t getBinarySize() const;
+
   // ==================== Number Methods ====================
 
   uint32_t getNumImportFunctions() const { return NumImportFunctions; }

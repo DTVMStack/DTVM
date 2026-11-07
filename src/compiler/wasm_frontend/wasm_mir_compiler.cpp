@@ -446,11 +446,10 @@ void FunctionMirBuilder::handleEnd(const BlockInfo &Info) {
   const bool HasOtherMemory = Info.hasOtherMemory();
   if (CollectInitialRAHints && Info.getKind() == CtrlBlockKind::LOOP) {
     ZEN_ASSERT(LoopDepth > 0);
-    if (LoopDepth >= 2 && HasFP && !HasCall)
-      HasCallFreeNestedFPLoop = true;
-    if (LoopDepth == 3 && WordLoads >= 2 && HasStores && !HasOtherMemory &&
-        !HasCall)
-      HasCallFreeDeepWordLoop = true;
+    const LazyInitialRAPolicy::Region Region{
+        LoopDepth, HasFP, HasCall, WordLoads, HasStores, HasOtherMemory};
+    HasCallFreeNestedFPLoop |= LazyInitialRAPolicy::matchesFP(Region);
+    HasCallFreeDeepWordLoop |= LazyInitialRAPolicy::matchesWord(Region);
     --LoopDepth;
   }
   ControlStack.pop_back();

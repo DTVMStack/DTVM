@@ -155,6 +155,19 @@ publication barrier. The size/depth rule is a static tradeoff, not a guarantee
 of runtime heat. Integer-only loops, oversized bodies and short loop nests
 remain limitations; startup and throughput must be measured together.
 
+Initial selection rules and guards live in `LazyInitialRAPolicy`; the frontend
+only collects structured effects. Defaults above are unchanged. Optional
+`LazyAutoGreedyMaxModuleBytes` (whole binary),
+`LazyAutoGreedyMaxFunctionBytes` (default 2048), and
+`LazyAutoGreedyBudgetMs` bound automatic selection; zero means unlimited.
+`DisableLazyAutoGreedy` disables automatic selection independently of configured
+Greedy. The soft module-lifetime elapsed budget charges stub precompilation and
+foreground compile attempts through code protection, including failures, and
+rechecks the current MIR prefix before choosing allocation. It excludes module
+loading, guest execution and background compilation; admitted/concurrent work
+can overrun. It is not a first-call deadline. Unlimited mode reads no budget
+clock. Eager, serial, one-function and background configured choices are exempt.
+
 ### Opt-in private loop tiering
 
 `EnableLazyPrivateTiering` permits demand-compiled private WASM helpers to

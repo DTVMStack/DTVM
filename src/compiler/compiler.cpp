@@ -385,9 +385,10 @@ void JITCompilerBase::emitObjectBuffer(CompileContext *Ctx) {
 #endif
 }
 
-bool WasmJITCompiler::compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod,
-                                      uint32_t FuncIdx, bool DisableGreedyRA,
-                                      uint8_t *LoopTick, bool AllowLoopGreedy) {
+bool WasmJITCompiler::compileWasmToMC(
+    WasmFrontendContext &Ctx, MModule &Mod, uint32_t FuncIdx,
+    bool DisableGreedyRA, uint8_t *LoopTick, bool AllowLoopGreedy,
+    const LazyInitialRAPolicy::Timer *CompileTimer) {
   if (Ctx.Inited) {
     // Release all memory allocated by previous function compilation
     Ctx.MemPool = CompileMemPool();
@@ -410,14 +411,17 @@ bool WasmJITCompiler::compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod,
   MFunction MFunc(Ctx, FuncIdx);
   CgFunction CgFunc(Ctx, MFunc);
   MFunc.setFunctionType(Mod.getFuncType(FuncIdx));
-  const bool CollectInitialRAHints = AllowLoopGreedy &&
-                                     !Config.DisableMultipassGreedyRA &&
-                                     FuncCode->CodeSize <= 2048;
+  const bool Allowed = AllowLoopGreedy && !Config.DisableMultipassGreedyRA;
+  const bool CollectInitialRAHints =
+      InitialRAPolicy.eligibility(Allowed, FuncCode->CodeSize,
+                                  CompileTimer ? CompileTimer->elapsed() : 0) ==
+      LazyInitialRAPolicy::Decision::Eligible;
   FunctionMirBuilder MIRBuilder(Ctx, MFunc, CollectInitialRAHints);
   MIRBuilder.compile(&Ctx); // pass the ctx argument only for compatibility
-  const bool LoopGreedy =
-      CollectInitialRAHints && (MIRBuilder.hasCallFreeNestedFPLoop() ||
-                                MIRBuilder.hasCallFreeDeepWordLoop());
+  const bool LoopGreedy = LazyInitialRAPolicy::isGreedy(InitialRAPolicy.select(
+      Allowed, FuncCode->CodeSize, MIRBuilder.hasCallFreeNestedFPLoop(),
+      MIRBuilder.hasCallFreeDeepWordLoop(),
+      CompileTimer ? CompileTimer->elapsed() : 0));
   if (LoopGreedy)
     DisableGreedyRA = false;
   compileMIRToCgIR(Mod, MFunc, CgFunc, DisableGreedyRA);
@@ -742,6 +746,7 @@ void LazyJITCompiler::dispatchEntryCompileTasks(WasmFrontendContext &Ctx) {
 }
 
 void LazyJITCompiler::precompile() {
+  LazyInitialRAPolicy::Timer BudgetTimer(InitialRAPolicy, true);
   auto Timer =
       Stats.startRecord(zen::utils::StatisticPhase::JITLazyPrecompilation);
   buildAllMIRFuncTypes(*MainContext, *Mod, *WasmMod);
@@ -772,8 +777,10 @@ void LazyJITCompiler::precompile() {
 uint8_t *LazyJITCompiler::compileFunction(
     WasmFrontendContext &Ctx, uint32_t FuncIdx, bool DisableGreedyRA,
     uint8_t *LoopTick, bool AllowLoopGreedy, bool *SelectedLoopGreedy) {
-  const bool LoopGreedy = compileWasmToMC(Ctx, *Mod, FuncIdx, DisableGreedyRA,
-                                          LoopTick, AllowLoopGreedy);
+  LazyInitialRAPolicy::Timer BudgetTimer(InitialRAPolicy, AllowLoopGreedy);
+  const bool LoopGreedy =
+      compileWasmToMC(Ctx, *Mod, FuncIdx, DisableGreedyRA, LoopTick,
+                      AllowLoopGreedy, &BudgetTimer);
   if (SelectedLoopGreedy)
     *SelectedLoopGreedy = LoopGreedy;
   emitObjectBuffer(&Ctx);
