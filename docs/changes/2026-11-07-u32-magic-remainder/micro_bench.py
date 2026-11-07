@@ -18,6 +18,14 @@ p.add_argument("--dtvm-extra", action="append", default=[])
 a = p.parse_args()
 if a.calls < 2 or a.iterations < 0 or a.rounds < 1:
     p.error("Require calls>=2, iterations>=0, rounds>=1")
+divisors = a.divisors.split(",")
+try:
+    if len(set(divisors)) != len(divisors):
+        raise ValueError("divisors must have unique names")
+    if any(spec != "dynamic" and not 0 < int(spec) <= 0xFFFFFFFF for spec in divisors):
+        raise ValueError("literal divisors must be in 1..UINT32_MAX")
+except ValueError as error:
+    p.error(str(error))
 out = Path(a.out)
 out.mkdir(parents=True, exist_ok=False)
 os.sched_setaffinity(0, {1})
@@ -40,7 +48,7 @@ env = {
 }
 env.update(LC_ALL="C", WASMTIME_CACHE="0")
 jobs = []
-for spec in a.divisors.split(","):
+for spec in divisors:
     d = 7 if spec == "dynamic" else int(spec)
     rhs = "(local.get $d)" if spec == "dynamic" else f"(i32.const {d})"
     name = "rem-" + spec
@@ -103,8 +111,9 @@ if a.generate_only:
     raise SystemExit(0)
 
 
-def run(cmd):
+def run(cmd, timeout_s=120):
     start = time.perf_counter_ns()
+    deadline = start + timeout_s * 1e9
     proc = subprocess.Popen(
         cmd,
         stdin=subprocess.DEVNULL,
@@ -115,30 +124,40 @@ def run(cmd):
     sel = selectors.DefaultSelector()
     chunks = {"out": bytearray(), "err": bytearray()}
     receipts = []
-    for key, stream in [("out", proc.stdout), ("err", proc.stderr)]:
-        os.set_blocking(stream.fileno(), False)
-        sel.register(stream, selectors.EVENT_READ, key)
-    while sel.get_map():
-        if time.perf_counter_ns() - start > 120_000_000_000:
+    try:
+        for key, stream in [("out", proc.stdout), ("err", proc.stderr)]:
+            os.set_blocking(stream.fileno(), False)
+            sel.register(stream, selectors.EVENT_READ, key)
+        while sel.get_map():
+            remaining = (deadline - time.perf_counter_ns()) / 1e9
+            if remaining <= 0:
+                raise TimeoutError(cmd)
+            for key, _ in sel.select(timeout=min(1, remaining)):
+                data = os.read(key.fd, 24 if key.data == "out" else 65536)
+                now = time.perf_counter_ns()
+                if not data:
+                    sel.unregister(key.fileobj)
+                    key.fileobj.close()
+                    continue
+                chunks[key.data].extend(data)
+                if key.data == "out":
+                    while len(chunks["out"]) >= 24 * (len(receipts) + 1):
+                        receipts.append((now - start) / 1e6)
+        try:
+            ret = proc.wait(timeout=max(0, (deadline - time.perf_counter_ns()) / 1e9))
+        except subprocess.TimeoutExpired:
+            raise TimeoutError(cmd) from None
+        end = time.perf_counter_ns()
+        if ret != 0 or chunks["err"]:
+            raise RuntimeError((ret, chunks["err"][-1000:]))
+        return chunks["out"], receipts, (end - start) / 1e6
+    finally:
+        if proc.poll() is None:
             proc.kill()
-            proc.wait()
-            raise TimeoutError(cmd)
-        for key, _ in sel.select(timeout=1):
-            b = os.read(key.fd, 24 if key.data == "out" else 65536)
-            now = time.perf_counter_ns()
-            if not b:
-                sel.unregister(key.fileobj)
-                key.fileobj.close()
-                continue
-            chunks[key.data].extend(b)
-            if key.data == "out":
-                while len(chunks["out"]) >= 24 * (len(receipts) + 1):
-                    receipts.append((now - start) / 1e6)
-    ret = proc.wait()
-    end = time.perf_counter_ns()
-    sel.close()
-    assert ret == 0 and not chunks["err"], (ret, chunks["err"][-1000:])
-    return chunks["out"], receipts, (end - start) / 1e6
+        proc.wait()
+        sel.close()
+        for stream in (proc.stdout, proc.stderr):
+            stream.close()
 
 
 rng = random.Random(a.seed)
@@ -149,15 +168,17 @@ with (out / "samples.jsonl").open("w") as f:
             rng.shuffle(order)
             for k in order:
                 data, receipts, wall = run(commands[k] + [job["wasm"]])
-                assert len(data) == 24 * a.calls and len(receipts) == a.calls
+                if len(data) != 24 * a.calls or len(receipts) != a.calls:
+                    raise ValueError("incomplete timing packets")
                 durations = []
                 for call in range(a.calls):
                     begin, end, value, index = struct.unpack_from(
                         "<QQII", data, call * 24
                     )
-                    assert (
+                    if not (
                         begin <= end and value == job["expected"] and index == call
-                    ), (job, k, value, index)
+                    ):
+                        raise ValueError((job, k, value, index))
                     durations.append((end - begin) / 1e6)
                 row = {
                     "case": job["name"],

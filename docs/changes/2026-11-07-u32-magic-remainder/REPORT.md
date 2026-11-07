@@ -332,6 +332,12 @@ condition, existing zero/pow2 rules and unchanged signed/i64 scope. The raw
 validation logs are included; rebuildable test executables were compressed or
 removed after their logs, and production benchmark binaries remain frozen.
 
+## PR645 review
+
+[Review and fixes](REVIEW.md) harden complete-pair validation and child deadlines.
+The compiler/runtime and all historical measurements are unchanged. Archived gzip
+logs can now be summarized directly; truncated/failed/duplicate data are rejected.
+
 ## Reproduction
 
 From repository root with CPU0/1 available, Python3 and WABT:

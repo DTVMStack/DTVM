@@ -1,31 +1,28 @@
 # SPDX-License-Identifier: Apache-2.0
-import argparse, collections, csv, json, random, statistics
+import argparse, csv, json, random, statistics
 from pathlib import Path
+from sample_data import load_paired_samples
 
 p = argparse.ArgumentParser()
 p.add_argument("folder")
 p.add_argument("--micro", action="store_true")
 a = p.parse_args()
 folder = Path(a.folder)
-g = collections.defaultdict(lambda: collections.defaultdict(dict))
-for l in (folder / "samples.jsonl").read_text().splitlines():
-    r = json.loads(l)
-    if r["round"] >= 0:
-        g[r["case"]][r.get("engine", r.get("variant"))][r["round"]] = r
 metrics = (
     ["warm_ms", "first_call_ms", "first_result_ms", "wall_ms"]
     if a.micro
     else ["wall_ms"]
 )
+try:
+    g, _ = load_paired_samples(folder, metrics)
+except (OSError, ValueError) as error:
+    p.error(str(error))
 rng = random.Random(20261107111)
 result = []
 for case, groups in g.items():
     for metric in metrics:
         for key, rows in groups.items():
-            paired = [
-                rows[i][metric] / groups["main"][i][metric]
-                for i in sorted(rows.keys() & groups["main"].keys())
-            ]
+            paired = [rows[i][metric] / groups["main"][i][metric] for i in sorted(rows)]
             n = len(paired)
             boots = sorted(
                 statistics.median(rng.choices(paired, k=n)) for _ in range(10000)

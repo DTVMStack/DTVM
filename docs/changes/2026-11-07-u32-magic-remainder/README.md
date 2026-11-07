@@ -30,3 +30,7 @@ The confirmed gain is in dependent synthetic integer loops. Canonical WAPM and
 selected PolyBench process-time effects did not consistently reproduce; do not
 claim whole-suite acceleration. Serial FastRA zero-loop admission adds roughly
 10–16 microseconds for the tested constants. ASan: 102 MIR/98 lazy WAST tests pass.
+
+[PR645 review and tooling fixes](REVIEW.md): complete paired-data validation and
+bounded child cleanup;14 regression checks pass in normal/optimized Python.
+All11 historical summary CSVs and adjusted sign tests reproduce unchanged.
