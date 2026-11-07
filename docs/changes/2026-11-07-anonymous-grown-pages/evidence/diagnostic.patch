@@ -2,7 +2,7 @@
 +++ b/src/compiler/compiler.cpp
 @@ -2,6 +2,9 @@
  // SPDX-License-Identifier: Apache-2.0
- 
+
  #include "compiler/compiler.h"
 +#include <chrono>
 +#include <cstdio>
@@ -66,9 +66,9 @@
  #include <cinttypes>
  #include <cstdio>
 +#include <cstdlib>
- 
+
  namespace zen::runtime {
- 
+
 @@ -74,6 +75,7 @@
      UseMmapBucket =
          UseMmapBucket && verifyCanUseMmapBucketByModuleDataSegments(Mod);

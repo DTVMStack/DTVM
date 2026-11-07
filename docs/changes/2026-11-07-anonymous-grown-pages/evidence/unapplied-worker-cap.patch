@@ -2,14 +2,14 @@
 +++ b/src/common/thread_pool.h
 @@ -58,6 +58,11 @@
    size_t getTasksTotal() const { return TasksTotal; }
- 
+
    ConcurrencyT getThreadCount() const { return ThreadCount; }
 +
 +  // Inspect the existing zero-request policy without starting workers.
 +  static ConcurrencyT getAutomaticThreadCount() {
 +    return determineThreadCount(0);
 +  }
- 
+
    void pushTask(std::function<void(ThreadContext *)> Task) {
      {
 --- a/src/compiler/compiler.cpp
@@ -17,7 +17,7 @@
 @@ -576,6 +576,28 @@
    Stats.stopRecord(Timer);
  }
- 
+
 +// Bound the ordinary lazy pool by work that entry-only scheduling can queue.
 +// Count identities, not export names: aliases and an exported start deduplicate.
 +static uint32_t getLazyEntryWorkerLimit(const Module &Mod) {
@@ -74,7 +74,7 @@
 +uint32_t LazyJITCompiler::getBackgroundWorkerCount() const {
 +  return ThreadPool ? ThreadPool->getThreadCount() : 0;
  }
- 
+
  LazyJITCompiler::~LazyJITCompiler() {
 --- a/src/compiler/compiler.h
 +++ b/src/compiler/compiler.h
@@ -85,14 +85,14 @@
 +
 +  // Worker allocation diagnostic; a count is not a publication barrier.
 +  uint32_t getBackgroundWorkerCount() const;
- 
+
    /// Attempt/start counts: incremented when a compile path is entered, before
    /// the body is produced, `Done` is stored, or the stub is patched. An acquire
 --- a/src/tests/lazy_jit_greedy_ondemand_tests.cpp
 +++ b/src/tests/lazy_jit_greedy_ondemand_tests.cpp
 @@ -2,6 +2,7 @@
  // SPDX-License-Identifier: Apache-2.0
- 
+
  #include "compiler/compiler.h"
 +#include "common/thread_pool.h"
  #include "compiler/stub/stub_jmp_target.h"
