@@ -1,0 +1,244 @@
+Running main() from /workspace/.dtvm-env/fetchcontent/googletest-src/googletest/src/gtest_main.cc
+[==========] Running 102 tests from 8 test suites.
+[----------] Global test environment set-up.
+[----------] 4 tests from U32MagicUDiv
+[ RUN      ] U32MagicUDiv.Div20MatchesDocumentedSequence
+[       OK ] U32MagicUDiv.Div20MatchesDocumentedSequence (0 ms)
+[ RUN      ] U32MagicUDiv.RejectsZeroAndPow2
+[       OK ] U32MagicUDiv.RejectsZeroAndPow2 (0 ms)
+[ RUN      ] U32MagicUDiv.MatchesHardwareUDiv
+[       OK ] U32MagicUDiv.MatchesHardwareUDiv (5 ms)
+[ RUN      ] U32MagicUDiv.VariedDivisorsAndQuotientBoundaries
+[       OK ] U32MagicUDiv.VariedDivisorsAndQuotientBoundaries (8 ms)
+[----------] 4 tests from U32MagicUDiv (14 ms total)
+
+[----------] 68 tests from MIRPeepholeLitmus
+[ RUN      ] MIRPeepholeLitmus.UDiv20FoldsToMulShift
+[       OK ] MIRPeepholeLitmus.UDiv20FoldsToMulShift (0 ms)
+[ RUN      ] MIRPeepholeLitmus.UDiv7FoldsToMul
+[       OK ] MIRPeepholeLitmus.UDiv7FoldsToMul (0 ms)
+[ RUN      ] MIRPeepholeLitmus.UDiv7KeepsNestedCall
+[       OK ] MIRPeepholeLitmus.UDiv7KeepsNestedCall (0 ms)
+[ RUN      ] MIRPeepholeLitmus.UDiv7KeepsNestedLoad
+[       OK ] MIRPeepholeLitmus.UDiv7KeepsNestedLoad (0 ms)
+[ RUN      ] MIRPeepholeLitmus.UDivZeroDoesNotFold
+[       OK ] MIRPeepholeLitmus.UDivZeroDoesNotFold (0 ms)
+[ RUN      ] MIRPeepholeLitmus.UDivConstConstFolds
+[       OK ] MIRPeepholeLitmus.UDivConstConstFolds (0 ms)
+[ RUN      ] MIRPeepholeLitmus.CtzEqzFoldsToBitTest
+[       OK ] MIRPeepholeLitmus.CtzEqzFoldsToBitTest (0 ms)
+[ RUN      ] MIRPeepholeLitmus.ClzEqzFoldsToSignTest
+[       OK ] MIRPeepholeLitmus.ClzEqzFoldsToSignTest (0 ms)
+[ RUN      ] MIRPeepholeLitmus.CtzEqFourDoesNotFold
+[       OK ] MIRPeepholeLitmus.CtzEqFourDoesNotFold (0 ms)
+[ RUN      ] MIRPeepholeLitmus.ClzNeZeroFoldsToSge
+[       OK ] MIRPeepholeLitmus.ClzNeZeroFoldsToSge (0 ms)
+[ RUN      ] MIRPeepholeLitmus.SelectICmpFoldsToCond
+[       OK ] MIRPeepholeLitmus.SelectICmpFoldsToCond (0 ms)
+[ RUN      ] MIRPeepholeLitmus.SelectICmpOtherConstIsZero
+[       OK ] MIRPeepholeLitmus.SelectICmpOtherConstIsZero (0 ms)
+[ RUN      ] MIRPeepholeLitmus.SelectNonConstArmDoesNotFold
+[       OK ] MIRPeepholeLitmus.SelectNonConstArmDoesNotFold (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemPow2FoldsToAnd
+[       OK ] MIRPeepholeLitmus.URemPow2FoldsToAnd (0 ms)
+[ RUN      ] MIRPeepholeLitmus.UDivPow2FoldsToUShr
+[       OK ] MIRPeepholeLitmus.UDivPow2FoldsToUShr (0 ms)
+[ RUN      ] MIRPeepholeLitmus.UDivByOneReturnsOperand
+[       OK ] MIRPeepholeLitmus.UDivByOneReturnsOperand (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemByOneIsZero
+[       OK ] MIRPeepholeLitmus.URemByOneIsZero (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemByOneKeepsNestedDivByZero
+[       OK ] MIRPeepholeLitmus.URemByOneKeepsNestedDivByZero (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemByOneKeepsNestedCall
+[       OK ] MIRPeepholeLitmus.URemByOneKeepsNestedCall (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemByOneKeepsNestedLoad
+[       OK ] MIRPeepholeLitmus.URemByOneKeepsNestedLoad (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemByOneKeepsNestedFPToSI
+[       OK ] MIRPeepholeLitmus.URemByOneKeepsNestedFPToSI (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemByOneKeepsNestedFPToUI
+[       OK ] MIRPeepholeLitmus.URemByOneKeepsNestedFPToUI (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemByOneKeepsNestedEvmUdivZeroDivisor
+[       OK ] MIRPeepholeLitmus.URemByOneKeepsNestedEvmUdivZeroDivisor (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemByOneKeepsNestedEvmUdivQuotientOverflow
+[       OK ] MIRPeepholeLitmus.URemByOneKeepsNestedEvmUdivQuotientOverflow (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemByOneKeepsNestedEvmUremExtractor
+[       OK ] MIRPeepholeLitmus.URemByOneKeepsNestedEvmUremExtractor (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemByOneKeepsNestedI128Overflow
+[       OK ] MIRPeepholeLitmus.URemByOneKeepsNestedI128Overflow (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemDreadOfConstPow2FoldsToAnd
+[       OK ] MIRPeepholeLitmus.URemDreadOfConstPow2FoldsToAnd (0 ms)
+[ RUN      ] MIRPeepholeLitmus.UDivDreadOfConstPow2FoldsToUShr
+[       OK ] MIRPeepholeLitmus.UDivDreadOfConstPow2FoldsToUShr (0 ms)
+[ RUN      ] MIRPeepholeLitmus.ConstURemFolds
+[       OK ] MIRPeepholeLitmus.ConstURemFolds (0 ms)
+[ RUN      ] MIRPeepholeLitmus.ConstUDivFolds
+[       OK ] MIRPeepholeLitmus.ConstUDivFolds (0 ms)
+[ RUN      ] MIRPeepholeLitmus.ConstUDivNonPow2Folds
+[       OK ] MIRPeepholeLitmus.ConstUDivNonPow2Folds (0 ms)
+[ RUN      ] MIRPeepholeLitmus.ConstUDivZeroDoesNotFold
+[       OK ] MIRPeepholeLitmus.ConstUDivZeroDoesNotFold (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemHighBitPow2FoldsToAnd
+[       OK ] MIRPeepholeLitmus.URemHighBitPow2FoldsToAnd (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemI64HighBitPow2FoldsToAnd
+[       OK ] MIRPeepholeLitmus.URemI64HighBitPow2FoldsToAnd (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemI64WideMaskFoldsToAnd
+[       OK ] MIRPeepholeLitmus.URemI64WideMaskFoldsToAnd (0 ms)
+[ RUN      ] MIRPeepholeLitmus.ConstURemNonPow2Folds
+[       OK ] MIRPeepholeLitmus.ConstURemNonPow2Folds (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemZeroDoesNotFold
+[       OK ] MIRPeepholeLitmus.URemZeroDoesNotFold (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemNonPow2SixFolds
+[       OK ] MIRPeepholeLitmus.URemNonPow2SixFolds (0 ms)
+[ RUN      ] MIRPeepholeLitmus.SRemPow2DoesNotFold
+[       OK ] MIRPeepholeLitmus.SRemPow2DoesNotFold (0 ms)
+[ RUN      ] MIRPeepholeLitmus.AlgebraIdentities
+[       OK ] MIRPeepholeLitmus.AlgebraIdentities (0 ms)
+[ RUN      ] MIRPeepholeLitmus.MulPow2FoldsToShl
+[       OK ] MIRPeepholeLitmus.MulPow2FoldsToShl (0 ms)
+[ RUN      ] MIRPeepholeLitmus.MulThreeDoesNotFoldToShl
+[       OK ] MIRPeepholeLitmus.MulThreeDoesNotFoldToShl (0 ms)
+[ RUN      ] MIRPeepholeLitmus.AddImmReassoc
+[       OK ] MIRPeepholeLitmus.AddImmReassoc (0 ms)
+[ RUN      ] MIRPeepholeLitmus.SubImmCanonicalizesToAdd
+[       OK ] MIRPeepholeLitmus.SubImmCanonicalizesToAdd (0 ms)
+[ RUN      ] MIRPeepholeLitmus.SubImmI64PreservesBorrowProducer
+[       OK ] MIRPeepholeLitmus.SubImmI64PreservesBorrowProducer (0 ms)
+[ RUN      ] MIRPeepholeLitmus.AddImmI64PreservesFinalCarryProducer
+[       OK ] MIRPeepholeLitmus.AddImmI64PreservesFinalCarryProducer (0 ms)
+[ RUN      ] MIRPeepholeLitmus.AddThenSubImmReassoc
+[       OK ] MIRPeepholeLitmus.AddThenSubImmReassoc (0 ms)
+[ RUN      ] MIRPeepholeLitmus.SignedPositivePow2DivFoldsToBiasShift
+[       OK ] MIRPeepholeLitmus.SignedPositivePow2DivFoldsToBiasShift (0 ms)
+[ RUN      ] MIRPeepholeLitmus.SignedDivByOneIsIdentity
+[       OK ] MIRPeepholeLitmus.SignedDivByOneIsIdentity (0 ms)
+[ RUN      ] MIRPeepholeLitmus.SignedDivBySevenDoesNotFold
+[       OK ] MIRPeepholeLitmus.SignedDivBySevenDoesNotFold (0 ms)
+[ RUN      ] MIRPeepholeLitmus.SignedDivByNegEightDoesNotFold
+[       OK ] MIRPeepholeLitmus.SignedDivByNegEightDoesNotFold (0 ms)
+[ RUN      ] MIRPeepholeLitmus.ConstBrIfStripsPhiOnLiveDropTarget
+[       OK ] MIRPeepholeLitmus.ConstBrIfStripsPhiOnLiveDropTarget (0 ms)
+[ RUN      ] MIRPeepholeLitmus.ConstZeroBrIfWithoutFalseFallsThrough
+[       OK ] MIRPeepholeLitmus.ConstZeroBrIfWithoutFalseFallsThrough (0 ms)
+[ RUN      ] MIRPeepholeLitmus.ConstBrIfBecomesUncondAndKillsDeadBlock
+[       OK ] MIRPeepholeLitmus.ConstBrIfBecomesUncondAndKillsDeadBlock (0 ms)
+[ RUN      ] MIRPeepholeLitmus.HoistsNonZeroFPConstOutOfNonEntryBlock
+[       OK ] MIRPeepholeLitmus.HoistsNonZeroFPConstOutOfNonEntryBlock (0 ms)
+[ RUN      ] MIRPeepholeLitmus.DoesNotHoistPlusZeroFPConst
+[       OK ] MIRPeepholeLitmus.DoesNotHoistPlusZeroFPConst (0 ms)
+[ RUN      ] MIRPeepholeLitmus.HoistsMinusZeroFPConst
+[       OK ] MIRPeepholeLitmus.HoistsMinusZeroFPConst (0 ms)
+[ RUN      ] MIRPeepholeLitmus.HoistsF32AndDedupsRepeatedConst
+[       OK ] MIRPeepholeLitmus.HoistsF32AndDedupsRepeatedConst (0 ms)
+[ RUN      ] MIRPeepholeLitmus.DoesNotHoistWhenEntryHasPredecessor
+[       OK ] MIRPeepholeLitmus.DoesNotHoistWhenEntryHasPredecessor (0 ms)
+[ RUN      ] MIRPeepholeLitmus.DoesNotHoistFPConstUsedOnlyInEntry
+[       OK ] MIRPeepholeLitmus.DoesNotHoistFPConstUsedOnlyInEntry (0 ms)
+[ RUN      ] MIRPeepholeLitmus.AssignmentLookupUsesPreviousValueDuringSelfUpdate
+[       OK ] MIRPeepholeLitmus.AssignmentLookupUsesPreviousValueDuringSelfUpdate (0 ms)
+[ RUN      ] MIRPeepholeLitmus.DynamicAssignmentKillsEarlierConstant
+[       OK ] MIRPeepholeLitmus.DynamicAssignmentKillsEarlierConstant (0 ms)
+[ RUN      ] MIRPeepholeLitmus.AssignmentIndexDoesNotCrossBlockBoundary
+[       OK ] MIRPeepholeLitmus.AssignmentIndexDoesNotCrossBlockBoundary (0 ms)
+[ RUN      ] MIRPeepholeLitmus.ReusedPassDoesNotReuseAssignmentFromPreviousFunction
+[       OK ] MIRPeepholeLitmus.ReusedPassDoesNotReuseAssignmentFromPreviousFunction (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemNonPow2FoldsToMagicQuotientAndSubtract
+[       OK ] MIRPeepholeLitmus.URemNonPow2FoldsToMagicQuotientAndSubtract (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemNonPow2KeepsRawCall
+[       OK ] MIRPeepholeLitmus.URemNonPow2KeepsRawCall (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemNonPow2KeepsRawLoad
+[       OK ] MIRPeepholeLitmus.URemNonPow2KeepsRawLoad (0 ms)
+[ RUN      ] MIRPeepholeLitmus.URemNonPow2KeepsRawTrappingDivision
+[       OK ] MIRPeepholeLitmus.URemNonPow2KeepsRawTrappingDivision (0 ms)
+[----------] 68 tests from MIRPeepholeLitmus (4 ms total)
+
+[----------] 1 test from PhiIncomingLayout
+[ RUN      ] PhiIncomingLayout.RemoveIncomingKeepsRemainingPairs
+[       OK ] PhiIncomingLayout.RemoveIncomingKeepsRemainingPairs (0 ms)
+[----------] 1 test from PhiIncomingLayout (0 ms total)
+
+[----------] 3 tests from MIRPeepholeWasm
+[ RUN      ] MIRPeepholeWasm.MultipassMatchesExpected
+[       OK ] MIRPeepholeWasm.MultipassMatchesExpected (42 ms)
+[ RUN      ] MIRPeepholeWasm.SinglepassMatchesMultipass
+[       OK ] MIRPeepholeWasm.SinglepassMatchesMultipass (38 ms)
+[ RUN      ] MIRPeepholeWasm.FastRARegmaskPreservesLongIntegerAndFloatCallChains
+[       OK ] MIRPeepholeWasm.FastRARegmaskPreservesLongIntegerAndFloatCallChains (238 ms)
+[----------] 3 tests from MIRPeepholeWasm (320 ms total)
+
+[----------] 3 tests from MIRPeepholeConcurrent
+[ RUN      ] MIRPeepholeConcurrent.ParallelCompileAndExecute
+[       OK ] MIRPeepholeConcurrent.ParallelCompileAndExecute (10981 ms)
+[ RUN      ] MIRPeepholeConcurrent.ParallelLazyCompileAndExecute
+[       OK ] MIRPeepholeConcurrent.ParallelLazyCompileAndExecute (5055 ms)
+[ RUN      ] MIRPeepholeConcurrent.LazyJitWarmupThenReplay
+[       OK ] MIRPeepholeConcurrent.LazyJitWarmupThenReplay (38 ms)
+[----------] 3 tests from MIRPeepholeConcurrent (16075 ms total)
+
+[----------] 1 test from MIRPeepholePerf
+[ RUN      ] MIRPeepholePerf.Microbenchmarks
+
+MIR peephole microbench (multipass, 2000000 loop iters, 3 runs)
+  bench_ctz_eqz     best=2.757 ms  mean=2.772 ms
+  bench_select      best=2.777 ms  mean=3.946 ms
+  bench_algebra     best=1.101 ms  mean=1.114 ms
+  bench_const_br    best=1.260 ms  mean=1.648 ms
+  bench_mixed       best=9.634 ms  mean=10.241 ms
+  bitmix            best=8.352 ms  mean=8.623 ms
+  bench_div8        best=2.818 ms  mean=2.941 ms
+  bench_udiv20      best=1.203 ms  mean=1.244 ms
+[       OK ] MIRPeepholePerf.Microbenchmarks (163 ms)
+[----------] 1 test from MIRPeepholePerf (163 ms total)
+
+[----------] 18 tests from X86CgLowering
+[ RUN      ] X86CgLowering.BrIfCmpEmitsDirectJccWithoutSetcc
+[       OK ] X86CgLowering.BrIfCmpEmitsDirectJccWithoutSetcc (1 ms)
+[ RUN      ] X86CgLowering.DirectJccSignedUnsignedI32I64Boundaries
+[       OK ] X86CgLowering.DirectJccSignedUnsignedI32I64Boundaries (13 ms)
+[ RUN      ] X86CgLowering.BrIfOfCachedCmpUsesSetcc
+[       OK ] X86CgLowering.BrIfOfCachedCmpUsesSetcc (1 ms)
+[ RUN      ] X86CgLowering.BrIfOfCmpValueStillUsesSetcc
+[       OK ] X86CgLowering.BrIfOfCmpValueStillUsesSetcc (1 ms)
+[ RUN      ] X86CgLowering.ShortDiamondInvertsCCToFalseEdge
+[       OK ] X86CgLowering.ShortDiamondInvertsCCToFalseEdge (1 ms)
+[ RUN      ] X86CgLowering.FpDirectJccNanInfSignedZero
+[       OK ] X86CgLowering.FpDirectJccNanInfSignedZero (22 ms)
+[ RUN      ] X86CgLowering.FpDirectJccSwapsOltOleOperands
+[       OK ] X86CgLowering.FpDirectJccSwapsOltOleOperands (9 ms)
+[ RUN      ] X86CgLowering.FpDirectJccNanOnEitherOperand
+[       OK ] X86CgLowering.FpDirectJccNanOnEitherOperand (5 ms)
+[ RUN      ] X86CgLowering.FpShortDiamondInvertsFalseEdge
+[       OK ] X86CgLowering.FpShortDiamondInvertsFalseEdge (1 ms)
+[ RUN      ] X86CgLowering.FpShortDiamondOltSwapsAndInverts
+[       OK ] X86CgLowering.FpShortDiamondOltSwapsAndInverts (14 ms)
+[ RUN      ] X86CgLowering.FcmpOeqUneStayOnTwoTestFallback
+[       OK ] X86CgLowering.FcmpOeqUneStayOnTwoTestFallback (2 ms)
+[ RUN      ] X86CgLowering.AddImmI32EmitsLEA64_32r
+[       OK ] X86CgLowering.AddImmI32EmitsLEA64_32r (1 ms)
+[ RUN      ] X86CgLowering.AddImmI64StaysAddNotLEA
+[       OK ] X86CgLowering.AddImmI64StaysAddNotLEA (1 ms)
+[ RUN      ] X86CgLowering.SubImmI32EmitsLEA64_32r
+[       OK ] X86CgLowering.SubImmI32EmitsLEA64_32r (1 ms)
+[ RUN      ] X86CgLowering.SubImmI64StaysSubAfterPeephole
+[       OK ] X86CgLowering.SubImmI64StaysSubAfterPeephole (1 ms)
+[ RUN      ] X86CgLowering.ConstantMinusI32DoesNotBecomeLEA
+[       OK ] X86CgLowering.ConstantMinusI32DoesNotBecomeLEA (1 ms)
+[ RUN      ] X86CgLowering.WrapAddImmStillLEANotDispFold
+[       OK ] X86CgLowering.WrapAddImmStillLEANotDispFold (1 ms)
+[ RUN      ] X86CgLowering.I64AddImmTooWideStaysAdd
+[       OK ] X86CgLowering.I64AddImmTooWideStaysAdd (1 ms)
+[----------] 18 tests from X86CgLowering (85 ms total)
+
+[----------] 4 tests from X86CgPeephole
+[ RUN      ] X86CgPeephole.OptimizeCmpSetccMovzxTestJe
+[       OK ] X86CgPeephole.OptimizeCmpSetccMovzxTestJe (1 ms)
+[ RUN      ] X86CgPeephole.OptimizeCmpSetccTestJe
+[       OK ] X86CgPeephole.OptimizeCmpSetccTestJe (1 ms)
+[ RUN      ] X86CgPeephole.OptimizeCmpKeepsLiveBooleanConsumer
+[       OK ] X86CgPeephole.OptimizeCmpKeepsLiveBooleanConsumer (7 ms)
+[ RUN      ] X86CgPeephole.OptimizeCmpDoesNotFoldMismatchedTest
+[       OK ] X86CgPeephole.OptimizeCmpDoesNotFoldMismatchedTest (5 ms)
+[----------] 4 tests from X86CgPeephole (14 ms total)
+
+[----------] Global test environment tear-down
+[==========] 102 tests from 8 test suites ran. (16678 ms total)
+[  PASSED  ] 102 tests.

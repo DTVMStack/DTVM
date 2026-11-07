@@ -1,0 +1,57 @@
+[
+  {
+    "cohort": "micro-hot-r31",
+    "summary_sha256": "64eaac3b9b6abc2eb9494524f21a89a55b6b7705970aade67566a34c2145a41d",
+    "identical": true
+  },
+  {
+    "cohort": "micro-serial-fast-zero-r31",
+    "summary_sha256": "2fef3973ac12122fed4bc8d13967da9f9fa1c0cf4dbeb8b7b6b0a0bf57f4df5f",
+    "identical": true
+  },
+  {
+    "cohort": "micro-serial-hot-r31",
+    "summary_sha256": "b55a57bac306d9ac056c396c32066f1e6282c715a5dbbe252e907c0544fdb2a7",
+    "identical": true
+  },
+  {
+    "cohort": "micro-serial-zero-r31",
+    "summary_sha256": "04eb4ec4507259eb57410e99d299c51df40cfec73bbfe865c3d215f61d9bd5c8",
+    "identical": true
+  },
+  {
+    "cohort": "micro-zero-r31",
+    "summary_sha256": "c05704ebf32fbfca95a68bb97eac7fa63094a26d88f419072a8210118ef8c698",
+    "identical": true
+  },
+  {
+    "cohort": "poly-confirm-r21",
+    "summary_sha256": "9691e3a40147474381d2ce7afec558a131c77dd4d61dc5e4609dc6e38e446abf",
+    "identical": true
+  },
+  {
+    "cohort": "poly-r7",
+    "summary_sha256": "8723aa5c99dc1e97a36d45a8bc4d3b2839578c10bf174ee71d2485d1f6ae7812",
+    "identical": true
+  },
+  {
+    "cohort": "wapm-confirm-r31",
+    "summary_sha256": "1107d02978ddc8959e579cfddc116cf5fc0c28af6e5707eeee990892b11684ed",
+    "identical": true
+  },
+  {
+    "cohort": "wapm-extra-confirm-r31",
+    "summary_sha256": "6b71368c6783bac065313c11a5cd83686d88f151a021fe436317efa5f5c4452a",
+    "identical": true
+  },
+  {
+    "cohort": "wapm-negative-confirm-r31",
+    "summary_sha256": "182eb32a698fbed98ff3602de3369a0f6e8453d8ed9ada526726bc347585c8da",
+    "identical": true
+  },
+  {
+    "cohort": "wapm-r7",
+    "summary_sha256": "6ee8a4e9692ac35a274b5ee811d934c316b09593fdc1ba20443ad922b47e2971",
+    "identical": true
+  }
+]

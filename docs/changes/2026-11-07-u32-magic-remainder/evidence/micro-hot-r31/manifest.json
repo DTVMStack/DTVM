@@ -1,0 +1,150 @@
+{
+  "seed": 20261107103,
+  "rounds": 31,
+  "warmup": -1,
+  "binaries": {
+    "main": {
+      "path": "/workspace/DTVM/work/urem-research/dtvm-main-3bff8bf",
+      "sha256": "978dc901886663b8acd5a6e216b28d345d4e0735701300d92c5a3c6a982ddf39"
+    },
+    "candidate": {
+      "path": "/workspace/DTVM/work/urem-research/dtvm-urem",
+      "sha256": "662424b2d69a2080642912e7fe9c5e458d47f5a2fe905fae778a9c4b9d4ca4f9"
+    },
+    "wasmtime": {
+      "path": "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "sha256": "d7b7317b34a717f4b809df14657975e2ce83221a697167219abdad6e44c7a12c"
+    }
+  },
+  "commands": {
+    "main": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/urem-research/dtvm-main-3bff8bf",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy"
+    ],
+    "candidate": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/work/urem-research/dtvm-urem",
+      "-m",
+      "multipass",
+      "--enable-multipass-lazy"
+    ],
+    "wasmtime": [
+      "taskset",
+      "-c",
+      "0",
+      "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "run",
+      "-C",
+      "cache=n"
+    ]
+  },
+  "jobs": [
+    {
+      "name": "rem-3",
+      "divisor": 3,
+      "iterations": 1000000,
+      "calls": 8,
+      "expected": 2792144442,
+      "wasm": "/workspace/DTVM/work/urem-research/micro-hot-r31/rem-3.wasm",
+      "sha256": "601f9fb6e07eab8a64c4488558f939793029a4a479e4d0e3bdcf864e0f2dba6d"
+    },
+    {
+      "name": "rem-7",
+      "divisor": 7,
+      "iterations": 1000000,
+      "calls": 8,
+      "expected": 2859945409,
+      "wasm": "/workspace/DTVM/work/urem-research/micro-hot-r31/rem-7.wasm",
+      "sha256": "285b8f173f85123a8ae7f85d20f4365ee5393d42a68a94da8350467d9fef18ad"
+    },
+    {
+      "name": "rem-10",
+      "divisor": 10,
+      "iterations": 1000000,
+      "calls": 8,
+      "expected": 3493401906,
+      "wasm": "/workspace/DTVM/work/urem-research/micro-hot-r31/rem-10.wasm",
+      "sha256": "1e5c377de94bf9adc02013ab4bef5f77310f7ae5a03b35634cd9316b73662140"
+    },
+    {
+      "name": "rem-20",
+      "divisor": 20,
+      "iterations": 1000000,
+      "calls": 8,
+      "expected": 2561097986,
+      "wasm": "/workspace/DTVM/work/urem-research/micro-hot-r31/rem-20.wasm",
+      "sha256": "db12f1e89c2ca23e0be8b1df241bf8137dcefba07a0d8ed6923eb23e23c95031"
+    },
+    {
+      "name": "rem-255",
+      "divisor": 255,
+      "iterations": 1000000,
+      "calls": 8,
+      "expected": 3596433647,
+      "wasm": "/workspace/DTVM/work/urem-research/micro-hot-r31/rem-255.wasm",
+      "sha256": "a4fdd2055925e60ff53a4c9009bcd3ace10ff8d63e2ad35806f528aedb828040"
+    },
+    {
+      "name": "rem-1900",
+      "divisor": 1900,
+      "iterations": 1000000,
+      "calls": 8,
+      "expected": 2107743186,
+      "wasm": "/workspace/DTVM/work/urem-research/micro-hot-r31/rem-1900.wasm",
+      "sha256": "35ffbe0996e671d9a6ea86174debb58624fe43ead1ea4a6f244869cdb25a33c5"
+    },
+    {
+      "name": "rem-2100",
+      "divisor": 2100,
+      "iterations": 1000000,
+      "calls": 8,
+      "expected": 534938698,
+      "wasm": "/workspace/DTVM/work/urem-research/micro-hot-r31/rem-2100.wasm",
+      "sha256": "b35d0e6faad62cfbc19998753f7e1dec5218a07a6934abd155b454cf1d8a6645"
+    },
+    {
+      "name": "rem-65521",
+      "divisor": 65521,
+      "iterations": 1000000,
+      "calls": 8,
+      "expected": 368215819,
+      "wasm": "/workspace/DTVM/work/urem-research/micro-hot-r31/rem-65521.wasm",
+      "sha256": "0f45bc35c27e3d9de5ca0e9dc0bc1b0ea72fc9e2f69cd2d5ca44372deffe9ac9"
+    },
+    {
+      "name": "rem-4294967295",
+      "divisor": 4294967295,
+      "iterations": 1000000,
+      "calls": 8,
+      "expected": 3843926930,
+      "wasm": "/workspace/DTVM/work/urem-research/micro-hot-r31/rem-4294967295.wasm",
+      "sha256": "cc1c500ac8f1cf930010b78c7dcdacadb65f7f47d9a5054f72d53b497bc4635c"
+    },
+    {
+      "name": "rem-8",
+      "divisor": 8,
+      "iterations": 1000000,
+      "calls": 8,
+      "expected": 2855549818,
+      "wasm": "/workspace/DTVM/work/urem-research/micro-hot-r31/rem-8.wasm",
+      "sha256": "f0013fb61a2ea6c7663032c82105d4e5b40a30c94fef567cac5e927089fb7d3b"
+    },
+    {
+      "name": "rem-dynamic",
+      "divisor": 7,
+      "iterations": 1000000,
+      "calls": 8,
+      "expected": 2859945409,
+      "wasm": "/workspace/DTVM/work/urem-research/micro-hot-r31/rem-dynamic.wasm",
+      "sha256": "4b346f9402d0c4b878217d2f35c2da9f8801fc71a501d8eaf0461a8057784ae4"
+    }
+  ],
+  "boundary": "Fresh process on CPU0, parent CPU1. Packet receipt after each kernel returns; 24-byte WASI begin/end/checksum/call packet. First call includes private demand compile (WT45 compiles before _start); zero-iteration cohort keeps loop code but n is a runtime parameter. Whole process/first packet include engine startup. Calls2..8 aggregate within each process, not independent samples. Each call starts same seed; no allocations/memory growth in kernel. Default lazy tiering unchanged."
+}

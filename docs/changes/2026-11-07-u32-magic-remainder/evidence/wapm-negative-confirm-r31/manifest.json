@@ -1,0 +1,186 @@
+{
+  "commits": {
+    "main": "3bff8bf",
+    "candidate": "2d07843",
+    "previous": null
+  },
+  "seed": 20261107125,
+  "rounds": 31,
+  "excluded_warmup": -1,
+  "timeout_s": 180,
+  "boundary": "Fresh process pre-spawn through exit; CPU0 including workers; warm page cache; WT45 cache disabled; output captured; no profiles/builds/tests conpreviously; private tiering default OFF",
+  "binaries": {
+    "main": {
+      "path": "/workspace/DTVM/work/urem-research/dtvm-main-3bff8bf",
+      "sha256": "978dc901886663b8acd5a6e216b28d345d4e0735701300d92c5a3c6a982ddf39"
+    },
+    "candidate": {
+      "path": "/workspace/DTVM/work/urem-research/dtvm-urem",
+      "sha256": "662424b2d69a2080642912e7fe9c5e458d47f5a2fe905fae778a9c4b9d4ca4f9"
+    },
+    "wt45": {
+      "path": "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "sha256": "d7b7317b34a717f4b809df14657975e2ce83221a697167219abdad6e44c7a12c"
+    }
+  },
+  "commands": {
+    "chkfont": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-main-3bff8bf",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/chkfont.wasm",
+        "--dir=fonts",
+        "--args",
+        "fonts/small.flf"
+      ],
+      "candidate": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/chkfont.wasm",
+        "--dir=fonts",
+        "--args",
+        "fonts/small.flf"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "--dir",
+        "fonts",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/chkfont.wasm",
+        "fonts/small.flf"
+      ]
+    },
+    "code-stock": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-main-3bff8bf",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/code-stock.wasm"
+      ],
+      "candidate": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/code-stock.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/code-stock.wasm"
+      ]
+    },
+    "suggest": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-main-3bff8bf",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/suggest.wasm",
+        "--args",
+        "instakk",
+        "update",
+        "install"
+      ],
+      "candidate": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/suggest.wasm",
+        "--args",
+        "instakk",
+        "update",
+        "install"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/suggest.wasm",
+        "instakk",
+        "update",
+        "install"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "chkfont",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/chkfont.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "dirs": [
+        "fonts"
+      ],
+      "args": [
+        "fonts/small.flf"
+      ],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "code-stock",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/code-stock.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "suggest",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/suggest.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": [
+        "instakk",
+        "update",
+        "install"
+      ],
+      "fairness": "same-wasm"
+    }
+  ],
+  "inputs": {
+    "chkfont": "a8fcad775e5ab5739c3d6f723cc8121b56fea9c1078d2b1bb1c2e0216d599062",
+    "code-stock": "d7d05eab7c7753e8b3cfa8f71cce93ae05c09e3b79d16c40509d4dd813aeac27",
+    "suggest": "73b1387fba8d20f42ddced687edfada988fdc2b140e7077e33aed7b80d1303a2"
+  }
+}

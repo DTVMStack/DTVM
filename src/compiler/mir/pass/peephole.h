@@ -39,7 +39,7 @@ private:
   MInstruction *foldConstCmp(MInstruction *Inst);
   MInstruction *foldSelectConstCond(MInstruction *Inst);
   MInstruction *foldSignedPositivePow2Div(MInstruction *Inst);
-  MInstruction *foldU32MagicUDiv(MInstruction *Inst);
+  MInstruction *foldU32MagicDivRem(MInstruction *Inst);
   bool foldConstBrIf(MBasicBlock &BB, BrIfInstruction &BrIf);
 
   MInstruction *makeConv(Opcode Opc, MType *Ty, MInstruction *Op);

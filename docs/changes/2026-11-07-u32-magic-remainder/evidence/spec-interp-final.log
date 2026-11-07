@@ -1,0 +1,311 @@
+[==========] Running 98 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 98 tests from spec/SpecUnitTest
+[ RUN      ] spec/SpecUnitTest.TestSpec/0
+Testing unit name: chain/checked_sample
+[       OK ] spec/SpecUnitTest.TestSpec/0 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/1
+Testing unit name: core/address
+[       OK ] spec/SpecUnitTest.TestSpec/1 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/2
+Testing unit name: core/align
+[       OK ] spec/SpecUnitTest.TestSpec/2 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/3
+Testing unit name: core/binary
+[       OK ] spec/SpecUnitTest.TestSpec/3 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/4
+Testing unit name: core/binary-leb128
+[       OK ] spec/SpecUnitTest.TestSpec/4 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/5
+Testing unit name: core/block
+[       OK ] spec/SpecUnitTest.TestSpec/5 (2 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/6
+Testing unit name: core/br
+[       OK ] spec/SpecUnitTest.TestSpec/6 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/7
+Testing unit name: core/br_if
+[       OK ] spec/SpecUnitTest.TestSpec/7 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/8
+Testing unit name: core/br_table
+[       OK ] spec/SpecUnitTest.TestSpec/8 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/9
+Testing unit name: core/break-drop
+[       OK ] spec/SpecUnitTest.TestSpec/9 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/10
+Testing unit name: core/call
+[       OK ] spec/SpecUnitTest.TestSpec/10 (5 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/11
+Testing unit name: core/call_indirect
+[       OK ] spec/SpecUnitTest.TestSpec/11 (9 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/12
+Testing unit name: core/comments
+[       OK ] spec/SpecUnitTest.TestSpec/12 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/13
+Testing unit name: core/const
+[       OK ] spec/SpecUnitTest.TestSpec/13 (6 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/14
+Testing unit name: core/conversions
+[       OK ] spec/SpecUnitTest.TestSpec/14 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/15
+Testing unit name: core/custom
+[       OK ] spec/SpecUnitTest.TestSpec/15 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/16
+Testing unit name: core/data
+[       OK ] spec/SpecUnitTest.TestSpec/16 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/17
+Testing unit name: core/elem
+[       OK ] spec/SpecUnitTest.TestSpec/17 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/18
+Testing unit name: core/endianness
+[       OK ] spec/SpecUnitTest.TestSpec/18 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/19
+Testing unit name: core/exports
+[       OK ] spec/SpecUnitTest.TestSpec/19 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/20
+Testing unit name: core/f32
+[       OK ] spec/SpecUnitTest.TestSpec/20 (4 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/21
+Testing unit name: core/f32_bitwise
+[       OK ] spec/SpecUnitTest.TestSpec/21 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/22
+Testing unit name: core/f32_cmp
+[       OK ] spec/SpecUnitTest.TestSpec/22 (4 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/23
+Testing unit name: core/f64
+[       OK ] spec/SpecUnitTest.TestSpec/23 (5 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/24
+Testing unit name: core/f64_bitwise
+[       OK ] spec/SpecUnitTest.TestSpec/24 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/25
+Testing unit name: core/f64_cmp
+[       OK ] spec/SpecUnitTest.TestSpec/25 (8 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/26
+Testing unit name: core/fac
+[       OK ] spec/SpecUnitTest.TestSpec/26 (3 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/27
+Testing unit name: core/float_exprs
+[       OK ] spec/SpecUnitTest.TestSpec/27 (3 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/28
+Testing unit name: core/float_literals
+[       OK ] spec/SpecUnitTest.TestSpec/28 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/29
+Testing unit name: core/float_memory
+[       OK ] spec/SpecUnitTest.TestSpec/29 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/30
+Testing unit name: core/float_misc
+[       OK ] spec/SpecUnitTest.TestSpec/30 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/31
+Testing unit name: core/forward
+[       OK ] spec/SpecUnitTest.TestSpec/31 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/32
+Testing unit name: core/func
+[       OK ] spec/SpecUnitTest.TestSpec/32 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/33
+Testing unit name: core/func_ptrs
+0x53:i32
+[       OK ] spec/SpecUnitTest.TestSpec/33 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/34
+Testing unit name: core/global
+[       OK ] spec/SpecUnitTest.TestSpec/34 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/35
+Testing unit name: core/i32
+[       OK ] spec/SpecUnitTest.TestSpec/35 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/36
+Testing unit name: core/i64
+[       OK ] spec/SpecUnitTest.TestSpec/36 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/37
+Testing unit name: core/if
+[       OK ] spec/SpecUnitTest.TestSpec/37 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/38
+Testing unit name: core/int_exprs
+[       OK ] spec/SpecUnitTest.TestSpec/38 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/39
+Testing unit name: core/int_literals
+[       OK ] spec/SpecUnitTest.TestSpec/39 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/40
+Testing unit name: core/labels
+[       OK ] spec/SpecUnitTest.TestSpec/40 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/41
+Testing unit name: core/left-to-right
+[       OK ] spec/SpecUnitTest.TestSpec/41 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/42
+Testing unit name: core/load
+[       OK ] spec/SpecUnitTest.TestSpec/42 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/43
+Testing unit name: core/local_get
+[       OK ] spec/SpecUnitTest.TestSpec/43 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/44
+Testing unit name: core/local_set
+[       OK ] spec/SpecUnitTest.TestSpec/44 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/45
+Testing unit name: core/local_tee
+[       OK ] spec/SpecUnitTest.TestSpec/45 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/46
+Testing unit name: core/loop
+[       OK ] spec/SpecUnitTest.TestSpec/46 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/47
+Testing unit name: core/memory
+[       OK ] spec/SpecUnitTest.TestSpec/47 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/48
+Testing unit name: core/memory_grow
+[       OK ] spec/SpecUnitTest.TestSpec/48 (31 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/49
+Testing unit name: core/memory_redundancy
+[       OK ] spec/SpecUnitTest.TestSpec/49 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/50
+Testing unit name: core/memory_size
+[       OK ] spec/SpecUnitTest.TestSpec/50 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/51
+Testing unit name: core/memory_trap
+[       OK ] spec/SpecUnitTest.TestSpec/51 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/52
+Testing unit name: core/names
+0x2a:i32
+0x7b:i32
+[       OK ] spec/SpecUnitTest.TestSpec/52 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/53
+Testing unit name: core/nop
+[       OK ] spec/SpecUnitTest.TestSpec/53 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/54
+Testing unit name: core/return
+[       OK ] spec/SpecUnitTest.TestSpec/54 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/55
+Testing unit name: core/select
+[       OK ] spec/SpecUnitTest.TestSpec/55 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/56
+Testing unit name: core/skip-stack-guard-page
+[       OK ] spec/SpecUnitTest.TestSpec/56 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/57
+Testing unit name: core/stack
+[       OK ] spec/SpecUnitTest.TestSpec/57 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/58
+Testing unit name: core/start
+0x1:i32
+0x2:i32
+[       OK ] spec/SpecUnitTest.TestSpec/58 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/59
+Testing unit name: core/store
+[       OK ] spec/SpecUnitTest.TestSpec/59 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/60
+Testing unit name: core/switch
+[       OK ] spec/SpecUnitTest.TestSpec/60 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/61
+Testing unit name: core/table
+[       OK ] spec/SpecUnitTest.TestSpec/61 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/62
+Testing unit name: core/token
+[       OK ] spec/SpecUnitTest.TestSpec/62 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/63
+Testing unit name: core/traps
+[       OK ] spec/SpecUnitTest.TestSpec/63 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/64
+Testing unit name: core/type
+[       OK ] spec/SpecUnitTest.TestSpec/64 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/65
+Testing unit name: core/unreachable
+[       OK ] spec/SpecUnitTest.TestSpec/65 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/66
+Testing unit name: core/unreached-invalid
+[       OK ] spec/SpecUnitTest.TestSpec/66 (1 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/67
+Testing unit name: core/unwind
+[       OK ] spec/SpecUnitTest.TestSpec/67 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/68
+Testing unit name: core/utf8-custom-section-id
+[       OK ] spec/SpecUnitTest.TestSpec/68 (2 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/69
+Testing unit name: core/utf8-import-field
+[       OK ] spec/SpecUnitTest.TestSpec/69 (2 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/70
+Testing unit name: core/utf8-import-module
+[       OK ] spec/SpecUnitTest.TestSpec/70 (2 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/71
+Testing unit name: core/utf8-invalid-encoding
+[       OK ] spec/SpecUnitTest.TestSpec/71 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/72
+Testing unit name: exception/exception_throw1
+[       OK ] spec/SpecUnitTest.TestSpec/72 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/73
+Testing unit name: exception/exception_throw2
+[       OK ] spec/SpecUnitTest.TestSpec/73 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/74
+Testing unit name: exception/exception_throw3
+hostapi call_wasm called to call wasm func 1
+hostapi call_wasm called end
+[       OK ] spec/SpecUnitTest.TestSpec/74 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/75
+Testing unit name: exception/exception_throw4
+hostapi call_wasm called to call wasm func 1
+hostapi call_wasm called end
+[       OK ] spec/SpecUnitTest.TestSpec/75 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/76
+Testing unit name: exception/memory_throw1
+[       OK ] spec/SpecUnitTest.TestSpec/76 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/77
+Testing unit name: exception/memory_throw2
+[       OK ] spec/SpecUnitTest.TestSpec/77 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/78
+Testing unit name: gas/simple_gas
+[       OK ] spec/SpecUnitTest.TestSpec/78 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/79
+Testing unit name: multipass/add_imm_lea_wrap
+[       OK ] spec/SpecUnitTest.TestSpec/79 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/80
+Testing unit name: multipass/address_add_imm_wrap
+[       OK ] spec/SpecUnitTest.TestSpec/80 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/81
+Testing unit name: multipass/bitwise
+[       OK ] spec/SpecUnitTest.TestSpec/81 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/82
+Testing unit name: multipass/cross
+[       OK ] spec/SpecUnitTest.TestSpec/82 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/83
+Testing unit name: multipass/peephole
+[       OK ] spec/SpecUnitTest.TestSpec/83 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/84
+Testing unit name: multipass/scalar_conversion_dependencies
+[       OK ] spec/SpecUnitTest.TestSpec/84 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/85
+Testing unit name: multipass/signed_pow2_div
+[       OK ] spec/SpecUnitTest.TestSpec/85 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/86
+Testing unit name: multipass/tied_idx
+[       OK ] spec/SpecUnitTest.TestSpec/86 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/87
+Testing unit name: multipass/trunc
+[       OK ] spec/SpecUnitTest.TestSpec/87 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/88
+Testing unit name: multipass/u32_magic_div
+[       OK ] spec/SpecUnitTest.TestSpec/88 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/89
+Testing unit name: multipass/u32_magic_rem
+[       OK ] spec/SpecUnitTest.TestSpec/89 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/90
+Testing unit name: proposals/sign-extension
+[       OK ] spec/SpecUnitTest.TestSpec/90 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/91
+Testing unit name: spec_extra/address_extra
+[       OK ] spec/SpecUnitTest.TestSpec/91 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/92
+Testing unit name: spec_extra/coalescer_if_local_tee
+[       OK ] spec/SpecUnitTest.TestSpec/92 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/93
+Testing unit name: spec_extra/coalescer_memory_grow_local_tee
+[       OK ] spec/SpecUnitTest.TestSpec/93 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/94
+Testing unit name: spec_extra/invalid_block_type1
+[       OK ] spec/SpecUnitTest.TestSpec/94 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/95
+Testing unit name: spec_extra/invalid_v128
+[       OK ] spec/SpecUnitTest.TestSpec/95 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/96
+Testing unit name: spec_extra/store_imm_base_overflow_false_negative_oob
+[       OK ] spec/SpecUnitTest.TestSpec/96 (0 ms)
+[ RUN      ] spec/SpecUnitTest.TestSpec/97
+Testing unit name: spec_extra/store_large_offset_false_positive_oob
+[       OK ] spec/SpecUnitTest.TestSpec/97 (0 ms)
+[----------] 98 tests from spec/SpecUnitTest (134 ms total)
+
+[----------] Global test environment tear-down
+[==========] 98 tests from 1 test suite ran. (134 ms total)
+[  PASSED  ] 98 tests.

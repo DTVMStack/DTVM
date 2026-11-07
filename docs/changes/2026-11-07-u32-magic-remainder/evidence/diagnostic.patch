@@ -1,0 +1,43 @@
+--- a/src/compiler/compiler.cpp
++++ b/src/compiler/compiler.cpp
+@@ -2,6 +2,9 @@
+ // SPDX-License-Identifier: Apache-2.0
+
+ #include "compiler/compiler.h"
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
+ #include "common/thread_pool.h"
+ #include "compiler/cgir/cg_function.h"
+ #include "compiler/cgir/pass/dead_cg_instruction_elim.h"
+@@ -777,6 +780,7 @@
+ uint8_t *LazyJITCompiler::compileFunction(
+     WasmFrontendContext &Ctx, uint32_t FuncIdx, bool DisableGreedyRA,
+     uint8_t *LoopTick, bool AllowLoopGreedy, bool *SelectedLoopGreedy) {
++  const auto ResearchStart = std::chrono::steady_clock::now();
+   LazyInitialRAPolicy::Timer BudgetTimer(InitialRAPolicy, AllowLoopGreedy);
+   const bool LoopGreedy =
+       compileWasmToMC(Ctx, *Mod, FuncIdx, DisableGreedyRA, LoopTick,
+@@ -800,6 +804,22 @@
+   uint8_t *JITFuncCodePtr = Ctx.CodePtr;
+   platform::mprotect(JITFuncCodePtr, TO_MPROTECT_CODE_SIZE(Ctx.CodeSize),
+                      PROT_READ | PROT_EXEC);
++  if (const char *Dir = std::getenv("DTVM_RESEARCH_NATIVE_DIR")) {
++    const auto Ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
++        std::chrono::steady_clock::now() - ResearchStart).count();
++    const unsigned RealIdx = FuncIdx + WasmMod->getNumImportFunctions();
++    const bool Greedy = !DisableGreedyRA || LoopGreedy;
++    char Path[4096];
++    std::snprintf(Path, sizeof(Path), "%s/func-%u-%d-%llx.bin", Dir, RealIdx,
++                  Greedy, (unsigned long long)(uintptr_t)Ctx.CodePtr);
++    if (FILE *Out = std::fopen(Path, "wb")) {
++      std::fwrite(Ctx.CodePtr, 1, Ctx.CodeSize, Out);
++      std::fclose(Out);
++    }
++    std::fprintf(stderr, "NATIVE %u %d %llx %zu %llu\n", RealIdx, Greedy,
++        (unsigned long long)(uintptr_t)Ctx.CodePtr, size_t(Ctx.CodeSize),
++        (unsigned long long)Ns);
++  }
+   if (LoopGreedy)
+     ForegroundLoopGreedyCount.fetch_add(1, std::memory_order_release);
+   return JITFuncCodePtr;
