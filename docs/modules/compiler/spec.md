@@ -30,7 +30,7 @@ The compiler module is responsible for DTVM's multi-pass JIT compilation pipelin
 ### Multi-pass Compilation Pipeline
 
 1. **Frontend→dMIR**: `WasmMirBuilder` / `EVMMirBuilder` translate source/bytecode to `MModule` + `MFunction` (dMIR)
-2. **dMIR optimization**: `MVerifier`, `MIRPeephole` (ctz/clz-eq-0, select+icmp, local algebra, unsigned pow2 `udiv`/`urem`, u32 magic `udiv`, signed positive-pow2 `sdiv`, add-imm reassoc, constant `br_if`, entry-wide FP-const hoist), `DeadMBasicBlockElim`, re-`MVerifier`
+2. **dMIR optimization**: `MVerifier`, `MIRPeephole` (ctz/clz-eq-0, select+icmp, local algebra, unsigned pow2 `udiv`/`urem`, u32 magic `udiv`/`urem`, signed positive-pow2 `sdiv`, add-imm reassoc, constant `br_if`, entry-wide FP-const hoist), `DeadMBasicBlockElim`, re-`MVerifier`
 3. **dMIR→CgIR**: `X86CgLowering` (i32 add/sub-imm → wrap-safe three-address `LEA64_32r`; cmp+`br_if` → cmp+jcc when the compare result has not already been materialized), `X86CgPeephole`
 4. **Register allocation**: `FastRA` or `CgRAGreedy` + `CgRegisterCoalescer`, `CgVirtRegMap`, `CgLiveIntervals`, etc.
 5. **Post-RA processing**: `PrologEpilogInserter`, `ExpandPostRAPseudos`
@@ -225,7 +225,11 @@ OOB). Load/store Scale stays 1. See
   bitwidth may become toward-zero bias+shift. Wasm `handleIDiv` skips the
   impossible overflow diamond for this divisor class.
   i32 `udiv` by a nonzero, non-power-of-two constant may become
-  `UnsignedDivisionByConstantInfo` magic multiply.
+  `UnsignedDivisionByConstantInfo` magic multiply. i32 `urem` by the same
+  constant class may reuse that exact quotient and become `x - q*d`. Reusing
+  the dividend requires a pure, nontrapping MIR tree; the Wasm frontend already
+  materializes source operands once. Raw call/load/trapping trees stay intact.
+  Both operations share the quotient builder and one magic-parameter calculation.
   Discarding a subtree requires a
   proven-pure **and nontrapping** tree (`isPureExpr` rejects load / call /
   wasm-check but not integer div/rem, `wasm_fptosi`/`wasm_fptoui`, i128

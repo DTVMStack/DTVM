@@ -133,7 +133,7 @@ MInstruction *MIRPeephole::foldExpr(MInstruction *Inst) {
   if (MInstruction *New = foldSignedPositivePow2Div(Inst)) {
     return New;
   }
-  if (MInstruction *New = foldU32MagicUDiv(Inst)) {
+  if (MInstruction *New = foldU32MagicDivRem(Inst)) {
     return New;
   }
   return Inst;
@@ -658,8 +658,9 @@ bool MIRPeephole::foldConstBrIf(MBasicBlock &BB, BrIfInstruction &BrIf) {
   return true;
 }
 
-MInstruction *MIRPeephole::foldU32MagicUDiv(MInstruction *Inst) {
-  if (Inst->getOpcode() != OP_udiv) {
+MInstruction *MIRPeephole::foldU32MagicDivRem(MInstruction *Inst) {
+  const bool IsRem = Inst->getOpcode() == OP_urem;
+  if (Inst->getOpcode() != OP_udiv && !IsRem) {
     return nullptr;
   }
   MType *Ty = Inst->getType();
@@ -673,6 +674,12 @@ MInstruction *MIRPeephole::foldU32MagicUDiv(MInstruction *Inst) {
     return nullptr;
   }
   if (RV.getBitWidth() != 32) {
+    return nullptr;
+  }
+  // Remainder reuses the dividend in q and x - q*d. The Wasm frontend
+  // materializes source expressions once; raw effectful/trapping MIR trees
+  // must remain intact.
+  if (IsRem && !isNontrappingPureExpr(LHS)) {
     return nullptr;
   }
   const auto Mag = tryU32MagicUDiv(static_cast<uint32_t>(RV.getZExtValue()));
@@ -689,21 +696,26 @@ MInstruction *MIRPeephole::foldU32MagicUDiv(MInstruction *Inst) {
   MType *I64 = &CompileContext::I64Type;
   MInstruction *X64 = makeConv(OP_uext, I64, LHS);
   MInstruction *Prod = makeBin(OP_mul, I64, X64, makeIntConst(I64, Mag->Magic));
+  MInstruction *Q;
   if (!Mag->IsAdd) {
     MInstruction *Shifted =
         makeBin(OP_ushr, I64, Prod, makeIntConst(I64, 32u + Mag->ShiftAmount));
-    return makeConv(OP_trunc, Ty, Shifted);
+    Q = makeConv(OP_trunc, Ty, Shifted);
+  } else {
+    MInstruction *Hi = makeConv(
+        OP_trunc, Ty, makeBin(OP_ushr, I64, Prod, makeIntConst(I64, 32)));
+    MInstruction *Half =
+        makeBin(OP_ushr, Ty, makeBin(OP_sub, Ty, LHS, Hi), makeIntConst(Ty, 1));
+    MInstruction *Sum = makeBin(OP_add, Ty, Half, Hi);
+    Q = Mag->ShiftAmount <= 1
+            ? Sum
+            : makeBin(OP_ushr, Ty, Sum, makeIntConst(Ty, Mag->ShiftAmount - 1));
   }
-
-  MInstruction *Hi = makeConv(
-      OP_trunc, Ty, makeBin(OP_ushr, I64, Prod, makeIntConst(I64, 32)));
-  MInstruction *Half =
-      makeBin(OP_ushr, Ty, makeBin(OP_sub, Ty, LHS, Hi), makeIntConst(Ty, 1));
-  MInstruction *Sum = makeBin(OP_add, Ty, Half, Hi);
-  if (Mag->ShiftAmount <= 1) {
-    return Sum;
+  if (!IsRem) {
+    return Q;
   }
-  return makeBin(OP_ushr, Ty, Sum, makeIntConst(Ty, Mag->ShiftAmount - 1));
+  return makeBin(OP_sub, Ty, LHS,
+                 makeBin(OP_mul, Ty, Q, makeIntConst(Ty, RV.getZExtValue())));
 }
 
 MInstruction *MIRPeephole::makeIntConst(MType *Ty, uint64_t Val) {

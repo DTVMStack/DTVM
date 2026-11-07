@@ -834,11 +834,11 @@ TEST(MIRPeepholeLitmus, URemZeroDoesNotFold) {
   EXPECT_NE(dumpFunc(B.F).find("urem"), std::string::npos) << dumpFunc(B.F);
 }
 
-TEST(MIRPeepholeLitmus, URemNonPow2DoesNotFold) {
+TEST(MIRPeepholeLitmus, URemNonPow2SixFolds) {
   MirBuilder B;
   B.ret(B.bin(OP_urem, B.param(), B.iconst(6)));
   B.run();
-  EXPECT_NE(dumpFunc(B.F).find("urem"), std::string::npos) << dumpFunc(B.F);
+  EXPECT_EQ(dumpFunc(B.F).find("urem"), std::string::npos) << dumpFunc(B.F);
 }
 
 TEST(MIRPeepholeLitmus, SRemPow2DoesNotFold) {
@@ -2006,4 +2006,49 @@ TEST(MIRPeepholeWasm, FastRARegmaskPreservesLongIntegerAndFloatCallChains) {
       EXPECT_DOUBLE_EQ(Results[0].Value.F64, 640.0);
     }
   }
+}
+
+TEST(MIRPeepholeLitmus, URemNonPow2FoldsToMagicQuotientAndSubtract) {
+  for (uint32_t D : {3u, 7u, 10u, 20u, 1900u, 2100u, 65521u, UINT32_MAX}) {
+    MirBuilder B;
+    B.ret(B.bin(OP_urem, B.param(), B.iconst(D)));
+    B.run();
+    const std::string Dump = dumpFunc(B.F);
+    EXPECT_EQ(Dump.find("urem"), std::string::npos) << D << " " << Dump;
+    EXPECT_EQ(Dump.find("udiv"), std::string::npos) << D << " " << Dump;
+    EXPECT_NE(Dump.find("mul"), std::string::npos) << D << " " << Dump;
+    EXPECT_NE(Dump.find("sub"), std::string::npos) << D << " " << Dump;
+  }
+}
+
+TEST(MIRPeepholeLitmus, URemNonPow2KeepsRawCall) {
+  MirBuilder B;
+  llvm::ArrayRef<MInstruction *> NoArgs;
+  auto *Call = B.F.createInstruction<CallInstruction>(false, *B.Entry, B.I32,
+                                                      0u, NoArgs);
+  B.ret(B.bin(OP_urem, Call, B.iconst(7)));
+  B.run();
+  const std::string Dump = dumpFunc(B.F);
+  EXPECT_NE(Dump.find("urem"), std::string::npos) << Dump;
+  EXPECT_NE(Dump.find("call"), std::string::npos) << Dump;
+}
+
+TEST(MIRPeepholeLitmus, URemNonPow2KeepsRawLoad) {
+  MirBuilder B;
+  auto *Ld =
+      B.F.createInstruction<LoadInstruction>(false, *B.Entry, B.I32, B.param());
+  B.ret(B.bin(OP_urem, Ld, B.iconst(10)));
+  B.run();
+  const std::string Dump = dumpFunc(B.F);
+  EXPECT_NE(Dump.find("urem"), std::string::npos) << Dump;
+  EXPECT_NE(Dump.find("load"), std::string::npos) << Dump;
+}
+
+TEST(MIRPeepholeLitmus, URemNonPow2KeepsRawTrappingDivision) {
+  MirBuilder B;
+  B.ret(B.bin(OP_urem, B.bin(OP_udiv, B.param(), B.iconst(0)), B.iconst(20)));
+  B.run();
+  const std::string Dump = dumpFunc(B.F);
+  EXPECT_NE(Dump.find("urem"), std::string::npos) << Dump;
+  EXPECT_NE(Dump.find("udiv"), std::string::npos) << Dump;
 }
