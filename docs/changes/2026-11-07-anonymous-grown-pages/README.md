@@ -1,6 +1,6 @@
 # Change: Anonymous zero pages for bucket memory growth
 
-- **Status**: Proposed
+- **Status**: In Progress
 - **Date**: 2026-11-07
 - **Tier**: Light
 
@@ -30,9 +30,24 @@ instances, OOB/failure, bucket retirement and >32MB fallback. Then compare froze
 main, PR643, production candidate and Wasmtime45, preserving failed experiments.
 PR643 itself has all 17 checks passing; this experiment is a separate branch.
 
-- [ ] Build and memory semantics tests
-- [ ] Existing spec suites in all engines
-- [ ] Production fresh-process and same-instance measurements
-- [ ] Independent confirmation and startup controls
+- [x] Build and memory semantics tests
+- [x] Existing spec suites in all engines
+- [x] Production fresh-process and same-instance measurements
+- [x] Independent confirmation and startup controls
 
 The LEA and worker-count studies remain separate, unproven alternatives.
+
+## Results
+
+[Production comparisons, phase diagnosis, rejected alternatives and raw evidence](REPORT.md).
+Four target cases improve versus merged main in31-round paired measurements.
+WAPM screen negatives and independent followups are retained. ASan24 and
+97 WAST cases in each of four execution modes pass. No new JIT pass is shipped.
+
+## Refinement before publication
+
+A no-touch 511-growth control found per-growth remapping overhead in v1.
+Convert the unused tail only on first positive growth, with PROT_NONE, then
+reuse it via existing mprotect. The module initial-size equality is a monotonic
+memory invariant, not a workload threshold. Revalidate this final source and
+retain v1 data separately.

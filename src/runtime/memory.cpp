@@ -545,15 +545,18 @@ WasmMemoryAllocator::enlargeWasmMemory(const WasmMemoryData &OldMemoryData,
           .NeedMprotect = false,
       };
       if (OldMemoryData.Type == WM_MEMORY_DATA_TYPE_BUCKET_MMAP) {
-        if (NewMemorySize > OldMemoryData.MemorySize) {
-          // The initial prefix retains its shared data template. Newly grown
-          // bytes are zero by definition: use anonymous pages instead of
-          // faulting sparse tmpfs pages and then copying them on first write.
-          // This range is page-aligned and wholly inside our reserved bucket
-          // item; its base and the following guard region remain unchanged.
-          auto *Begin = OldMemoryData.MemoryData + OldMemoryData.MemorySize;
-          size_t Length = NewMemorySize - OldMemoryData.MemorySize;
-          if (::mmap(Begin, Length, PROT_READ | PROT_WRITE,
+        const size_t InitialSize =
+            size_t(CurModule->getDefaultMemoryEntry().InitSize) *
+            DefaultBytesNumPerPage;
+        if (NewMemorySize > OldMemoryData.MemorySize &&
+            OldMemoryData.MemorySize == InitialSize) {
+          // Memory only grows: convert this item's unused zero tail once, on
+          // its first positive growth. Keep the initial data template intact.
+          // Reserve the whole tail as inaccessible anonymous pages; the
+          // existing mprotect below exposes exactly the requested size.
+          auto *Begin = OldMemoryData.MemoryData + InitialSize;
+          size_t Length = MmapMemoryBucketGrowMaxSize - InitialSize;
+          if (::mmap(Begin, Length, PROT_NONE,
                      MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1,
                      0) == MAP_FAILED) {
             ZEN_ABORT();
