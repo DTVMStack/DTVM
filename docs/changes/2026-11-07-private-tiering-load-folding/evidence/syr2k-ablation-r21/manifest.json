@@ -1,0 +1,93 @@
+{
+  "commits": {
+    "main": "7eb81b0",
+    "candidate": "58b0fd3",
+    "previous": null
+  },
+  "variant_meaning": {
+    "load": "load folding only",
+    "private": "cold work only, folding entry point disabled for ablation",
+    "combined": "both components",
+    "suffix_tier": "enable existing private promotion with default thresholds/budget"
+  },
+  "seed": 6461109,
+  "rounds": 21,
+  "excluded_warmup": -1,
+  "timeout_s": 180,
+  "boundary": "Fresh process pre-spawn through exit; CPU0 including workers; warm page cache; WT45 cache disabled; output captured; no concurrent profiles/builds/tests; suffix _tier explicitly enables budgeted private promotion",
+  "binaries": {
+    "main": {
+      "path": "/workspace/DTVM/work/urem-research/dtvm-urem",
+      "sha256": "662424b2d69a2080642912e7fe9c5e458d47f5a2fe905fae778a9c4b9d4ca4f9"
+    },
+    "private": {
+      "path": "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+      "sha256": "93359dd36683de33baaaff4b9ba27332a0ab4e269267ecd9f80592b870648987"
+    },
+    "combined": {
+      "path": "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+      "sha256": "68350488b8497af798d47679738297aa30b0744efba9ac77fa7b491b4292f532"
+    },
+    "wt45": {
+      "path": "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "sha256": "d7b7317b34a717f4b809df14657975e2ce83221a697167219abdad6e44c7a12c"
+    }
+  },
+  "commands": {
+    "syr2k": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/syr2k.wasm"
+      ],
+      "private": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/syr2k.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/syr2k.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/syr2k.wasm"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "syr2k",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/syr2k.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    }
+  ],
+  "inputs": {
+    "syr2k": "1efca89e231483c74e73ff7311219cc0a93e269a1a24d0b562bf32c36f1d2606"
+  }
+}

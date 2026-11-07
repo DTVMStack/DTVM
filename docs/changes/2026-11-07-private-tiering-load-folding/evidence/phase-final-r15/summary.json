@@ -1,0 +1,1448 @@
+[
+  {
+    "case": "atax",
+    "count": 1,
+    "n": 15,
+    "medians_ms": {
+      "main": {
+        "first_result_ms": 48.439254,
+        "last_result_ms": 48.439254,
+        "first_kernel_ms": 6.552902,
+        "first_admission_ms": 7.22318,
+        "wall_ms": 51.332921
+      },
+      "previous": {
+        "first_result_ms": 48.291576,
+        "last_result_ms": 48.291576,
+        "first_kernel_ms": 6.650246,
+        "first_admission_ms": 6.904861,
+        "wall_ms": 51.107047
+      },
+      "candidate": {
+        "first_result_ms": 47.430457,
+        "last_result_ms": 47.430457,
+        "first_kernel_ms": 6.557188,
+        "first_admission_ms": 7.052699,
+        "wall_ms": 50.349821
+      },
+      "wasmtime": {
+        "first_result_ms": 59.202454,
+        "last_result_ms": 59.202454,
+        "first_kernel_ms": 7.996801,
+        "first_admission_ms": 0.016214,
+        "wall_ms": 61.249653
+      }
+    },
+    "paired": {
+      "candidate/main:first_result_ms": {
+        "median": 0.9926497804584985,
+        "ci95": [
+          0.9791739773696763,
+          1.0138657554663402
+        ]
+      },
+      "candidate/main:last_result_ms": {
+        "median": 0.9926497804584985,
+        "ci95": [
+          0.9791739773696763,
+          1.0138657554663402
+        ]
+      },
+      "candidate/main:first_kernel_ms": {
+        "median": 1.0025309396951252,
+        "ci95": [
+          0.9518241295877152,
+          1.0568795140357938
+        ]
+      },
+      "candidate/main:first_admission_ms": {
+        "median": 0.966590689277238,
+        "ci95": [
+          0.9312420085089693,
+          1.0204082761611728
+        ]
+      },
+      "candidate/main:wall_ms": {
+        "median": 0.9910271033133985,
+        "ci95": [
+          0.9795173879623142,
+          1.0142635210874489
+        ]
+      },
+      "candidate/wasmtime:first_result_ms": {
+        "median": 0.804695743745713,
+        "ci95": [
+          0.7936863835451907,
+          0.8162866498206154
+        ]
+      },
+      "candidate/wasmtime:last_result_ms": {
+        "median": 0.804695743745713,
+        "ci95": [
+          0.7936863835451907,
+          0.8162866498206154
+        ]
+      },
+      "candidate/wasmtime:first_kernel_ms": {
+        "median": 0.8299777999728676,
+        "ci95": [
+          0.8106320920469948,
+          0.8749188564802531
+        ]
+      },
+      "candidate/wasmtime:first_admission_ms": {
+        "median": 418.5293573455039,
+        "ci95": [
+          400.2183818626361,
+          446.4238166604221
+        ]
+      },
+      "candidate/wasmtime:wall_ms": {
+        "median": 0.8212963100378707,
+        "ci95": [
+          0.8114611960374573,
+          0.8542075587025124
+        ]
+      },
+      "candidate/previous:first_result_ms": {
+        "median": 0.9999236590488136,
+        "ci95": [
+          0.9880310159459877,
+          1.010998645861214
+        ]
+      },
+      "candidate/previous:last_result_ms": {
+        "median": 0.9999236590488136,
+        "ci95": [
+          0.9880310159459877,
+          1.010998645861214
+        ]
+      },
+      "candidate/previous:first_kernel_ms": {
+        "median": 0.9961919450729518,
+        "ci95": [
+          0.9302338080229128,
+          1.0143363497090156
+        ]
+      },
+      "candidate/previous:first_admission_ms": {
+        "median": 0.989687740449917,
+        "ci95": [
+          0.9693467266043527,
+          1.0098978400063061
+        ]
+      },
+      "candidate/previous:wall_ms": {
+        "median": 1.0044714791788214,
+        "ci95": [
+          0.9864524467843344,
+          1.0116617059853377
+        ]
+      },
+      "previous/main:first_result_ms": {
+        "median": 0.9799754664962732,
+        "ci95": [
+          0.9349545467418302,
+          1.0024267443531867
+        ]
+      },
+      "previous/main:last_result_ms": {
+        "median": 0.9799754664962732,
+        "ci95": [
+          0.9349545467418302,
+          1.0024267443531867
+        ]
+      },
+      "previous/main:first_kernel_ms": {
+        "median": 1.0148550977872095,
+        "ci95": [
+          0.9986546359333831,
+          1.0259943423664903
+        ]
+      },
+      "previous/main:first_admission_ms": {
+        "median": 0.9797574828470716,
+        "ci95": [
+          0.85804327654176,
+          0.9894691402352961
+        ]
+      },
+      "previous/main:wall_ms": {
+        "median": 0.9787970451558036,
+        "ci95": [
+          0.9363528475587729,
+          1.0043062345914815
+        ]
+      }
+    }
+  },
+  {
+    "case": "atax",
+    "count": 8,
+    "n": 15,
+    "medians_ms": {
+      "main": {
+        "first_result_ms": 50.049398,
+        "last_result_ms": 149.631571,
+        "first_kernel_ms": 6.746878,
+        "first_admission_ms": 7.494871,
+        "wall_ms": 153.233904,
+        "warm_kernel_ms": 6.689263,
+        "warm_matrix_init_ms": 5.347185,
+        "warm_internal_first_to_last_ms": 14.070186
+      },
+      "previous": {
+        "first_result_ms": 49.400761,
+        "last_result_ms": 150.028878,
+        "first_kernel_ms": 6.84325,
+        "first_admission_ms": 7.265673,
+        "wall_ms": 153.633713,
+        "warm_kernel_ms": 6.888757,
+        "warm_matrix_init_ms": 5.536403,
+        "warm_internal_first_to_last_ms": 14.25603
+      },
+      "candidate": {
+        "first_result_ms": 48.826996,
+        "last_result_ms": 146.660472,
+        "first_kernel_ms": 6.53134,
+        "first_admission_ms": 7.489734,
+        "wall_ms": 150.03611,
+        "warm_kernel_ms": 6.609646,
+        "warm_matrix_init_ms": 5.427643,
+        "warm_internal_first_to_last_ms": 13.782954
+      },
+      "wasmtime": {
+        "first_result_ms": 61.282791,
+        "last_result_ms": 175.776342,
+        "first_kernel_ms": 8.141975,
+        "first_admission_ms": 0.015673,
+        "wall_ms": 178.222173,
+        "warm_kernel_ms": 8.058953,
+        "warm_matrix_init_ms": 5.366963,
+        "warm_internal_first_to_last_ms": 16.260866
+      }
+    },
+    "paired": {
+      "candidate/main:first_result_ms": {
+        "median": 0.9788585783864584,
+        "ci95": [
+          0.8992286910692612,
+          0.9944634729609928
+        ]
+      },
+      "candidate/main:last_result_ms": {
+        "median": 0.9826249100866554,
+        "ci95": [
+          0.9004555992485601,
+          1.0123769252282657
+        ]
+      },
+      "candidate/main:first_kernel_ms": {
+        "median": 0.9854757020258059,
+        "ci95": [
+          0.9418732983785325,
+          1.0054187572033173
+        ]
+      },
+      "candidate/main:first_admission_ms": {
+        "median": 0.9911921964155261,
+        "ci95": [
+          0.9735910015621828,
+          1.1046715725975367
+        ]
+      },
+      "candidate/main:wall_ms": {
+        "median": 0.9835070659196021,
+        "ci95": [
+          0.899775421774834,
+          1.0073464490321689
+        ]
+      },
+      "candidate/main:warm_kernel_ms": {
+        "median": 0.9881400885289768,
+        "ci95": [
+          0.9723155035039548,
+          1.0661216989999602
+        ]
+      },
+      "candidate/main:warm_matrix_init_ms": {
+        "median": 0.9987109815916387,
+        "ci95": [
+          0.9771935237449115,
+          1.0477477211077468
+        ]
+      },
+      "candidate/main:warm_internal_first_to_last_ms": {
+        "median": 0.9728074007960557,
+        "ci95": [
+          0.9260931589674792,
+          1.018833190203877
+        ]
+      },
+      "candidate/wasmtime:first_result_ms": {
+        "median": 0.8125635196359692,
+        "ci95": [
+          0.7601918457010223,
+          0.8437591291150227
+        ]
+      },
+      "candidate/wasmtime:last_result_ms": {
+        "median": 0.8430084615501219,
+        "ci95": [
+          0.8166147805942288,
+          0.8824214883783544
+        ]
+      },
+      "candidate/wasmtime:first_kernel_ms": {
+        "median": 0.8050949859995491,
+        "ci95": [
+          0.7810794674662721,
+          0.8690039407033682
+        ]
+      },
+      "candidate/wasmtime:first_admission_ms": {
+        "median": 454.08383078120943,
+        "ci95": [
+          432.3656883642127,
+          518.2425874218853
+        ]
+      },
+      "candidate/wasmtime:wall_ms": {
+        "median": 0.8512571901264945,
+        "ci95": [
+          0.8195127249692394,
+          0.8912156889753237
+        ]
+      },
+      "candidate/wasmtime:warm_kernel_ms": {
+        "median": 0.8445120940029935,
+        "ci95": [
+          0.7955495924375968,
+          0.8654810643289832
+        ]
+      },
+      "candidate/wasmtime:warm_matrix_init_ms": {
+        "median": 1.0206620851950297,
+        "ci95": [
+          0.9865372618355395,
+          1.0669159275117899
+        ]
+      },
+      "candidate/wasmtime:warm_internal_first_to_last_ms": {
+        "median": 0.8668177801189839,
+        "ci95": [
+          0.8134996471691214,
+          0.9000742870582286
+        ]
+      },
+      "candidate/previous:first_result_ms": {
+        "median": 1.002919774456903,
+        "ci95": [
+          0.9430356346129971,
+          1.034713828503146
+        ]
+      },
+      "candidate/previous:last_result_ms": {
+        "median": 0.9895858811719749,
+        "ci95": [
+          0.9351786712439991,
+          1.0149631542656548
+        ]
+      },
+      "candidate/previous:first_kernel_ms": {
+        "median": 0.9998463905774541,
+        "ci95": [
+          0.9361382360663204,
+          1.0132838928871515
+        ]
+      },
+      "candidate/previous:first_admission_ms": {
+        "median": 1.0015950071894335,
+        "ci95": [
+          0.8733311528437361,
+          1.103326111378591
+        ]
+      },
+      "candidate/previous:wall_ms": {
+        "median": 0.9887880232168199,
+        "ci95": [
+          0.9339350534680662,
+          1.0160046208598454
+        ]
+      },
+      "candidate/previous:warm_kernel_ms": {
+        "median": 0.9758631489840711,
+        "ci95": [
+          0.9452687062939578,
+          1.0043771525856406
+        ]
+      },
+      "candidate/previous:warm_matrix_init_ms": {
+        "median": 0.9910650143590295,
+        "ci95": [
+          0.9451139046681017,
+          1.0084619923802511
+        ]
+      },
+      "candidate/previous:warm_internal_first_to_last_ms": {
+        "median": 0.9668157263978822,
+        "ci95": [
+          0.9136925182653833,
+          0.9951051713596257
+        ]
+      },
+      "previous/main:first_result_ms": {
+        "median": 0.9770799107519597,
+        "ci95": [
+          0.9427368021676583,
+          1.0281678225688708
+        ]
+      },
+      "previous/main:last_result_ms": {
+        "median": 0.9885194673561438,
+        "ci95": [
+          0.9628701198357641,
+          1.0546587842039667
+        ]
+      },
+      "previous/main:first_kernel_ms": {
+        "median": 0.9698950756215344,
+        "ci95": [
+          0.9609599221925867,
+          1.0373356628756305
+        ]
+      },
+      "previous/main:first_admission_ms": {
+        "median": 0.9885198333153957,
+        "ci95": [
+          0.9280262527096198,
+          1.1383734323009982
+        ]
+      },
+      "previous/main:wall_ms": {
+        "median": 0.9849649167638487,
+        "ci95": [
+          0.9634239751828737,
+          1.0539793791327015
+        ]
+      },
+      "previous/main:warm_kernel_ms": {
+        "median": 1.014188482695974,
+        "ci95": [
+          0.9910542272205186,
+          1.0793994285278332
+        ]
+      },
+      "previous/main:warm_matrix_init_ms": {
+        "median": 1.0109317374187905,
+        "ci95": [
+          1.0054621542954483,
+          1.0726790052478234
+        ]
+      },
+      "previous/main:warm_internal_first_to_last_ms": {
+        "median": 1.0039257365205505,
+        "ci95": [
+          0.982823490641258,
+          1.0840066596947657
+        ]
+      }
+    }
+  },
+  {
+    "case": "atax",
+    "count": 30,
+    "n": 15,
+    "medians_ms": {
+      "main": {
+        "first_result_ms": 50.726307,
+        "last_result_ms": 454.774662,
+        "first_kernel_ms": 6.833055,
+        "first_admission_ms": 7.632304,
+        "wall_ms": 458.434699,
+        "warm_kernel_ms": 6.600383,
+        "warm_matrix_init_ms": 5.392591,
+        "warm_internal_first_to_last_ms": 13.802562
+      },
+      "previous": {
+        "first_result_ms": 48.617846,
+        "last_result_ms": 452.863952,
+        "first_kernel_ms": 6.600913,
+        "first_admission_ms": 7.233165,
+        "wall_ms": 456.162045,
+        "warm_kernel_ms": 6.509848,
+        "warm_matrix_init_ms": 5.288498,
+        "warm_internal_first_to_last_ms": 13.822291
+      },
+      "candidate": {
+        "first_result_ms": 49.942218,
+        "last_result_ms": 451.287458,
+        "first_kernel_ms": 6.819886,
+        "first_admission_ms": 7.628478,
+        "wall_ms": 454.75464,
+        "warm_kernel_ms": 6.638719,
+        "warm_matrix_init_ms": 5.496865,
+        "warm_internal_first_to_last_ms": 13.69268
+      },
+      "wasmtime": {
+        "first_result_ms": 62.227233,
+        "last_result_ms": 536.21773,
+        "first_kernel_ms": 8.062479,
+        "first_admission_ms": 0.016595,
+        "wall_ms": 538.578702,
+        "warm_kernel_ms": 7.774644,
+        "warm_matrix_init_ms": 5.239887,
+        "warm_internal_first_to_last_ms": 16.31687
+      }
+    },
+    "paired": {
+      "candidate/main:first_result_ms": {
+        "median": 0.9824007302149035,
+        "ci95": [
+          0.9677212712188946,
+          1.0606396400983813
+        ]
+      },
+      "candidate/main:last_result_ms": {
+        "median": 0.9887758104694057,
+        "ci95": [
+          0.9645234421994663,
+          0.9966664522806185
+        ]
+      },
+      "candidate/main:first_kernel_ms": {
+        "median": 0.9737529186467735,
+        "ci95": [
+          0.9676876718970022,
+          1.0137950301370073
+        ]
+      },
+      "candidate/main:first_admission_ms": {
+        "median": 0.9556816346284839,
+        "ci95": [
+          0.926803286665208,
+          1.0076071838084417
+        ]
+      },
+      "candidate/main:wall_ms": {
+        "median": 0.9882818817778887,
+        "ci95": [
+          0.9634045844788722,
+          0.9964818316142702
+        ]
+      },
+      "candidate/main:warm_kernel_ms": {
+        "median": 0.9888256335441654,
+        "ci95": [
+          0.9555255512972335,
+          1.0105285089466962
+        ]
+      },
+      "candidate/main:warm_matrix_init_ms": {
+        "median": 0.991421702078673,
+        "ci95": [
+          0.9683223722794471,
+          1.008629202253636
+        ]
+      },
+      "candidate/main:warm_internal_first_to_last_ms": {
+        "median": 0.98903454795675,
+        "ci95": [
+          0.9706310328298797,
+          1.007697821877495
+        ]
+      },
+      "candidate/wasmtime:first_result_ms": {
+        "median": 0.8139140513203038,
+        "ci95": [
+          0.7871197333023852,
+          0.8683361083364587
+        ]
+      },
+      "candidate/wasmtime:last_result_ms": {
+        "median": 0.8376592201447416,
+        "ci95": [
+          0.8180078206332266,
+          0.857181316834295
+        ]
+      },
+      "candidate/wasmtime:first_kernel_ms": {
+        "median": 0.851626345010356,
+        "ci95": [
+          0.803508697511026,
+          0.911219918498728
+        ]
+      },
+      "candidate/wasmtime:first_admission_ms": {
+        "median": 464.06378660481295,
+        "ci95": [
+          422.03000903886715,
+          499.50195164945865
+        ]
+      },
+      "candidate/wasmtime:wall_ms": {
+        "median": 0.8402170850241871,
+        "ci95": [
+          0.8202844648551999,
+          0.8581888633387892
+        ]
+      },
+      "candidate/wasmtime:warm_kernel_ms": {
+        "median": 0.8409300979375894,
+        "ci95": [
+          0.7995375867720055,
+          0.8478497536350217
+        ]
+      },
+      "candidate/wasmtime:warm_matrix_init_ms": {
+        "median": 0.9895471452520735,
+        "ci95": [
+          0.9649139888433111,
+          1.0598756133010903
+        ]
+      },
+      "candidate/wasmtime:warm_internal_first_to_last_ms": {
+        "median": 0.840941038614853,
+        "ci95": [
+          0.8300955835287808,
+          0.9001423930470644
+        ]
+      },
+      "candidate/previous:first_result_ms": {
+        "median": 1.0208465639072362,
+        "ci95": [
+          0.9695818579747436,
+          1.1391362909449874
+        ]
+      },
+      "candidate/previous:last_result_ms": {
+        "median": 0.9910520141719941,
+        "ci95": [
+          0.9647005452487727,
+          1.022905712189087
+        ]
+      },
+      "candidate/previous:first_kernel_ms": {
+        "median": 1.0305334106931325,
+        "ci95": [
+          0.980262106998934,
+          1.070957002463144
+        ]
+      },
+      "candidate/previous:first_admission_ms": {
+        "median": 1.0200995602731233,
+        "ci95": [
+          0.94983637012183,
+          1.1275923452019199
+        ]
+      },
+      "candidate/previous:wall_ms": {
+        "median": 0.9892792373815319,
+        "ci95": [
+          0.964671381906898,
+          1.0229831566036247
+        ]
+      },
+      "candidate/previous:warm_kernel_ms": {
+        "median": 1.0150802564150445,
+        "ci95": [
+          0.9657559278215532,
+          1.0370646219042936
+        ]
+      },
+      "candidate/previous:warm_matrix_init_ms": {
+        "median": 1.0288302239124618,
+        "ci95": [
+          0.9613530769125834,
+          1.0674321709548773
+        ]
+      },
+      "candidate/previous:warm_internal_first_to_last_ms": {
+        "median": 0.9840625178729304,
+        "ci95": [
+          0.9713897676600665,
+          1.0075625384932865
+        ]
+      },
+      "previous/main:first_result_ms": {
+        "median": 0.962278417662392,
+        "ci95": [
+          0.9310910806103034,
+          0.991776898889685
+        ]
+      },
+      "previous/main:last_result_ms": {
+        "median": 0.9913060951833458,
+        "ci95": [
+          0.959554662625609,
+          1.0134601039400013
+        ]
+      },
+      "previous/main:first_kernel_ms": {
+        "median": 0.9877799383442063,
+        "ci95": [
+          0.9157965204173051,
+          1.0163187498133825
+        ]
+      },
+      "previous/main:first_admission_ms": {
+        "median": 0.9915604127638543,
+        "ci95": [
+          0.9298281977987497,
+          1.0082281263897168
+        ]
+      },
+      "previous/main:wall_ms": {
+        "median": 0.991445660366827,
+        "ci95": [
+          0.9586029033364959,
+          1.0100404378145822
+        ]
+      },
+      "previous/main:warm_kernel_ms": {
+        "median": 0.9934056286069556,
+        "ci95": [
+          0.9695461611848889,
+          0.9990099711730137
+        ]
+      },
+      "previous/main:warm_matrix_init_ms": {
+        "median": 0.9933988749160201,
+        "ci95": [
+          0.9492078681139987,
+          1.0018876294242907
+        ]
+      },
+      "previous/main:warm_internal_first_to_last_ms": {
+        "median": 1.001222346360298,
+        "ci95": [
+          0.975036811260222,
+          1.0154823128738646
+        ]
+      }
+    }
+  },
+  {
+    "case": "bicg",
+    "count": 1,
+    "n": 15,
+    "medians_ms": {
+      "main": {
+        "first_result_ms": 61.908492,
+        "last_result_ms": 61.908492,
+        "first_kernel_ms": 15.193572,
+        "first_admission_ms": 8.448888,
+        "wall_ms": 65.003515
+      },
+      "previous": {
+        "first_result_ms": 63.055111,
+        "last_result_ms": 63.055111,
+        "first_kernel_ms": 15.304356,
+        "first_admission_ms": 7.874521,
+        "wall_ms": 66.674889
+      },
+      "candidate": {
+        "first_result_ms": 61.010889,
+        "last_result_ms": 61.010889,
+        "first_kernel_ms": 15.760568,
+        "first_admission_ms": 7.617141,
+        "wall_ms": 64.245588
+      },
+      "wasmtime": {
+        "first_result_ms": 72.920698,
+        "last_result_ms": 72.920698,
+        "first_kernel_ms": 14.48683,
+        "first_admission_ms": 0.015934,
+        "wall_ms": 74.973175
+      }
+    },
+    "paired": {
+      "candidate/main:first_result_ms": {
+        "median": 0.9873603220774133,
+        "ci95": [
+          0.8918277641135242,
+          1.007172961169335
+        ]
+      },
+      "candidate/main:last_result_ms": {
+        "median": 0.9873603220774133,
+        "ci95": [
+          0.8918277641135242,
+          1.007172961169335
+        ]
+      },
+      "candidate/main:first_kernel_ms": {
+        "median": 1.0442579402167107,
+        "ci95": [
+          0.9705624836849447,
+          1.0681172231523774
+        ]
+      },
+      "candidate/main:first_admission_ms": {
+        "median": 0.8922100814787342,
+        "ci95": [
+          0.7933952467913364,
+          1.0296009177430734
+        ]
+      },
+      "candidate/main:wall_ms": {
+        "median": 0.9785444466071774,
+        "ci95": [
+          0.8975543245622949,
+          1.0072976948623817
+        ]
+      },
+      "candidate/wasmtime:first_result_ms": {
+        "median": 0.8463967582999494,
+        "ci95": [
+          0.7729718787939642,
+          0.8944448363685743
+        ]
+      },
+      "candidate/wasmtime:last_result_ms": {
+        "median": 0.8463967582999494,
+        "ci95": [
+          0.7729718787939642,
+          0.8944448363685743
+        ]
+      },
+      "candidate/wasmtime:first_kernel_ms": {
+        "median": 1.067830514579586,
+        "ci95": [
+          1.0387278348636662,
+          1.115316391918985
+        ]
+      },
+      "candidate/wasmtime:first_admission_ms": {
+        "median": 490.9014047177313,
+        "ci95": [
+          466.087684527064,
+          505.45743541694554
+        ]
+      },
+      "candidate/wasmtime:wall_ms": {
+        "median": 0.8593125368833698,
+        "ci95": [
+          0.7879163423305495,
+          0.9052694340441926
+        ]
+      },
+      "candidate/previous:first_result_ms": {
+        "median": 0.9829652006549854,
+        "ci95": [
+          0.9227431627526951,
+          1.0685098848052181
+        ]
+      },
+      "candidate/previous:last_result_ms": {
+        "median": 0.9829652006549854,
+        "ci95": [
+          0.9227431627526951,
+          1.0685098848052181
+        ]
+      },
+      "candidate/previous:first_kernel_ms": {
+        "median": 1.0114095603144282,
+        "ci95": [
+          0.9736452640595241,
+          1.0854538096503352
+        ]
+      },
+      "candidate/previous:first_admission_ms": {
+        "median": 1.0395235468925668,
+        "ci95": [
+          0.8716380499320958,
+          1.077139348289087
+        ]
+      },
+      "candidate/previous:wall_ms": {
+        "median": 0.9820514361829946,
+        "ci95": [
+          0.9261294625273366,
+          1.0228900265576821
+        ]
+      },
+      "previous/main:first_result_ms": {
+        "median": 0.9741388503063161,
+        "ci95": [
+          0.9568082356132984,
+          1.039340460779258
+        ]
+      },
+      "previous/main:last_result_ms": {
+        "median": 0.9741388503063161,
+        "ci95": [
+          0.9568082356132984,
+          1.039340460779258
+        ]
+      },
+      "previous/main:first_kernel_ms": {
+        "median": 1.003314542238124,
+        "ci95": [
+          0.9763665147931517,
+          1.0586438048952995
+        ]
+      },
+      "previous/main:first_admission_ms": {
+        "median": 0.9050837882128876,
+        "ci95": [
+          0.7786706773182145,
+          1.02360157584704
+        ]
+      },
+      "previous/main:wall_ms": {
+        "median": 0.9888329402265599,
+        "ci95": [
+          0.9624089053568927,
+          1.0196103166802883
+        ]
+      }
+    }
+  },
+  {
+    "case": "bicg",
+    "count": 8,
+    "n": 15,
+    "medians_ms": {
+      "main": {
+        "first_result_ms": 57.924557,
+        "last_result_ms": 222.912745,
+        "first_kernel_ms": 14.631533,
+        "first_admission_ms": 7.611564,
+        "wall_ms": 226.403542,
+        "warm_kernel_ms": 14.363028,
+        "warm_matrix_init_ms": 5.180308,
+        "warm_internal_first_to_last_ms": 23.607679
+      },
+      "previous": {
+        "first_result_ms": 58.593223,
+        "last_result_ms": 221.344842,
+        "first_kernel_ms": 14.764841,
+        "first_admission_ms": 7.76573,
+        "wall_ms": 224.78197,
+        "warm_kernel_ms": 14.578746,
+        "warm_matrix_init_ms": 5.1888,
+        "warm_internal_first_to_last_ms": 23.029748
+      },
+      "candidate": {
+        "first_result_ms": 58.213353,
+        "last_result_ms": 222.965482,
+        "first_kernel_ms": 14.563234,
+        "first_admission_ms": 7.34473,
+        "wall_ms": 226.466044,
+        "warm_kernel_ms": 14.51377,
+        "warm_matrix_init_ms": 5.141441,
+        "warm_internal_first_to_last_ms": 22.99826
+      },
+      "wasmtime": {
+        "first_result_ms": 68.431459,
+        "last_result_ms": 240.125384,
+        "first_kernel_ms": 14.001405,
+        "first_admission_ms": 0.015393,
+        "wall_ms": 242.242005,
+        "warm_kernel_ms": 13.717946,
+        "warm_matrix_init_ms": 5.16783,
+        "warm_internal_first_to_last_ms": 23.338883
+      }
+    },
+    "paired": {
+      "candidate/main:first_result_ms": {
+        "median": 0.9832151933495755,
+        "ci95": [
+          0.9711957283368022,
+          1.0080836354087266
+        ]
+      },
+      "candidate/main:last_result_ms": {
+        "median": 0.9889568666174205,
+        "ci95": [
+          0.9791770920194016,
+          1.0063437602008805
+        ]
+      },
+      "candidate/main:first_kernel_ms": {
+        "median": 0.9931387422180047,
+        "ci95": [
+          0.9456329191669038,
+          1.0408992650115283
+        ]
+      },
+      "candidate/main:first_admission_ms": {
+        "median": 0.9791792059322715,
+        "ci95": [
+          0.9359279532819879,
+          1.007130663344582
+        ]
+      },
+      "candidate/main:wall_ms": {
+        "median": 0.9887580476834552,
+        "ci95": [
+          0.976851201508096,
+          1.0065436873774705
+        ]
+      },
+      "candidate/main:warm_kernel_ms": {
+        "median": 0.9925057060681732,
+        "ci95": [
+          0.9732333780752406,
+          1.019391514344596
+        ]
+      },
+      "candidate/main:warm_matrix_init_ms": {
+        "median": 1.002163772493415,
+        "ci95": [
+          0.944389165503589,
+          1.0143778872245943
+        ]
+      },
+      "candidate/main:warm_internal_first_to_last_ms": {
+        "median": 0.998022677282252,
+        "ci95": [
+          0.9709444424085905,
+          1.0080706975490314
+        ]
+      },
+      "candidate/wasmtime:first_result_ms": {
+        "median": 0.8505846400339948,
+        "ci95": [
+          0.8245808990497561,
+          0.8941985790675896
+        ]
+      },
+      "candidate/wasmtime:last_result_ms": {
+        "median": 0.919978419336045,
+        "ci95": [
+          0.8979861540592937,
+          0.9272982715846072
+        ]
+      },
+      "candidate/wasmtime:first_kernel_ms": {
+        "median": 1.0306098730910387,
+        "ci95": [
+          1.0065949988798317,
+          1.0873396490838576
+        ]
+      },
+      "candidate/wasmtime:first_admission_ms": {
+        "median": 467.2355299747785,
+        "ci95": [
+          440.3081303563375,
+          496.7980907904677
+        ]
+      },
+      "candidate/wasmtime:wall_ms": {
+        "median": 0.9264214048451804,
+        "ci95": [
+          0.9040535628378481,
+          0.9346775061558734
+        ]
+      },
+      "candidate/wasmtime:warm_kernel_ms": {
+        "median": 1.0312118155298178,
+        "ci95": [
+          1.0206907289727802,
+          1.0865910621695718
+        ]
+      },
+      "candidate/wasmtime:warm_matrix_init_ms": {
+        "median": 0.9910919526659633,
+        "ci95": [
+          0.9680273854612248,
+          1.0156596784409544
+        ]
+      },
+      "candidate/wasmtime:warm_internal_first_to_last_ms": {
+        "median": 0.9638018024462669,
+        "ci95": [
+          0.9270493463261108,
+          0.9862488413289614
+        ]
+      },
+      "candidate/previous:first_result_ms": {
+        "median": 0.9959420061229738,
+        "ci95": [
+          0.9691398675660314,
+          1.018215385411872
+        ]
+      },
+      "candidate/previous:last_result_ms": {
+        "median": 0.9995603719150041,
+        "ci95": [
+          0.970199526944477,
+          1.0352497556060831
+        ]
+      },
+      "candidate/previous:first_kernel_ms": {
+        "median": 0.9747548452474136,
+        "ci95": [
+          0.9668423445639931,
+          1.025135110765239
+        ]
+      },
+      "candidate/previous:first_admission_ms": {
+        "median": 0.9378111265779264,
+        "ci95": [
+          0.8091724436562283,
+          1.0040311829573287
+        ]
+      },
+      "candidate/previous:wall_ms": {
+        "median": 1.0006277726736883,
+        "ci95": [
+          0.9690147525890287,
+          1.028876416827974
+        ]
+      },
+      "candidate/previous:warm_kernel_ms": {
+        "median": 0.9976960096519389,
+        "ci95": [
+          0.9411664757217189,
+          1.0498384601835908
+        ]
+      },
+      "candidate/previous:warm_matrix_init_ms": {
+        "median": 0.9885558892167721,
+        "ci95": [
+          0.9754599239414199,
+          1.029140440846133
+        ]
+      },
+      "candidate/previous:warm_internal_first_to_last_ms": {
+        "median": 1.0127376943189055,
+        "ci95": [
+          0.9871165958314002,
+          1.0249164816262528
+        ]
+      },
+      "previous/main:first_result_ms": {
+        "median": 1.0021213251457026,
+        "ci95": [
+          0.9553638553936701,
+          1.0729716758990493
+        ]
+      },
+      "previous/main:last_result_ms": {
+        "median": 0.9893918310534171,
+        "ci95": [
+          0.9613791467890689,
+          1.0262225893752932
+        ]
+      },
+      "previous/main:first_kernel_ms": {
+        "median": 0.9967526984990679,
+        "ci95": [
+          0.9668377883349111,
+          1.0432424271605718
+        ]
+      },
+      "previous/main:first_admission_ms": {
+        "median": 0.9958359025280875,
+        "ci95": [
+          0.9338514710886571,
+          1.1491624182426372
+        ]
+      },
+      "previous/main:wall_ms": {
+        "median": 0.9881377218238535,
+        "ci95": [
+          0.9610511257274047,
+          1.0273969076358982
+        ]
+      },
+      "previous/main:warm_kernel_ms": {
+        "median": 1.0143916067619856,
+        "ci95": [
+          0.9496184976256665,
+          1.0692531519094228
+        ]
+      },
+      "previous/main:warm_matrix_init_ms": {
+        "median": 1.0098411445123767,
+        "ci95": [
+          0.9418888680583649,
+          1.0221109715598415
+        ]
+      },
+      "previous/main:warm_internal_first_to_last_ms": {
+        "median": 0.9915921282550675,
+        "ci95": [
+          0.9400693656932041,
+          1.0381555067835309
+        ]
+      }
+    }
+  },
+  {
+    "case": "bicg",
+    "count": 30,
+    "n": 15,
+    "medians_ms": {
+      "main": {
+        "first_result_ms": 59.601542,
+        "last_result_ms": 754.589827,
+        "first_kernel_ms": 14.653662,
+        "first_admission_ms": 7.610484,
+        "wall_ms": 758.482868,
+        "warm_kernel_ms": 14.69014,
+        "warm_matrix_init_ms": 5.380527,
+        "warm_internal_first_to_last_ms": 23.588278
+      },
+      "previous": {
+        "first_result_ms": 59.1519,
+        "last_result_ms": 745.012647,
+        "first_kernel_ms": 14.841699,
+        "first_admission_ms": 7.417098,
+        "wall_ms": 748.711562,
+        "warm_kernel_ms": 14.857959,
+        "warm_matrix_init_ms": 5.368868,
+        "warm_internal_first_to_last_ms": 23.586332
+      },
+      "candidate": {
+        "first_result_ms": 59.637945,
+        "last_result_ms": 750.565095,
+        "first_kernel_ms": 15.031341,
+        "first_admission_ms": 7.428845,
+        "wall_ms": 754.30461,
+        "warm_kernel_ms": 14.667319,
+        "warm_matrix_init_ms": 5.287827,
+        "warm_internal_first_to_last_ms": 23.683739
+      },
+      "wasmtime": {
+        "first_result_ms": 71.007924,
+        "last_result_ms": 811.77101,
+        "first_kernel_ms": 14.13334,
+        "first_admission_ms": 0.016174,
+        "wall_ms": 814.256787,
+        "warm_kernel_ms": 13.987796,
+        "warm_matrix_init_ms": 5.217965,
+        "warm_internal_first_to_last_ms": 25.498381
+      }
+    },
+    "paired": {
+      "candidate/main:first_result_ms": {
+        "median": 0.9926295382908554,
+        "ci95": [
+          0.9774702071154104,
+          1.044512102962549
+        ]
+      },
+      "candidate/main:last_result_ms": {
+        "median": 1.014839837467505,
+        "ci95": [
+          0.9834185078917191,
+          1.0378779029867087
+        ]
+      },
+      "candidate/main:first_kernel_ms": {
+        "median": 1.0020650832206472,
+        "ci95": [
+          0.9579008187908321,
+          1.0674180729939455
+        ]
+      },
+      "candidate/main:first_admission_ms": {
+        "median": 1.0024949995177732,
+        "ci95": [
+          0.9173891663575298,
+          1.0787805024583124
+        ]
+      },
+      "candidate/main:wall_ms": {
+        "median": 1.0151197468065933,
+        "ci95": [
+          0.9785827272072549,
+          1.0377486003122907
+        ]
+      },
+      "candidate/main:warm_kernel_ms": {
+        "median": 1.002100407943915,
+        "ci95": [
+          0.9804128255209502,
+          1.039409072061335
+        ]
+      },
+      "candidate/main:warm_matrix_init_ms": {
+        "median": 1.0103742886712643,
+        "ci95": [
+          1.0044266118696794,
+          1.0312750151534764
+        ]
+      },
+      "candidate/main:warm_internal_first_to_last_ms": {
+        "median": 1.013917285459562,
+        "ci95": [
+          0.9723494248321152,
+          1.0334935202848414
+        ]
+      },
+      "candidate/wasmtime:first_result_ms": {
+        "median": 0.8329278070700662,
+        "ci95": [
+          0.7956178575787483,
+          0.8529930486890627
+        ]
+      },
+      "candidate/wasmtime:last_result_ms": {
+        "median": 0.9062598621945913,
+        "ci95": [
+          0.8938737990773401,
+          0.9493983742292375
+        ]
+      },
+      "candidate/wasmtime:first_kernel_ms": {
+        "median": 1.0719089047599506,
+        "ci95": [
+          0.9923701139382084,
+          1.1048529116979162
+        ]
+      },
+      "candidate/wasmtime:first_admission_ms": {
+        "median": 465.84499116665575,
+        "ci95": [
+          424.9521907600596,
+          506.8199844479005
+        ]
+      },
+      "candidate/wasmtime:wall_ms": {
+        "median": 0.9081171649068235,
+        "ci95": [
+          0.895504500270054,
+          0.951224199797843
+        ]
+      },
+      "candidate/wasmtime:warm_kernel_ms": {
+        "median": 1.0560154385694143,
+        "ci95": [
+          1.03293663577561,
+          1.0720189572155414
+        ]
+      },
+      "candidate/wasmtime:warm_matrix_init_ms": {
+        "median": 1.006133817060172,
+        "ci95": [
+          0.988891328445276,
+          1.0443932776452545
+        ]
+      },
+      "candidate/wasmtime:warm_internal_first_to_last_ms": {
+        "median": 0.925934071861734,
+        "ci95": [
+          0.8950989538440413,
+          0.9799051031922853
+        ]
+      },
+      "candidate/previous:first_result_ms": {
+        "median": 1.0236548247807038,
+        "ci95": [
+          0.9653604828905245,
+          1.0367203901980617
+        ]
+      },
+      "candidate/previous:last_result_ms": {
+        "median": 1.0016191703328357,
+        "ci95": [
+          0.9805824993536685,
+          1.0384135391544482
+        ]
+      },
+      "candidate/previous:first_kernel_ms": {
+        "median": 0.976227584124795,
+        "ci95": [
+          0.9257544492384036,
+          1.0970633322727399
+        ]
+      },
+      "candidate/previous:first_admission_ms": {
+        "median": 0.9928809557429138,
+        "ci95": [
+          0.9570886028942482,
+          1.0402230883160328
+        ]
+      },
+      "candidate/previous:wall_ms": {
+        "median": 1.0011668081886405,
+        "ci95": [
+          0.9821070493331117,
+          1.038665030161096
+        ]
+      },
+      "candidate/previous:warm_kernel_ms": {
+        "median": 0.9991961210823102,
+        "ci95": [
+          0.9636083951904328,
+          1.032705587938827
+        ]
+      },
+      "candidate/previous:warm_matrix_init_ms": {
+        "median": 1.009220396389025,
+        "ci95": [
+          0.962426358328085,
+          1.0193221831156918
+        ]
+      },
+      "candidate/previous:warm_internal_first_to_last_ms": {
+        "median": 0.9957587969445688,
+        "ci95": [
+          0.9797038368717982,
+          1.02270275264263
+        ]
+      },
+      "previous/main:first_result_ms": {
+        "median": 0.9887831993093031,
+        "ci95": [
+          0.9613185555828136,
+          1.0478948418528995
+        ]
+      },
+      "previous/main:last_result_ms": {
+        "median": 0.9868727571878113,
+        "ci95": [
+          0.9651369877156937,
+          1.02784810420274
+        ]
+      },
+      "previous/main:first_kernel_ms": {
+        "median": 1.0092976786513104,
+        "ci95": [
+          0.9929738944872427,
+          1.0415409472389905
+        ]
+      },
+      "previous/main:first_admission_ms": {
+        "median": 0.9698923570463495,
+        "ci95": [
+          0.9097108440616728,
+          1.0126611050664893
+        ]
+      },
+      "previous/main:wall_ms": {
+        "median": 0.9864375808577849,
+        "ci95": [
+          0.9643814013873948,
+          1.0262541142323176
+        ]
+      },
+      "previous/main:warm_kernel_ms": {
+        "median": 1.0153631474533846,
+        "ci95": [
+          0.9804734881245778,
+          1.0330105241829073
+        ]
+      },
+      "previous/main:warm_matrix_init_ms": {
+        "median": 1.0211175827325667,
+        "ci95": [
+          0.9795291427772781,
+          1.0231047183411979
+        ]
+      },
+      "previous/main:warm_internal_first_to_last_ms": {
+        "median": 1.005598671370923,
+        "ci95": [
+          0.9671975263999554,
+          1.0251363509995373
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,806 @@
+{
+  "commits": {
+    "main": "7eb81b0",
+    "candidate": "58b0fd3268656adc3eee08ad009feca1f04fc2aa",
+    "previous": null
+  },
+  "variant_meaning": {
+    "load": "load folding only",
+    "private": "cold work only, folding entry point disabled for ablation",
+    "combined": "both components",
+    "suffix_tier": "enable existing private promotion with default thresholds/budget"
+  },
+  "seed": 6461104,
+  "rounds": 31,
+  "excluded_warmup": -1,
+  "timeout_s": 180,
+  "boundary": "Fresh process pre-spawn through exit; CPU0 including workers; warm page cache; WT45 cache disabled; output captured; no concurrent profiles/builds/tests; suffix _tier explicitly enables budgeted private promotion",
+  "binaries": {
+    "main": {
+      "path": "/workspace/DTVM/work/urem-research/dtvm-urem",
+      "sha256": "662424b2d69a2080642912e7fe9c5e458d47f5a2fe905fae778a9c4b9d4ca4f9"
+    },
+    "main_tier": {
+      "path": "/workspace/DTVM/work/urem-research/dtvm-urem",
+      "sha256": "662424b2d69a2080642912e7fe9c5e458d47f5a2fe905fae778a9c4b9d4ca4f9"
+    },
+    "private": {
+      "path": "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+      "sha256": "93359dd36683de33baaaff4b9ba27332a0ab4e269267ecd9f80592b870648987"
+    },
+    "private_tier": {
+      "path": "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+      "sha256": "93359dd36683de33baaaff4b9ba27332a0ab4e269267ecd9f80592b870648987"
+    },
+    "combined": {
+      "path": "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+      "sha256": "68350488b8497af798d47679738297aa30b0744efba9ac77fa7b491b4292f532"
+    },
+    "combined_tier": {
+      "path": "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+      "sha256": "68350488b8497af798d47679738297aa30b0744efba9ac77fa7b491b4292f532"
+    },
+    "wt45": {
+      "path": "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "sha256": "d7b7317b34a717f4b809df14657975e2ce83221a697167219abdad6e44c7a12c"
+    }
+  },
+  "commands": {
+    "atax": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+      ],
+      "main_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+      ],
+      "private": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+      ],
+      "private_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+      ],
+      "combined_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+      ]
+    },
+    "bicg": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+      ],
+      "main_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+      ],
+      "private": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+      ],
+      "private_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+      ],
+      "combined_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+      ]
+    },
+    "amirali": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/amirali.wasm"
+      ],
+      "main_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/amirali.wasm"
+      ],
+      "private": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/amirali.wasm"
+      ],
+      "private_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/amirali.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/amirali.wasm"
+      ],
+      "combined_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/amirali.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/amirali.wasm"
+      ]
+    },
+    "echo": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/echo.wasm",
+        "--args",
+        "1234567890"
+      ],
+      "main_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/echo.wasm",
+        "--args",
+        "1234567890"
+      ],
+      "private": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/echo.wasm",
+        "--args",
+        "1234567890"
+      ],
+      "private_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/echo.wasm",
+        "--args",
+        "1234567890"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/echo.wasm",
+        "--args",
+        "1234567890"
+      ],
+      "combined_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/echo.wasm",
+        "--args",
+        "1234567890"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/echo.wasm",
+        "1234567890"
+      ]
+    },
+    "md5": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/md5.wasm",
+        "--args",
+        "helloworld"
+      ],
+      "main_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/md5.wasm",
+        "--args",
+        "helloworld"
+      ],
+      "private": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/md5.wasm",
+        "--args",
+        "helloworld"
+      ],
+      "private_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/md5.wasm",
+        "--args",
+        "helloworld"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/md5.wasm",
+        "--args",
+        "helloworld"
+      ],
+      "combined_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/md5.wasm",
+        "--args",
+        "helloworld"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/md5.wasm",
+        "helloworld"
+      ]
+    },
+    "pi": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1"
+      ],
+      "main_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1"
+      ],
+      "private": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1"
+      ],
+      "private_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1"
+      ],
+      "combined_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "1"
+      ]
+    },
+    "qr2text": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/qr2text.wasm",
+        "--args",
+        "https://wapm.io"
+      ],
+      "main_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/qr2text.wasm",
+        "--args",
+        "https://wapm.io"
+      ],
+      "private": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/qr2text.wasm",
+        "--args",
+        "https://wapm.io"
+      ],
+      "private_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/qr2text.wasm",
+        "--args",
+        "https://wapm.io"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/qr2text.wasm",
+        "--args",
+        "https://wapm.io"
+      ],
+      "combined_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/qr2text.wasm",
+        "--args",
+        "https://wapm.io"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/qr2text.wasm",
+        "https://wapm.io"
+      ]
+    },
+    "pi1000": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1000"
+      ],
+      "main_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1000"
+      ],
+      "private": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1000"
+      ],
+      "private_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1000"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1000"
+      ],
+      "combined_tier": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "--enable-lazy-private-tiering",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "--args",
+        "1000"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/wapm/pi.wasm",
+        "1000"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "atax",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/atax.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": false
+    },
+    {
+      "id": "bicg",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/bicg.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": false
+    },
+    {
+      "id": "amirali",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/amirali.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "echo",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/echo.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": [
+        "1234567890"
+      ],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "md5",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/md5.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": [
+        "helloworld"
+      ],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "pi",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/pi.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": [
+        "1"
+      ],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "qr2text",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/qr2text.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": [
+        "https://wapm.io"
+      ],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "pi1000",
+      "suite": "wapm",
+      "wasm": "benchmarks/wapm/pi.wasm",
+      "kind": "wasi-main",
+      "cwd": "benchmarks/wapm",
+      "args": [
+        "1000"
+      ],
+      "fairness": "same-wasm"
+    }
+  ],
+  "inputs": {
+    "atax": "796cdecca44721f058f182e5e4994649f45a5b2f394f449d6bb63b6415aadd66",
+    "bicg": "5017122c17ebff6f927d7fd6785fadb154ebfda6a8fb1c1f4721b734cbd1febe",
+    "amirali": "649e7bbe96303bf0a86c38397191c74d1cd3d589f2c3c187c4a7175e8365a007",
+    "echo": "2854e8f4d8f62028d0799f2740ec960c390515443923f85d0846dc7902a02d25",
+    "md5": "21552b0d4c3d74cf464bc350d03f095ebb5f8f8c499329aca8d66af598ca15aa",
+    "pi": "7ebe0f1b08eb7e4d358b23091202aabcaa612995145afbfd1ef2d2de47c96265",
+    "qr2text": "ee42716385c8c8b1d9ba916fcf52ff2a258a4152f4e54af2262425d1832671fe",
+    "pi1000": "7ebe0f1b08eb7e4d358b23091202aabcaa612995145afbfd1ef2d2de47c96265"
+  }
+}

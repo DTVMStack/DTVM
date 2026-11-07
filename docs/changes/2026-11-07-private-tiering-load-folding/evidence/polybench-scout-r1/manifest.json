@@ -1,0 +1,1268 @@
+{
+  "commits": {
+    "main": "7eb81b0",
+    "candidate": "58b0fd3268656adc3eee08ad009feca1f04fc2aa",
+    "previous": null
+  },
+  "variant_meaning": {
+    "load": "load folding only",
+    "private": "cold work only, folding entry point disabled for ablation",
+    "combined": "both components",
+    "suffix_tier": "enable existing private promotion with default thresholds/budget"
+  },
+  "seed": 6461105,
+  "rounds": 1,
+  "excluded_warmup": null,
+  "timeout_s": 180,
+  "boundary": "Fresh process pre-spawn through exit; CPU0 including workers; warm page cache; WT45 cache disabled; output captured; no concurrent profiles/builds/tests; suffix _tier explicitly enables budgeted private promotion",
+  "binaries": {
+    "main": {
+      "path": "/workspace/DTVM/work/urem-research/dtvm-urem",
+      "sha256": "662424b2d69a2080642912e7fe9c5e458d47f5a2fe905fae778a9c4b9d4ca4f9"
+    },
+    "combined": {
+      "path": "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+      "sha256": "68350488b8497af798d47679738297aa30b0744efba9ac77fa7b491b4292f532"
+    },
+    "wt45": {
+      "path": "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "sha256": "d7b7317b34a717f4b809df14657975e2ce83221a697167219abdad6e44c7a12c"
+    }
+  },
+  "commands": {
+    "2mm": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/2mm.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/2mm.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/2mm.wasm"
+      ]
+    },
+    "3mm": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/3mm.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/3mm.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/3mm.wasm"
+      ]
+    },
+    "adi": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/adi.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/adi.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/adi.wasm"
+      ]
+    },
+    "atax": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm"
+      ]
+    },
+    "bicg": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm"
+      ]
+    },
+    "cholesky": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/cholesky.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/cholesky.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/cholesky.wasm"
+      ]
+    },
+    "correlation": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/correlation.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/correlation.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/correlation.wasm"
+      ]
+    },
+    "covariance": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/covariance.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/covariance.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/covariance.wasm"
+      ]
+    },
+    "deriche": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/deriche.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/deriche.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/deriche.wasm"
+      ]
+    },
+    "doitgen": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/doitgen.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/doitgen.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/doitgen.wasm"
+      ]
+    },
+    "durbin": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/durbin.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/durbin.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/durbin.wasm"
+      ]
+    },
+    "fdtd-2d": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/fdtd-2d.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/fdtd-2d.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/fdtd-2d.wasm"
+      ]
+    },
+    "floyd-warshall": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/floyd-warshall.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/floyd-warshall.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/floyd-warshall.wasm"
+      ]
+    },
+    "gemm": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gemm.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gemm.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gemm.wasm"
+      ]
+    },
+    "gemver": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gemver.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gemver.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gemver.wasm"
+      ]
+    },
+    "gesummv": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gesummv.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gesummv.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gesummv.wasm"
+      ]
+    },
+    "gramschmidt": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gramschmidt.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gramschmidt.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/gramschmidt.wasm"
+      ]
+    },
+    "heat-3d": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/heat-3d.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/heat-3d.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/heat-3d.wasm"
+      ]
+    },
+    "jacobi-2d": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/jacobi-2d.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/jacobi-2d.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/jacobi-2d.wasm"
+      ]
+    },
+    "jacobi_1d": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/jacobi_1d.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/jacobi_1d.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/jacobi_1d.wasm"
+      ]
+    },
+    "lu": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/lu.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/lu.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/lu.wasm"
+      ]
+    },
+    "ludcmp": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/ludcmp.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/ludcmp.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/ludcmp.wasm"
+      ]
+    },
+    "mvt": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/mvt.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/mvt.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/mvt.wasm"
+      ]
+    },
+    "nussinov": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/nussinov.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/nussinov.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/nussinov.wasm"
+      ]
+    },
+    "seidel-2d": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/seidel-2d.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/seidel-2d.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/seidel-2d.wasm"
+      ]
+    },
+    "symm": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/symm.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/symm.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/symm.wasm"
+      ]
+    },
+    "syr2k": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/syr2k.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/syr2k.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/syr2k.wasm"
+      ]
+    },
+    "syrk": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/syrk.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/syrk.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/syrk.wasm"
+      ]
+    },
+    "trisolv": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/trisolv.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/trisolv.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/trisolv.wasm"
+      ]
+    },
+    "trmm": {
+      "main": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/urem-research/dtvm-urem",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/trmm.wasm"
+      ],
+      "combined": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+        "-m",
+        "multipass",
+        "--enable-multipass-lazy",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/trmm.wasm"
+      ],
+      "wt45": [
+        "taskset",
+        "-c",
+        "0",
+        "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+        "run",
+        "-C",
+        "cache=n",
+        "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/trmm.wasm"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "2mm",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/2mm.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "3mm",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/3mm.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "adi",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/adi.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "atax",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/atax.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": false
+    },
+    {
+      "id": "bicg",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/bicg.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": false
+    },
+    {
+      "id": "cholesky",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/cholesky.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": false
+    },
+    {
+      "id": "correlation",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/correlation.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "covariance",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/covariance.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "deriche",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/deriche.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "doitgen",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/doitgen.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "durbin",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/durbin.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": false
+    },
+    {
+      "id": "fdtd-2d",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/fdtd-2d.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "floyd-warshall",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/floyd-warshall.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "gemm",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/gemm.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "gemver",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/gemver.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": false
+    },
+    {
+      "id": "gesummv",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/gesummv.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": false
+    },
+    {
+      "id": "gramschmidt",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/gramschmidt.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "heat-3d",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/heat-3d.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "jacobi-2d",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/jacobi-2d.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "jacobi_1d",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/jacobi_1d.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": false
+    },
+    {
+      "id": "lu",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/lu.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "ludcmp",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/ludcmp.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "mvt",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/mvt.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": false
+    },
+    {
+      "id": "nussinov",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/nussinov.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "seidel-2d",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/seidel-2d.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "symm",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/symm.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "syr2k",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/syr2k.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "syrk",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/syrk.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    },
+    {
+      "id": "trisolv",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/trisolv.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": false
+    },
+    {
+      "id": "trmm",
+      "suite": "polybench",
+      "wasm": "benchmarks/polybenchc/trmm.wasm",
+      "kind": "wasi-main",
+      "fairness": "same-wasm",
+      "skip_interp": true
+    }
+  ],
+  "inputs": {
+    "2mm": "6d31eeebe685646cf2b8c4460beaf2243064dd8a311cb83a92523f9260260d99",
+    "3mm": "50bc67dec69851859d7096994ed879b3270fdd846a2c638bb4f063b708a8b97b",
+    "adi": "6f1ddea5df711a918574659fd97375e5a8fa21cc565737beabbab084552679a4",
+    "atax": "796cdecca44721f058f182e5e4994649f45a5b2f394f449d6bb63b6415aadd66",
+    "bicg": "5017122c17ebff6f927d7fd6785fadb154ebfda6a8fb1c1f4721b734cbd1febe",
+    "cholesky": "1b1d008a549c2fa53816faed968c599eea750cf733e9e9f9413b64e0511920fb",
+    "correlation": "c5cbf9de3f59fa1a5880ac2c6548aed812a672c3779e9f8a5d212428d900b962",
+    "covariance": "8a7b44e64ea17c0b069c8bb0dbed6d6ff4eaa3f2127fe15531d400d586c22c09",
+    "deriche": "b4d559e2832ea244a240761354c554aa4cee14e2ab7969fb592bb3a6acad6d83",
+    "doitgen": "4058e25b7c3433dbbecd713fe863c021e78bbaadcf7978837d504b065f5f5196",
+    "durbin": "5002d0ea979566bc3431e03ad8cf3274851e70a831e8d210e569862abafc88eb",
+    "fdtd-2d": "26acbd07ffa58a8eb414a6ba72e579025d9ab8517ea000e6434d6e56cfa19e13",
+    "floyd-warshall": "4607b0de3362cba3e366197f16e33b546ef867c2403d77936905c632025c733b",
+    "gemm": "c12e6c2d971769bf4478119156b74789929c5d1c366b47a50eb985f7b9f09d53",
+    "gemver": "64b9dc332a87d1d0435288d6464f13ab1c7b09426e89c46562be8e8b09f12ddf",
+    "gesummv": "e5cd4e0fc62127b927ae2ae1d3d97ee6b60f5a08b8c4d55f69f1a1be6be88eb1",
+    "gramschmidt": "6fc59d4c8746661515da0acb1f509cfdfe25f2a09ed10df0d615f7d248ab078d",
+    "heat-3d": "f3ba7fa0a00456ab28bc5a2393cb1fdad3031e12b1d9d26dc70b095def2e2565",
+    "jacobi-2d": "e5df1ac83af2476f8b75198596c93cd9c06071f91aa4009ccd1d3f44272ab499",
+    "jacobi_1d": "564cd1c6d63e1f73c0cdf18d602edf69a64c3cc374d16f66d8f292e516b5bef4",
+    "lu": "051d61f55dd4c7e41f4b7881aa3589b3097e2f60124138bdbac96dd665461285",
+    "ludcmp": "f4e3fc8f16bae052db1283a926da0fa270b89f39727256fe9bc01af04696611f",
+    "mvt": "83d248c3ccc35a595ac5777851e9537a182d3c2d3ae75aeb1d074d531c937719",
+    "nussinov": "b1acce4bda648fa02bbf8514f891fa8ab7be4f78da3d69b0345869d204c23f25",
+    "seidel-2d": "6fdf6ce763caf0d6c20bb9125382ed8aa1d0ec2efbd2118710f83d422f2c5d21",
+    "symm": "bda11acdb2d49090db998059966291d12c7d1dc675a400ead2ae354dfe5d35d4",
+    "syr2k": "1efca89e231483c74e73ff7311219cc0a93e269a1a24d0b562bf32c36f1d2606",
+    "syrk": "b5e91788d5e6452b961d52d0792b328bbebc256dacb75cfc0b68b7ae9a2345b0",
+    "trisolv": "661196c5294ff3ddf426b626d10f04c5cca88e245dc37d84b3d6452fb0b154a4",
+    "trmm": "9c779b2b4b493d34810ed49045c89c411be003d0dc9a72bdc645f854bc19434e"
+  }
+}

@@ -1,0 +1,558 @@
+{
+  "case": "syr2k",
+  "engine": "wt45",
+  "command": [
+    "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+    "run",
+    "--profile=perfmap",
+    "-C",
+    "cache=n",
+    "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/syr2k.wasm"
+  ],
+  "exit": 0,
+  "total_samples": 848,
+  "jit_samples": 541,
+  "events": [
+    {
+      "address": 139644080672768,
+      "size": 9,
+      "name": "__wasm_call_ctors",
+      "file": "func-0.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080672800,
+      "size": 126,
+      "name": "_start",
+      "file": "func-1.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080672928,
+      "size": 1496,
+      "name": "main",
+      "file": "func-2.bin",
+      "samples": 430,
+      "pc_offsets": {
+        "270": 1,
+        "327": 1,
+        "323": 1,
+        "459": 1,
+        "743": 71,
+        "750": 24,
+        "739": 30,
+        "684": 5,
+        "735": 12,
+        "714": 105,
+        "702": 2,
+        "721": 26,
+        "728": 91,
+        "680": 11,
+        "668": 7,
+        "689": 24,
+        "584": 1,
+        "692": 3,
+        "675": 1,
+        "707": 2,
+        "757": 5,
+        "767": 4,
+        "1018": 1,
+        "1066": 1
+      }
+    },
+    {
+      "address": 139644080674432,
+      "size": 227,
+      "name": "polybench_alloc_data",
+      "file": "func-3.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080674688,
+      "size": 40,
+      "name": "malloc",
+      "file": "func-4.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080674752,
+      "size": 7648,
+      "name": "dlmalloc",
+      "file": "func-5.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080682400,
+      "size": 40,
+      "name": "free",
+      "file": "func-6.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080682464,
+      "size": 2120,
+      "name": "dlfree",
+      "file": "func-7.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080684608,
+      "size": 216,
+      "name": "calloc",
+      "file": "func-8.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080684832,
+      "size": 1968,
+      "name": "dispose_chunk",
+      "file": "func-9.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080686816,
+      "size": 234,
+      "name": "posix_memalign",
+      "file": "func-10.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080687072,
+      "size": 616,
+      "name": "internal_memalign",
+      "file": "func-11.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080687712,
+      "size": 40,
+      "name": "__original_main",
+      "file": "func-12.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080687776,
+      "size": 46,
+      "name": "_Exit",
+      "file": "func-13.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080687840,
+      "size": 431,
+      "name": "__main_void",
+      "file": "func-14.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080688288,
+      "size": 6,
+      "name": "abort",
+      "file": "func-15.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080688320,
+      "size": 192,
+      "name": "sbrk",
+      "file": "func-16.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080688512,
+      "size": 9,
+      "name": "dummy",
+      "file": "func-17.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080688544,
+      "size": 70,
+      "name": "__wasm_call_dtors",
+      "file": "func-18.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080688640,
+      "size": 81,
+      "name": "exit",
+      "file": "func-19.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080688736,
+      "size": 93,
+      "name": "__towrite",
+      "file": "func-20.bin",
+      "samples": 1,
+      "pc_offsets": {
+        "18": 1
+      }
+    },
+    {
+      "address": 139644080688832,
+      "size": 666,
+      "name": "__fwritex",
+      "file": "func-21.bin",
+      "samples": 10,
+      "pc_offsets": {
+        "85": 2,
+        "19": 1,
+        "12": 2,
+        "326": 1,
+        "621": 1,
+        "601": 1,
+        "629": 1,
+        "60": 1
+      }
+    },
+    {
+      "address": 139644080689504,
+      "size": 793,
+      "name": "fwrite",
+      "file": "func-22.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080690304,
+      "size": 192,
+      "name": "__lseek",
+      "file": "func-23.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080690496,
+      "size": 52,
+      "name": "__stdio_seek",
+      "file": "func-24.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080690560,
+      "size": 1324,
+      "name": "__stdio_exit",
+      "file": "func-25.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080691904,
+      "size": 14,
+      "name": "__ofl_lock",
+      "file": "func-26.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080691936,
+      "size": 195,
+      "name": "writev",
+      "file": "func-27.bin",
+      "samples": 5,
+      "pc_offsets": {
+        "123": 3,
+        "159": 1,
+        "169": 1
+      }
+    },
+    {
+      "address": 139644080692160,
+      "size": 560,
+      "name": "__stdio_write",
+      "file": "func-28.bin",
+      "samples": 4,
+      "pc_offsets": {
+        "476": 1,
+        "167": 2,
+        "536": 1
+      }
+    },
+    {
+      "address": 139644080692736,
+      "size": 420,
+      "name": "__overflow",
+      "file": "func-29.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080693184,
+      "size": 129,
+      "name": "fputc",
+      "file": "func-30.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080693344,
+      "size": 120,
+      "name": "strerror",
+      "file": "func-31.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080693472,
+      "size": 139,
+      "name": "fputs",
+      "file": "func-32.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080693632,
+      "size": 704,
+      "name": "vfprintf",
+      "file": "func-33.bin",
+      "samples": 9,
+      "pc_offsets": {
+        "634": 2,
+        "559": 1,
+        "545": 2,
+        "236": 1,
+        "477": 2,
+        "480": 1
+      }
+    },
+    {
+      "address": 139644080694336,
+      "size": 22112,
+      "name": "printf_core",
+      "file": "func-34.bin",
+      "samples": 72,
+      "pc_offsets": {
+        "13283": 1,
+        "8952": 1,
+        "8973": 2,
+        "11308": 2,
+        "1417": 2,
+        "11344": 1,
+        "12834": 1,
+        "13175": 1,
+        "13060": 1,
+        "19": 1,
+        "13492": 1,
+        "10508": 1,
+        "1890": 1,
+        "1914": 1,
+        "10757": 1,
+        "10456": 1,
+        "13191": 1,
+        "13499": 4,
+        "581": 1,
+        "299": 2,
+        "8444": 1,
+        "92": 4,
+        "9710": 1,
+        "8870": 2,
+        "15928": 2,
+        "838": 1,
+        "8438": 1,
+        "10064": 1,
+        "8430": 2,
+        "9426": 1,
+        "2027": 1,
+        "9441": 1,
+        "8819": 2,
+        "2317": 1,
+        "11398": 1,
+        "660": 1,
+        "452": 1,
+        "537": 2,
+        "8944": 1,
+        "7130": 1,
+        "3311": 1,
+        "2401": 1,
+        "1486": 1,
+        "2033": 1,
+        "11316": 1,
+        "8824": 1,
+        "232": 1,
+        "10366": 1,
+        "10255": 1,
+        "409": 1,
+        "21763": 1,
+        "10484": 1,
+        "7332": 1,
+        "12849": 2,
+        "13578": 1,
+        "7376": 1
+      }
+    },
+    {
+      "address": 139644080716448,
+      "size": 801,
+      "name": "pop_arg",
+      "file": "func-35.bin",
+      "samples": 1,
+      "pc_offsets": {
+        "16": 1
+      }
+    },
+    {
+      "address": 139644080717280,
+      "size": 69,
+      "name": "long_double_not_supported",
+      "file": "func-36.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080717376,
+      "size": 106,
+      "name": "fprintf",
+      "file": "func-37.bin",
+      "samples": 1,
+      "pc_offsets": {
+        "86": 1
+      }
+    },
+    {
+      "address": 139644080717504,
+      "size": 112,
+      "name": "close",
+      "file": "func-38.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080717632,
+      "size": 52,
+      "name": "__stdio_close",
+      "file": "func-39.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080717696,
+      "size": 201,
+      "name": "__isatty",
+      "file": "func-40.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080717920,
+      "size": 230,
+      "name": "__stdout_write",
+      "file": "func-41.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080718176,
+      "size": 95,
+      "name": "strnlen",
+      "file": "func-42.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080718272,
+      "size": 1624,
+      "name": "memcpy",
+      "file": "func-43.bin",
+      "samples": 3,
+      "pc_offsets": {
+        "1613": 1,
+        "1603": 1,
+        "19": 1
+      }
+    },
+    {
+      "address": 139644080719904,
+      "size": 335,
+      "name": "memset",
+      "file": "func-44.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080720256,
+      "size": 191,
+      "name": "strlen",
+      "file": "func-45.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080720448,
+      "size": 332,
+      "name": "memchr",
+      "file": "func-46.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080720800,
+      "size": 12,
+      "name": "dummy",
+      "file": "func-47.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080720832,
+      "size": 40,
+      "name": "__lctrans",
+      "file": "func-48.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080720896,
+      "size": 61,
+      "name": "wctomb",
+      "file": "func-49.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080720960,
+      "size": 391,
+      "name": "wcrtomb",
+      "file": "func-50.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139644080721376,
+      "size": 304,
+      "name": "frexp",
+      "file": "func-51.bin",
+      "samples": 5,
+      "pc_offsets": {
+        "12": 1,
+        "8": 1,
+        "224": 1,
+        "68": 1,
+        "231": 1
+      }
+    }
+  ],
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "4e5182534acb02c68b702e245952e48ec71820fdf3e30e467da35fd1a49f092b",
+  "method": "Untimed diagnostic, SIGPROF with requested 1 ms interval (actual kernel granularity may be coarser); includes startup and compile; static byte dumps include pools. Dumping perturbs policy elapsed budgets. PC samples are descriptive, not instruction retired counts."
+}

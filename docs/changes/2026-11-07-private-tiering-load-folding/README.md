@@ -1,6 +1,6 @@
 # Change: reduce private tiering cold work and fold scalar loads
 
-- **Status**: Proposed
+- **Status**: Implemented; performance review in progress
 - **Date**: 2026-11-07
 - **Tier**: Light
 
@@ -24,7 +24,7 @@ its generated code uses separate scalar loads where WT folds memory operands.
    through conservative creation-time presence information.
 2. Fold adjacent, uniquely consumed f32/f64 loads into matching SSE arithmetic,
    preserving operand order, trap order, exact width and register use lists.
-3. Build separate private-only/load-only/combined artifacts against fixed main.
+3. Build separate cold-only/combined artifacts against fixed main.
    Verify CgIR structure, arithmetic edge cases, side effects and OOB traps;
    exercise private policy budgets and concurrent publication tests.
 4. Measure main, candidate and WT45, with allocation-mode/feature ablations;
@@ -34,8 +34,23 @@ its generated code uses separate scalar loads where WT folds memory operands.
 
 ## Checklist
 
-- [ ] Implement both components
-- [ ] Correctness and publication tests pass
-- [ ] Confirm native mechanism and independent timing
-- [ ] Review and document limits
+- [x] Implement both components
+- [x] Correctness and publication tests pass
+- [x] Confirm native mechanism and independent timing
+- [x] Review and document limits
 - [ ] Create upstream PR
+
+## Results and current merge blocker
+
+See [REPORT.md](REPORT.md) and `evidence/` for process-level samples,
+artifact/input hashes and full-suite tables. Native bicg instructions decreased
+22 -> 20, but its warm kernel has no established timing gain and remains behind
+Wasmtime 45. The 31-process syr2k follow-up shows a small regression, but the independent
+21-process ablation does not reproduce it and the hottest native loop is
+byte-identical. Both outcomes are retained as a draft performance concern.
+
+An upstream PR creation attempt with both the GitHub connector and configured
+`gh` credential returned HTTP/GraphQL 403, `Resource not accessible by
+integration`. Branch is pushed to `zoowii:perf/private-tiering-load-folding`;
+no PR number has been assigned. Repository permissions alone do not grant the
+integration permission to create pull requests.

@@ -1,0 +1,15 @@
+diff --git a/src/compiler/target/x86/x86_cg_peephole.cpp b/src/compiler/target/x86/x86_cg_peephole.cpp
+index 6536c86..fcf9d63 100644
+--- a/src/compiler/target/x86/x86_cg_peephole.cpp
++++ b/src/compiler/target/x86/x86_cg_peephole.cpp
+@@ -24,9 +24,7 @@ void X86CgPeephole::peepholeOptimizeBB(CgBasicBlock &MBB) {
+ void X86CgPeephole::peepholeOptimize(CgBasicBlock &MBB,
+                                      CgBasicBlock::iterator &MII) {
+   auto &Inst = *MII;
+-  if (Inst.getOpcode() == X86::MOVSDrm || Inst.getOpcode() == X86::MOVSSrm) {
+-    foldScalarLoad(MBB, MII);
+-  } else if (Inst.isCompare()) {
++  if (Inst.isCompare()) {
+     optimizeCmp(MBB, MII);
+   }
+ }
