@@ -46,11 +46,11 @@ protected:
 
   ~WasmJITCompiler() override = default;
 
-  bool
-  compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod, uint32_t FuncIdx,
-                  bool DisableGreedyRA, uint8_t *LoopTick = nullptr,
-                  bool AllowLoopGreedy = false,
-                  const LazyInitialRAPolicy::Timer *CompileTimer = nullptr);
+  bool compileWasmToMC(WasmFrontendContext &Ctx, MModule &Mod, uint32_t FuncIdx,
+                       bool DisableGreedyRA, uint8_t *LoopTick = nullptr,
+                       bool AllowLoopGreedy = false,
+                       const LazyInitialRAPolicy::Timer *CompileTimer = nullptr,
+                       bool CollectPrivateMetadata = false);
 
   runtime::Module *WasmMod;
   const uint32_t NumInternalFunctions;
@@ -87,7 +87,8 @@ public:
   uint8_t *compileFunction(WasmFrontendContext &Ctx, uint32_t FuncIdx,
                            bool DisableGreedyRA, uint8_t *LoopTick = nullptr,
                            bool AllowLoopGreedy = false,
-                           bool *SelectedLoopGreedy = nullptr);
+                           bool *SelectedLoopGreedy = nullptr,
+                           bool CollectPrivateMetadata = false);
 
   void compileFunctionInBackgroud(WasmFrontendContext &Ctx, uint32_t FuncIdx);
 
@@ -163,7 +164,6 @@ private:
   struct PrivateFunction {
     LazyJITCompiler *Owner = nullptr;
     uint32_t Index = 0;
-    bool Eligible = false;
     PrivateStatus Status = PrivateStatus::Cold;
     alignas(8) std::atomic<uint64_t> EntryRemaining{0};
     alignas(8) std::atomic<uint64_t> LoopRemaining{0};

@@ -25,28 +25,30 @@ static void assertZeroFlagChainOperand(const MInstruction *Operand) {
 X86CgLowering::X86CgLowering(CgFunction &MF)
     : CgLowering(MF), Subtarget(&MF.getSubtarget<X86Subtarget>()),
       TRI(Subtarget->getRegisterInfo()) {
-  llvm::DenseSet<const MInstruction *> Visited;
-  auto CollectUmul128Hi = [&](auto &&Self, const MInstruction *Inst) -> void {
-    if (Inst == nullptr || !Visited.insert(Inst).second) {
-      return;
-    }
+  if (_mir_func.mayHaveEvmUmul128Hi()) {
+    llvm::DenseSet<const MInstruction *> Visited;
+    auto CollectUmul128Hi = [&](auto &&Self, const MInstruction *Inst) -> void {
+      if (Inst == nullptr || !Visited.insert(Inst).second) {
+        return;
+      }
 
-    if (Inst->getKind() == MInstruction::EVM_UMUL128_HI) {
-      Umul128NeedHi.insert(Inst->getOperand<0>());
-    }
+      if (Inst->getKind() == MInstruction::EVM_UMUL128_HI) {
+        Umul128NeedHi.insert(Inst->getOperand<0>());
+      }
 
-    if (const auto *ICall = llvm::dyn_cast<ICallInstruction>(Inst)) {
-      Self(Self, ICall->getCalleeAddr());
-    }
+      if (const auto *ICall = llvm::dyn_cast<ICallInstruction>(Inst)) {
+        Self(Self, ICall->getCalleeAddr());
+      }
 
-    for (OperandNum I = 0; I < Inst->getNumOperands(); ++I) {
-      Self(Self, Inst->getOperand(I));
-    }
-  };
+      for (OperandNum I = 0; I < Inst->getNumOperands(); ++I) {
+        Self(Self, Inst->getOperand(I));
+      }
+    };
 
-  for (MBasicBlock *MIRBB : _mir_func) {
-    for (MInstruction *Inst : *MIRBB) {
-      CollectUmul128Hi(CollectUmul128Hi, Inst);
+    for (MBasicBlock *MIRBB : _mir_func) {
+      for (MInstruction *Inst : *MIRBB) {
+        CollectUmul128Hi(CollectUmul128Hi, Inst);
+      }
     }
   }
 

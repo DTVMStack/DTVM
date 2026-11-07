@@ -1014,3 +1014,190 @@ TEST(X86CgLowering, I64AddImmTooWideStaysAdd) {
   const std::string Dump = B.lowerRet(Add);
   EXPECT_EQ(Dump.find("LEA64r"), std::string::npos) << Dump;
 }
+
+namespace {
+struct ScalarFoldShape {
+  unsigned Load, RR, RM;
+  const TargetRegisterClass *RC;
+};
+const ScalarFoldShape ScalarFoldShapes[] = {
+    {X86::MOVSDrm, X86::ADDSDrr, X86::ADDSDrm, &X86::FR64RegClass},
+    {X86::MOVSDrm, X86::SUBSDrr, X86::SUBSDrm, &X86::FR64RegClass},
+    {X86::MOVSDrm, X86::MULSDrr, X86::MULSDrm, &X86::FR64RegClass},
+    {X86::MOVSDrm, X86::DIVSDrr, X86::DIVSDrm, &X86::FR64RegClass},
+    {X86::MOVSSrm, X86::ADDSSrr, X86::ADDSSrm, &X86::FR32RegClass},
+    {X86::MOVSSrm, X86::SUBSSrr, X86::SUBSSrm, &X86::FR32RegClass},
+    {X86::MOVSSrm, X86::MULSSrr, X86::MULSSrm, &X86::FR32RegClass},
+    {X86::MOVSSrm, X86::DIVSSrr, X86::DIVSSrm, &X86::FR32RegClass},
+};
+CgInstruction *scalarFoldLoad(CgFunction &MF, CgBasicBlock &BB,
+                              const ScalarFoldShape &S, CgRegister Reg,
+                              CgRegister Base) {
+  SmallVector<CgOperand, 6> Ops{CgOperand::createRegOperand(Reg, true),
+                                CgOperand::createRegOperand(Base, false),
+                                CgOperand::createImmOperand(1),
+                                CgOperand::createRegOperand(0, false),
+                                CgOperand::createImmOperand(16),
+                                CgOperand::createRegOperand(0, false)};
+  return MF.createCgInstruction(BB, MF.getTargetInstrInfo().get(S.Load), Ops);
+}
+} // namespace
+
+TEST(X86CgPeephole, ScalarLoadFoldsRHSAndKeepsTiedCopyAndFlags) {
+  for (const auto &S : ScalarFoldShapes) {
+    for (bool Copy : {false, true}) {
+      CompileContext Ctx;
+      Ctx.initialize();
+      MFunction F(Ctx, 0);
+      F.setFunctionType(MFunctionType::create(Ctx, Ctx.I32Type, {}));
+      CgFunction MF(Ctx, F);
+      auto *BB = MF.createCgBasicBlock();
+      MF.appendCgBasicBlock(BB);
+      auto &MRI = MF.getRegInfo();
+      auto Loaded = MRI.createVirtualRegister(S.RC);
+      auto LHS = MRI.createVirtualRegister(S.RC);
+      auto Result = Copy ? MRI.createVirtualRegister(S.RC) : LHS;
+      auto Base = MRI.createVirtualRegister(&X86::GR64RegClass);
+      scalarFoldLoad(MF, *BB, S, Loaded, Base);
+      SmallVector<CgOperand, 3> Ops{CgOperand::createRegOperand(Result, true),
+                                    CgOperand::createRegOperand(LHS, false),
+                                    CgOperand::createRegOperand(Loaded, false)};
+      auto *Arith =
+          MF.createCgInstruction(*BB, MF.getTargetInstrInfo().get(S.RR), Ops);
+      Arith->setFlag(CgInstruction::NoFPExcept);
+      X86CgPeephole Peep(MF);
+      EXPECT_EQ(countOpcode(MF, S.Load), 0u) << dumpCg(MF);
+      EXPECT_EQ(countOpcode(MF, S.RR), 0u);
+      EXPECT_EQ(countOpcode(MF, S.RM), 1u);
+      EXPECT_EQ(countOpcode(MF, TargetOpcode::COPY), Copy ? 1u : 0u);
+      const auto &Folded = BB->back();
+      EXPECT_EQ(Folded.getOperand(0).getReg(), Result);
+      EXPECT_EQ(Folded.getOperand(1).getReg(), Result);
+      EXPECT_EQ(Folded.getOperand(2).getReg(), Base);
+      EXPECT_EQ(Folded.getOperand(5).getImm(), 16);
+      EXPECT_TRUE(Folded.getFlag(CgInstruction::NoFPExcept));
+      EXPECT_TRUE(MRI.use_nodbg_empty(Loaded));
+      EXPECT_TRUE(MRI.def_empty(Loaded));
+      finishLitmus(F);
+    }
+  }
+}
+
+TEST(X86CgPeephole, ScalarLoadKeepsSharedLHSAndOrderedEffects) {
+  enum Kind {
+    Shared,
+    BothOperands,
+    LeftOnly,
+    Store,
+    AnotherLoad,
+    LoadNoMerge,
+    ArithNoMerge,
+    MismatchedWidth,
+    AddressClobber,
+    Redefined
+  };
+  for (Kind K :
+       {Shared, BothOperands, LeftOnly, Store, AnotherLoad, LoadNoMerge,
+        ArithNoMerge, MismatchedWidth, AddressClobber, Redefined}) {
+    CompileContext Ctx;
+    Ctx.initialize();
+    MFunction F(Ctx, 0);
+    F.setFunctionType(MFunctionType::create(Ctx, Ctx.I32Type, {}));
+    CgFunction MF(Ctx, F);
+    auto *BB = MF.createCgBasicBlock();
+    MF.appendCgBasicBlock(BB);
+    auto &MRI = MF.getRegInfo();
+    const auto &TII = MF.getTargetInstrInfo();
+    const auto &S = ScalarFoldShapes[2];
+    auto Loaded = MRI.createVirtualRegister(S.RC);
+    auto Other = MRI.createVirtualRegister(S.RC);
+    auto Base = MRI.createVirtualRegister(&X86::GR64RegClass);
+    auto *Load = scalarFoldLoad(MF, *BB, S, Loaded, Base);
+    if (K == LoadNoMerge)
+      Load->setFlag(CgInstruction::NoMerge);
+    if (K == Store) {
+      SmallVector<CgOperand, 6> StoreOps{
+          CgOperand::createRegOperand(Base, false),
+          CgOperand::createImmOperand(1),
+          CgOperand::createRegOperand(0, false),
+          CgOperand::createImmOperand(16),
+          CgOperand::createRegOperand(0, false),
+          CgOperand::createRegOperand(Other, false)};
+      MF.createCgInstruction(*BB, TII.get(X86::MOVSDmr), StoreOps);
+    }
+    if (K == AnotherLoad)
+      scalarFoldLoad(MF, *BB, S, MRI.createVirtualRegister(S.RC), Base);
+    if (K == AddressClobber)
+      MF.createCgInstruction(*BB, TII.get(TargetOpcode::COPY),
+                             MRI.createVirtualRegister(&X86::GR64RegClass),
+                             Base);
+    if (K == Redefined)
+      MF.createCgInstruction(*BB, TII.get(TargetOpcode::COPY), Other, Loaded);
+    const auto LHS = (K == BothOperands || K == LeftOnly) ? Loaded : Other;
+    const auto RHS = K == LeftOnly ? Other : Loaded;
+    SmallVector<CgOperand, 3> Ops{CgOperand::createRegOperand(LHS, true),
+                                  CgOperand::createRegOperand(LHS, false),
+                                  CgOperand::createRegOperand(RHS, false)};
+    auto *Arith = MF.createCgInstruction(
+        *BB, TII.get(K == MismatchedWidth ? X86::MULSSrr : S.RR), Ops);
+    if (K == ArithNoMerge)
+      Arith->setFlag(CgInstruction::NoMerge);
+    if (K == Shared)
+      MF.createCgInstruction(*BB, TII.get(TargetOpcode::COPY), Loaded,
+                             MRI.createVirtualRegister(S.RC));
+    X86CgPeephole Peep(MF);
+    EXPECT_GE(countOpcode(MF, S.Load), 1u) << int(K) << '\n' << dumpCg(MF);
+    EXPECT_EQ(countOpcode(MF, S.RM), 0u) << int(K);
+    finishLitmus(F);
+  }
+}
+
+TEST(X86CgLowering,
+     HighMultiplyPresenceIsConservativeAndResetsWithInstructions) {
+  CompileContext Ctx;
+  Ctx.initialize();
+  MFunction F(Ctx, 0);
+  F.setFunctionType(MFunctionType::create(Ctx, Ctx.I64Type, {}));
+  auto *BB = F.createBasicBlock();
+  F.appendBlock(BB);
+  auto *A = makeInt(F, *BB, &Ctx.I64Type, 3);
+  auto *B = makeInt(F, *BB, &Ctx.I64Type, 7);
+  EXPECT_FALSE(F.mayHaveEvmUmul128Hi());
+  auto *Lo = F.createInstruction<EvmUmul128Instruction>(
+      false, *BB, OP_evm_umul128_lo, &Ctx.I64Type, A, B);
+  EXPECT_FALSE(F.mayHaveEvmUmul128Hi());
+  auto *Hi = F.createInstruction<EvmUmul128HiInstruction>(false, *BB,
+                                                          &Ctx.I64Type, Lo);
+  EXPECT_TRUE(F.mayHaveEvmUmul128Hi());
+  F.deleteInstruction(Hi);
+  EXPECT_TRUE(F.mayHaveEvmUmul128Hi());
+  F.clearInstructions();
+  EXPECT_FALSE(F.mayHaveEvmUmul128Hi());
+  finishLitmus(F);
+}
+
+TEST(X86CgLowering, HighMultiplyDemandWalkStillCapturesHighResult) {
+  for (bool High : {false, true}) {
+    CompileContext Ctx;
+    Ctx.initialize();
+    MFunction F(Ctx, 0);
+    F.setFunctionType(MFunctionType::create(Ctx, Ctx.I64Type, {}));
+    auto *BB = F.createBasicBlock();
+    F.appendBlock(BB);
+    auto *A = makeInt(F, *BB, &Ctx.I64Type, UINT64_MAX);
+    auto *B = makeInt(F, *BB, &Ctx.I64Type, 2);
+    auto *Lo = F.createInstruction<EvmUmul128Instruction>(
+        false, *BB, OP_evm_umul128_lo, &Ctx.I64Type, A, B);
+    MInstruction *Value = Lo;
+    if (High)
+      Value = F.createInstruction<EvmUmul128HiInstruction>(false, *BB,
+                                                           &Ctx.I64Type, Lo);
+    F.createInstruction<COMPILER::ReturnInstruction>(true, *BB, &Ctx.I64Type,
+                                                     Value);
+    CgFunction MF(Ctx, F);
+    X86CgLowering Lower(MF);
+    EXPECT_EQ(countOpcode(MF, X86::MUL64r), 1u) << dumpCg(MF);
+    EXPECT_EQ(bool(copyDestFromPhys(MF, X86::RDX)), High) << dumpCg(MF);
+    finishLitmus(F);
+  }
+}

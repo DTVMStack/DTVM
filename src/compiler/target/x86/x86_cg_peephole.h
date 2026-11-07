@@ -14,6 +14,7 @@ public:
   void peepholeOptimize(CgBasicBlock &MBB, CgBasicBlock::iterator &MII);
 
 private:
+  void foldScalarLoad(CgBasicBlock &MBB, CgBasicBlock::iterator &MII);
   void optimizeCmp(CgBasicBlock &MBB, CgBasicBlock::iterator &MII);
   void optimizeBranchInBlockEnd(CgBasicBlock &MBB, CgInstruction &MI);
 };
