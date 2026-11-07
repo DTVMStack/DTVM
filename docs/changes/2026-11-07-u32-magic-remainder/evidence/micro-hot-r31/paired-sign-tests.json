@@ -1,0 +1,86 @@
+{
+  "method": "Exact paired two-sided sign test on one warm median per independent process; Holm adjustment within the nine predeclared nonpow2-constant synthetic cases only; controls excluded from this claim family. No pooling calls as independent samples.",
+  "rows": [
+    {
+      "case": "rem-3",
+      "process_pairs": 31,
+      "candidate_faster_pairs": 29,
+      "candidate_slower_pairs": 2,
+      "ties": 0,
+      "sign_test_two_sided_p": 4.628673195838928e-07,
+      "holm_p_9_constants": 1.3886019587516785e-06
+    },
+    {
+      "case": "rem-7",
+      "process_pairs": 31,
+      "candidate_faster_pairs": 29,
+      "candidate_slower_pairs": 2,
+      "ties": 0,
+      "sign_test_two_sided_p": 4.628673195838928e-07,
+      "holm_p_9_constants": 1.3886019587516785e-06
+    },
+    {
+      "case": "rem-10",
+      "process_pairs": 31,
+      "candidate_faster_pairs": 29,
+      "candidate_slower_pairs": 2,
+      "ties": 0,
+      "sign_test_two_sided_p": 4.628673195838928e-07,
+      "holm_p_9_constants": 1.3886019587516785e-06
+    },
+    {
+      "case": "rem-20",
+      "process_pairs": 31,
+      "candidate_faster_pairs": 30,
+      "candidate_slower_pairs": 1,
+      "ties": 0,
+      "sign_test_two_sided_p": 2.9802322387695312e-08,
+      "holm_p_9_constants": 1.1920928955078125e-07
+    },
+    {
+      "case": "rem-255",
+      "process_pairs": 31,
+      "candidate_faster_pairs": 31,
+      "candidate_slower_pairs": 0,
+      "ties": 0,
+      "sign_test_two_sided_p": 9.313225746154785e-10,
+      "holm_p_9_constants": 8.381903171539307e-09
+    },
+    {
+      "case": "rem-1900",
+      "process_pairs": 31,
+      "candidate_faster_pairs": 31,
+      "candidate_slower_pairs": 0,
+      "ties": 0,
+      "sign_test_two_sided_p": 9.313225746154785e-10,
+      "holm_p_9_constants": 8.381903171539307e-09
+    },
+    {
+      "case": "rem-2100",
+      "process_pairs": 31,
+      "candidate_faster_pairs": 31,
+      "candidate_slower_pairs": 0,
+      "ties": 0,
+      "sign_test_two_sided_p": 9.313225746154785e-10,
+      "holm_p_9_constants": 8.381903171539307e-09
+    },
+    {
+      "case": "rem-65521",
+      "process_pairs": 31,
+      "candidate_faster_pairs": 31,
+      "candidate_slower_pairs": 0,
+      "ties": 0,
+      "sign_test_two_sided_p": 9.313225746154785e-10,
+      "holm_p_9_constants": 8.381903171539307e-09
+    },
+    {
+      "case": "rem-4294967295",
+      "process_pairs": 31,
+      "candidate_faster_pairs": 31,
+      "candidate_slower_pairs": 0,
+      "ties": 0,
+      "sign_test_two_sided_p": 9.313225746154785e-10,
+      "holm_p_9_constants": 8.381903171539307e-09
+    }
+  ]
+}

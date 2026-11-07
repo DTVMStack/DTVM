@@ -1,0 +1,54 @@
+{
+  "tag": "v45.0.0",
+  "benchmark_version": "wasmtime 45.0.0 (377cd917a 2026-05-21)",
+  "files": [
+    {
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/v45.0.0/crates/wasmtime/src/runtime/vm/memory/mmap.rs",
+      "path": "work/pr644-research/wasmtime45-source/crates__wasmtime__src__runtime__vm__memory__mmap.rs",
+      "sha256": "94f9d8d394d547b8a8e310713462bd63d41d26301b308c14c58527ba6c60079f",
+      "bytes": 10460
+    },
+    {
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/v45.0.0/cranelift/codegen/src/isa/x64/lower.isle",
+      "path": "work/pr644-research/wasmtime45-source/cranelift__codegen__src__isa__x64__lower.isle",
+      "sha256": "4b4d03186356762759d1658e8c0acdabcc29034cc2edfb105dd097c747707592",
+      "bytes": 224804
+    },
+    {
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/v45.0.0/cranelift/codegen/src/opts/div_const.rs",
+      "path": "work/pr644-research/wasmtime45-source/cranelift__codegen__src__opts__div_const.rs",
+      "sha256": "31bf81dbe3381af3ef5e351b58c6943adf9c533a5c73030fd4e537ec08e14254",
+      "bytes": 41088
+    },
+    {
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/v45.0.0/cranelift/codegen/src/opts/arithmetic.isle",
+      "path": "work/pr644-research/wasmtime45-source/cranelift__codegen__src__opts__arithmetic.isle",
+      "sha256": "5b7a73b008c98edf95acef4dbfb8b3dd2aadbeb0611d0fc1fed6ca02ac184e89",
+      "bytes": 22003
+    },
+    {
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/v45.0.0/cranelift/codegen/src/opts.rs",
+      "path": "work/pr644-research/wasmtime45-source/cranelift__codegen__src__opts.rs",
+      "sha256": "3cbb7f822d2bf4815717478dffc42e81035d0b16fd01c2110d3539bb2e0256b3",
+      "bytes": 11052
+    },
+    {
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/v45.0.0/cranelift/codegen/src/opts/skeleton.isle",
+      "path": "work/pr644-research/wasmtime45-source/cranelift__codegen__src__opts__skeleton.isle",
+      "sha256": "6b06ff0dfef63ba925800c40f0101f094eafc44f2a7b7b542e397300fe70df04",
+      "bytes": 1875
+    },
+    {
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/v45.0.0/cranelift/codegen/src/prelude.isle",
+      "path": "work/pr644-research/wasmtime45-source/cranelift__codegen__src__prelude.isle",
+      "sha256": "8d9c7db26ceae6671c6cc22df53d696929e11fe49cbb4b1a2d6fa328b70676cc",
+      "bytes": 23732
+    },
+    {
+      "url": "https://raw.githubusercontent.com/bytecodealliance/wasmtime/v45.0.0/cranelift/codegen/src/prelude_opt.isle",
+      "path": "work/pr644-research/wasmtime45-source/cranelift__codegen__src__prelude_opt.isle",
+      "sha256": "5ade07125558b9dd917c8951bdfe3909c8ac9b9f6231153ad8096767ceeb43af",
+      "bytes": 26476
+    }
+  ]
+}
