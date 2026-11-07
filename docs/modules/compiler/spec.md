@@ -196,8 +196,10 @@ no OSR: a live profiling frame can keep inactive CALL/RET ticks until return.
 Before register allocation, scalar SSE f32/f64 add/sub/mul/div may fold their
 right-hand load only when its virtual result has one definition and one operand
 use, its width matches, and no subregister or NoMerge/bundle condition interferes.
-The load is adjacent to the arithmetic except for one register-only COPY whose
-destination cannot change its address. Preserve operand order, effective-address
+The load may cross at most four virtual-register COPYs whose destinations
+cannot change its address and which have no kill-marked source. A same-class
+forwarding COPY is removed only if its result also has a single definition and
+single use; independent copies remain. Preserve operand order, effective-address
 operands, access width and arithmetic flags; never commute FP operands or cross
 another load, store, call, branch or potentially trapping operation. This reduces
 instructions/register demand, not memory traffic, and enables no AVX or FMA.

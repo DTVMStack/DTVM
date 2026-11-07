@@ -30,8 +30,8 @@ void X86CgPeephole::peepholeOptimize(CgBasicBlock &MBB,
     optimizeCmp(MBB, MII);
   }
 }
-// Fold only the RHS of scalar arithmetic. A single register COPY may separate
-// the load and arithmetic because legacy SSE lowering copies the tied LHS.
+// Fold only the RHS of scalar arithmetic across at most four virtual-register
+// COPYs (value forwarding, tied scalar LHS, or independent address copies).
 // No memory operation, call, branch, or other potentially trapping instruction
 // is crossed. In particular, never commute FP operands to make a load foldable.
 void X86CgPeephole::foldScalarLoad(CgBasicBlock &MBB,
@@ -46,25 +46,41 @@ void X86CgPeephole::foldScalarLoad(CgBasicBlock &MBB,
       !llvm::hasSingleElement(MF.getRegInfo().def_instructions(Reg)))
     return;
   auto Next = std::next(MII);
-  if (Next == MBB.end())
-    return;
-  if (Next->isCopy()) {
-    // Skip only the tied scalar LHS copy; its destination must not modify any
-    // load-address operand. Virtual scalar registers cannot alias GPRs, but
-    // check the exact registers too so this remains safe for hand-built CgIR.
+  auto ValueReg = Reg;
+  SmallVector<CgInstruction *, 4> ValueCopies;
+  unsigned Copies = 0;
+  // Frontend expression/local reads introduce forwarding COPYs, in addition
+  // to the tied LHS and address COPYs. Bound the walk; commit no edits until
+  // the final arithmetic and every use/def/address check have succeeded.
+  while (Next != MBB.end() && Next->isCopy() && Copies < 4) {
     if (Next->getFlags() || Next->getNumExplicitOperands() != 2 ||
         !Next->getOperand(0).isReg() || !Next->getOperand(1).isReg() ||
         !Next->getOperand(0).getReg().isVirtual() ||
-        !Next->getOperand(1).getReg().isVirtual())
+        !Next->getOperand(1).getReg().isVirtual() ||
+        Next->getOperand(0).getSubReg() || Next->getOperand(1).getSubReg() ||
+        Next->getOperand(1).isKill())
       return;
     const auto Dst = Next->getOperand(0).getReg();
+    const auto Src = Next->getOperand(1).getReg();
+    if (Dst == ValueReg)
+      return;
     for (unsigned I = 1; I < 6; ++I)
       if (Load.getOperand(I).isReg() && Load.getOperand(I).getReg() == Dst)
         return;
+    if (Src == ValueReg) {
+      auto &MRI = MF.getRegInfo();
+      if (MRI.getRegClass(Dst) != MRI.getRegClass(Reg) ||
+          !MRI.hasOneNonDBGUse(Dst) ||
+          !llvm::hasSingleElement(MRI.def_instructions(Dst)))
+        return;
+      ValueReg = Dst;
+      ValueCopies.push_back(&*Next);
+    }
     ++Next;
-    if (Next == MBB.end())
-      return;
+    ++Copies;
   }
+  if (Next == MBB.end())
+    return;
   auto &Arith = *Next;
   unsigned MemOpc = 0;
   const bool Double = Load.getOpcode() == X86::MOVSDrm;
@@ -108,7 +124,8 @@ void X86CgPeephole::foldScalarLoad(CgBasicBlock &MBB,
       Arith.getFlag(CgInstruction::BundledPred) ||
       Arith.getFlag(CgInstruction::BundledSucc) ||
       Arith.getNumExplicitOperands() != 3 || !Arith.getOperand(2).isReg() ||
-      Arith.getOperand(2).getReg() != Reg || Arith.getOperand(2).getSubReg())
+      Arith.getOperand(2).getReg() != ValueReg ||
+      Arith.getOperand(2).getSubReg())
     return;
   SmallVector<CgOperand, 7> Ops{Arith.getOperand(0), Arith.getOperand(1)};
   for (unsigned I = 1; I < 6; ++I)
@@ -117,6 +134,8 @@ void X86CgPeephole::foldScalarLoad(CgBasicBlock &MBB,
   auto *Folded =
       MF.replaceCgInstruction(&Arith, MF.getTargetInstrInfo().get(MemOpc), Ops);
   Folded->setFlags(Flags);
+  for (auto *Copy : llvm::reverse(ValueCopies))
+    Copy->eraseFromParent();
   Load.eraseFromParent();
   MII = Folded->getIterator();
 }

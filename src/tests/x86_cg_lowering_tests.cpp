@@ -1094,11 +1094,12 @@ TEST(X86CgPeephole, ScalarLoadKeepsSharedLHSAndOrderedEffects) {
     ArithNoMerge,
     MismatchedWidth,
     AddressClobber,
-    Redefined
+    Redefined,
+    KillCopy
   };
   for (Kind K :
        {Shared, BothOperands, LeftOnly, Store, AnotherLoad, LoadNoMerge,
-        ArithNoMerge, MismatchedWidth, AddressClobber, Redefined}) {
+        ArithNoMerge, MismatchedWidth, AddressClobber, Redefined, KillCopy}) {
     CompileContext Ctx;
     Ctx.initialize();
     MFunction F(Ctx, 0);
@@ -1131,6 +1132,12 @@ TEST(X86CgPeephole, ScalarLoadKeepsSharedLHSAndOrderedEffects) {
       MF.createCgInstruction(*BB, TII.get(TargetOpcode::COPY),
                              MRI.createVirtualRegister(&X86::GR64RegClass),
                              Base);
+    if (K == KillCopy) {
+      auto *Copy =
+          MF.createCgInstruction(*BB, TII.get(TargetOpcode::COPY), Base,
+                                 MRI.createVirtualRegister(&X86::GR64RegClass));
+      Copy->getOperand(1).setIsKill(true);
+    }
     if (K == Redefined)
       MF.createCgInstruction(*BB, TII.get(TargetOpcode::COPY), Other, Loaded);
     const auto LHS = (K == BothOperands || K == LeftOnly) ? Loaded : Other;
@@ -1139,7 +1146,8 @@ TEST(X86CgPeephole, ScalarLoadKeepsSharedLHSAndOrderedEffects) {
                                   CgOperand::createRegOperand(LHS, false),
                                   CgOperand::createRegOperand(RHS, false)};
     auto *Arith = MF.createCgInstruction(
-        *BB, TII.get(K == MismatchedWidth ? X86::MULSSrr : S.RR), Ops);
+        *BB, TII.get(K == MismatchedWidth ? unsigned(X86::MULSSrr) : S.RR),
+        Ops);
     if (K == ArithNoMerge)
       Arith->setFlag(CgInstruction::NoMerge);
     if (K == Shared)
@@ -1198,6 +1206,96 @@ TEST(X86CgLowering, HighMultiplyDemandWalkStillCapturesHighResult) {
     X86CgLowering Lower(MF);
     EXPECT_EQ(countOpcode(MF, X86::MUL64r), 1u) << dumpCg(MF);
     EXPECT_EQ(bool(copyDestFromPhys(MF, X86::RDX)), High) << dumpCg(MF);
+    finishLitmus(F);
+  }
+}
+
+TEST(X86CgPeephole, ScalarLoadFollowsUniqueValueCopiesWithinBoundedWindow) {
+  for (unsigned Copies : {1u, 2u, 3u, 4u, 5u}) {
+    for (bool ForwardAll : {false, true}) {
+      CompileContext Ctx;
+      Ctx.initialize();
+      MFunction F(Ctx, 0);
+      F.setFunctionType(MFunctionType::create(Ctx, Ctx.I32Type, {}));
+      CgFunction MF(Ctx, F);
+      auto *BB = MF.createCgBasicBlock();
+      MF.appendCgBasicBlock(BB);
+      auto &MRI = MF.getRegInfo();
+      const auto &TII = MF.getTargetInstrInfo();
+      const auto &S = ScalarFoldShapes[2];
+      auto Loaded = MRI.createVirtualRegister(S.RC);
+      auto Base = MRI.createVirtualRegister(&X86::GR64RegClass);
+      auto LHS = MRI.createVirtualRegister(S.RC);
+      scalarFoldLoad(MF, *BB, S, Loaded, Base);
+      auto Value = MRI.createVirtualRegister(S.RC);
+      MF.createCgInstruction(*BB, TII.get(TargetOpcode::COPY), Loaded, Value);
+      // Preserve independent copies, including an address value needed later.
+      for (unsigned I = 1; I < Copies; ++I) {
+        auto Src = ForwardAll ? Value : Base;
+        auto Dst =
+            MRI.createVirtualRegister(ForwardAll ? S.RC : &X86::GR64RegClass);
+        MF.createCgInstruction(*BB, TII.get(TargetOpcode::COPY), Src, Dst);
+        if (ForwardAll)
+          Value = Dst;
+      }
+      SmallVector<CgOperand, 3> Ops{CgOperand::createRegOperand(LHS, true),
+                                    CgOperand::createRegOperand(LHS, false),
+                                    CgOperand::createRegOperand(Value, false)};
+      MF.createCgInstruction(*BB, TII.get(S.RR), Ops);
+      X86CgPeephole Peep(MF);
+      EXPECT_EQ(countOpcode(MF, S.RM), Copies <= 4 ? 1u : 0u) << dumpCg(MF);
+      EXPECT_EQ(countOpcode(MF, S.Load), Copies <= 4 ? 0u : 1u);
+      EXPECT_EQ(countOpcode(MF, TargetOpcode::COPY),
+                Copies <= 4 ? (ForwardAll ? 0u : Copies - 1) : Copies);
+      if (Copies <= 4) {
+        EXPECT_TRUE(MRI.reg_empty(Loaded));
+        EXPECT_TRUE(MRI.reg_empty(Value));
+      }
+      finishLitmus(F);
+    }
+  }
+}
+
+TEST(X86CgPeephole,
+     ScalarLoadDoesNotPartiallyEraseSharedForwardingOrCrossStore) {
+  for (bool Store : {false, true}) {
+    CompileContext Ctx;
+    Ctx.initialize();
+    MFunction F(Ctx, 0);
+    F.setFunctionType(MFunctionType::create(Ctx, Ctx.I32Type, {}));
+    CgFunction MF(Ctx, F);
+    auto *BB = MF.createCgBasicBlock();
+    MF.appendCgBasicBlock(BB);
+    auto &MRI = MF.getRegInfo();
+    const auto &TII = MF.getTargetInstrInfo();
+    const auto &S = ScalarFoldShapes[2];
+    auto Loaded = MRI.createVirtualRegister(S.RC);
+    auto Base = MRI.createVirtualRegister(&X86::GR64RegClass);
+    auto LHS = MRI.createVirtualRegister(S.RC);
+    auto Value = MRI.createVirtualRegister(S.RC);
+    scalarFoldLoad(MF, *BB, S, Loaded, Base);
+    MF.createCgInstruction(*BB, TII.get(TargetOpcode::COPY), Loaded, Value);
+    if (Store) {
+      SmallVector<CgOperand, 6> Ops{CgOperand::createRegOperand(Base, false),
+                                    CgOperand::createImmOperand(1),
+                                    CgOperand::createRegOperand(0, false),
+                                    CgOperand::createImmOperand(16),
+                                    CgOperand::createRegOperand(0, false),
+                                    CgOperand::createRegOperand(LHS, false)};
+      MF.createCgInstruction(*BB, TII.get(X86::MOVSDmr), Ops);
+    }
+    SmallVector<CgOperand, 3> Ops{CgOperand::createRegOperand(LHS, true),
+                                  CgOperand::createRegOperand(LHS, false),
+                                  CgOperand::createRegOperand(Value, false)};
+    MF.createCgInstruction(*BB, TII.get(S.RR), Ops);
+    if (!Store)
+      MF.createCgInstruction(*BB, TII.get(TargetOpcode::COPY), Value,
+                             MRI.createVirtualRegister(S.RC));
+    X86CgPeephole Peep(MF);
+    EXPECT_EQ(countOpcode(MF, S.Load), 1u) << dumpCg(MF);
+    EXPECT_EQ(countOpcode(MF, S.RM), 0u);
+    EXPECT_FALSE(MRI.use_nodbg_empty(Loaded));
+    EXPECT_FALSE(MRI.def_empty(Value));
     finishLitmus(F);
   }
 }
