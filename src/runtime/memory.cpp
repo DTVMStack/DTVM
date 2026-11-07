@@ -545,6 +545,8 @@ WasmMemoryAllocator::enlargeWasmMemory(const WasmMemoryData &OldMemoryData,
           .NeedMprotect = false,
       };
       if (OldMemoryData.Type == WM_MEMORY_DATA_TYPE_BUCKET_MMAP) {
+#ifndef ZEN_ENABLE_SGX
+        // SGX's mmap shim does not implement fixed-address replacement.
         const size_t InitialSize =
             size_t(CurModule->getDefaultMemoryEntry().InitSize) *
             DefaultBytesNumPerPage;
@@ -562,6 +564,7 @@ WasmMemoryAllocator::enlargeWasmMemory(const WasmMemoryData &OldMemoryData,
             ZEN_ABORT();
           }
         }
+#endif
         auto *BucketMemAddr = (*MemoryAddrToMmapAddr)[OldMemoryData.MemoryData];
         auto *BucketInstance = ActiveBuckets[BucketMemAddr].get();
         auto IndexInBucket = (OldMemoryData.MemoryData - BucketMemAddr) /

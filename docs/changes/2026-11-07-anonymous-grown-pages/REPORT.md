@@ -25,6 +25,12 @@ retirement span both backing types. Growth beyond the bucket limit keeps the
 existing allocate/copy fallback. Mapping failures follow the existing abort
 convention. No JIT pass, allocator selection or background policy changes.
 
+PR644 review found that SGX mmap does not implement fixed-address replacement
+and its headers omit MAP_FIXED/MAP_FAILED. The new remap block is excluded from
+SGX; its previous path is retained. All24 Release tests pass after the guard.
+A syntax smoke check of the actual block against the real SGX mmap header
+passes for SGX and non-SGX; this does not replace a full SGX SDK build.
+
 Two exercised tests cover modified-prefix persistence, successive/zero/failed
 growth, OOB, independent instances,12-instance bucket retirement and >32MiB
 fallback. All24 unit tests pass in Release and ASan(O1/NDEBUG, virtual stack off,
