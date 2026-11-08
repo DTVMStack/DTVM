@@ -95,10 +95,11 @@ and forced each produced seven scalar AVX arithmetic instructions and a
 1321-byte body; auto off produced seven corresponding SSE instructions and a
 1313-byte body. Diagnostic instrumentation did not participate in timing.
 
-Validation: ASAN MIR/CgIR 110/110; ASAN WAST 99/99 in each of auto, auto-off,
-forced and forced-FastRA lazy configurations. The Wasm spec submodule's
-existing supported-suite patch was applied during the build and reversed after
-testing. The policy truth table covers missing host features and the controls.
+Validation: ASAN MIR/CgIR 110/110; ASAN WAST 99/99 in eager mode and in each
+of auto, auto-off, forced and forced-FastRA lazy configurations. The Wasm spec
+submodule's existing supported-suite patch was applied during the build and
+reversed after testing. The policy truth table covers missing host features and
+the controls.
 Only one physical CPU model has been measured; the non-AVX checks use QEMU.
 The earlier forced-AVX study observed an atax warm-kernel regression, while the
 current auto study's atax interval includes one. Additional physical CPU and
