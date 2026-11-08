@@ -272,6 +272,21 @@ public:
 
   void setParent(CgInstruction *Parent) { ParentMI = Parent; }
   auto *getParent() const { return ParentMI; }
+
+  // An operand copied out of an instruction must not retain its parent's
+  // use/def links or operand ties when inserted into a different instruction.
+  // The new instruction rebuilds ties from its own descriptor.
+  CgOperand detachedCopy() const {
+    CgOperand Copy(*this);
+    Copy.ParentMI = nullptr;
+    if (Copy.isReg()) {
+      Copy.Contents.Reg.Prev = nullptr;
+      Copy.Contents.Reg.Next = nullptr;
+      Copy.TiedTo = 0;
+    }
+    return Copy;
+  }
+
   uint32_t getFunc() const {
     ZEN_ASSERT(isFunc());
     return Contents.FuncIdx;

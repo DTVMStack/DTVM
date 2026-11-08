@@ -1059,12 +1059,21 @@ TEST(X86CgPeephole, ScalarLoadFoldsRHSAndKeepsTiedCopyAndFlags) {
       auto LHS = MRI.createVirtualRegister(S.RC);
       auto Result = Copy ? MRI.createVirtualRegister(S.RC) : LHS;
       auto Base = MRI.createVirtualRegister(&X86::GR64RegClass);
-      scalarFoldLoad(MF, *BB, S, Loaded, Base);
+      auto *Load = scalarFoldLoad(MF, *BB, S, Loaded, Base);
+      auto DetachedBase = Load->getOperand(1).detachedCopy();
+      EXPECT_TRUE(Load->getOperand(1).isOnRegUseList());
+      EXPECT_FALSE(DetachedBase.isOnRegUseList());
+      EXPECT_EQ(DetachedBase.getParent(), nullptr);
+      EXPECT_EQ(DetachedBase.getReg(), Base);
       SmallVector<CgOperand, 3> Ops{CgOperand::createRegOperand(Result, true),
                                     CgOperand::createRegOperand(LHS, false),
                                     CgOperand::createRegOperand(Loaded, false)};
       auto *Arith =
           MF.createCgInstruction(*BB, MF.getTargetInstrInfo().get(S.RR), Ops);
+      ASSERT_TRUE(Arith->getOperand(1).isTied());
+      const auto DetachedTied = Arith->getOperand(1).detachedCopy();
+      EXPECT_FALSE(DetachedTied.isTied());
+      EXPECT_FALSE(DetachedTied.isOnRegUseList());
       Arith->setFlag(CgInstruction::NoFPExcept);
       X86CgPeephole Peep(MF);
       EXPECT_EQ(countOpcode(MF, S.Load), 0u) << dumpCg(MF);

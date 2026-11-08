@@ -127,9 +127,10 @@ void X86CgPeephole::foldScalarLoad(CgBasicBlock &MBB,
       Arith.getOperand(2).getReg() != ValueReg ||
       Arith.getOperand(2).getSubReg())
     return;
-  SmallVector<CgOperand, 7> Ops{Arith.getOperand(0), Arith.getOperand(1)};
+  SmallVector<CgOperand, 7> Ops{Arith.getOperand(0).detachedCopy(),
+                                Arith.getOperand(1).detachedCopy()};
   for (unsigned I = 1; I < 6; ++I)
-    Ops.push_back(Load.getOperand(I));
+    Ops.push_back(Load.getOperand(I).detachedCopy());
   const unsigned Flags = Arith.getFlags();
   auto *Folded =
       MF.replaceCgInstruction(&Arith, MF.getTargetInstrInfo().get(MemOpc), Ops);

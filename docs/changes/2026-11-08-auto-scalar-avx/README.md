@@ -110,3 +110,10 @@ the bicg kernel to FastRA yielded seven scalar SSE operations and no scalar AVX
 operations, while allowing Greedy yielded seven scalar AVX operations. Both
 produced identical output. The policy uses the actual debug allocator choice;
 the CgIR tests also check f32/f64 operand order for all four arithmetic ops.
+
+PR review also fixed scalar load folding's use of live operand copies: the
+replacement now detaches each copied operand from its original parent, use/def
+links and old ties before rebuilding the instruction. The original CI failure
+was reproduced with assertions enabled. After the fix, the Debug MIR/CgIR suite
+passed 111/111 and the locally available Debug multipass WAST suite passed
+93/93. The CI configuration includes additional platform/build coverage.
