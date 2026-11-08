@@ -425,6 +425,11 @@ protected:
     }
     llvm::MVT VT = getMVT(Type);
 
+    if (!IsInteger && MF->getContext().EnableGreedyScalarAVX) {
+      if (CgRegister Reg = SELF.tryLowerScalarAVX(Inst))
+        return Reg;
+    }
+
     if (IsInteger && (Opcode == OP_add || Opcode == OP_sub)) {
       if (CgRegister LeaReg = SELF.tryLowerAddSubImmAsLEA(Inst)) {
         return LeaReg;

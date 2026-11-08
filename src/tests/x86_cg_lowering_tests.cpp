@@ -10,6 +10,7 @@
 #include "compiler/mir/instructions.h"
 #include "compiler/mir/pass/peephole.h"
 #include "compiler/mir/variable.h"
+#include "compiler/target/x86/scalar_avx_policy.h"
 #include "compiler/target/x86/x86_cg_peephole.h"
 #include "compiler/target/x86/x86lowering.h"
 
@@ -1058,12 +1059,21 @@ TEST(X86CgPeephole, ScalarLoadFoldsRHSAndKeepsTiedCopyAndFlags) {
       auto LHS = MRI.createVirtualRegister(S.RC);
       auto Result = Copy ? MRI.createVirtualRegister(S.RC) : LHS;
       auto Base = MRI.createVirtualRegister(&X86::GR64RegClass);
-      scalarFoldLoad(MF, *BB, S, Loaded, Base);
+      auto *Load = scalarFoldLoad(MF, *BB, S, Loaded, Base);
+      auto DetachedBase = Load->getOperand(1).detachedCopy();
+      EXPECT_TRUE(Load->getOperand(1).isOnRegUseList());
+      EXPECT_FALSE(DetachedBase.isOnRegUseList());
+      EXPECT_EQ(DetachedBase.getParent(), nullptr);
+      EXPECT_EQ(DetachedBase.getReg(), Base);
       SmallVector<CgOperand, 3> Ops{CgOperand::createRegOperand(Result, true),
                                     CgOperand::createRegOperand(LHS, false),
                                     CgOperand::createRegOperand(Loaded, false)};
       auto *Arith =
           MF.createCgInstruction(*BB, MF.getTargetInstrInfo().get(S.RR), Ops);
+      ASSERT_TRUE(Arith->getOperand(1).isTied());
+      const auto DetachedTied = Arith->getOperand(1).detachedCopy();
+      EXPECT_FALSE(DetachedTied.isTied());
+      EXPECT_FALSE(DetachedTied.isOnRegUseList());
       Arith->setFlag(CgInstruction::NoFPExcept);
       X86CgPeephole Peep(MF);
       EXPECT_EQ(countOpcode(MF, S.Load), 0u) << dumpCg(MF);
@@ -1296,6 +1306,103 @@ TEST(X86CgPeephole,
     EXPECT_EQ(countOpcode(MF, S.RM), 0u);
     EXPECT_FALSE(MRI.use_nodbg_empty(Loaded));
     EXPECT_FALSE(MRI.def_empty(Value));
+    finishLitmus(F);
+  }
+}
+
+TEST(X86ScalarAVX, PolicyRespectsHostAllocationAndControls) {
+  for (bool Forced : {false, true})
+    for (bool AutoEnabled : {false, true})
+      for (bool HostAVX : {false, true})
+        for (bool Greedy : {false, true})
+          for (bool Loop : {false, true})
+            EXPECT_EQ(ScalarAVXPolicy::enabled(Forced, AutoEnabled, HostAVX,
+                                               Greedy, Loop),
+                      HostAVX && Greedy && (Forced || (AutoEnabled && Loop)));
+}
+
+TEST(X86ScalarAVX, PreservesScalarOpcodeAndFeatureGate) {
+  struct Shape {
+    Opcode Op;
+    bool Double;
+    const char *AVX;
+    const char *SSE;
+  };
+  const Shape Shapes[] = {
+      {OP_add, true, "VADDSDrr", "ADDSDrr"},
+      {OP_sub, true, "VSUBSDrr", "SUBSDrr"},
+      {OP_mul, true, "VMULSDrr", "MULSDrr"},
+      {OP_fpdiv, true, "VDIVSDrr", "DIVSDrr"},
+      {OP_add, false, "VADDSSrr", "ADDSSrr"},
+      {OP_sub, false, "VSUBSSrr", "SUBSSrr"},
+      {OP_mul, false, "VMULSSrr", "MULSSrr"},
+      {OP_fpdiv, false, "VDIVSSrr", "DIVSSrr"},
+  };
+  for (const auto &S : Shapes) {
+    for (bool Enabled : {false, true}) {
+      LeaLoweringFixture B;
+      B.Ctx.EnableGreedyScalarAVX = Enabled;
+      MType *Ty =
+          S.Double ? &CompileContext::F64Type : &CompileContext::F32Type;
+      auto L = S.Double ? APFloat(3.0) : APFloat(3.0f);
+      auto R = S.Double ? APFloat(2.0) : APFloat(2.0f);
+      auto *Expr = B.F.createInstruction<BinaryInstruction>(
+          false, *B.Entry, S.Op, Ty, makeFP(B.F, *B.Entry, Ty, L),
+          makeFP(B.F, *B.Entry, Ty, R));
+      const std::string Dump = B.lowerRet(Expr);
+      EXPECT_NE(Dump.find(Enabled ? S.AVX : S.SSE), std::string::npos) << Dump;
+      if (!Enabled)
+        EXPECT_EQ(Dump.find(S.AVX), std::string::npos) << Dump;
+    }
+  }
+}
+
+TEST(X86ScalarAVX, PreservesArithmeticOperandOrder) {
+  struct Shape {
+    Opcode Op;
+    bool Double;
+    unsigned MachineOp;
+  };
+  const Shape Shapes[] = {
+      {OP_add, true, X86::VADDSDrr},  {OP_sub, true, X86::VSUBSDrr},
+      {OP_mul, true, X86::VMULSDrr},  {OP_fpdiv, true, X86::VDIVSDrr},
+      {OP_add, false, X86::VADDSSrr}, {OP_sub, false, X86::VSUBSSrr},
+      {OP_mul, false, X86::VMULSSrr}, {OP_fpdiv, false, X86::VDIVSSrr},
+  };
+  for (const auto &S : Shapes) {
+    CompileContext Ctx;
+    Ctx.initialize();
+    Ctx.EnableGreedyScalarAVX = true;
+    MType *Ty = S.Double ? &CompileContext::F64Type : &CompileContext::F32Type;
+    MFunction F(Ctx, 0);
+    F.setFunctionType(MFunctionType::create(Ctx, *Ty, {Ty, Ty}));
+    MBasicBlock *Entry = F.createBasicBlock();
+    F.appendBlock(Entry);
+    auto *L = F.createInstruction<DreadInstruction>(false, *Entry, Ty, 0);
+    auto *R = F.createInstruction<DreadInstruction>(false, *Entry, Ty, 1);
+    auto *Expr =
+        F.createInstruction<BinaryInstruction>(false, *Entry, S.Op, Ty, L, R);
+    F.createInstruction<ReturnInstruction>(true, *Entry, Ty, Expr);
+    {
+      CgFunction MF(Ctx, F);
+      X86CgLowering Lowering(MF);
+      const std::string Dump = dumpCg(MF);
+      const CgRegister LReg = copyDestFromPhys(MF, X86::XMM0);
+      const CgRegister RReg = copyDestFromPhys(MF, X86::XMM1);
+      ASSERT_TRUE(LReg.isVirtual() && RReg.isVirtual()) << Dump;
+      unsigned Found = 0;
+      for (CgBasicBlock *BB : MF) {
+        for (auto &MI : *BB) {
+          if (MI.getOpcode() != S.MachineOp)
+            continue;
+          ASSERT_GE(MI.getNumOperands(), 3u) << Dump;
+          EXPECT_EQ(MI.getOperand(1).getReg(), LReg) << Dump;
+          EXPECT_EQ(MI.getOperand(2).getReg(), RReg) << Dump;
+          ++Found;
+        }
+      }
+      EXPECT_EQ(Found, 1u) << Dump;
+    }
     finishLitmus(F);
   }
 }

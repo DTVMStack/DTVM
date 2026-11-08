@@ -47,6 +47,8 @@ public:
   // Per-function diagnostics used only by the optional private tiering policy.
   uint32_t LastSpillSlots = 0;
   bool CollectTieringMetadata = false;
+  // Per-function scalar AVX decision; reset before each compilation.
+  bool EnableGreedyScalarAVX = false;
 
   CompileContext();
 
