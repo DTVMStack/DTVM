@@ -158,6 +158,8 @@ GTEST_API_ int main(int argc, char *argv[]) {
   CLIParser.add_flag("--disable-multipass-greedyra",
                      Config.DisableMultipassGreedyRA,
                      "Disable greedy register allocation of multipass JIT");
+  CLIParser.add_flag("--enable-greedy-scalar-avx", Config.EnableGreedyScalarAVX,
+                     "Enable scalar AVX in Greedy-allocated Wasm functions");
   auto *DMMOption = CLIParser.add_flag(
       "--disable-multipass-multithread", Config.DisableMultipassMultithread,
       "Disable multithread compilation of multipass JIT");

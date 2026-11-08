@@ -20,12 +20,14 @@
 #include "compiler/mir/pass/dead_basicblock_elim.h"
 #include "compiler/mir/pass/peephole.h"
 #include "compiler/mir/pass/verifier.h"
+#include "compiler/target/x86/scalar_avx_policy.h"
 #include "compiler/target/x86/x86_cg_peephole.h"
 #include "compiler/target/x86/x86_mc_lowering.h"
 #include "compiler/target/x86/x86lowering.h"
 #include "compiler/wasm_frontend/wasm_mir_compiler.h"
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Object/ObjectFile.h"
+#include "llvm/Support/Host.h"
 #include "llvm/Support/SmallVectorMemoryBuffer.h"
 #include <chrono>
 #include <deque>
@@ -424,6 +426,15 @@ bool WasmJITCompiler::compileWasmToMC(
       CompileTimer ? CompileTimer->elapsed() : 0));
   if (LoopGreedy)
     DisableGreedyRA = false;
+  Ctx.EnableGreedyScalarAVX = false;
+  if (Config.EnableGreedyScalarAVX && !DisableGreedyRA) {
+    static const bool HostHasAVX = [] {
+      llvm::StringMap<bool> Features;
+      return llvm::sys::getHostCPUFeatures(Features) && Features.lookup("avx");
+    }();
+    Ctx.EnableGreedyScalarAVX = ScalarAVXPolicy::enabled(
+        Config.EnableGreedyScalarAVX, HostHasAVX, !DisableGreedyRA);
+  }
   // Spill-slot metadata is only consumed by eligible demanded FastRA helpers.
   // Background/initial Greedy, callful and loop-free functions cannot use it.
   Ctx.CollectTieringMetadata = CollectPrivateMetadata && DisableGreedyRA &&

@@ -16,6 +16,7 @@ using namespace llvm;
 class X86CgLowering : public CgLowering<X86CgLowering> {
 public:
   X86CgLowering(CgFunction &MF);
+  CgRegister tryLowerScalarAVX(const MInstruction &Inst);
 
   // ==================== Unary Expressions ====================
 

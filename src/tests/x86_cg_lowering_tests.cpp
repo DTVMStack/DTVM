@@ -10,6 +10,7 @@
 #include "compiler/mir/instructions.h"
 #include "compiler/mir/pass/peephole.h"
 #include "compiler/mir/variable.h"
+#include "compiler/target/x86/scalar_avx_policy.h"
 #include "compiler/target/x86/x86_cg_peephole.h"
 #include "compiler/target/x86/x86lowering.h"
 
@@ -1297,5 +1298,49 @@ TEST(X86CgPeephole,
     EXPECT_FALSE(MRI.use_nodbg_empty(Loaded));
     EXPECT_FALSE(MRI.def_empty(Value));
     finishLitmus(F);
+  }
+}
+
+TEST(X86ScalarAVX, PolicyRequiresOptInHostAndGreedy) {
+  for (bool Requested : {false, true})
+    for (bool HostAVX : {false, true})
+      for (bool Greedy : {false, true})
+        EXPECT_EQ(ScalarAVXPolicy::enabled(Requested, HostAVX, Greedy),
+                  Requested && HostAVX && Greedy);
+}
+
+TEST(X86ScalarAVX, PreservesScalarOpcodeAndFeatureGate) {
+  struct Shape {
+    Opcode Op;
+    bool Double;
+    const char *AVX;
+    const char *SSE;
+  };
+  const Shape Shapes[] = {
+      {OP_add, true, "VADDSDrr", "ADDSDrr"},
+      {OP_sub, true, "VSUBSDrr", "SUBSDrr"},
+      {OP_mul, true, "VMULSDrr", "MULSDrr"},
+      {OP_fpdiv, true, "VDIVSDrr", "DIVSDrr"},
+      {OP_add, false, "VADDSSrr", "ADDSSrr"},
+      {OP_sub, false, "VSUBSSrr", "SUBSSrr"},
+      {OP_mul, false, "VMULSSrr", "MULSSrr"},
+      {OP_fpdiv, false, "VDIVSSrr", "DIVSSrr"},
+  };
+  for (const auto &S : Shapes) {
+    for (bool Enabled : {false, true}) {
+      LeaLoweringFixture B;
+      B.Ctx.EnableGreedyScalarAVX = Enabled;
+      MType *Ty =
+          S.Double ? &CompileContext::F64Type : &CompileContext::F32Type;
+      auto L = S.Double ? APFloat(3.0) : APFloat(3.0f);
+      auto R = S.Double ? APFloat(2.0) : APFloat(2.0f);
+      auto *Expr = B.F.createInstruction<BinaryInstruction>(
+          false, *B.Entry, S.Op, Ty, makeFP(B.F, *B.Entry, Ty, L),
+          makeFP(B.F, *B.Entry, Ty, R));
+      const std::string Dump = B.lowerRet(Expr);
+      EXPECT_NE(Dump.find(Enabled ? S.AVX : S.SSE), std::string::npos) << Dump;
+      if (!Enabled)
+        EXPECT_EQ(Dump.find(S.AVX), std::string::npos) << Dump;
+    }
   }
 }

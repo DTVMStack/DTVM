@@ -277,6 +277,9 @@ int main(int argc, char *argv[]) {
     CLIParser->add_flag("--disable-multipass-greedyra",
                         Config.DisableMultipassGreedyRA,
                         "Disable greedy register allocation of multipass JIT");
+    CLIParser->add_flag(
+        "--enable-greedy-scalar-avx", Config.EnableGreedyScalarAVX,
+        "Use scalar AVX in Greedy-allocated Wasm functions when supported");
     CLIParser->add_flag("--disable-lazy-auto-greedy",
                         Config.DisableLazyAutoGreedy,
                         "Disable automatic initial Greedy selection (lazy MT)");

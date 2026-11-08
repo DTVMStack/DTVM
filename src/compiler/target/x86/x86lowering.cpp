@@ -22,6 +22,35 @@ static void assertZeroFlagChainOperand(const MInstruction *Operand) {
 }
 
 } // namespace
+
+CgRegister X86CgLowering::tryLowerScalarAVX(const MInstruction &Inst) {
+  const auto *Ty = Inst.getType();
+  if (!Ty || (!Ty->isF32() && !Ty->isF64()))
+    return 0;
+  const bool Double = Ty->isF64();
+  unsigned Opc;
+  switch (Inst.getOpcode()) {
+  case OP_add:
+    Opc = Double ? X86::VADDSDrr : X86::VADDSSrr;
+    break;
+  case OP_sub:
+    Opc = Double ? X86::VSUBSDrr : X86::VSUBSSrr;
+    break;
+  case OP_mul:
+    Opc = Double ? X86::VMULSDrr : X86::VMULSSrr;
+    break;
+  case OP_fpdiv:
+    Opc = Double ? X86::VDIVSDrr : X86::VDIVSSrr;
+    break;
+  default:
+    return 0;
+  }
+  auto LHS = lowerExpr(*Inst.getOperand<0>());
+  auto RHS = lowerExpr(*Inst.getOperand<1>());
+  return fastEmitInst_rr(Opc, Double ? &X86::FR64RegClass : &X86::FR32RegClass,
+                         LHS, RHS);
+}
+
 X86CgLowering::X86CgLowering(CgFunction &MF)
     : CgLowering(MF), Subtarget(&MF.getSubtarget<X86Subtarget>()),
       TRI(Subtarget->getRegisterInfo()) {
