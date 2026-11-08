@@ -95,7 +95,7 @@ and forced each produced seven scalar AVX arithmetic instructions and a
 1321-byte body; auto off produced seven corresponding SSE instructions and a
 1313-byte body. Diagnostic instrumentation did not participate in timing.
 
-Validation: ASAN MIR/CgIR 110/110; ASAN WAST 99/99 in eager mode and in each
+Validation: ASAN MIR/CgIR 111/111; ASAN WAST 99/99 in eager mode and in each
 of auto, auto-off, forced and forced-FastRA lazy configurations. The Wasm spec
 submodule's existing supported-suite patch was applied during the build and
 reversed after testing. The policy truth table covers missing host features and
@@ -104,3 +104,9 @@ Only one physical CPU model has been measured; the non-AVX checks use QEMU.
 The earlier forced-AVX study observed an atax warm-kernel regression, while the
 current auto study's atax interval includes one. Additional physical CPU and
 workload coverage is needed before considering the default policy mature.
+
+In a separate untimed `ZEN_ENABLE_DEBUG_GREEDY_RA` diagnostic build, forcing
+the bicg kernel to FastRA yielded seven scalar SSE operations and no scalar AVX
+operations, while allowing Greedy yielded seven scalar AVX operations. Both
+produced identical output. The policy uses the actual debug allocator choice;
+the CgIR tests also check f32/f64 operand order for all four arithmetic ops.

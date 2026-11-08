@@ -1347,3 +1347,53 @@ TEST(X86ScalarAVX, PreservesScalarOpcodeAndFeatureGate) {
     }
   }
 }
+
+TEST(X86ScalarAVX, PreservesArithmeticOperandOrder) {
+  struct Shape {
+    Opcode Op;
+    bool Double;
+    unsigned MachineOp;
+  };
+  const Shape Shapes[] = {
+      {OP_add, true, X86::VADDSDrr},  {OP_sub, true, X86::VSUBSDrr},
+      {OP_mul, true, X86::VMULSDrr},  {OP_fpdiv, true, X86::VDIVSDrr},
+      {OP_add, false, X86::VADDSSrr}, {OP_sub, false, X86::VSUBSSrr},
+      {OP_mul, false, X86::VMULSSrr}, {OP_fpdiv, false, X86::VDIVSSrr},
+  };
+  for (const auto &S : Shapes) {
+    CompileContext Ctx;
+    Ctx.initialize();
+    Ctx.EnableGreedyScalarAVX = true;
+    MType *Ty = S.Double ? &CompileContext::F64Type : &CompileContext::F32Type;
+    MFunction F(Ctx, 0);
+    F.setFunctionType(MFunctionType::create(Ctx, *Ty, {Ty, Ty}));
+    MBasicBlock *Entry = F.createBasicBlock();
+    F.appendBlock(Entry);
+    auto *L = F.createInstruction<DreadInstruction>(false, *Entry, Ty, 0);
+    auto *R = F.createInstruction<DreadInstruction>(false, *Entry, Ty, 1);
+    auto *Expr =
+        F.createInstruction<BinaryInstruction>(false, *Entry, S.Op, Ty, L, R);
+    F.createInstruction<ReturnInstruction>(true, *Entry, Ty, Expr);
+    {
+      CgFunction MF(Ctx, F);
+      X86CgLowering Lowering(MF);
+      const std::string Dump = dumpCg(MF);
+      const CgRegister LReg = copyDestFromPhys(MF, X86::XMM0);
+      const CgRegister RReg = copyDestFromPhys(MF, X86::XMM1);
+      ASSERT_TRUE(LReg.isVirtual() && RReg.isVirtual()) << Dump;
+      unsigned Found = 0;
+      for (CgBasicBlock *BB : MF) {
+        for (auto &MI : *BB) {
+          if (MI.getOpcode() != S.MachineOp)
+            continue;
+          ASSERT_GE(MI.getNumOperands(), 3u) << Dump;
+          EXPECT_EQ(MI.getOperand(1).getReg(), LReg) << Dump;
+          EXPECT_EQ(MI.getOperand(2).getReg(), RReg) << Dump;
+          ++Found;
+        }
+      }
+      EXPECT_EQ(Found, 1u) << Dump;
+    }
+    finishLitmus(F);
+  }
+}
