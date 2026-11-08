@@ -1301,12 +1301,15 @@ TEST(X86CgPeephole,
   }
 }
 
-TEST(X86ScalarAVX, PolicyRequiresOptInHostAndGreedy) {
-  for (bool Requested : {false, true})
-    for (bool HostAVX : {false, true})
-      for (bool Greedy : {false, true})
-        EXPECT_EQ(ScalarAVXPolicy::enabled(Requested, HostAVX, Greedy),
-                  Requested && HostAVX && Greedy);
+TEST(X86ScalarAVX, PolicyRespectsHostAllocationAndControls) {
+  for (bool Forced : {false, true})
+    for (bool AutoEnabled : {false, true})
+      for (bool HostAVX : {false, true})
+        for (bool Greedy : {false, true})
+          for (bool Loop : {false, true})
+            EXPECT_EQ(ScalarAVXPolicy::enabled(Forced, AutoEnabled, HostAVX,
+                                               Greedy, Loop),
+                      HostAVX && Greedy && (Forced || (AutoEnabled && Loop)));
 }
 
 TEST(X86ScalarAVX, PreservesScalarOpcodeAndFeatureGate) {

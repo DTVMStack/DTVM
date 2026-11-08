@@ -4,10 +4,11 @@
 
 namespace COMPILER {
 
-// Keep opt-in, host support and allocation mode decisions in one place.
+// Keep explicit controls, host support and allocation decisions in one place.
 struct ScalarAVXPolicy {
-  static constexpr bool enabled(bool Requested, bool HostAVX, bool Greedy) {
-    return Requested && HostAVX && Greedy;
+  static constexpr bool enabled(bool Forced, bool AutoEnabled, bool HostAVX,
+                                bool Greedy, bool SelectedLoopGreedy) {
+    return HostAVX && Greedy && (Forced || (AutoEnabled && SelectedLoopGreedy));
   }
 };
 

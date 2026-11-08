@@ -37,6 +37,8 @@ struct RuntimeConfig {
   bool DisableMultipassGreedyRA = false;
   // Opt-in scalar AVX instructions in Greedy-allocated Wasm functions.
   bool EnableGreedyScalarAVX = false;
+  // Disable the automatic policy; explicit opt-in remains available.
+  bool DisableAutoGreedyScalarAVX = false;
   // Disable multithread of multipass JIT
   bool DisableMultipassMultithread = false;
   // Number of threads for multipass JIT if DisableMultipassMultithread is false

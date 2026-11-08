@@ -427,13 +427,16 @@ bool WasmJITCompiler::compileWasmToMC(
   if (LoopGreedy)
     DisableGreedyRA = false;
   Ctx.EnableGreedyScalarAVX = false;
-  if (Config.EnableGreedyScalarAVX && !DisableGreedyRA) {
+  if ((Config.EnableGreedyScalarAVX ||
+       (!Config.DisableAutoGreedyScalarAVX && LoopGreedy)) &&
+      !DisableGreedyRA) {
     static const bool HostHasAVX = [] {
       llvm::StringMap<bool> Features;
       return llvm::sys::getHostCPUFeatures(Features) && Features.lookup("avx");
     }();
     Ctx.EnableGreedyScalarAVX = ScalarAVXPolicy::enabled(
-        Config.EnableGreedyScalarAVX, HostHasAVX, !DisableGreedyRA);
+        Config.EnableGreedyScalarAVX, !Config.DisableAutoGreedyScalarAVX,
+        HostHasAVX, !DisableGreedyRA, LoopGreedy);
   }
   // Spill-slot metadata is only consumed by eligible demanded FastRA helpers.
   // Background/initial Greedy, callful and loop-free functions cannot use it.

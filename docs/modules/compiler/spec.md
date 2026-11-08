@@ -278,12 +278,15 @@ OOB). Load/store Scale stays 1. See
   folding dynamic addends into memory displacements. i64 keeps ADD/SUB
   because EVM ADC/SBB consume their carry/borrow flags.
 
-- Scalar AVX in Wasm multipass is opt-in (`EnableGreedyScalarAVX` /
-  `--enable-greedy-scalar-avx`) and requires both host AVX support and Greedy
-  register allocation for the function. FastRA and unsupported hosts retain
-  the existing SSE path. Only scalar f32/f64 add, sub, mul and div use the
-  three-operand AVX forms; operand order and trapping memory operations remain
-  unchanged. This does not enable FMA or globally enable AVX target features.
+- Scalar AVX in Wasm multipass is automatically selected for functions chosen
+  for initial lazy Greedy allocation by the existing loop and budget policy.
+  It requires host and OS AVX support. The auto policy can be disabled with
+  `--disable-auto-greedy-scalar-avx`; `--enable-greedy-scalar-avx` explicitly
+  enables it for other Greedy functions, subject to the same host check. FastRA
+  and unsupported hosts retain the existing SSE path. Only scalar f32/f64 add,
+  sub, mul and div use three-operand AVX forms; operand order and trapping
+  memory operations remain unchanged. This does not enable FMA or globally
+  enable AVX target features.
 
 ### Scalar x86 conversion dependency breaking
 

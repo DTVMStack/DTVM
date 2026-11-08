@@ -4,8 +4,10 @@
 - **Tier**: Light
 - **Date**: 2026-11-08
 
-The option `--enable-greedy-scalar-avx` enables non-fused scalar AVX arithmetic
-for Wasm functions already selected for Greedy allocation. It is off by default.
+In this original opt-in experiment, `--enable-greedy-scalar-avx` enabled
+non-fused scalar AVX arithmetic for Wasm functions already selected for Greedy
+allocation; it was off by default. See the subsequent automatic policy change
+for the current default behavior.
 The decision also requires LLVM's host AVX detection, which on x86 checks OS
 support for saving AVX state. FastRA and unsupported hosts use the SSE path.
 Only f32/f64 addition, subtraction, multiplication and division change; the
