@@ -1,0 +1,521 @@
+{
+  "source_revisions": {
+    "main": "7eb81b0",
+    "previous": "58b0fd3268656adc3eee08ad009feca1f04fc2aa folding dispatch disabled",
+    "candidate": "58b0fd3268656adc3eee08ad009feca1f04fc2aa"
+  },
+  "seed": 6461103,
+  "rounds": 15,
+  "excluded_warmup": -1,
+  "cpu_engines": 0,
+  "cpu_collector": 1,
+  "binaries": {
+    "main": {
+      "path": "/workspace/DTVM/work/urem-research/dtvm-urem",
+      "sha256": "662424b2d69a2080642912e7fe9c5e458d47f5a2fe905fae778a9c4b9d4ca4f9"
+    },
+    "previous": {
+      "path": "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+      "sha256": "93359dd36683de33baaaff4b9ba27332a0ab4e269267ecd9f80592b870648987"
+    },
+    "candidate": {
+      "path": "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+      "sha256": "68350488b8497af798d47679738297aa30b0744efba9ac77fa7b491b4292f532"
+    },
+    "wasmtime": {
+      "path": "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "sha256": "d7b7317b34a717f4b809df14657975e2ce83221a697167219abdad6e44c7a12c"
+    }
+  },
+  "inputs": {
+    "atax:1": {
+      "case": "atax",
+      "count": 1,
+      "canonical": "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm",
+      "canonical_sha256": "796cdecca44721f058f182e5e4994649f45a5b2f394f449d6bb63b6415aadd66",
+      "canonical_wat_sha256": "12f822ac177f2d373ccb476ec5b7150d51d022a745a53900bcb4f81e420f1078",
+      "wasm": "/workspace/DTVM/work/pr643-research/phases/atax-phases-r1.wasm",
+      "wasm_sha256": "b1d7035883869954027179cdbfcce99198ec9965d8a9a18b551182528bae7b44",
+      "exports": [
+        " (export \"memory\" (memory $0))",
+        " (export \"_start\" (func $_start))"
+      ],
+      "scratch_bytes": [
+        8,
+        76
+      ],
+      "stamps": [
+        "original_main pre-call",
+        "main entry",
+        "allocation complete",
+        "vector initialization complete",
+        "matrix initialization complete",
+        "numeric kernel complete",
+        "output/free/stack restore complete"
+      ],
+      "notes": [
+        "Original exported _start stays exported; main stays private; no new exports/background seed functions.",
+        "Constructors execute once, original_main repeats in same instance, destructors execute once.",
+        "Each original main call retains its original allocation/initialization/free/stack reset and stderr output.",
+        "Research calls are outside all original main loops, including qualifying FP loop subtrees.",
+        "Pre-call to main entry includes original_main wrapper/args work and demand compilation, not pure compiler time.",
+        "First stamp packet is a parent-observed result event before main returns, not a pure function-return timestamp.",
+        "Extra host-clock helper compile is excluded from the first internal pre-call timestamp, included in process-first-result/total."
+      ]
+    },
+    "atax:8": {
+      "case": "atax",
+      "count": 8,
+      "canonical": "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm",
+      "canonical_sha256": "796cdecca44721f058f182e5e4994649f45a5b2f394f449d6bb63b6415aadd66",
+      "canonical_wat_sha256": "12f822ac177f2d373ccb476ec5b7150d51d022a745a53900bcb4f81e420f1078",
+      "wasm": "/workspace/DTVM/work/pr643-research/phases/atax-phases-r8.wasm",
+      "wasm_sha256": "e8ed80b0e687f2d5af5edb3db6ece518016eaab113021691c9632cabbe6b3bd6",
+      "exports": [
+        " (export \"memory\" (memory $0))",
+        " (export \"_start\" (func $_start))"
+      ],
+      "scratch_bytes": [
+        8,
+        76
+      ],
+      "stamps": [
+        "original_main pre-call",
+        "main entry",
+        "allocation complete",
+        "vector initialization complete",
+        "matrix initialization complete",
+        "numeric kernel complete",
+        "output/free/stack restore complete"
+      ],
+      "notes": [
+        "Original exported _start stays exported; main stays private; no new exports/background seed functions.",
+        "Constructors execute once, original_main repeats in same instance, destructors execute once.",
+        "Each original main call retains its original allocation/initialization/free/stack reset and stderr output.",
+        "Research calls are outside all original main loops, including qualifying FP loop subtrees.",
+        "Pre-call to main entry includes original_main wrapper/args work and demand compilation, not pure compiler time.",
+        "First stamp packet is a parent-observed result event before main returns, not a pure function-return timestamp.",
+        "Extra host-clock helper compile is excluded from the first internal pre-call timestamp, included in process-first-result/total."
+      ]
+    },
+    "atax:30": {
+      "case": "atax",
+      "count": 30,
+      "canonical": "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/atax.wasm",
+      "canonical_sha256": "796cdecca44721f058f182e5e4994649f45a5b2f394f449d6bb63b6415aadd66",
+      "canonical_wat_sha256": "12f822ac177f2d373ccb476ec5b7150d51d022a745a53900bcb4f81e420f1078",
+      "wasm": "/workspace/DTVM/work/pr643-research/phases/atax-phases-r30.wasm",
+      "wasm_sha256": "deb3ed2c45b869171cd25fd590861e5631d6435cd1bbe5dfed337aac79f30583",
+      "exports": [
+        " (export \"memory\" (memory $0))",
+        " (export \"_start\" (func $_start))"
+      ],
+      "scratch_bytes": [
+        8,
+        76
+      ],
+      "stamps": [
+        "original_main pre-call",
+        "main entry",
+        "allocation complete",
+        "vector initialization complete",
+        "matrix initialization complete",
+        "numeric kernel complete",
+        "output/free/stack restore complete"
+      ],
+      "notes": [
+        "Original exported _start stays exported; main stays private; no new exports/background seed functions.",
+        "Constructors execute once, original_main repeats in same instance, destructors execute once.",
+        "Each original main call retains its original allocation/initialization/free/stack reset and stderr output.",
+        "Research calls are outside all original main loops, including qualifying FP loop subtrees.",
+        "Pre-call to main entry includes original_main wrapper/args work and demand compilation, not pure compiler time.",
+        "First stamp packet is a parent-observed result event before main returns, not a pure function-return timestamp.",
+        "Extra host-clock helper compile is excluded from the first internal pre-call timestamp, included in process-first-result/total."
+      ]
+    },
+    "bicg:1": {
+      "case": "bicg",
+      "count": 1,
+      "canonical": "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm",
+      "canonical_sha256": "5017122c17ebff6f927d7fd6785fadb154ebfda6a8fb1c1f4721b734cbd1febe",
+      "canonical_wat_sha256": "176e0f50fbdb7002ee5ef735d4077e532164a83a71b45f88ae56c6379f0b1466",
+      "wasm": "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r1.wasm",
+      "wasm_sha256": "8f57cbe198759597e7f7126aee945b67c8d70d9dcea880cec1d09a15148757d4",
+      "exports": [
+        " (export \"memory\" (memory $0))",
+        " (export \"_start\" (func $_start))"
+      ],
+      "scratch_bytes": [
+        8,
+        76
+      ],
+      "stamps": [
+        "original_main pre-call",
+        "main entry",
+        "allocation complete",
+        "vector initialization complete",
+        "matrix initialization complete",
+        "numeric kernel complete",
+        "output/free/stack restore complete"
+      ],
+      "notes": [
+        "Original exported _start stays exported; main stays private; no new exports/background seed functions.",
+        "Constructors execute once, original_main repeats in same instance, destructors execute once.",
+        "Each original main call retains its original allocation/initialization/free/stack reset and stderr output.",
+        "Research calls are outside all original main loops, including qualifying FP loop subtrees.",
+        "Pre-call to main entry includes original_main wrapper/args work and demand compilation, not pure compiler time.",
+        "First stamp packet is a parent-observed result event before main returns, not a pure function-return timestamp.",
+        "Extra host-clock helper compile is excluded from the first internal pre-call timestamp, included in process-first-result/total."
+      ]
+    },
+    "bicg:8": {
+      "case": "bicg",
+      "count": 8,
+      "canonical": "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm",
+      "canonical_sha256": "5017122c17ebff6f927d7fd6785fadb154ebfda6a8fb1c1f4721b734cbd1febe",
+      "canonical_wat_sha256": "176e0f50fbdb7002ee5ef735d4077e532164a83a71b45f88ae56c6379f0b1466",
+      "wasm": "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r8.wasm",
+      "wasm_sha256": "fc9778a990d165ac9be5cabcd1434439acdef9390cc84c7f9be198788c6dbcf5",
+      "exports": [
+        " (export \"memory\" (memory $0))",
+        " (export \"_start\" (func $_start))"
+      ],
+      "scratch_bytes": [
+        8,
+        76
+      ],
+      "stamps": [
+        "original_main pre-call",
+        "main entry",
+        "allocation complete",
+        "vector initialization complete",
+        "matrix initialization complete",
+        "numeric kernel complete",
+        "output/free/stack restore complete"
+      ],
+      "notes": [
+        "Original exported _start stays exported; main stays private; no new exports/background seed functions.",
+        "Constructors execute once, original_main repeats in same instance, destructors execute once.",
+        "Each original main call retains its original allocation/initialization/free/stack reset and stderr output.",
+        "Research calls are outside all original main loops, including qualifying FP loop subtrees.",
+        "Pre-call to main entry includes original_main wrapper/args work and demand compilation, not pure compiler time.",
+        "First stamp packet is a parent-observed result event before main returns, not a pure function-return timestamp.",
+        "Extra host-clock helper compile is excluded from the first internal pre-call timestamp, included in process-first-result/total."
+      ]
+    },
+    "bicg:30": {
+      "case": "bicg",
+      "count": 30,
+      "canonical": "/workspace/DTVM/benchmarks/paper/benchmarks/polybenchc/bicg.wasm",
+      "canonical_sha256": "5017122c17ebff6f927d7fd6785fadb154ebfda6a8fb1c1f4721b734cbd1febe",
+      "canonical_wat_sha256": "176e0f50fbdb7002ee5ef735d4077e532164a83a71b45f88ae56c6379f0b1466",
+      "wasm": "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r30.wasm",
+      "wasm_sha256": "c676de145352d809fb09080e2e5b126fc70ca46a56d08db27f93e7077407f533",
+      "exports": [
+        " (export \"memory\" (memory $0))",
+        " (export \"_start\" (func $_start))"
+      ],
+      "scratch_bytes": [
+        8,
+        76
+      ],
+      "stamps": [
+        "original_main pre-call",
+        "main entry",
+        "allocation complete",
+        "vector initialization complete",
+        "matrix initialization complete",
+        "numeric kernel complete",
+        "output/free/stack restore complete"
+      ],
+      "notes": [
+        "Original exported _start stays exported; main stays private; no new exports/background seed functions.",
+        "Constructors execute once, original_main repeats in same instance, destructors execute once.",
+        "Each original main call retains its original allocation/initialization/free/stack reset and stderr output.",
+        "Research calls are outside all original main loops, including qualifying FP loop subtrees.",
+        "Pre-call to main entry includes original_main wrapper/args work and demand compilation, not pure compiler time.",
+        "First stamp packet is a parent-observed result event before main returns, not a pure function-return timestamp.",
+        "Extra host-clock helper compile is excluded from the first internal pre-call timestamp, included in process-first-result/total."
+      ]
+    }
+  },
+  "boundary": "Parent pre-spawn through exit, plus parent receipt of each 56-byte packet. Internal WASI monotonic stamps are analyzed separately; do not compare internal epoch to parent epoch. All engines receive same modified Wasm; no new exports; original main repeats with original init/free/reset.",
+  "jobs": [
+    {
+      "case": "atax",
+      "count": 1,
+      "commands": {
+        "main": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/urem-research/dtvm-urem",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r1.wasm"
+        ],
+        "previous": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r1.wasm"
+        ],
+        "candidate": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r1.wasm"
+        ],
+        "wasmtime": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+          "run",
+          "-C",
+          "cache=n",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r1.wasm"
+        ]
+      }
+    },
+    {
+      "case": "atax",
+      "count": 8,
+      "commands": {
+        "main": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/urem-research/dtvm-urem",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r8.wasm"
+        ],
+        "previous": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r8.wasm"
+        ],
+        "candidate": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r8.wasm"
+        ],
+        "wasmtime": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+          "run",
+          "-C",
+          "cache=n",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r8.wasm"
+        ]
+      }
+    },
+    {
+      "case": "atax",
+      "count": 30,
+      "commands": {
+        "main": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/urem-research/dtvm-urem",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r30.wasm"
+        ],
+        "previous": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r30.wasm"
+        ],
+        "candidate": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r30.wasm"
+        ],
+        "wasmtime": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+          "run",
+          "-C",
+          "cache=n",
+          "/workspace/DTVM/work/pr643-research/phases/atax-phases-r30.wasm"
+        ]
+      }
+    },
+    {
+      "case": "bicg",
+      "count": 1,
+      "commands": {
+        "main": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/urem-research/dtvm-urem",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r1.wasm"
+        ],
+        "previous": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r1.wasm"
+        ],
+        "candidate": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r1.wasm"
+        ],
+        "wasmtime": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+          "run",
+          "-C",
+          "cache=n",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r1.wasm"
+        ]
+      }
+    },
+    {
+      "case": "bicg",
+      "count": 8,
+      "commands": {
+        "main": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/urem-research/dtvm-urem",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r8.wasm"
+        ],
+        "previous": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r8.wasm"
+        ],
+        "candidate": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r8.wasm"
+        ],
+        "wasmtime": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+          "run",
+          "-C",
+          "cache=n",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r8.wasm"
+        ]
+      }
+    },
+    {
+      "case": "bicg",
+      "count": 30,
+      "commands": {
+        "main": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/urem-research/dtvm-urem",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r30.wasm"
+        ],
+        "previous": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-private",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r30.wasm"
+        ],
+        "candidate": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r30.wasm"
+        ],
+        "wasmtime": [
+          "taskset",
+          "-c",
+          "0",
+          "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+          "run",
+          "-C",
+          "cache=n",
+          "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r30.wasm"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,468 @@
+{
+  "case": "bicg-repeat30",
+  "engine": "main",
+  "command": [
+    "/workspace/DTVM/work/combined-optimization/v2/dtvm-combined-diagnostic",
+    "-m",
+    "multipass",
+    "--enable-multipass-lazy",
+    "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r30.wasm"
+  ],
+  "exit": 0,
+  "total_samples": 182,
+  "jit_samples": 170,
+  "events": [
+    {
+      "index": 9,
+      "greedy": 0,
+      "address": 140651473674240,
+      "size": 189,
+      "compile_ns": 1063858,
+      "name": "9",
+      "file": "func-9-0-7febf9202000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 8,
+      "greedy": 0,
+      "address": 140651473678336,
+      "size": 14,
+      "compile_ns": 96493,
+      "name": "8",
+      "file": "func-8-0-7febf9203000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 60,
+      "greedy": 0,
+      "address": 140651473682432,
+      "size": 127,
+      "compile_ns": 113187,
+      "name": "60",
+      "file": "func-60-0-7febf9204000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 20,
+      "greedy": 0,
+      "address": 140651473686528,
+      "size": 33,
+      "compile_ns": 86648,
+      "name": "20",
+      "file": "func-20-0-7febf9205000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 22,
+      "greedy": 0,
+      "address": 140651473690624,
+      "size": 655,
+      "compile_ns": 315585,
+      "name": "22",
+      "file": "func-22-0-7febf9206000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 12,
+      "greedy": 0,
+      "address": 140651473694720,
+      "size": 33,
+      "compile_ns": 91836,
+      "name": "12",
+      "file": "func-12-0-7febf9207000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 9,
+      "greedy": 1,
+      "address": 140651473698816,
+      "size": 174,
+      "compile_ns": 874620,
+      "name": "9",
+      "file": "func-9-1-7febf9208000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 13,
+      "greedy": 0,
+      "address": 140651473702912,
+      "size": 9631,
+      "compile_ns": 4903179,
+      "name": "13",
+      "file": "func-13-0-7febf9209000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 24,
+      "greedy": 0,
+      "address": 140651473715200,
+      "size": 244,
+      "compile_ns": 196900,
+      "name": "24",
+      "file": "func-24-0-7febf920c000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 16,
+      "greedy": 0,
+      "address": 140651473719296,
+      "size": 235,
+      "compile_ns": 166575,
+      "name": "16",
+      "file": "func-16-0-7febf920d000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 52,
+      "greedy": 0,
+      "address": 140651473723392,
+      "size": 627,
+      "compile_ns": 267755,
+      "name": "52",
+      "file": "func-52-0-7febf920e000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 10,
+      "greedy": 1,
+      "address": 140651473727488,
+      "size": 1429,
+      "compile_ns": 1390149,
+      "name": "10",
+      "file": "func-10-1-7febf920f000.bin",
+      "samples": 157,
+      "pc_offsets": {
+        "541": 29,
+        "746": 34,
+        "726": 62,
+        "752": 9,
+        "711": 6,
+        "516": 3,
+        "525": 1,
+        "513": 4,
+        "493": 1,
+        "546": 3,
+        "702": 2,
+        "554": 1,
+        "511": 2
+      }
+    },
+    {
+      "index": 11,
+      "greedy": 0,
+      "address": 140651473731584,
+      "size": 288,
+      "compile_ns": 182419,
+      "name": "11",
+      "file": "func-11-0-7febf9210000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 18,
+      "greedy": 0,
+      "address": 140651473735680,
+      "size": 242,
+      "compile_ns": 249788,
+      "name": "18",
+      "file": "func-18-0-7febf9211000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 19,
+      "greedy": 0,
+      "address": 140651473739776,
+      "size": 744,
+      "compile_ns": 398067,
+      "name": "19",
+      "file": "func-19-0-7febf9212000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 17,
+      "greedy": 0,
+      "address": 140651473743872,
+      "size": 2568,
+      "compile_ns": 973516,
+      "name": "17",
+      "file": "func-17-0-7febf9213000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 30,
+      "greedy": 0,
+      "address": 140651473747968,
+      "size": 899,
+      "compile_ns": 573896,
+      "name": "30",
+      "file": "func-30-0-7febf9214000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 28,
+      "greedy": 0,
+      "address": 140651473752064,
+      "size": 162,
+      "compile_ns": 177442,
+      "name": "28",
+      "file": "func-28-0-7febf9215000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 36,
+      "greedy": 0,
+      "address": 140651473756160,
+      "size": 634,
+      "compile_ns": 287454,
+      "name": "36",
+      "file": "func-36-0-7febf9216000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 35,
+      "greedy": 0,
+      "address": 140651473760256,
+      "size": 273,
+      "compile_ns": 154208,
+      "name": "35",
+      "file": "func-35-0-7febf9217000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 45,
+      "greedy": 0,
+      "address": 140651473764352,
+      "size": 106,
+      "compile_ns": 114409,
+      "name": "45",
+      "file": "func-45-0-7febf9218000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 41,
+      "greedy": 0,
+      "address": 140651473768448,
+      "size": 847,
+      "compile_ns": 312781,
+      "name": "41",
+      "file": "func-41-0-7febf9219000.bin",
+      "samples": 2,
+      "pc_offsets": {
+        "560": 1,
+        "503": 1
+      }
+    },
+    {
+      "index": 42,
+      "greedy": 0,
+      "address": 140651473772544,
+      "size": 20404,
+      "compile_ns": 6385394,
+      "name": "42",
+      "file": "func-42-0-7febf921a000.bin",
+      "samples": 8,
+      "pc_offsets": {
+        "9824": 1,
+        "9116": 1,
+        "8310": 1,
+        "10377": 1,
+        "1208": 1,
+        "13272": 1,
+        "339": 1,
+        "13493": 1
+      }
+    },
+    {
+      "index": 29,
+      "greedy": 0,
+      "address": 140651473793024,
+      "size": 816,
+      "compile_ns": 408492,
+      "name": "29",
+      "file": "func-29-0-7febf921f000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 51,
+      "greedy": 0,
+      "address": 140651473797120,
+      "size": 1999,
+      "compile_ns": 733191,
+      "name": "51",
+      "file": "func-51-0-7febf9220000.bin",
+      "samples": 1,
+      "pc_offsets": {
+        "148": 1
+      }
+    },
+    {
+      "index": 43,
+      "greedy": 0,
+      "address": 140651473801216,
+      "size": 984,
+      "compile_ns": 364297,
+      "name": "43",
+      "file": "func-43-0-7febf9221000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 50,
+      "greedy": 0,
+      "address": 140651473805312,
+      "size": 62,
+      "compile_ns": 112606,
+      "name": "50",
+      "file": "func-50-0-7febf9222000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 54,
+      "greedy": 0,
+      "address": 140651473809408,
+      "size": 400,
+      "compile_ns": 214176,
+      "name": "54",
+      "file": "func-54-0-7febf9223000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 38,
+      "greedy": 0,
+      "address": 140651473813504,
+      "size": 171,
+      "compile_ns": 242547,
+      "name": "38",
+      "file": "func-38-0-7febf9224000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 37,
+      "greedy": 0,
+      "address": 140651473817600,
+      "size": 516,
+      "compile_ns": 216810,
+      "name": "37",
+      "file": "func-37-0-7febf9225000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 59,
+      "greedy": 0,
+      "address": 140651473821696,
+      "size": 296,
+      "compile_ns": 172744,
+      "name": "59",
+      "file": "func-59-0-7febf9226000.bin",
+      "samples": 2,
+      "pc_offsets": {
+        "71": 1,
+        "270": 1
+      }
+    },
+    {
+      "index": 14,
+      "greedy": 0,
+      "address": 140651473825792,
+      "size": 19,
+      "compile_ns": 107238,
+      "name": "14",
+      "file": "func-14-0-7febf9227000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 15,
+      "greedy": 0,
+      "address": 140651473829888,
+      "size": 2735,
+      "compile_ns": 879276,
+      "name": "15",
+      "file": "func-15-0-7febf9228000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 61,
+      "greedy": 0,
+      "address": 140651473833984,
+      "size": 199,
+      "compile_ns": 144593,
+      "name": "61",
+      "file": "func-61-0-7febf9229000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 26,
+      "greedy": 0,
+      "address": 140651473838080,
+      "size": 40,
+      "compile_ns": 274805,
+      "name": "26",
+      "file": "func-26-0-7febf922a000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 25,
+      "greedy": 0,
+      "address": 140651473842176,
+      "size": 14,
+      "compile_ns": 105205,
+      "name": "25",
+      "file": "func-25-0-7febf922b000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 33,
+      "greedy": 0,
+      "address": 140651473846272,
+      "size": 1816,
+      "compile_ns": 602619,
+      "name": "33",
+      "file": "func-33-0-7febf922c000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "index": 34,
+      "greedy": 0,
+      "address": 140651473850368,
+      "size": 33,
+      "compile_ns": 102752,
+      "name": "34",
+      "file": "func-34-0-7febf922d000.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    }
+  ],
+  "stdout_sha256": "63eae2ded2fcd22733b0b86ad297541e3586959f0cfc33b7da770fe1e4da87d4",
+  "stderr_sha256": "fc6907e2f67a812db7b0f9cc72d5e1c95049862b11364baaba946bf617a35fa8",
+  "method": "Untimed diagnostic, SIGPROF with requested 1 ms interval (actual kernel granularity may be coarser); includes startup and compile; static byte dumps include pools. Dumping perturbs policy elapsed budgets. PC samples are descriptive, not instruction retired counts."
+}

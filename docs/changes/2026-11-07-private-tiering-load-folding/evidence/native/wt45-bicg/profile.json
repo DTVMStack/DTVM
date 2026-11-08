@@ -1,0 +1,518 @@
+{
+  "case": "bicg-repeat30",
+  "engine": "wt45",
+  "command": [
+    "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+    "run",
+    "--profile=perfmap",
+    "-C",
+    "cache=n",
+    "/workspace/DTVM/work/pr643-research/phases/bicg-phases-r30.wasm"
+  ],
+  "exit": 0,
+  "total_samples": 205,
+  "jit_samples": 167,
+  "events": [
+    {
+      "address": 139921440260096,
+      "size": 9,
+      "name": "wasm[0]::function[8]",
+      "file": "func-0.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440260128,
+      "size": 178,
+      "name": "wasm[0]::function[9]",
+      "file": "func-1.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440260320,
+      "size": 1528,
+      "name": "wasm[0]::function[10]",
+      "file": "func-2.bin",
+      "samples": 160,
+      "pc_offsets": {
+        "470": 2,
+        "445": 10,
+        "644": 1,
+        "658": 53,
+        "685": 40,
+        "467": 27,
+        "640": 5,
+        "692": 7,
+        "611": 1,
+        "497": 2,
+        "630": 2,
+        "459": 3,
+        "482": 4,
+        "681": 2,
+        "1109": 1
+      }
+    },
+    {
+      "address": 139921440261856,
+      "size": 227,
+      "name": "wasm[0]::function[11]",
+      "file": "func-3.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440262112,
+      "size": 40,
+      "name": "wasm[0]::function[12]",
+      "file": "func-4.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440262176,
+      "size": 7648,
+      "name": "wasm[0]::function[13]",
+      "file": "func-5.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440269824,
+      "size": 40,
+      "name": "wasm[0]::function[14]",
+      "file": "func-6.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440269888,
+      "size": 2120,
+      "name": "wasm[0]::function[15]",
+      "file": "func-7.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440272032,
+      "size": 216,
+      "name": "wasm[0]::function[16]",
+      "file": "func-8.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440272256,
+      "size": 1968,
+      "name": "wasm[0]::function[17]",
+      "file": "func-9.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440274240,
+      "size": 234,
+      "name": "wasm[0]::function[18]",
+      "file": "func-10.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440274496,
+      "size": 616,
+      "name": "wasm[0]::function[19]",
+      "file": "func-11.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440275136,
+      "size": 40,
+      "name": "wasm[0]::function[20]",
+      "file": "func-12.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440275200,
+      "size": 46,
+      "name": "wasm[0]::function[21]",
+      "file": "func-13.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440275264,
+      "size": 431,
+      "name": "wasm[0]::function[22]",
+      "file": "func-14.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440275712,
+      "size": 6,
+      "name": "wasm[0]::function[23]",
+      "file": "func-15.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440275744,
+      "size": 192,
+      "name": "wasm[0]::function[24]",
+      "file": "func-16.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440275936,
+      "size": 9,
+      "name": "wasm[0]::function[25]",
+      "file": "func-17.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440275968,
+      "size": 70,
+      "name": "wasm[0]::function[26]",
+      "file": "func-18.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440276064,
+      "size": 81,
+      "name": "wasm[0]::function[27]",
+      "file": "func-19.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440276160,
+      "size": 93,
+      "name": "wasm[0]::function[28]",
+      "file": "func-20.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440276256,
+      "size": 666,
+      "name": "wasm[0]::function[29]",
+      "file": "func-21.bin",
+      "samples": 2,
+      "pc_offsets": {
+        "625": 1,
+        "103": 1
+      }
+    },
+    {
+      "address": 139921440276928,
+      "size": 793,
+      "name": "wasm[0]::function[30]",
+      "file": "func-22.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440277728,
+      "size": 192,
+      "name": "wasm[0]::function[31]",
+      "file": "func-23.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440277920,
+      "size": 52,
+      "name": "wasm[0]::function[32]",
+      "file": "func-24.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440277984,
+      "size": 1324,
+      "name": "wasm[0]::function[33]",
+      "file": "func-25.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440279328,
+      "size": 14,
+      "name": "wasm[0]::function[34]",
+      "file": "func-26.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440279360,
+      "size": 195,
+      "name": "wasm[0]::function[35]",
+      "file": "func-27.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440279584,
+      "size": 560,
+      "name": "wasm[0]::function[36]",
+      "file": "func-28.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440280160,
+      "size": 420,
+      "name": "wasm[0]::function[37]",
+      "file": "func-29.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440280608,
+      "size": 129,
+      "name": "wasm[0]::function[38]",
+      "file": "func-30.bin",
+      "samples": 1,
+      "pc_offsets": {
+        "125": 1
+      }
+    },
+    {
+      "address": 139921440280768,
+      "size": 120,
+      "name": "wasm[0]::function[39]",
+      "file": "func-31.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440280896,
+      "size": 139,
+      "name": "wasm[0]::function[40]",
+      "file": "func-32.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440281056,
+      "size": 704,
+      "name": "wasm[0]::function[41]",
+      "file": "func-33.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440281760,
+      "size": 22112,
+      "name": "wasm[0]::function[42]",
+      "file": "func-34.bin",
+      "samples": 4,
+      "pc_offsets": {
+        "20958": 1,
+        "195": 1,
+        "404": 1,
+        "660": 1
+      }
+    },
+    {
+      "address": 139921440303872,
+      "size": 801,
+      "name": "wasm[0]::function[43]",
+      "file": "func-35.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440304704,
+      "size": 69,
+      "name": "wasm[0]::function[44]",
+      "file": "func-36.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440304800,
+      "size": 106,
+      "name": "wasm[0]::function[45]",
+      "file": "func-37.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440304928,
+      "size": 112,
+      "name": "wasm[0]::function[46]",
+      "file": "func-38.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440305056,
+      "size": 52,
+      "name": "wasm[0]::function[47]",
+      "file": "func-39.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440305120,
+      "size": 201,
+      "name": "wasm[0]::function[48]",
+      "file": "func-40.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440305344,
+      "size": 230,
+      "name": "wasm[0]::function[49]",
+      "file": "func-41.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440305600,
+      "size": 95,
+      "name": "wasm[0]::function[50]",
+      "file": "func-42.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440305696,
+      "size": 1624,
+      "name": "wasm[0]::function[51]",
+      "file": "func-43.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440307328,
+      "size": 335,
+      "name": "wasm[0]::function[52]",
+      "file": "func-44.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440307680,
+      "size": 191,
+      "name": "wasm[0]::function[53]",
+      "file": "func-45.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440307872,
+      "size": 332,
+      "name": "wasm[0]::function[54]",
+      "file": "func-46.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440308224,
+      "size": 12,
+      "name": "wasm[0]::function[55]",
+      "file": "func-47.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440308256,
+      "size": 40,
+      "name": "wasm[0]::function[56]",
+      "file": "func-48.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440308320,
+      "size": 61,
+      "name": "wasm[0]::function[57]",
+      "file": "func-49.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440308384,
+      "size": 391,
+      "name": "wasm[0]::function[58]",
+      "file": "func-50.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440308800,
+      "size": 304,
+      "name": "wasm[0]::function[59]",
+      "file": "func-51.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440309120,
+      "size": 78,
+      "name": "wasm[0]::function[60]",
+      "file": "func-52.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440309216,
+      "size": 139,
+      "name": "wasm[0]::function[61]",
+      "file": "func-53.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440309355,
+      "size": 139,
+      "name": "wasm[0]::array_to_wasm_trampoline[9]",
+      "file": "func-54.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440309494,
+      "size": 166,
+      "name": "wasm[0]::array_to_wasm_trampoline[32]",
+      "file": "func-55.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440309660,
+      "size": 164,
+      "name": "wasm[0]::array_to_wasm_trampoline[36]",
+      "file": "func-56.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440309824,
+      "size": 157,
+      "name": "wasm[0]::array_to_wasm_trampoline[47]",
+      "file": "func-57.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    },
+    {
+      "address": 139921440309981,
+      "size": 164,
+      "name": "wasm[0]::array_to_wasm_trampoline[49]",
+      "file": "func-58.bin",
+      "samples": 0,
+      "pc_offsets": {}
+    }
+  ],
+  "stdout_sha256": "ade8151aa6d435cdd5700ad187c31d6fb3e3b20529c0c4a0cf4a358c433c41f3",
+  "stderr_sha256": "fc6907e2f67a812db7b0f9cc72d5e1c95049862b11364baaba946bf617a35fa8",
+  "method": "Untimed diagnostic, SIGPROF 1 ms; includes startup and compile; static byte dumps include pools. Dumping perturbs policy elapsed budgets. PC samples are descriptive, not instruction retired counts."
+}

@@ -88,6 +88,7 @@ public:
     BasicBlocks.clear();
     Variables.clear();
     Instructions.clear();
+    MayHaveEvmUmul128Hi = false;
     ExceptionSetBBs.clear();
     ExceptionHandlingBB = nullptr;
     ExceptionReturnBB = nullptr;
@@ -184,10 +185,15 @@ public:
 
   uint32_t getNumInstructions() const { return Instructions.size(); }
 
+  // Conservative creation-time presence bit. Deleting an instruction need not
+  // clear it: a false value must prove that the high-multiply walk is needless.
+  bool mayHaveEvmUmul128Hi() const { return MayHaveEvmUmul128Hi; }
+
   template <class T, typename... Arguments>
   T *createInstruction(bool IsStmt, MBasicBlock &BB, Arguments &&...Args) {
     T *Inst = T::create(Ctx.MemPool, std::forward<Arguments>(Args)...);
     Instructions.emplace_back(Inst);
+    MayHaveEvmUmul128Hi |= Inst->getKind() == MInstruction::EVM_UMUL128_HI;
 
     if (IsStmt) {
       BB.addStatement(Inst);
@@ -200,6 +206,7 @@ public:
   T *createInstructionBeforeFirstNonPhi(MBasicBlock &BB, Arguments &&...Args) {
     T *Inst = T::create(Ctx.MemPool, std::forward<Arguments>(Args)...);
     Instructions.emplace_back(Inst);
+    MayHaveEvmUmul128Hi |= Inst->getKind() == MInstruction::EVM_UMUL128_HI;
     BB.addStatementBeforeFirstNonPhi(Inst);
     return Inst;
   }
@@ -222,6 +229,7 @@ public:
       freeInstruction(Inst);
     }
     Instructions.clear();
+    MayHaveEvmUmul128Hi = false;
   }
 
   auto getFuncIdx() const { return FuncIdx; }
@@ -260,6 +268,7 @@ private:
   std::vector<Variable *> Variables;
   std::vector<MBasicBlock *> BasicBlocks;
   std::vector<MInstruction *> Instructions;
+  bool MayHaveEvmUmul128Hi = false;
   std::map<ErrorCode, MBasicBlock *> ExceptionSetBBs;
   MBasicBlock *ExceptionHandlingBB = nullptr;
   MBasicBlock *ExceptionReturnBB = nullptr;

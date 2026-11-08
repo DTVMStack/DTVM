@@ -388,7 +388,8 @@ void JITCompilerBase::emitObjectBuffer(CompileContext *Ctx) {
 bool WasmJITCompiler::compileWasmToMC(
     WasmFrontendContext &Ctx, MModule &Mod, uint32_t FuncIdx,
     bool DisableGreedyRA, uint8_t *LoopTick, bool AllowLoopGreedy,
-    const LazyInitialRAPolicy::Timer *CompileTimer) {
+    const LazyInitialRAPolicy::Timer *CompileTimer,
+    bool CollectPrivateMetadata) {
   if (Ctx.Inited) {
     // Release all memory allocated by previous function compilation
     Ctx.MemPool = CompileMemPool();
@@ -400,8 +401,7 @@ bool WasmJITCompiler::compileWasmToMC(
   }
 
   Ctx.LoopTick = LoopTick;
-  Ctx.CollectTieringMetadata =
-      Config.EnableLazyPrivateTiering && DisableGreedyRA;
+  Ctx.CollectTieringMetadata = false;
   uint32_t RealFuncIdx = FuncIdx + WasmMod->getNumImportFunctions();
   TypeEntry *FuncType = WasmMod->getFunctionType(RealFuncIdx);
   ZEN_ASSERT(FuncType);
@@ -424,6 +424,10 @@ bool WasmJITCompiler::compileWasmToMC(
       CompileTimer ? CompileTimer->elapsed() : 0));
   if (LoopGreedy)
     DisableGreedyRA = false;
+  // Spill-slot metadata is only consumed by eligible demanded FastRA helpers.
+  // Background/initial Greedy, callful and loop-free functions cannot use it.
+  Ctx.CollectTieringMetadata = CollectPrivateMetadata && DisableGreedyRA &&
+                               Ctx.NumWasmLoops && !Ctx.NumGuestCalls;
   compileMIRToCgIR(Mod, MFunc, CgFunc, DisableGreedyRA);
   Ctx.getMCLowering().runOnCgFunction(CgFunc);
   return LoopGreedy;
@@ -625,11 +629,6 @@ LazyJITCompiler::LazyJITCompiler(Module *WasmMod)
         uint64_t(Config.LazyTierBudgetMs) * 1000000);
     PrivateFunctions =
         std::make_unique<PrivateFunction[]>(NumInternalFunctions);
-    for (uint32_t I = 0; I < NumInternalFunctions; ++I) {
-      PrivateFunctions[I].Owner = this;
-      PrivateFunctions[I].Index = I;
-      PrivateFunctions[I].Eligible = isPrivateCandidate(I);
-    }
   }
 #endif
 }
@@ -774,13 +773,15 @@ void LazyJITCompiler::precompile() {
   Stats.stopRecord(Timer);
 }
 
-uint8_t *LazyJITCompiler::compileFunction(
-    WasmFrontendContext &Ctx, uint32_t FuncIdx, bool DisableGreedyRA,
-    uint8_t *LoopTick, bool AllowLoopGreedy, bool *SelectedLoopGreedy) {
+uint8_t *
+LazyJITCompiler::compileFunction(WasmFrontendContext &Ctx, uint32_t FuncIdx,
+                                 bool DisableGreedyRA, uint8_t *LoopTick,
+                                 bool AllowLoopGreedy, bool *SelectedLoopGreedy,
+                                 bool CollectPrivateMetadata) {
   LazyInitialRAPolicy::Timer BudgetTimer(InitialRAPolicy, AllowLoopGreedy);
   const bool LoopGreedy =
       compileWasmToMC(Ctx, *Mod, FuncIdx, DisableGreedyRA, LoopTick,
-                      AllowLoopGreedy, &BudgetTimer);
+                      AllowLoopGreedy, &BudgetTimer, CollectPrivateMetadata);
   if (SelectedLoopGreedy)
     *SelectedLoopGreedy = LoopGreedy;
   emitObjectBuffer(&Ctx);
@@ -862,21 +863,21 @@ uint8_t *LazyJITCompiler::compileFunctionOnRequest(uint8_t *FuncStubCodePtr) {
   // Prefer FastRA for startup, allowing bounded numeric loop nests to use
   // Greedy immediately. Parallel foreground requests may each produce a body;
   // at least this caller gets a runnable pointer even if stub CAS loses.
-  const auto PrivateStart = PrivateFunctions
+  const bool PrivateCandidate = PrivateFunctions && isPrivateCandidate(FuncIdx);
+  const auto PrivateStart = PrivateCandidate
                                 ? std::chrono::steady_clock::now()
                                 : std::chrono::steady_clock::time_point{};
   bool SelectedLoopGreedy = false;
-  uint8_t *JITFuncCodePtr =
-      compileFunction(*MainContext, FuncIdx, true, nullptr,
-                      !Config.DisableMultipassGreedyRA, &SelectedLoopGreedy);
+  uint8_t *JITFuncCodePtr = compileFunction(
+      *MainContext, FuncIdx, true, nullptr, !Config.DisableMultipassGreedyRA,
+      &SelectedLoopGreedy, PrivateCandidate);
   const auto PrivateNs =
-      PrivateFunctions ? std::chrono::duration_cast<std::chrono::nanoseconds>(
+      PrivateCandidate ? std::chrono::duration_cast<std::chrono::nanoseconds>(
                              std::chrono::steady_clock::now() - PrivateStart)
                              .count()
                        : 0;
   Stats.stopRecord(Timer);
-  if (!SelectedLoopGreedy && PrivateFunctions &&
-      PrivateFunctions[FuncIdx].Eligible && MainContext->NumWasmLoops &&
+  if (!SelectedLoopGreedy && PrivateCandidate && MainContext->NumWasmLoops &&
       !MainContext->NumGuestCalls && MainContext->LastSpillSlots >= 2 &&
       PrivateEntryGates.load(std::memory_order_relaxed) <
           std::min<uint64_t>(64, uint64_t(Config.LazyTierMaxFunctions) * 4) &&
@@ -884,6 +885,8 @@ uint8_t *LazyJITCompiler::compileFunctionOnRequest(uint8_t *FuncStubCodePtr) {
           uint64_t(Config.LazyTierBudgetMs) * 1000000) {
     std::lock_guard<std::mutex> PrivateLock(PrivateMutex);
     auto &P = PrivateFunctions[FuncIdx];
+    P.Owner = this;
+    P.Index = FuncIdx;
     P.OriginalFast = JITFuncCodePtr;
     P.SpillSlots = MainContext->LastSpillSlots;
     P.FastCompileNs = static_cast<uint64_t>(PrivateNs);

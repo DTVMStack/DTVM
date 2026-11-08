@@ -79,6 +79,7 @@ public:
 
   /// Set a MI flag.
   void setFlag(MIFlag Flag) { Flags |= (uint16_t)Flag; }
+  unsigned getFlags() const { return Flags; }
   void setFlags(unsigned flags) {
     // Filter out the automatically maintained flags.
     unsigned Mask = BundledPred | BundledSucc;

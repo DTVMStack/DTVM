@@ -191,6 +191,32 @@ Greedy. Workers join before counters/cookies are freed. Native loop callbacks
 preserve GPR/x87/SSE state, with arithmetic flags modeled as clobbered. There is
 no OSR: a live profiling frame can keep inactive CALL/RET ticks until return.
 
+### Scalar load folding and demand-only tiering metadata
+
+Before register allocation, scalar SSE f32/f64 add/sub/mul/div may fold their
+right-hand load only when its virtual result has one definition and one operand
+use, its width matches, and no subregister or NoMerge/bundle condition interferes.
+The load may cross at most four virtual-register COPYs whose destinations
+cannot change its address and which have no kill-marked source. A same-class
+forwarding COPY is removed only if its result also has a single definition and
+single use; independent copies remain. Preserve operand order, effective-address
+operands, access width and arithmetic flags; never commute FP operands or cross
+another load, store, call, branch or potentially trapping operation. This reduces
+instructions/register demand, not memory traffic, and enables no AVX or FMA.
+
+MFunction records conservative EVM high-multiply presence in both instruction
+creation factories. False permits skipping the high-result requirement graph
+walk. Individual deletion need not clear the bit; clearing all instructions
+resets it. Function-owned MIR nodes must use those registration factories.
+
+Opt-in private eligibility is checked only for demanded foreground functions;
+owner/callback identity is filled when an entry gate is created. The descriptor
+array remains allocated at compiler construction, preserving its stable lifetime
+for concurrent callbacks. Only eligible FastRA helpers with loops and no guest
+calls collect spill-slot metadata. Initial/background Greedy and profiler bodies
+skip that unused collection. Thresholds, hard admission limits, soft elapsed
+budget, foreground serialization and publication ordering remain unchanged.
+
 ### Wasm linear-memory addressing
 
 Wasm32 effective address is `zext64(wrap32(base)) + memarg_offset`, then
