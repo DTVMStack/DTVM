@@ -11,6 +11,8 @@ Source: `test/vm_benchmark/` in the contract-testbed repository. The reproductio
 | `bench_contract/` | Solidity contract sources (Uniswap V2 source is not included — see [`../../SOURCES.md`](../../SOURCES.md) for upstream links) |
 | `bench_bytecode/` | prebuilt EVM / sol→wasm / C→wasm **hex artifacts** (no compile scripts) |
 | `bench_wat/` | **WAT text** of the sol→wasm modules + `wat2wasm` rebuild instructions ([`bench_wat/README.md`](bench_wat/README.md)); binary `.wasm` output is git-ignored |
+| `bench_c/` | New C-to-Wasm valid/invalid Merkle proof case; not a paper-time artifact |
+| `../../harness/contracts/` | Standalone host and smoke runner for a stateless subset; does not reproduce the original testbed |
 | runner source | not included (gtest driver, calldata assembly, Bazel BUILD — experiment archive only); methodology in `CALLS.md` / `REPRODUCE.md` |
 | `CALLS.md` | per-case function under test, calldata, iteration counts |
 | `REPRODUCE.md` | build, run, environment, and measurement methodology |

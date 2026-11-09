@@ -90,4 +90,7 @@ cd benchmarks/overflow && bash run_dtvm.sh && bash run_wasmtime45.sh
 - Full intermediate data (multi-round timestamped runs, per-runtime CSVs, SVG comparisons) and the raw per-iteration contract timing samples (`.time`) are not included.
 - The 9 non-paper WAPM cases and the libsodium (72) / wabench (22) suites were not migrated (see `benchmarks/README.md`).
 - The contract microbenchmark runner (`test_vmbench`) builds only inside the contract-testbed repository; the sol→wasm / sol→evm compile commands were not recorded in the archive (see `benchmarks/contracts/README.md`, `SOURCES.md`).
+- A separate [contract smoke runner](harness/contracts/README.md) supports a
+  small stateless subset on DTVM and Wasmtime 45 with a shared mock host. It
+  does not reproduce the original testbed or its measurement boundary.
 - Other gaps are listed in `SOURCES.md` and `benchmarks/wapm/WAPM_REPRODUCE.md` §2.

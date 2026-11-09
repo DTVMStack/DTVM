@@ -1,0 +1,51 @@
+{
+  "runner": {
+    "path": "/workspace/DTVM_contract_bench/benchmarks/paper/harness/contracts/build/contract-runner",
+    "sha256": "dd5578c47c027f6dc5915106b3ee67a3d2853dad05c9d3f9cd3d4828793f4581"
+  },
+  "wasmtime_library": {
+    "path": "/workspace/DTVM_contract_bench/benchmarks/paper/harness/contracts/build/wasmtime/lib/libwasmtime.so",
+    "sha256": "a148f4b52f93119dc9b4467abff1bce1462d1f362235d7ee61e96a8c4e07d8f2"
+  },
+  "inputs": {
+    "merkle-wat": {
+      "path": "/workspace/DTVM_contract_bench/benchmarks/paper/harness/contracts/build/merkle_proof.wasm",
+      "sha256": "ee2f768ff42fb71a24e22c1a4a367eb261a8ee1bf0ecad14761143ecf71de92e",
+      "calldata": "8903c5a2",
+      "expected_return": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    "merkle-c": {
+      "path": "/workspace/DTVM_contract_bench/benchmarks/paper/harness/contracts/build/merkle_valid.wasm",
+      "sha256": "fd09a8d56be7b9365d7ec839b9e4c1a02504b4f9bdb7a87530d58517154de81a",
+      "calldata": "8903c5a2",
+      "expected_return": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    "generative-nft": {
+      "path": "/workspace/DTVM_contract_bench/benchmarks/paper/harness/contracts/build/generative_nft.wasm",
+      "sha256": "22fdfda9283805fc5f0fee3712cf0e6efaa5f787ffd47fda73d4123c4208fc04",
+      "calldata": "4a7dd5230000000000000000000000000000000000000000000000000000000000000001",
+      "expected_return": "18af0dc9b7cee4fb3aeb6c665aec59809c6b317e582e7e587f4e370bfe3e4db0"
+    },
+    "fibonacci-20": {
+      "path": "/workspace/DTVM_contract_bench/benchmarks/paper/harness/contracts/build/fibonacci_30.wasm",
+      "sha256": "2b3184d5438cabd5aed566df97caee52ab3f0b2a5ac1535770b60939c6e231bf",
+      "calldata": "61047ff40000000000000000000000000000000000000000000000000000000000000014",
+      "expected_return": "0000000000000000000000000000000000000000000000000000000000001a6d"
+    }
+  },
+  "engines": [
+    "dtvm-singlepass",
+    "dtvm-multipass",
+    "dtvm-lazy",
+    "wasmtime"
+  ],
+  "cpu": 0,
+  "rounds": 21,
+  "warmups": 1,
+  "seed": 202611103,
+  "git_revision": "790351b2a69987162c833637917c501a713b4ae3",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "ld_library_path": "",
+  "boundary": "fresh process before spawn to exit; module loading, compilation, instantiation, one call with native host, result, and teardown; page cache warm; native host counts on, crypto trace off; not steady-state or pure execution",
+  "run_policy": "sequential, randomized within round; engine and workers pinned to one logical CPU; collect stdout/stderr and verify identical result and host-call counts"
+}
