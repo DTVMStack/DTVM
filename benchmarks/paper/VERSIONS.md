@@ -154,9 +154,10 @@ See [`ENVIRONMENT.md`](ENVIRONMENT.md). Summary:
 | **WASI-SDK / clang** | **11.0.0** (27 cases), **14.0.3** (3 cases) | archived PolyBench wasm metadata |
 | **PolyBench/C** | **4.2.1** | standard 30-case suite |
 | **Emscripten (`em++`)** | not pinned, `-O2` | `benchmarks/overflow/build.sh` |
-| **evmone / solc / wabt** (contract bench) | not pinned in the archive | contract hex are prebuilt artifacts |
+| **evmone / solc** (contract bench) | not pinned in the archive | contract hex are prebuilt artifacts |
+| **wabt / wat2wasm** (contract WAT form) | **1.0.36** (verified rebuild) | `benchmarks/contracts/bench_wat/` |
 
 ### Not Recorded in the Archive
 
 - Contract vm_benchmark host: **OS distribution, kernel, Docker, CPU governor, core pinning, drop_caches**
-- **`solc`** / **`wat2wasm`** versions and commands used to produce `bench_bytecode/*.hex`
+- **`solc`** version and commands used to produce `bench_bytecode/*.hex` (`wat2wasm` is only used to rebuild `.wasm` from `bench_wat/*.wat`)

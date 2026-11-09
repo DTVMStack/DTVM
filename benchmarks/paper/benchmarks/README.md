@@ -7,7 +7,7 @@ Wasm test suites and rebuildable cases used by the paper experiments.
 | Directory | wasm count | Source | Build script | Status |
 |-----------|-----------|--------|--------------|--------|
 | `polybenchc/` | 30 | PolyBenchC-4.2.1 | `build.sh` (WASI clang) | **migrated**: wasm + rebuild docs |
-| `contracts/` | — | Solidity + hex | testbed Bazel (see REPRODUCE) | **migrated**: sources / hex; runner source not included |
+| `contracts/` | 15 (WAT) | Solidity + hex + WAT | testbed Bazel (see REPRODUCE) | **migrated**: sources / hex / `bench_wat/*.wat`; runner source not included |
 | `wapm/` | 21 | — | — | **migrated**: paper's 20 cases + fortune (zuk substitute) wasm + confs + SHA256 |
 | `overflow/` | 1 | yes (C++) | yes | **migrated** |
 | `fib/` | 3 | yes (C/Solidity) | — | **migrated**: standalone fib/md5 cases |
@@ -25,6 +25,7 @@ Wasm test suites and rebuildable cases used by the paper experiments.
 
 - Directory: `benchmarks/contracts/` (archive of `test/vm_benchmark` in the contract-testbed repo)
 - Reproduction: inside the source repo, `sh build.sh release.vmbench 6 false 2`
+- WAT text + rebuild: `contracts/bench_wat/*.wat` (binary `.wasm` is git-ignored), `wat2wasm --enable-annotations`
 - Details: `contracts/REPRODUCE.md`, `contracts/CALLS.md`
 
 ## Running

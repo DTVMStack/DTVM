@@ -47,6 +47,29 @@
 
 > The ERC721/1155/20 `.sol` files reference `@openzeppelin/contracts`; recompiling them requires resolving that dependency in the testbed build environment.
 
+## bench_wat/*.wat (15)
+
+WAT text forms of the sol→wasm modules. Details and rebuild commands:
+[`bench_wat/README.md`](bench_wat/README.md).
+
+| File | Corresponding case / hex |
+|------|--------------------------|
+| `counter.wat` | Counter → `bench_bytecode/sol_counter_wasm.hex` |
+| `erc20.wat` | ERC20 → `bench_bytecode/sol_erc20_wasm.hex` (newer build) |
+| `uniswap_v2_token.wat` | Uniswap pair token (same module bytes as `erc20.wat`) |
+| `erc721.wat` | ERC721 → `bench_bytecode/sol_erc721_wasm.hex` |
+| `erc1155_single.wat` | ERC1155 `safeTransferFrom` → `bench_bytecode/sol_erc1155_wasm.hex` |
+| `erc1155_batch2.wat` | ERC1155 `safeBatchTransferFrom` (same module bytes as `erc1155_single.wat`) |
+| `fibonacci_30.wat` | Fibonacci → `bench_bytecode/sol_fib_wasm.hex` |
+| `ecdsa_p256.wat` | ECDSA P256 → `bench_bytecode/sol_ecdsa_wasm.hex` (newer build) |
+| `poseidon.wat` | Poseidon → `bench_bytecode/sol_poseidon_wasm.hex` |
+| `merkle_proof.wat` | Merkle proof → `bench_bytecode/sol_merkle_wasm.hex` (newer build) |
+| `generative_nft.wat` | Generative NFT → `bench_bytecode/sol_generative_nft_wasm.hex` (newer build) |
+| `uniswap_v2_factory.wat` | Uniswap V2 Factory → `bench_bytecode/sol_uniswapv2_factory_wasm.hex` (newer build) |
+| `uniswap_v2_router.wat` | Uniswap V2 Router → `bench_bytecode/sol_uniswapv2_router_wasm.hex` (newer build) |
+| `rpow_pilot.wat` | fixed-point `rpow` micro case (no hex) |
+| `uniswap_v3_tickmath_pilot.wat` | Uniswap V3 TickMath micro case (no hex) |
+
 ## runner/ (not included; experiment archive only)
 
 | File | Description |

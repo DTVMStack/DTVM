@@ -2,11 +2,11 @@
 
 Based on reproduction notes and `test/vm_benchmark/`.
 
-This directory archives the **sources, hex artifacts, and methodology**; a full run still requires compiling the runner inside the contract-testbed repository.
+This directory archives the **sources, hex artifacts, WAT modules, and methodology**; a full run still requires compiling the runner inside the contract-testbed repository.
 
 ## 1. Getting the Code
 
-The contract bench runner (`test_vmbench`, a gtest binary) builds only inside the contract-testbed repository's `test/vm_benchmark/`, which is not included. This directory already contains all contract sources and hex artifacts (verifiable with `SHA256SUMS`); methodology and parameters are in `CALLS.md`. External readers can reproduce the wasm-side experiments; the EVM comparison part is documented for methodology reference only.
+The contract bench runner (`test_vmbench`, a gtest binary) builds only inside the contract-testbed repository's `test/vm_benchmark/`, which is not included. This directory already contains all contract sources, hex artifacts and WAT modules; `SHA256SUMS` covers the `.hex` / `.sol` / `.wat` files, while the `.wasm` binaries are git-lfs tracked (content hash = lfs object id, check with `git lfs fsck`). Methodology and parameters are in `CALLS.md`. External readers can reproduce the wasm-side experiments; the EVM comparison part is documented for methodology reference only.
 
 ## 2. Building test_vmbench (source repository)
 
@@ -115,6 +115,31 @@ $YUL2WASM --input /tmp/merkle_yul/MerkleProof.yul --output MerkleProof.wasm
 solc --ir --optimize-yul -o /tmp/gennft_yul --overwrite GenerativeNFT.sol
 $YUL2WASM --input /tmp/gennft_yul/GenerativeNFT.yul --output GenerativeNFT.wasm
 ```
+
+### WAT text and rebuilding `.wasm`
+
+[`bench_wat/`](bench_wat/README.md) holds the WAT (text) form of every sol→wasm
+module used here. The binary `.wasm` output is a build artifact and is
+git-ignored; regenerate it with WABT (`--enable-annotations` is required for the
+`@custom "target_features"` / `@custom "name"` sections):
+
+```bash
+cd benchmarks/paper/benchmarks/contracts/bench_wat
+for f in *.wat; do
+  wat2wasm --enable-annotations "$f" -o "${f%.wat}.wasm"
+done
+```
+
+Reverse direction (what produced the `.wat`):
+
+```bash
+wasm2wat --enable-annotations MerkleProof.wasm -o merkle_proof.wat
+```
+
+Verified with WABT 1.0.36: 14/15 modules rebuild byte-identically; `poseidon.wasm`
+differs only in local-declaration grouping (28 groups vs 2, same instruction
+stream and local indices). Per-module mapping and details:
+[`bench_wat/README.md`](bench_wat/README.md).
 
 ## 9. Contract Microbenchmark Results (evmone 0.21.0 vs DTVM)
 
