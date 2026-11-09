@@ -1,0 +1,3 @@
+# Compiled from the checked-in *.wat sources; regenerate with
+#   wat2wasm --enable-annotations X.wat -o X.wasm
+*.wasm

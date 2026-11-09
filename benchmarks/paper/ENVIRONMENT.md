@@ -61,7 +61,7 @@ Sources: reproduction notes (2025-04-22 archive) + `benchmarks/contracts/`.
 | **evmone** | pulled in via the testbed's Bazel deps; **no** standalone version pin |
 | **DTVM (`dtvm`)** | see the macros above; the `dtvm` binary is built from the DTVM source fork (`VERSIONS.md`) |
 | **solc** (hex generation) | **not recorded** |
-| **wabt / wat2wasm** | **not used** in the archived contract-bench flow |
+| **wabt / wat2wasm** | **not used** in the archived contract-bench hex flow; **1.0.36** used to verify `benchmarks/contracts/bench_wat/*.wat` → `.wasm` (text form only) |
 | **clang / LLVM** (contract bench itself) | **not recorded** as a standalone version; hex are prebuilt artifacts |
 
 ---
