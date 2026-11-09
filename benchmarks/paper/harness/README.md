@@ -17,7 +17,7 @@ found**; otherwise those cells are `skipped` with no invented numbers.
 | overflow (`non_dtvm`) | **no** (Wasmtime only) | emscripten wasm uses opcode `0xfc`; DTVM cannot load it |
 | overflow (`dtvm`) | **no** (DTVM only) | `env::checked_i64_*` hostapi; paper comparison is different-wasm |
 | WAPM (20, `fortune` for `zuk`) | **yes** | same argv / `--dir` / stdin; cache off |
-| contracts | **out of scope** | runner lives in the contract testbed |
+| contracts (stateless subset) | **yes** | separate [contract smoke runner](contracts/README.md); not the original contract testbed |
 
 Wall samples never add `--enable-statistics`: its timers and logging would
 bias comparisons with Wasmtime. `--stats` and `--metric ttfi|both` collect
