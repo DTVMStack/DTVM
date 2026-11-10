@@ -1,0 +1,473 @@
+{
+  "runner_sha256": "3a9c93c1d2b51f9a5e3a0841cd7b53c0a765dedff27facbf984cc43ed5464ac5",
+  "wasm_sha256": {
+    "invalid_signature.wasm": "be9acb22ae81a89b05724436cdfcea31571257817c2978975f4d5dc3e7e0ab2e",
+    "host_copy.wasm": "10e98ab9c33588fb77534e888404dc2cfa1562074a06067373700861f20d2388",
+    "generative_nft.wasm": "22fdfda9283805fc5f0fee3712cf0e6efaa5f787ffd47fda73d4123c4208fc04",
+    "merkle_proof.wasm": "ee2f768ff42fb71a24e22c1a4a367eb261a8ee1bf0ecad14761143ecf71de92e",
+    "merkle_valid.wasm": "fd09a8d56be7b9365d7ec839b9e4c1a02504b4f9bdb7a87530d58517154de81a",
+    "rpow_pilot.wasm": "b66f99fdb0f21fa03b9a219eff01e559fd7c68e301f745324498f509653878e5",
+    "host_oob.wasm": "2d8ea9bec9e56c911f20d952abf5dbfd40271abbe4fb28e50aef9d5c7d500d71",
+    "fibonacci_30.wasm": "2b3184d5438cabd5aed566df97caee52ab3f0b2a5ac1535770b60939c6e231bf",
+    "host_code.wasm": "d5a786d9cf226b6f4edbaa1053b8fcb5735f46905bed41d924b7293a8b819fba",
+    "uniswap_v3_tickmath_pilot.wasm": "941464b28bfe78befc043b93e3375b0f8b358858473240163aae0c3d9cf5b38b",
+    "host_vectors.wasm": "e466564e697a6ed45f81f224e4df9cfd4642fb5355859be966876cecd7746f82"
+  },
+  "results": [
+    {
+      "case": "fibonacci-20",
+      "engine": "dtvm-interp",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000001a6d\ncounts 1 1 1 0 1 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "fibonacci-20",
+      "engine": "dtvm-singlepass",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000001a6d\ncounts 1 1 1 0 1 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "fibonacci-20",
+      "engine": "dtvm-multipass",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000001a6d\ncounts 1 1 1 0 1 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "fibonacci-20",
+      "engine": "dtvm-lazy",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000001a6d\ncounts 1 1 1 0 1 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "fibonacci-20",
+      "engine": "wasmtime",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000001a6d\ncounts 1 1 1 0 1 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "archived-merkle",
+      "engine": "dtvm-interp",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000001\ncounts 1 1 1 0 1 0 0 1456 4384 5824\ncrypto_trace 42565dd50a1b6851\n",
+      "stderr": ""
+    },
+    {
+      "case": "archived-merkle",
+      "engine": "dtvm-singlepass",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000001\ncounts 1 1 1 0 1 0 0 1456 4384 5824\ncrypto_trace 42565dd50a1b6851\n",
+      "stderr": ""
+    },
+    {
+      "case": "archived-merkle",
+      "engine": "dtvm-multipass",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000001\ncounts 1 1 1 0 1 0 0 1456 4384 5824\ncrypto_trace 42565dd50a1b6851\n",
+      "stderr": ""
+    },
+    {
+      "case": "archived-merkle",
+      "engine": "dtvm-lazy",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000001\ncounts 1 1 1 0 1 0 0 1456 4384 5824\ncrypto_trace 42565dd50a1b6851\n",
+      "stderr": ""
+    },
+    {
+      "case": "archived-merkle",
+      "engine": "wasmtime",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000001\ncounts 1 1 1 0 1 0 0 1456 4384 5824\ncrypto_trace 42565dd50a1b6851\n",
+      "stderr": ""
+    },
+    {
+      "case": "valid-merkle",
+      "engine": "dtvm-interp",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000001\ncounts 2 1 0 0 1 0 0 1456 4384 5824\ncrypto_trace 42565dd50a1b6851\n",
+      "stderr": ""
+    },
+    {
+      "case": "valid-merkle",
+      "engine": "dtvm-singlepass",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000001\ncounts 2 1 0 0 1 0 0 1456 4384 5824\ncrypto_trace 42565dd50a1b6851\n",
+      "stderr": ""
+    },
+    {
+      "case": "valid-merkle",
+      "engine": "dtvm-multipass",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000001\ncounts 2 1 0 0 1 0 0 1456 4384 5824\ncrypto_trace 42565dd50a1b6851\n",
+      "stderr": ""
+    },
+    {
+      "case": "valid-merkle",
+      "engine": "dtvm-lazy",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000001\ncounts 2 1 0 0 1 0 0 1456 4384 5824\ncrypto_trace 42565dd50a1b6851\n",
+      "stderr": ""
+    },
+    {
+      "case": "valid-merkle",
+      "engine": "wasmtime",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000001\ncounts 2 1 0 0 1 0 0 1456 4384 5824\ncrypto_trace 42565dd50a1b6851\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid-merkle",
+      "engine": "dtvm-interp",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000000\ncounts 2 1 0 0 1 0 0 1456 4384 5824\ncrypto_trace 2a6425ca36f803d3\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid-merkle",
+      "engine": "dtvm-singlepass",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000000\ncounts 2 1 0 0 1 0 0 1456 4384 5824\ncrypto_trace 2a6425ca36f803d3\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid-merkle",
+      "engine": "dtvm-multipass",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000000\ncounts 2 1 0 0 1 0 0 1456 4384 5824\ncrypto_trace 2a6425ca36f803d3\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid-merkle",
+      "engine": "dtvm-lazy",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000000\ncounts 2 1 0 0 1 0 0 1456 4384 5824\ncrypto_trace 2a6425ca36f803d3\n",
+      "stderr": ""
+    },
+    {
+      "case": "invalid-merkle",
+      "engine": "wasmtime",
+      "exit": 0,
+      "stdout": "finish 0000000000000000000000000000000000000000000000000000000000000000\ncounts 2 1 0 0 1 0 0 1456 4384 5824\ncrypto_trace 2a6425ca36f803d3\n",
+      "stderr": ""
+    },
+    {
+      "case": "host-vectors",
+      "engine": "dtvm-interp",
+      "exit": 0,
+      "stdout": "finish 00000000000000000000000000000000000000000000000000000000000000be0000000000000000000000000000000000000000000000000000000000008a10c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a4700000000000000000000000000000000000000000000000000000000000000000\ncounts 0 0 0 0 1 0 0 1 1 2\ncrypto_trace 5ec1e2bd93ffa62c\n",
+      "stderr": ""
+    },
+    {
+      "case": "host-vectors",
+      "engine": "dtvm-singlepass",
+      "exit": 0,
+      "stdout": "finish 00000000000000000000000000000000000000000000000000000000000000be0000000000000000000000000000000000000000000000000000000000008a10c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a4700000000000000000000000000000000000000000000000000000000000000000\ncounts 0 0 0 0 1 0 0 1 1 2\ncrypto_trace 5ec1e2bd93ffa62c\n",
+      "stderr": ""
+    },
+    {
+      "case": "host-vectors",
+      "engine": "dtvm-multipass",
+      "exit": 0,
+      "stdout": "finish 00000000000000000000000000000000000000000000000000000000000000be0000000000000000000000000000000000000000000000000000000000008a10c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a4700000000000000000000000000000000000000000000000000000000000000000\ncounts 0 0 0 0 1 0 0 1 1 2\ncrypto_trace 5ec1e2bd93ffa62c\n",
+      "stderr": ""
+    },
+    {
+      "case": "host-vectors",
+      "engine": "dtvm-lazy",
+      "exit": 0,
+      "stdout": "finish 00000000000000000000000000000000000000000000000000000000000000be0000000000000000000000000000000000000000000000000000000000008a10c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a4700000000000000000000000000000000000000000000000000000000000000000\ncounts 0 0 0 0 1 0 0 1 1 2\ncrypto_trace 5ec1e2bd93ffa62c\n",
+      "stderr": ""
+    },
+    {
+      "case": "host-vectors",
+      "engine": "wasmtime",
+      "exit": 0,
+      "stdout": "finish 00000000000000000000000000000000000000000000000000000000000000be0000000000000000000000000000000000000000000000000000000000008a10c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a4700000000000000000000000000000000000000000000000000000000000000000\ncounts 0 0 0 0 1 0 0 1 1 2\ncrypto_trace 5ec1e2bd93ffa62c\n",
+      "stderr": ""
+    },
+    {
+      "case": "calldata-padding",
+      "engine": "dtvm-interp",
+      "exit": 0,
+      "stdout": "finish 0203000000000000\ncounts 0 1 0 0 1 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "calldata-padding",
+      "engine": "dtvm-singlepass",
+      "exit": 0,
+      "stdout": "finish 0203000000000000\ncounts 0 1 0 0 1 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "calldata-padding",
+      "engine": "dtvm-multipass",
+      "exit": 0,
+      "stdout": "finish 0203000000000000\ncounts 0 1 0 0 1 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "calldata-padding",
+      "engine": "dtvm-lazy",
+      "exit": 0,
+      "stdout": "finish 0203000000000000\ncounts 0 1 0 0 1 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "calldata-padding",
+      "engine": "wasmtime",
+      "exit": 0,
+      "stdout": "finish 0203000000000000\ncounts 0 1 0 0 1 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "code-copy",
+      "engine": "dtvm-interp",
+      "exit": 0,
+      "stdout": "finish 0000008d0061736d9100000000000000\ncounts 0 0 0 0 1 1 2 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "code-copy",
+      "engine": "dtvm-singlepass",
+      "exit": 0,
+      "stdout": "finish 0000008d0061736d9100000000000000\ncounts 0 0 0 0 1 1 2 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "code-copy",
+      "engine": "dtvm-multipass",
+      "exit": 0,
+      "stdout": "finish 0000008d0061736d9100000000000000\ncounts 0 0 0 0 1 1 2 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "code-copy",
+      "engine": "dtvm-lazy",
+      "exit": 0,
+      "stdout": "finish 0000008d0061736d9100000000000000\ncounts 0 0 0 0 1 1 2 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "code-copy",
+      "engine": "wasmtime",
+      "exit": 0,
+      "stdout": "finish 0000008d0061736d9100000000000000\ncounts 0 0 0 0 1 1 2 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "revert-selector",
+      "engine": "dtvm-interp",
+      "exit": 2,
+      "stdout": "revert \ncounts 1 1 0 1 0 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "revert-selector",
+      "engine": "dtvm-singlepass",
+      "exit": 2,
+      "stdout": "revert \ncounts 1 1 0 1 0 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "revert-selector",
+      "engine": "dtvm-multipass",
+      "exit": 2,
+      "stdout": "revert \ncounts 1 1 0 1 0 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "revert-selector",
+      "engine": "dtvm-lazy",
+      "exit": 2,
+      "stdout": "revert \ncounts 1 1 0 1 0 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "revert-selector",
+      "engine": "wasmtime",
+      "exit": 2,
+      "stdout": "revert \ncounts 1 1 0 1 0 0 0 0 0 0\ncrypto_trace cbf29ce484222325\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-0",
+      "engine": "dtvm-interp",
+      "exit": 0,
+      "stdout": "finish 2a5d7c54ac659d36e83d34fe67ec8e73fb8ae9eade74da1334ec1e445011ab04\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace d70a14206917faa8\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-0",
+      "engine": "dtvm-singlepass",
+      "exit": 0,
+      "stdout": "finish 2a5d7c54ac659d36e83d34fe67ec8e73fb8ae9eade74da1334ec1e445011ab04\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace d70a14206917faa8\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-0",
+      "engine": "dtvm-multipass",
+      "exit": 0,
+      "stdout": "finish 2a5d7c54ac659d36e83d34fe67ec8e73fb8ae9eade74da1334ec1e445011ab04\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace d70a14206917faa8\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-0",
+      "engine": "dtvm-lazy",
+      "exit": 0,
+      "stdout": "finish 2a5d7c54ac659d36e83d34fe67ec8e73fb8ae9eade74da1334ec1e445011ab04\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace d70a14206917faa8\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-0",
+      "engine": "wasmtime",
+      "exit": 0,
+      "stdout": "finish 2a5d7c54ac659d36e83d34fe67ec8e73fb8ae9eade74da1334ec1e445011ab04\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace d70a14206917faa8\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-1",
+      "engine": "dtvm-interp",
+      "exit": 0,
+      "stdout": "finish 18af0dc9b7cee4fb3aeb6c665aec59809c6b317e582e7e587f4e370bfe3e4db0\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace 834a68a16e1b9c2d\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-1",
+      "engine": "dtvm-singlepass",
+      "exit": 0,
+      "stdout": "finish 18af0dc9b7cee4fb3aeb6c665aec59809c6b317e582e7e587f4e370bfe3e4db0\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace 834a68a16e1b9c2d\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-1",
+      "engine": "dtvm-multipass",
+      "exit": 0,
+      "stdout": "finish 18af0dc9b7cee4fb3aeb6c665aec59809c6b317e582e7e587f4e370bfe3e4db0\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace 834a68a16e1b9c2d\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-1",
+      "engine": "dtvm-lazy",
+      "exit": 0,
+      "stdout": "finish 18af0dc9b7cee4fb3aeb6c665aec59809c6b317e582e7e587f4e370bfe3e4db0\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace 834a68a16e1b9c2d\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-1",
+      "engine": "wasmtime",
+      "exit": 0,
+      "stdout": "finish 18af0dc9b7cee4fb3aeb6c665aec59809c6b317e582e7e587f4e370bfe3e4db0\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace 834a68a16e1b9c2d\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-2",
+      "engine": "dtvm-interp",
+      "exit": 0,
+      "stdout": "finish 0bd5a98cc815886560b85eca8e219070c58c7437502701385cc5c195b077ab96\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace f59c195745736d63\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-2",
+      "engine": "dtvm-singlepass",
+      "exit": 0,
+      "stdout": "finish 0bd5a98cc815886560b85eca8e219070c58c7437502701385cc5c195b077ab96\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace f59c195745736d63\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-2",
+      "engine": "dtvm-multipass",
+      "exit": 0,
+      "stdout": "finish 0bd5a98cc815886560b85eca8e219070c58c7437502701385cc5c195b077ab96\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace f59c195745736d63\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-2",
+      "engine": "dtvm-lazy",
+      "exit": 0,
+      "stdout": "finish 0bd5a98cc815886560b85eca8e219070c58c7437502701385cc5c195b077ab96\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace f59c195745736d63\n",
+      "stderr": ""
+    },
+    {
+      "case": "nft-2",
+      "engine": "wasmtime",
+      "exit": 0,
+      "stdout": "finish 0bd5a98cc815886560b85eca8e219070c58c7437502701385cc5c195b077ab96\ncounts 1 1 1 0 1 0 0 1456 2936 5824\ncrypto_trace f59c195745736d63\n",
+      "stderr": ""
+    },
+    {
+      "case": "host-oob",
+      "engine": "dtvm-interp",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error: DTVM call: execution error: out of bounds memory access\n"
+    },
+    {
+      "case": "host-oob",
+      "engine": "dtvm-singlepass",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error: DTVM call: execution error: out of bounds memory access\n"
+    },
+    {
+      "case": "host-oob",
+      "engine": "dtvm-multipass",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error: DTVM call: execution error: out of bounds memory access\n"
+    },
+    {
+      "case": "host-oob",
+      "engine": "dtvm-lazy",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error: DTVM call: execution error: out of bounds memory access\n"
+    },
+    {
+      "case": "host-oob",
+      "engine": "wasmtime",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error: error while executing at wasm backtrace:\n    0:     0x50 - <unknown>!<wasm function 1>\n\nCaused by:\n    host memory out of bounds\n\n"
+    },
+    {
+      "case": "invalid-signature",
+      "engine": "dtvm-interp",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error: call must have type () -> ()\n"
+    },
+    {
+      "case": "invalid-signature",
+      "engine": "dtvm-singlepass",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error: call must have type () -> ()\n"
+    },
+    {
+      "case": "invalid-signature",
+      "engine": "dtvm-multipass",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error: call must have type () -> ()\n"
+    },
+    {
+      "case": "invalid-signature",
+      "engine": "dtvm-lazy",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error: call must have type () -> ()\n"
+    },
+    {
+      "case": "invalid-signature",
+      "engine": "wasmtime",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "error: call must have type () -> ()\n"
+    }
+  ]
+}

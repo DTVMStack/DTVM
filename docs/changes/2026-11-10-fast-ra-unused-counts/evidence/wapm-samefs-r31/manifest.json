@@ -1,0 +1,31 @@
+{
+  "cpu": 0,
+  "rounds": 31,
+  "warmups": 1,
+  "seed": 739006,
+  "environment": "LC_ALL=C, WASMTIME_CACHE=0; sequential randomized within each round; all processes pinned to cpu 0",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "boundary": "fresh process through exit; warmed file cache; includes compilation and execution; outputs compared between DTVM baseline and candidate by case and mode",
+  "binaries": {
+    "baseline_dtvm": {
+      "path": "/tmp/dtvm-contract-build/control-dtvm",
+      "sha256": "a011d1fc8e930ce06782cf9ddaee0f2c72f9a0b6457e1d680ac1de4cdb4c0503"
+    },
+    "candidate_dtvm": {
+      "path": "/tmp/dtvm-contract-build/candidate-dtvm",
+      "sha256": "45c2412a75520f45078451a9d15051292579980ab765a5c8521f3ca1ce3459ac"
+    },
+    "baseline_runner": {
+      "path": "work/contracts-jit-study/baseline-runner",
+      "sha256": "dd5578c47c027f6dc5915106b3ee67a3d2853dad05c9d3f9cd3d4828793f4581"
+    },
+    "candidate_runner": {
+      "path": "work/contracts-jit-study/fast-ra-counts/production-runner",
+      "sha256": "3a9c93c1d2b51f9a5e3a0841cd7b53c0a765dedff27facbf984cc43ed5464ac5"
+    },
+    "wasmtime45_cli": {
+      "path": "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+      "sha256": "d7b7317b34a717f4b809df14657975e2ce83221a697167219abdad6e44c7a12c"
+    }
+  }
+}
