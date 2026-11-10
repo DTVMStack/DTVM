@@ -157,37 +157,6 @@ public:
       bb.erase(it);
   }
 
-  /// Count number of defs consumed from each register class by \p Reg
-  void addRegClassDefCounts(std::vector<unsigned> &RegClassDefCounts,
-                            Register Reg) const {
-    ZEN_ASSERT(RegClassDefCounts.size() == TRI->getNumRegClasses());
-
-    if (Reg.isVirtual()) {
-      const TargetRegisterClass *OpRC = MRI->getRegClass(Reg);
-      for (unsigned RCIdx = 0, RCIdxEnd = TRI->getNumRegClasses();
-           RCIdx != RCIdxEnd; ++RCIdx) {
-        const TargetRegisterClass *IdxRC = TRI->getRegClass(RCIdx);
-        // FIXME: Consider aliasing sub/super registers.
-        if (OpRC->hasSubClassEq(IdxRC)) {
-          ++RegClassDefCounts[RCIdx];
-        }
-      }
-
-      return;
-    }
-
-    for (unsigned RCIdx = 0, RCIdxEnd = TRI->getNumRegClasses();
-         RCIdx != RCIdxEnd; ++RCIdx) {
-      const TargetRegisterClass *IdxRC = TRI->getRegClass(RCIdx);
-      for (MCRegAliasIterator Alias(Reg, TRI, true); Alias.isValid(); ++Alias) {
-        if (IdxRC->contains(*Alias)) {
-          ++RegClassDefCounts[RCIdx];
-          break;
-        }
-      }
-    }
-  }
-
   /// Returns false if \p VirtReg is known to not live out of the current
   /// block.
   bool mayLiveOut(Register VirtReg) {
@@ -828,11 +797,6 @@ void FastRA::Impl::allocateCgInstruction(CgInstruction &MI) {
         DefOperandIndexes.clear();
         PhysRegUses.clear();
 
-        // Track number of defs which may consume a register from the
-        // class.
-        std::vector<unsigned> RegClassDefCounts(TRI->getNumRegClasses(), 0);
-        ZEN_ASSERT(RegClassDefCounts[0] == 0);
-
         LLVM_DEBUG(dbgs() << "Need to assign livethroughs\n");
         for (unsigned I = 0, E = MI.getNumOperands(); I < E; ++I) {
           const CgOperand &MO = MI.getOperand(I);
@@ -851,8 +815,6 @@ void FastRA::Impl::allocateCgInstruction(CgInstruction &MI) {
             if (Reg.isVirtual()) {
               DefOperandIndexes.push_back(I);
             }
-
-            addRegClassDefCounts(RegClassDefCounts, Reg);
           }
         }
 

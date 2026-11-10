@@ -1,0 +1,75 @@
+{
+  "git_base": "a5e466e2dc010d85e5cd4799a232c0eb46222e3b",
+  "baseline_runner": "dd5578c47c027f6dc5915106b3ee67a3d2853dad05c9d3f9cd3d4828793f4581",
+  "candidate_runner": "3a9c93c1d2b51f9a5e3a0841cd7b53c0a765dedff27facbf984cc43ed5464ac5",
+  "control_runner": "a60efa58029db43413c94553ba3701d9340e034c1bce6430a1fc7ab0fa4f2174",
+  "wasmtime_library": "a148f4b52f93119dc9b4467abff1bce1462d1f362235d7ee61e96a8c4e07d8f2",
+  "inputs": {
+    "merkle-wat": {
+      "wasm": "/workspace/DTVM_contract_bench/benchmarks/paper/harness/contracts/build/merkle_proof.wasm",
+      "sha256": "ee2f768ff42fb71a24e22c1a4a367eb261a8ee1bf0ecad14761143ecf71de92e",
+      "calldata": "8903c5a2",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    "merkle-c": {
+      "wasm": "/workspace/DTVM_contract_bench/benchmarks/paper/harness/contracts/build/merkle_valid.wasm",
+      "sha256": "fd09a8d56be7b9365d7ec839b9e4c1a02504b4f9bdb7a87530d58517154de81a",
+      "calldata": "8903c5a2",
+      "expected": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    "nft": {
+      "wasm": "/workspace/DTVM_contract_bench/benchmarks/paper/harness/contracts/build/generative_nft.wasm",
+      "sha256": "22fdfda9283805fc5f0fee3712cf0e6efaa5f787ffd47fda73d4123c4208fc04",
+      "calldata": "4a7dd5230000000000000000000000000000000000000000000000000000000000000001",
+      "expected": "18af0dc9b7cee4fb3aeb6c665aec59809c6b317e582e7e587f4e370bfe3e4db0"
+    },
+    "rpow": {
+      "wasm": "/workspace/DTVM_contract_bench/benchmarks/paper/harness/contracts/build/rpow_pilot.wasm",
+      "sha256": "b66f99fdb0f21fa03b9a219eff01e559fd7c68e301f745324498f509653878e5",
+      "calldata": "4a7dd5230000000000000000000000000000000000000000000000000000000000000001",
+      "expected": "0000000000000000000000000000000000000000033b39b9ce982fe738e515ea"
+    },
+    "tickmath": {
+      "wasm": "/workspace/DTVM_contract_bench/benchmarks/paper/harness/contracts/build/uniswap_v3_tickmath_pilot.wasm",
+      "sha256": "941464b28bfe78befc043b93e3375b0f8b358858473240163aae0c3d9cf5b38b",
+      "calldata": "4a7dd5230000000000000000000000000000000000000000000000000000000000000001",
+      "expected": "00000000000000000000000000000000000055ff74bf991114d22f9b287b822e"
+    }
+  },
+  "variants": {
+    "base-single": {
+      "binary": "/workspace/DTVM_contract_bench/work/contracts-jit-study/baseline-runner",
+      "mode": "dtvm-singlepass"
+    },
+    "control-single": {
+      "binary": "/workspace/DTVM_contract_bench/work/contracts-jit-study/force-greedy/contract-runner",
+      "mode": "dtvm-singlepass"
+    },
+    "candidate-single": {
+      "binary": "/workspace/DTVM_contract_bench/work/contracts-jit-study/fast-ra-counts/production-runner",
+      "mode": "dtvm-singlepass"
+    },
+    "base-lazy": {
+      "binary": "/workspace/DTVM_contract_bench/work/contracts-jit-study/baseline-runner",
+      "mode": "dtvm-lazy"
+    },
+    "control-lazy": {
+      "binary": "/workspace/DTVM_contract_bench/work/contracts-jit-study/force-greedy/contract-runner",
+      "mode": "dtvm-lazy"
+    },
+    "candidate-lazy": {
+      "binary": "/workspace/DTVM_contract_bench/work/contracts-jit-study/fast-ra-counts/production-runner",
+      "mode": "dtvm-lazy"
+    },
+    "wt45": {
+      "binary": "/workspace/DTVM_contract_bench/work/contracts-jit-study/baseline-runner",
+      "mode": "wasmtime"
+    }
+  },
+  "rounds": 31,
+  "warmups": 1,
+  "seed": 252317,
+  "cpu": 0,
+  "boundary": "fresh process pre-spawn to exit; parse/load/compile/instantiate/one call/native host/output/teardown; warm page cache; no trace; native host counters on; same Wasm and same host implementation",
+  "limitations": "WT and DTVM callbacks use different API adapters; no pure execution inference; sequential with within-round randomized order"
+}
