@@ -74,8 +74,9 @@ namespace {
 // const intx::uint256 * through storeUint256Result (~40 call sites).
 // A later helper overwrites this buffer.
 thread_local intx::uint256 Uint256ReturnBuffer;
-static constexpr auto Bn254Modulus = intx::from_string<intx::uint256>(
-    "21888242871839275222246405745257275088548364400416034343698204186575808495617");
+static constexpr auto Bn254Modulus =
+    intx::from_string<intx::uint256>("21888242871839275222246405745257275088548"
+                                     "364400416034343698204186575808495617");
 
 // Store Value in Uint256ReturnBuffer and return that pointer.
 // Invariant: the JIT call site must materialize the four limbs immediately
@@ -112,7 +113,7 @@ intx::uint256 mulmodBn254(const intx::uint256 &X, const intx::uint256 &Y) {
       const auto Quotient = ~uint64_t{0};
       Numerator[J + DivisorLen] =
           U2 - intx::internal::submul(&Numerator[J], &Numerator[J], Divisor,
-                                     DivisorLen, Quotient);
+                                      DivisorLen, Quotient);
     } else {
       intx::uint128 Remainder;
       uint64_t Quotient;
@@ -137,10 +138,9 @@ intx::uint256 mulmodBn254(const intx::uint256 &X, const intx::uint256 &Y) {
   intx::uint256 Result;
   auto *ResultWords = intx::as_words(Result);
   for (int I = 0; I < DivisorLen - 1; ++I)
-    ResultWords[I] = Args.shift
-                         ? (Numerator[I] >> Args.shift) |
-                               (Numerator[I + 1] << (64 - Args.shift))
-                         : Numerator[I];
+    ResultWords[I] = Args.shift ? (Numerator[I] >> Args.shift) |
+                                      (Numerator[I + 1] << (64 - Args.shift))
+                                : Numerator[I];
   ResultWords[DivisorLen - 1] = Numerator[DivisorLen - 1] >> Args.shift;
   return Result;
 }
