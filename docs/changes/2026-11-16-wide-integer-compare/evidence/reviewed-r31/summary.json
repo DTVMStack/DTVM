@@ -1,0 +1,328 @@
+[
+  {
+    "case": "wide_compare_zero",
+    "medians_ms": {
+      "main/singlepass": 4.364706,
+      "main/lazy-G-MT": 5.369966,
+      "main/lazy-F-ST": 5.260091,
+      "main/multipass-G-ST": 5.247983,
+      "candidate/singlepass": 4.273539,
+      "candidate/lazy-G-MT": 5.384577,
+      "candidate/lazy-F-ST": 5.261693,
+      "candidate/multipass-G-ST": 5.355494,
+      "main-AA/lazy-G-MT": 5.414969,
+      "wt45": 6.506533
+    },
+    "pairs": {
+      "main-AA/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.9823552449262707,
+        "ci95": [
+          0.935765669801226,
+          1.0537959641207222
+        ]
+      },
+      "candidate/singlepass vs main/singlepass": {
+        "median": 1.0222913702525174,
+        "ci95": [
+          0.9664265248105077,
+          1.0479394644002207
+        ]
+      },
+      "candidate/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.9891211366597674,
+        "ci95": [
+          0.9131155391081192,
+          1.0438798373587983
+        ]
+      },
+      "candidate/lazy-F-ST vs main/lazy-F-ST": {
+        "median": 0.9928174012463422,
+        "ci95": [
+          0.9407131404317233,
+          1.0247103297105564
+        ]
+      },
+      "candidate/multipass-G-ST vs main/multipass-G-ST": {
+        "median": 1.0214593363976234,
+        "ci95": [
+          0.9650856155312695,
+          1.0776370666819326
+        ]
+      }
+    }
+  },
+  {
+    "case": "wide_compare_dev",
+    "medians_ms": {
+      "main/singlepass": 15.729987,
+      "main/lazy-G-MT": 13.450392,
+      "main/lazy-F-ST": 14.691277,
+      "main/multipass-G-ST": 13.14282,
+      "candidate/singlepass": 15.511659,
+      "candidate/lazy-G-MT": 11.483819,
+      "candidate/lazy-F-ST": 13.597433,
+      "candidate/multipass-G-ST": 11.583498,
+      "main-AA/lazy-G-MT": 13.095239,
+      "wt45": 11.546102
+    },
+    "pairs": {
+      "main-AA/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.9848881906626743,
+        "ci95": [
+          0.9703220667876528,
+          1.0410172258133956
+        ]
+      },
+      "candidate/singlepass vs main/singlepass": {
+        "median": 0.9780577538455778,
+        "ci95": [
+          0.962150482245197,
+          1.0034168336832812
+        ]
+      },
+      "candidate/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.8693453944343736,
+        "ci95": [
+          0.8390888758988324,
+          0.8846423831128686
+        ]
+      },
+      "candidate/lazy-F-ST vs main/lazy-F-ST": {
+        "median": 0.939547369140393,
+        "ci95": [
+          0.9131435809735613,
+          0.9630895322017945
+        ]
+      },
+      "candidate/multipass-G-ST vs main/multipass-G-ST": {
+        "median": 0.8926894249454813,
+        "ci95": [
+          0.8540303146770869,
+          0.918349232725958
+        ]
+      }
+    }
+  },
+  {
+    "case": "wide_compare_paper",
+    "medians_ms": {
+      "main/singlepass": 116.117152,
+      "main/lazy-G-MT": 79.927367,
+      "main/lazy-F-ST": 96.639496,
+      "main/multipass-G-ST": 81.134848,
+      "candidate/singlepass": 113.093149,
+      "candidate/lazy-G-MT": 64.803271,
+      "candidate/lazy-F-ST": 86.62978,
+      "candidate/multipass-G-ST": 64.287101,
+      "main-AA/lazy-G-MT": 79.34248,
+      "wt45": 58.242266
+    },
+    "pairs": {
+      "main-AA/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.994943794910312,
+        "ci95": [
+          0.9714099025278169,
+          1.0115976425421644
+        ]
+      },
+      "candidate/singlepass vs main/singlepass": {
+        "median": 0.9852727743055293,
+        "ci95": [
+          0.960941480998878,
+          1.0039434927793014
+        ]
+      },
+      "candidate/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.8063367232404884,
+        "ci95": [
+          0.7834279744448951,
+          0.8155690589071455
+        ]
+      },
+      "candidate/lazy-F-ST vs main/lazy-F-ST": {
+        "median": 0.8904902258470827,
+        "ci95": [
+          0.8647259496684713,
+          0.918223932692605
+        ]
+      },
+      "candidate/multipass-G-ST vs main/multipass-G-ST": {
+        "median": 0.815184925224732,
+        "ci95": [
+          0.7926566305079837,
+          0.8243043333097626
+        ]
+      }
+    }
+  },
+  {
+    "case": "bicg",
+    "medians_ms": {
+      "main/singlepass": 81.794448,
+      "main/lazy-G-MT": 60.521106,
+      "candidate/singlepass": 80.929749,
+      "candidate/lazy-G-MT": 61.05625,
+      "main-AA/lazy-G-MT": 61.43302,
+      "wt45": 73.225449
+    },
+    "pairs": {
+      "main-AA/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 1.0100989639505131,
+        "ci95": [
+          1.0003772689929589,
+          1.0415562198603554
+        ]
+      },
+      "candidate/singlepass vs main/singlepass": {
+        "median": 0.9860588535772211,
+        "ci95": [
+          0.9667927240238241,
+          0.9999352309450472
+        ]
+      },
+      "candidate/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.9939281340866875,
+        "ci95": [
+          0.9789918501474868,
+          1.0139510028501213
+        ]
+      }
+    }
+  },
+  {
+    "case": "atax",
+    "medians_ms": {
+      "main/singlepass": 84.02882,
+      "main/lazy-G-MT": 53.303165,
+      "candidate/singlepass": 83.420872,
+      "candidate/lazy-G-MT": 52.000253,
+      "main-AA/lazy-G-MT": 51.214453,
+      "wt45": 62.935783
+    },
+    "pairs": {
+      "main-AA/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.9601909578330857,
+        "ci95": [
+          0.9512999826378574,
+          1.001036045796716
+        ]
+      },
+      "candidate/singlepass vs main/singlepass": {
+        "median": 0.9928936123053732,
+        "ci95": [
+          0.9766967893326435,
+          1.0070928388067701
+        ]
+      },
+      "candidate/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.9799846777596434,
+        "ci95": [
+          0.9650398622537252,
+          0.9926083832087432
+        ]
+      }
+    }
+  },
+  {
+    "case": "md5",
+    "medians_ms": {
+      "main/singlepass": 7.870734,
+      "main/lazy-G-MT": 27.860472,
+      "candidate/singlepass": 7.683712,
+      "candidate/lazy-G-MT": 27.338857,
+      "main-AA/lazy-G-MT": 27.508833,
+      "wt45": 44.983443
+    },
+    "pairs": {
+      "main-AA/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.9944021402510712,
+        "ci95": [
+          0.9517987362655046,
+          1.0113660391064914
+        ]
+      },
+      "candidate/singlepass vs main/singlepass": {
+        "median": 1.0183834980863429,
+        "ci95": [
+          0.9036904498102988,
+          1.0397393003018074
+        ]
+      },
+      "candidate/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.9847162450608362,
+        "ci95": [
+          0.9594451240042865,
+          1.042309900372268
+        ]
+      }
+    }
+  },
+  {
+    "case": "cowsay",
+    "medians_ms": {
+      "main/singlepass": 19.350061,
+      "main/lazy-G-MT": 110.846774,
+      "candidate/singlepass": 19.2093,
+      "candidate/lazy-G-MT": 111.724556,
+      "main-AA/lazy-G-MT": 110.46298,
+      "wt45": 401.385477
+    },
+    "pairs": {
+      "main-AA/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.9996984551989428,
+        "ci95": [
+          0.992716480190917,
+          1.0103927524805476
+        ]
+      },
+      "candidate/singlepass vs main/singlepass": {
+        "median": 0.9973492995559087,
+        "ci95": [
+          0.9773690308336449,
+          1.0111719955979332
+        ]
+      },
+      "candidate/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 1.0131476048645862,
+        "ci95": [
+          0.9932949634121937,
+          1.0351736568377161
+        ]
+      }
+    }
+  },
+  {
+    "case": "base64cli",
+    "medians_ms": {
+      "main/singlepass": 23.099459,
+      "main/lazy-G-MT": 105.954532,
+      "candidate/singlepass": 23.075414,
+      "candidate/lazy-G-MT": 101.906909,
+      "main-AA/lazy-G-MT": 104.783735,
+      "wt45": 464.762468
+    },
+    "pairs": {
+      "main-AA/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.9985271779408686,
+        "ci95": [
+          0.9896219492652094,
+          1.0057038806041823
+        ]
+      },
+      "candidate/singlepass vs main/singlepass": {
+        "median": 0.9851405653442055,
+        "ci95": [
+          0.9507565890108497,
+          1.014486652958055
+        ]
+      },
+      "candidate/lazy-G-MT vs main/lazy-G-MT": {
+        "median": 0.9777421570438284,
+        "ci95": [
+          0.9548381747825454,
+          1.0098381787448987
+        ]
+      }
+    }
+  }
+]

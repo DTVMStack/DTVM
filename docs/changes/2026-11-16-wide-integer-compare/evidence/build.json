@@ -1,0 +1,13 @@
+{
+  "baseline": "aa98c1b712aa27cc23e55216ca7ce2b5e38b8fcf",
+  "runtime_sources_sha256": {
+    "src/compiler/cgir/lowering.h": "127b2295db7411186a3f30ff556b0fcf90390b82b3393a127e403a7d401e9a9c",
+    "src/compiler/target/x86/x86lowering.cpp": "e57012d5dada551fe1bbffd7cdae2ecc43514b696c90fc7c91c5e5be008e4d2d",
+    "src/compiler/target/x86/x86lowering.h": "a49e8f3f97bc54b0f830171721c4046b42468b610543a507c407c03619d6a648"
+  },
+  "compiler": "GCC14.2 / LLVM15",
+  "build": "Release O3, multipass/singlepass/WASI on, SPEC/ASAN off",
+  "cpu": "AMD EPYC 9V74; cgroup cpu.max=200000 100000; formal engines/workers CPU0",
+  "candidate_cli_sha256": "1302af767e4acd5206cc3844f5ab0d98c3a2035cf01bc59f9af162afcff6132a",
+  "contract_runner_sha256": "2eb8f5f68c927482ce735acfdeb0b78c9da3c1321ef3e702f445e1bc382505fe"
+}

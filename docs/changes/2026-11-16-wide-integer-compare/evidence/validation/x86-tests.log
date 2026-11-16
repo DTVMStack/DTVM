@@ -1,0 +1,83 @@
+Running main() from /workspace/DTVM_CppSDK/cpp_tests/googletest/googletest/src/gtest_main.cc
+[==========] Running 34 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 23 tests from X86CgLowering
+[ RUN      ] X86CgLowering.BrIfCmpEmitsDirectJccWithoutSetcc
+[       OK ] X86CgLowering.BrIfCmpEmitsDirectJccWithoutSetcc (1 ms)
+[ RUN      ] X86CgLowering.DirectJccSignedUnsignedI32I64Boundaries
+[       OK ] X86CgLowering.DirectJccSignedUnsignedI32I64Boundaries (3 ms)
+[ RUN      ] X86CgLowering.BrIfOfCachedCmpUsesSetcc
+[       OK ] X86CgLowering.BrIfOfCachedCmpUsesSetcc (0 ms)
+[ RUN      ] X86CgLowering.BrIfOfCmpValueStillUsesSetcc
+[       OK ] X86CgLowering.BrIfOfCmpValueStillUsesSetcc (0 ms)
+[ RUN      ] X86CgLowering.ShortDiamondInvertsCCToFalseEdge
+[       OK ] X86CgLowering.ShortDiamondInvertsCCToFalseEdge (0 ms)
+[ RUN      ] X86CgLowering.FpDirectJccNanInfSignedZero
+[       OK ] X86CgLowering.FpDirectJccNanInfSignedZero (7 ms)
+[ RUN      ] X86CgLowering.FpDirectJccSwapsOltOleOperands
+[       OK ] X86CgLowering.FpDirectJccSwapsOltOleOperands (3 ms)
+[ RUN      ] X86CgLowering.FpDirectJccNanOnEitherOperand
+[       OK ] X86CgLowering.FpDirectJccNanOnEitherOperand (1 ms)
+[ RUN      ] X86CgLowering.FpShortDiamondInvertsFalseEdge
+[       OK ] X86CgLowering.FpShortDiamondInvertsFalseEdge (0 ms)
+[ RUN      ] X86CgLowering.FpShortDiamondOltSwapsAndInverts
+[       OK ] X86CgLowering.FpShortDiamondOltSwapsAndInverts (1 ms)
+[ RUN      ] X86CgLowering.FcmpOeqUneStayOnTwoTestFallback
+[       OK ] X86CgLowering.FcmpOeqUneStayOnTwoTestFallback (0 ms)
+[ RUN      ] X86CgLowering.AddImmI32EmitsLEA64_32r
+[       OK ] X86CgLowering.AddImmI32EmitsLEA64_32r (0 ms)
+[ RUN      ] X86CgLowering.AddImmI64StaysAddNotLEA
+[       OK ] X86CgLowering.AddImmI64StaysAddNotLEA (0 ms)
+[ RUN      ] X86CgLowering.SubImmI32EmitsLEA64_32r
+[       OK ] X86CgLowering.SubImmI32EmitsLEA64_32r (0 ms)
+[ RUN      ] X86CgLowering.SubImmI64StaysSubAfterPeephole
+[       OK ] X86CgLowering.SubImmI64StaysSubAfterPeephole (0 ms)
+[ RUN      ] X86CgLowering.ConstantMinusI32DoesNotBecomeLEA
+[       OK ] X86CgLowering.ConstantMinusI32DoesNotBecomeLEA (0 ms)
+[ RUN      ] X86CgLowering.WrapAddImmStillLEANotDispFold
+[       OK ] X86CgLowering.WrapAddImmStillLEANotDispFold (0 ms)
+[ RUN      ] X86CgLowering.I64AddImmTooWideStaysAdd
+[       OK ] X86CgLowering.I64AddImmTooWideStaysAdd (0 ms)
+[ RUN      ] X86CgLowering.HighMultiplyPresenceIsConservativeAndResetsWithInstructions
+[       OK ] X86CgLowering.HighMultiplyPresenceIsConservativeAndResetsWithInstructions (0 ms)
+[ RUN      ] X86CgLowering.HighMultiplyDemandWalkStillCapturesHighResult
+[       OK ] X86CgLowering.HighMultiplyDemandWalkStillCapturesHighResult (0 ms)
+[ RUN      ] X86CgLowering.WideComparisonSupportsRelationalAndEqualityDirections
+[       OK ] X86CgLowering.WideComparisonSupportsRelationalAndEqualityDirections (13 ms)
+[ RUN      ] X86CgLowering.WideComparisonRejectsUnprovenOrNonLeafValues
+[       OK ] X86CgLowering.WideComparisonRejectsUnprovenOrNonLeafValues (4 ms)
+[ RUN      ] X86CgLowering.WideComparisonKeepsSnapshotsBeforeSourceOverwrite
+[       OK ] X86CgLowering.WideComparisonKeepsSnapshotsBeforeSourceOverwrite (0 ms)
+[----------] 23 tests from X86CgLowering (44 ms total)
+
+[----------] 8 tests from X86CgPeephole
+[ RUN      ] X86CgPeephole.OptimizeCmpSetccMovzxTestJe
+[       OK ] X86CgPeephole.OptimizeCmpSetccMovzxTestJe (0 ms)
+[ RUN      ] X86CgPeephole.OptimizeCmpSetccTestJe
+[       OK ] X86CgPeephole.OptimizeCmpSetccTestJe (0 ms)
+[ RUN      ] X86CgPeephole.OptimizeCmpKeepsLiveBooleanConsumer
+[       OK ] X86CgPeephole.OptimizeCmpKeepsLiveBooleanConsumer (1 ms)
+[ RUN      ] X86CgPeephole.OptimizeCmpDoesNotFoldMismatchedTest
+[       OK ] X86CgPeephole.OptimizeCmpDoesNotFoldMismatchedTest (1 ms)
+[ RUN      ] X86CgPeephole.ScalarLoadFoldsRHSAndKeepsTiedCopyAndFlags
+[       OK ] X86CgPeephole.ScalarLoadFoldsRHSAndKeepsTiedCopyAndFlags (5 ms)
+[ RUN      ] X86CgPeephole.ScalarLoadKeepsSharedLHSAndOrderedEffects
+[       OK ] X86CgPeephole.ScalarLoadKeepsSharedLHSAndOrderedEffects (4 ms)
+[ RUN      ] X86CgPeephole.ScalarLoadFollowsUniqueValueCopiesWithinBoundedWindow
+[       OK ] X86CgPeephole.ScalarLoadFollowsUniqueValueCopiesWithinBoundedWindow (3 ms)
+[ RUN      ] X86CgPeephole.ScalarLoadDoesNotPartiallyEraseSharedForwardingOrCrossStore
+[       OK ] X86CgPeephole.ScalarLoadDoesNotPartiallyEraseSharedForwardingOrCrossStore (0 ms)
+[----------] 8 tests from X86CgPeephole (18 ms total)
+
+[----------] 3 tests from X86ScalarAVX
+[ RUN      ] X86ScalarAVX.PolicyRespectsHostAllocationAndControls
+[       OK ] X86ScalarAVX.PolicyRespectsHostAllocationAndControls (0 ms)
+[ RUN      ] X86ScalarAVX.PreservesScalarOpcodeAndFeatureGate
+[       OK ] X86ScalarAVX.PreservesScalarOpcodeAndFeatureGate (5 ms)
+[ RUN      ] X86ScalarAVX.PreservesArithmeticOperandOrder
+[       OK ] X86ScalarAVX.PreservesArithmeticOperandOrder (2 ms)
+[----------] 3 tests from X86ScalarAVX (8 ms total)
+
+[----------] Global test environment tear-down
+[==========] 34 tests from 3 test suites ran. (90 ms total)
+[  PASSED  ] 34 tests.

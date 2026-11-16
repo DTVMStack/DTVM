@@ -115,6 +115,8 @@ public:
 #undef override
 
 private:
+  CgRegister tryLowerWideCompare(const SelectInstruction &Inst);
+
   // ==================== X86CgLowering Utilities ====================
 
   static unsigned X86ChooseCmpImmediateOpcode(MVT VT, int64_t Val);

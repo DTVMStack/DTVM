@@ -97,6 +97,23 @@ unit-to-live-entry lookup stays constant time for large sets; truncated sparse
 indices can require a dense-set probe walk. Allocation choices, spill order,
 publication and guest call-clobber behavior remain unchanged.
 
+### Lexicographic two-limb comparisons
+
+X86 lowering recognizes i32 boolean selects expressing lexicographic i128
+comparisons from unsigned i64 low limbs and signed/unsigned i64 high limbs.
+Equality/inequality of the high limbs chooses the appropriate comparison arm.
+Only i64 local reads are eligible. Already-materialized comparisons fall back
+to preserve cached boolean snapshots. The equality operands must provably refer
+to the same high-limb values, including snapshots taken before a local rewrite.
+Expression-owner walks are bounded to 32 parent links. Alias resolution stays
+in the current MIR block, with at most 128 visited
+statements per operand; exhausted proofs fall back to ordinary lowering.
+The current statement iterator comes from the existing lowering traversal,
+without repeated searches from the block start. Lower all four operands
+before emitting CMP/SBB/SETcc, preserving their order and the borrow flag chain.
+No memory access, call or potentially trapping expression is moved. This
+requires baseline x86-64 instructions and applies to either register allocator.
+
 ### LazyJIT stub publish monotonicity
 
 In multithread LazyJIT, each function stub's `jmp` target is published monotonically:

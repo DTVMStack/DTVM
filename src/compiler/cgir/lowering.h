@@ -44,7 +44,10 @@ public:
         setInsertBlock(getOrCreateCgBB(MIRBB));
       }
 
-      for (MInstruction *Instr : *MIRBB) {
+      CurrentMIRBB = MIRBB;
+      for (auto It = MIRBB->begin(); It != MIRBB->end(); ++It) {
+        CurrentMIRPosition = It;
+        MInstruction *Instr = *It;
         ZEN_ASSERT(Instr);
         lowerStmt(*Instr);
       }
@@ -788,6 +791,8 @@ protected:
   bool shouldOptForSize(const CgFunction *_MF) { return false; }
 
   CompileMemPool _mpool;
+  const MBasicBlock *CurrentMIRBB = nullptr;
+  MInstruction *const *CurrentMIRPosition = nullptr;
   MFunction &_mir_func;
   CgFunction *MF;
   const llvm::TargetRegisterInfo &TRI;

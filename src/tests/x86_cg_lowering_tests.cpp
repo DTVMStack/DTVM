@@ -1406,3 +1406,110 @@ TEST(X86ScalarAVX, PreservesArithmeticOperandOrder) {
     finishLitmus(F);
   }
 }
+
+namespace {
+std::pair<unsigned, std::string>
+lowerWideComparison(CmpInstruction::Predicate LowPred,
+                    CmpInstruction::Predicate HighPred, bool NotEqual,
+                    bool SwapEquality, unsigned Negative = 0) {
+  CompileContext Ctx;
+  Ctx.initialize();
+  MFunction F(Ctx, 0);
+  auto *I64 = &CompileContext::I64Type;
+  auto *I32 = &CompileContext::I32Type;
+  F.setFunctionType(MFunctionType::create(Ctx, *I32, {I64, I64, I64, I64}));
+  auto *BB = F.createBasicBlock();
+  F.appendBlock(BB);
+  auto Read = [&](unsigned Index) -> MInstruction * {
+    return F.createInstruction<DreadInstruction>(false, *BB, I64, Index);
+  };
+  auto Assign = [&](unsigned Index, MInstruction *Value) {
+    F.createInstruction<DassignInstruction>(true, *BB, I64, Value, Index);
+  };
+  unsigned HighA = 2, EqualA = 2;
+  if (Negative == 4 || Negative == 5) {
+    HighA = F.createVariable(I64)->getVarIdx();
+    auto Snapshot = F.createVariable(I64)->getVarIdx();
+    Assign(HighA, Read(2));
+    Assign(Snapshot, Read(2));
+    Assign(2, makeInt(F, *BB, I64, 1));
+    EqualA = Negative == 4 ? 2 : Snapshot;
+  }
+  if (Negative == 6)
+    for (unsigned I = 0; I < 160; ++I)
+      Assign(F.createVariable(I64)->getVarIdx(), makeInt(F, *BB, I64, I));
+  MInstruction *LowA = Read(0);
+  if (Negative == 3)
+    LowA = F.createInstruction<BinaryInstruction>(false, *BB, OP_add, I64, LowA,
+                                                  makeInt(F, *BB, I64, 1));
+  auto *Low = F.createInstruction<CmpInstruction>(
+      false, *BB, Negative == 1 ? CmpInstruction::ICMP_SLT : LowPred, I32, LowA,
+      Read(1));
+  auto *High = F.createInstruction<CmpInstruction>(false, *BB, HighPred, I32,
+                                                   Read(HighA), Read(3));
+  auto *EA = Read(EqualA);
+  auto *EB = Read(Negative == 2 ? 0 : 3);
+  if (SwapEquality)
+    std::swap(EA, EB);
+  auto *Eq = F.createInstruction<CmpInstruction>(
+      false, *BB, NotEqual ? CmpInstruction::ICMP_NE : CmpInstruction::ICMP_EQ,
+      I32, EA, EB);
+  if (Negative >= 8) {
+    auto *Saved = Negative == 8 ? Low : (Negative == 9 ? High : Eq);
+    F.createInstruction<DassignInstruction>(true, *BB, I32, Saved,
+                                            F.createVariable(I32)->getVarIdx());
+    Assign(Negative == 8 ? 0 : 2, makeInt(F, *BB, I64, 1));
+  }
+  auto *Select = F.createInstruction<SelectInstruction>(
+      false, *BB, I32, Eq, NotEqual ? High : Low, NotEqual ? Low : High);
+  MInstruction *Value = Select;
+  if (Negative == 7)
+    for (unsigned I = 0; I < 40; ++I)
+      Value = F.createInstruction<BinaryInstruction>(
+          false, *BB, OP_add, I32, Value, makeInt(F, *BB, I32, 1));
+  F.createInstruction<COMPILER::ReturnInstruction>(true, *BB, I32, Value);
+  std::pair<unsigned, std::string> Result;
+  {
+    CgFunction MF(Ctx, F);
+    X86CgLowering Lowering(MF);
+    Result = {countOpcode(MF, X86::SBB64rr), dumpCg(MF)};
+  }
+  finishLitmus(F);
+  return Result;
+}
+} // namespace
+
+TEST(X86CgLowering, WideComparisonSupportsRelationalAndEqualityDirections) {
+  using C = CmpInstruction;
+  const std::pair<C::Predicate, C::Predicate> Cases[] = {
+      {C::ICMP_ULT, C::ICMP_ULT}, {C::ICMP_ULE, C::ICMP_ULE},
+      {C::ICMP_UGT, C::ICMP_UGT}, {C::ICMP_UGE, C::ICMP_UGE},
+      {C::ICMP_ULT, C::ICMP_SLT}, {C::ICMP_ULE, C::ICMP_SLE},
+      {C::ICMP_UGT, C::ICMP_SGT}, {C::ICMP_UGE, C::ICMP_SGE}};
+  for (auto P : Cases)
+    for (bool NE : {false, true})
+      for (bool SwapEq : {false, true}) {
+        auto Result = lowerWideComparison(P.first, P.second, NE, SwapEq);
+        EXPECT_EQ(Result.first, 1u) << Result.second;
+        EXPECT_EQ(Result.second.find("CMOV32"), std::string::npos)
+            << Result.second;
+      }
+}
+
+TEST(X86CgLowering, WideComparisonRejectsUnprovenOrNonLeafValues) {
+  for (unsigned Negative : {1u, 2u, 3u, 4u, 6u, 7u, 8u, 9u, 10u}) {
+    auto Result =
+        lowerWideComparison(CmpInstruction::ICMP_ULT, CmpInstruction::ICMP_ULT,
+                            false, false, Negative);
+    EXPECT_EQ(Result.first, 0u) << Negative << '\n' << Result.second;
+  }
+  auto WrongDirection = lowerWideComparison(
+      CmpInstruction::ICMP_ULT, CmpInstruction::ICMP_UGT, false, false);
+  EXPECT_EQ(WrongDirection.first, 0u) << WrongDirection.second;
+}
+
+TEST(X86CgLowering, WideComparisonKeepsSnapshotsBeforeSourceOverwrite) {
+  auto Result = lowerWideComparison(CmpInstruction::ICMP_ULT,
+                                    CmpInstruction::ICMP_ULT, false, false, 5);
+  EXPECT_EQ(Result.first, 1u) << Result.second;
+}

@@ -1,6 +1,7 @@
 {
   "schema_version": "phase15-v1",
   "notes": {
+    "codegen_diagnostics": "Synthetic compiler diagnostics, not original paper applications; explicit wide_compare cases use dev=5M / paper=50M iterations.",
     "fair_same_wasm": "DTVM and Wasmtime execute the identical .wasm with equivalent entry/args/dir/stdin. Wasmtime module cache is disabled.",
     "dtvm_hostapi_only": "DTVM overflow path imports env::checked_i64_*; Wasmtime cannot run that module. Not a same-wasm comparison.",
     "different_wasm": "Wasmtime overflow uses emscripten wasm with opcode 0xfc / bulk-memory that DTVM cannot load. Paper overflow table is different-wasm by construction.",
@@ -36,6 +37,30 @@
     ]
   },
   "cases": [
+    {
+      "id": "wide_compare_dev",
+      "suite": "codegen",
+      "scale": "dev",
+      "wasm": "benchmarks/codegen/wide_compare.wasm",
+      "kind": "reactor",
+      "function": "run",
+      "args": [
+        "5000000"
+      ],
+      "fairness": "same-wasm"
+    },
+    {
+      "id": "wide_compare_paper",
+      "suite": "codegen",
+      "scale": "paper",
+      "wasm": "benchmarks/codegen/wide_compare.wasm",
+      "kind": "reactor",
+      "function": "run",
+      "args": [
+        "50000000"
+      ],
+      "fairness": "same-wasm"
+    },
     {
       "id": "fib_iter_dev",
       "suite": "fib",
