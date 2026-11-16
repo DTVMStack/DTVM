@@ -1,0 +1,16 @@
+{
+  "executions": 9450,
+  "seed": 6461601,
+  "random_cases": 100,
+  "cpu": 0,
+  "modes": [
+    "greedy",
+    "fast",
+    "lazy"
+  ],
+  "binary": "/tmp/dtvm-layout-build/dtvm",
+  "binary_sha256": "1302af767e4acd5206cc3844f5ab0d98c3a2035cf01bc59f9af162afcff6132a",
+  "fixture_sha256": "cb7e079c592f22512a56ad40c4a2fbccf83e49f16266a49fbf62315fb1910325",
+  "wasm_sha256": "6195afe11d9f798d936209377973fa3cb0b6b6a6599a5293be6d6c9aca87bf45",
+  "oracle": "independent Python unbounded integers, explicit signed high limb, unsigned low limb; each process fresh"
+}

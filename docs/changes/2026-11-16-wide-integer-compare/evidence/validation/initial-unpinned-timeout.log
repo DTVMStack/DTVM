@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "/workspace/DTVM_contract_bench/work/contracts-jit-study/avx-wide/validate_wide_v2.py", line 20, in <module>
+    r=subprocess.run(cmd,capture_output=True,text=True,env=env,timeout=20)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/tmp/dtvm-layout-build/dtvm', '-m', 'multipass', '--enable-multipass-lazy', '-f', 'gt_u_ne', '/tmp/dtvm-avx-wide/wide-compare-v2.wasm', '--args', '3726019365670905330', '9142169350147547889', '-6059922281519152956', '-7447048499417620116']' timed out after 20 seconds

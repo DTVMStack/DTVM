@@ -1,0 +1,2 @@
+selftest: ok
+  cases=60 polybench=30 wapm=20

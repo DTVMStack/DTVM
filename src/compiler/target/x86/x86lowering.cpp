@@ -1415,7 +1415,125 @@ X86CgLowering::lowerEvmUrem128By64Expr(const EvmUrem128By64Instruction &Inst) {
   return It->second;
 }
 
+// Fold select(hiA == hiB, loA <u loB, hiA < hiB) and its relational
+// variants into one two-limb subtract. Only i64 local reads participate:
+// lowering every input before CMP preserves evaluation and flag ordering.
+CgRegister X86CgLowering::tryLowerWideCompare(const SelectInstruction &Inst) {
+  auto *Eq = dyn_cast<CmpInstruction>(Inst.getOperand<0>());
+  if (!Eq || !Inst.getType()->isI32() ||
+      (Eq->getPredicate() != CmpInstruction::ICMP_EQ &&
+       Eq->getPredicate() != CmpInstruction::ICMP_NE))
+    return 0;
+  const bool Equal = Eq->getPredicate() == CmpInstruction::ICMP_EQ;
+  auto *Low = dyn_cast<CmpInstruction>(Inst.getOperand(Equal ? 1 : 2));
+  auto *High = dyn_cast<CmpInstruction>(Inst.getOperand(Equal ? 2 : 1));
+  if (!Low || !High)
+    return 0;
+  const auto LP = Low->getPredicate(), HP = High->getPredicate();
+  const bool Greater =
+      LP == CmpInstruction::ICMP_UGT || LP == CmpInstruction::ICMP_UGE;
+  const bool Inclusive =
+      LP == CmpInstruction::ICMP_ULE || LP == CmpInstruction::ICMP_UGE;
+  if (!Greater && LP != CmpInstruction::ICMP_ULT &&
+      LP != CmpInstruction::ICMP_ULE)
+    return 0;
+  const bool Signed =
+      Greater
+          ? (HP == CmpInstruction::ICMP_SGT || HP == CmpInstruction::ICMP_SGE)
+          : (HP == CmpInstruction::ICMP_SLT || HP == CmpInstruction::ICMP_SLE);
+  const bool Unsigned =
+      Greater
+          ? (HP == CmpInstruction::ICMP_UGT || HP == CmpInstruction::ICMP_UGE)
+          : (HP == CmpInstruction::ICMP_ULT || HP == CmpInstruction::ICMP_ULE);
+  if (!Signed && !Unsigned)
+    return 0;
+  // A comparison already materialized for another use can describe older
+  // local values. Re-reading its operands would lose that boolean snapshot.
+  if (_expr_reg_map.count(Eq) || _expr_reg_map.count(Low) ||
+      _expr_reg_map.count(High))
+    return 0;
+  const auto *BB = CurrentMIRBB;
+  const auto End = CurrentMIRPosition;
+  if (!BB || !End)
+    return 0;
+  // Shared expression trees may have another owner. Bound this walk too:
+  // deeply nested expressions must not make candidate matching quadratic.
+  const MInstruction *Owner = &Inst;
+  unsigned ParentBudget = 32;
+  while (!Owner->isStatement() && ParentBudget) {
+    Owner = Owner->getParentInst();
+    --ParentBudget;
+  }
+  if (!Owner->isStatement() || Owner->getParentBB() != BB)
+    return 0;
+  // Resolve snapshots at their own definition point, not at the latest local
+  // write. Stop conservatively after 128 visited statements per operand.
+  auto Origin = [&](const MInstruction *Value) {
+    auto Pos = End;
+    unsigned Budget = 128;
+    while (const auto *Read = dyn_cast<DreadInstruction>(Value)) {
+      if (!Read->getType()->isI64())
+        return std::make_pair(static_cast<const MInstruction *>(nullptr), ~0u);
+      const uint32_t Var = Read->getVarIdx();
+      bool Found = false;
+      while (Pos != BB->begin()) {
+        if (!Budget)
+          return std::make_pair(static_cast<const MInstruction *>(nullptr),
+                                ~0u);
+        --Budget;
+        const auto *Assign = dyn_cast<DassignInstruction>(*--Pos);
+        if (Assign && Assign->getVarIdx() == Var) {
+          Value = Assign->getOperand<0>();
+          if (!isa<DreadInstruction>(Value))
+            return std::make_pair(static_cast<const MInstruction *>(Assign),
+                                  0u);
+          Found = true;
+          break;
+        }
+      }
+      if (!Found)
+        return std::make_pair(static_cast<const MInstruction *>(nullptr), Var);
+    }
+    return std::make_pair(static_cast<const MInstruction *>(nullptr), ~0u);
+  };
+  auto SameLocal = [&](const MInstruction *A, const MInstruction *B) {
+    auto OA = Origin(A), OB = Origin(B);
+    return OA.second != ~0u && OA == OB;
+  };
+  const auto *HA = High->getOperand<0>();
+  const auto *HB = High->getOperand<1>();
+  if (!((SameLocal(HA, Eq->getOperand<0>()) &&
+         SameLocal(HB, Eq->getOperand<1>())) ||
+        (SameLocal(HA, Eq->getOperand<1>()) &&
+         SameLocal(HB, Eq->getOperand<0>()))))
+    return 0;
+  const auto *LA = Low->getOperand<0>();
+  const auto *LB = Low->getOperand<1>();
+  if (!isa<DreadInstruction>(LA) || !isa<DreadInstruction>(LB) ||
+      !LA->getType()->isI64() || !LB->getType()->isI64())
+    return 0;
+  // DREAD's cache maps to the stable virtual register for its variable, not a
+  // captured runtime value. Resolve local aliases at the current MIR position.
+  CgRegister A = lowerExpr(*LA), B = lowerExpr(*LB);
+  CgRegister C = lowerExpr(*HA), D = lowerExpr(*HB);
+  if (Greater != Inclusive) {
+    std::swap(A, B);
+    std::swap(C, D);
+  }
+  // Materialize/copy every operand before CMP so CF is consumed directly.
+  CgRegister Scratch = fastEmitCopy(&X86::GR64RegClass, C);
+  fastEmitNoDefInst_rr(X86::CMP64rr, A, B);
+  (void)fastEmitInst_rr(X86::SBB64rr, &X86::GR64RegClass, Scratch, D);
+  CgRegister Result =
+      fastEmitInst_i(X86::SETCCr, &X86::GR8RegClass,
+                     Signed ? (Inclusive ? X86::COND_GE : X86::COND_L)
+                            : (Inclusive ? X86::COND_AE : X86::COND_B));
+  return fastEmitInst_r(X86::MOVZX32rr8, &X86::GR32RegClass, Result);
+}
+
 CgRegister X86CgLowering::lowerSelectExpr(const SelectInstruction &Inst) {
+  if (CgRegister Result = tryLowerWideCompare(Inst))
+    return Result;
   const MType &Type = *Inst.getType();
   const MInstruction *Cond = Inst.getOperand<0>();
   const MInstruction *LHS = Inst.getOperand<1>();
