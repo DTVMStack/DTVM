@@ -2241,9 +2241,18 @@ CgRegister X86CgLowering::lowerCall(const CallInstructionBase &Inst) {
   }
 
   OperandNum NumOperands = Inst.getNumOperands();
+  // Keep the ordinary path for narrow calls. Wide calls can exceed the
+  // available registers before argument placement even begins.
+  constexpr unsigned WideCallThreshold = 16;
+  const bool DeferConstantArgs = NumOperands >= WideCallThreshold;
   SmallVector<CgRegister, 6> ArgVirtRegs;
   for (uint32_t i = 0; i < NumOperands; i++) {
     const MInstruction *Operand = Inst.getOperand(i);
+    if (DeferConstantArgs && isa<ConstantInstruction>(Operand) &&
+        (Operand->getType()->isI32() || Operand->getType()->isI64())) {
+      ArgVirtRegs.push_back(X86::NoRegister);
+      continue;
+    }
     MVT VT = getMVT(*Operand->getType());
     const TargetRegisterClass *RC = TLI.getRegClassFor(VT);
     CgRegister OperandReg = lowerExpr(*Operand);
@@ -2269,6 +2278,10 @@ CgRegister X86CgLowering::lowerCall(const CallInstructionBase &Inst) {
     const MInstruction *Operand = Inst.getOperand(i);
     MType *Type = Operand->getType();
     CgRegister ArgVirtReg = ArgVirtRegs[i];
+    // Other argument expressions are lowered in their original order above.
+    // Materialize an integer literal here, next to its ABI copy or store.
+    if (!ArgVirtReg)
+      ArgVirtReg = fastMaterializeConstant(cast<ConstantInstruction>(*Operand));
     bool NeedSpill = false;
     MCPhysReg ArgReg;
     if (Type->isI8() && GPRIdx < getArraySize(GPR8ArgRegs)) {

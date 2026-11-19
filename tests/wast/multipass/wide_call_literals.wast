@@ -1,0 +1,163 @@
+;; Wide calls mix literal and dynamic integer/FP arguments across registers and stack.
+(module
+  (type $sig (func
+    (param i32 i64 f64 i32 i64 f64 i32 i64 f64)
+    (param i32 i64 f64 i32 i64 f64 i32 i64 f64)
+    (param i32 i64 f64 i32 i64 f64 i32 i64 f64)
+    (result i64)))
+  (table 1 funcref)
+  (elem (i32.const 0) $mix)
+  (memory 1)
+  (func $mix (type $sig) (local $hash i64)
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.extend_i32_u (local.get 0))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (local.get 1)))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.trunc_f64_u (local.get 2))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.extend_i32_u (local.get 3))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (local.get 4)))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.trunc_f64_u (local.get 5))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.extend_i32_u (local.get 6))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (local.get 7)))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.trunc_f64_u (local.get 8))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.extend_i32_u (local.get 9))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (local.get 10)))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.trunc_f64_u (local.get 11))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.extend_i32_u (local.get 12))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (local.get 13)))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.trunc_f64_u (local.get 14))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.extend_i32_u (local.get 15))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (local.get 16)))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.trunc_f64_u (local.get 17))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.extend_i32_u (local.get 18))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (local.get 19)))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.trunc_f64_u (local.get 20))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.extend_i32_u (local.get 21))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (local.get 22)))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.trunc_f64_u (local.get 23))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.extend_i32_u (local.get 24))))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (local.get 25)))
+    (local.set $hash
+      (i64.xor (i64.mul (local.get $hash) (i64.const 16777619)) (i64.trunc_f64_u (local.get 26))))
+    (local.get $hash))
+  (func (export "direct") (param $x i64) (result i64)
+    (call $mix (i32.const 4294901760)
+      (local.get $x)
+      (f64.const 102)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030434)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901766)
+      (local.get $x)
+      (f64.const 108)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030440)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901772)
+      (local.get $x)
+      (f64.const 114)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030446)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901778)
+      (local.get $x)
+      (f64.const 120)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030452)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901784)
+      (local.get $x)
+      (f64.const 126)))
+  (func (export "indirect") (param $x i64) (result i64)
+    (call_indirect (type $sig) (i32.const 4294901760)
+      (local.get $x)
+      (f64.const 102)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030434)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901766)
+      (local.get $x)
+      (f64.const 108)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030440)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901772)
+      (local.get $x)
+      (f64.const 114)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030446)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901778)
+      (local.get $x)
+      (f64.const 120)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030452)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901784)
+      (local.get $x)
+      (f64.const 126) (i32.const 0)))
+  (func (export "trap_arg") (param $x i64) (result i64)
+    (call $mix (i32.load (i32.const 65536))
+      (local.get $x)
+      (f64.const 102)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030434)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901766)
+      (local.get $x)
+      (f64.const 108)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030440)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901772)
+      (local.get $x)
+      (f64.const 114)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030446)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901778)
+      (local.get $x)
+      (f64.const 120)
+      (i32.wrap_i64 (local.get $x))
+      (i64.const 5124095576030452)
+      (f64.convert_i64_u (local.get $x))
+      (i32.const 4294901784)
+      (local.get $x)
+      (f64.const 126)))
+)
+
+(assert_return (invoke "direct" (i64.const 0)) (i64.const 0x9ba13ae361c89dce))
+(assert_return (invoke "direct" (i64.const 1)) (i64.const 0xf4734f66e223ac7d))
+(assert_return (invoke "direct" (i64.const 4294967295)) (i64.const 0xd9e781de1ddc5383))
+(assert_return (invoke "direct" (i64.const 4294967296)) (i64.const 0x2f7823dc61c89dce))
+(assert_return (invoke "direct" (i64.const 1099511704333)) (i64.const 0xf48278443824e629))
+(assert_return (invoke "indirect" (i64.const 0)) (i64.const 0x9ba13ae361c89dce))
+(assert_return (invoke "indirect" (i64.const 1)) (i64.const 0xf4734f66e223ac7d))
+(assert_return (invoke "indirect" (i64.const 4294967295)) (i64.const 0xd9e781de1ddc5383))
+(assert_return (invoke "indirect" (i64.const 4294967296)) (i64.const 0x2f7823dc61c89dce))
+(assert_return (invoke "indirect" (i64.const 1099511704333)) (i64.const 0xf48278443824e629))
+(assert_trap (invoke "trap_arg" (i64.const 1)) "out of bounds memory access")

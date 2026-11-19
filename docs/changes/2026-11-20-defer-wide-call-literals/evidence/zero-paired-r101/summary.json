@@ -1,0 +1,45 @@
+{
+  "clang-calls/run_wide24/0": {
+    "median_ms": {
+      "main-fast": 5.847936,
+      "candidate-fast": 5.750279,
+      "main-lazy": 6.188036,
+      "candidate-lazy": 6.201927,
+      "main-greedy": 7.242192,
+      "candidate-greedy": 6.936579,
+      "main-aa": 5.952643,
+      "main-singlepass": 5.470379,
+      "WT45": 7.428156
+    },
+    "paired": {
+      "candidate-fast/main-fast": {
+        "median": 0.9829499332697962,
+        "ci95": [
+          0.9547031916465513,
+          1.0206745545152682
+        ]
+      },
+      "candidate-lazy/main-lazy": {
+        "median": 0.9937214146721551,
+        "ci95": [
+          0.9389292091140508,
+          1.0337829787178328
+        ]
+      },
+      "candidate-greedy/main-greedy": {
+        "median": 0.9590151434243052,
+        "ci95": [
+          0.9344909411147392,
+          0.9990994568971331
+        ]
+      },
+      "main-aa/main-fast": {
+        "median": 0.9875910620774786,
+        "ci95": [
+          0.9545926416727278,
+          1.0197320088621649
+        ]
+      }
+    }
+  }
+}
