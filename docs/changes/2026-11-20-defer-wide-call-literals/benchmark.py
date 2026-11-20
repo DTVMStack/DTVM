@@ -24,8 +24,20 @@ parser.add_argument("--out", type=Path, required=True)
 parser.add_argument("--rounds", type=int, default=31)
 parser.add_argument("--seed", type=int, default=6542001)
 parser.add_argument("--cpu", type=int, default=0)
+parser.add_argument("--timeout", type=float, default=90.0)
 parser.add_argument("--only", choices=["clang", "canonical", "zero-calls"])
+parser.add_argument(
+    "--experimental-control", action="store_true",
+    help="compare masks 0 and 4 using the earlier c31be94 research build as --candidate",
+)
 args = parser.parse_args()
+if args.rounds < 1 or args.timeout <= 0:
+    parser.error("--rounds and --timeout must be positive")
+if args.experimental_control and args.only != "zero-calls":
+    parser.error("--experimental-control requires --only zero-calls")
+args.main = args.main.resolve()
+args.candidate = args.candidate.resolve()
+args.wasmtime = args.wasmtime.resolve()
 args.out.mkdir(parents=True)
 rng = random.Random(args.seed)
 env = {k: v for k, v in os.environ.items() if not k.startswith("DTVM_RESEARCH_")}
@@ -82,26 +94,34 @@ manifest = {
     "cpu": args.cpu,
     "rounds": args.rounds,
     "warmups": 2,
+    "timeout_s": args.timeout,
+    "experimental_control": args.experimental_control,
     "binaries": {str(path): sha(path) for path in (args.main, args.candidate, args.wasmtime)},
     "cases": {},
 }
 summary = {}
 for case_id, case in cases.items():
     modes = {"fast": "lazy-F-ST", "lazy": "lazy-G-MT", "greedy": "multipass-G-ST"}
+    control = args.candidate if args.experimental_control else args.main
     commands = {
         f"{label}-{mode}": harness.dtvm_cmd(binary, case, flag, False)
         for mode, flag in modes.items()
-        for label, binary in (("main", args.main), ("candidate", args.candidate))
+        for label, binary in (("main", control), ("candidate", args.candidate))
     }
     commands["main-aa"] = commands["main-fast"]
     commands["main-singlepass"] = harness.dtvm_cmd(args.main, case, "singlepass", False)
     commands["WT45"] = harness.wasmtime_cmd(args.wasmtime, case)
+    masks = {
+        label: "4" if args.experimental_control and label.startswith("candidate-") else "0"
+        for label in commands
+    }
     expected = reference(case) if "function" in case else None
     cwd = harness.case_cwd(case)
     manifest["cases"][case_id] = {
         "input_sha256": sha(harness.paper_join(case["wasm"])),
         "cwd": str(cwd),
         "commands": commands,
+        "research_masks": masks,
         "expected": expected,
     }
     (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
@@ -114,8 +134,27 @@ for case_id, case in cases.items():
             for label in order:
                 command = ["taskset", "-c", str(args.cpu), *commands[label]]
                 before = time.perf_counter_ns()
-                result = subprocess.run(command, cwd=cwd, env=env, input=b"",
-                                        capture_output=True, timeout=90)
+                sample_env = (
+                    {**env, "DTVM_RESEARCH_COMPILER_MASK": masks[label]}
+                    if args.experimental_control else env
+                )
+                try:
+                    result = subprocess.run(
+                        command, cwd=cwd, env=sample_env, input=b"",
+                        capture_output=True, timeout=args.timeout,
+                    )
+                except subprocess.TimeoutExpired as exc:
+                    stream.write(json.dumps({
+                        "case": case_id,
+                        "round": round_id,
+                        "variant": label,
+                        "wall_ms": (time.perf_counter_ns() - before) / 1e6,
+                        "exit": None,
+                        "timeout": True,
+                        "stdout_sha256": hashlib.sha256(exc.stdout or b"").hexdigest(),
+                        "stderr_sha256": hashlib.sha256(exc.stderr or b"").hexdigest(),
+                    }) + "\n")
+                    raise RuntimeError((case_id, label, round_id, "timed out")) from exc
                 elapsed = (time.perf_counter_ns() - before) / 1e6
                 stream.write(json.dumps({
                     "case": case_id,

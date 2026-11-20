@@ -65,7 +65,18 @@ python3 benchmark.py --main /path/main/dtvm --candidate /path/pr/dtvm --wasmtime
 ```
 
 Use `--only zero-calls --seed 6542002 --rounds 101` with a separate output
-directory for the zero-iteration repeat. The WAST fixture covers direct and
+directory for the zero-iteration repeat. To reproduce the same-binary control,
+build the earlier experimental branch at `c31be94` and pass that executable as
+`--candidate` with `--experimental-control --only zero-calls --seed 6542003
+--rounds 101`. In this mode the main multipass arms and A/A use mask 0 on the
+experimental binary, and candidate arms use mask 4. Main singlepass still uses
+the standalone main binary. The manifest records the mask for each arm.
+
+The WAST fixture covers direct and
 indirect calls, mixed integer/floating-point argument classes and out-of-bounds
 traps during argument evaluation. Local validation executes its 11 assertions
 on Wasmtime 45 and on main and candidate in four modes each.
+
+The CgIR regression test verifies that the 15-operand call materializes both
+literals before frame setup. At 16 operands it checks that register and stack
+arguments consume each literal immediately after materialization.

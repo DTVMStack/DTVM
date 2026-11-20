@@ -7,7 +7,8 @@
 The x86 multipass compiler currently computes all arguments before placing them
 in registers or stack slots. In wide calls, simultaneously live integer
 literals can force extra saves and reloads. Materialize direct i32/i64 literals
-at their existing ABI copy or stack store when a call has at least 16 operands.
+at their existing ABI copy or stack store when a call has at least 16 MIR
+argument operands, including the hidden Wasm instance pointer.
 This uses the existing literal emitter and preserves nonliteral evaluation
 order, indirect target lowering and argument placement.
 
