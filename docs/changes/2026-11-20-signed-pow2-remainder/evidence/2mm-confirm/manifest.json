@@ -1,0 +1,70 @@
+{
+  "seed": 6552014,
+  "cpu": 0,
+  "group": "catalog",
+  "binaries": {
+    "/tmp/dtvm-srem-study/main": "5171c3b08f3d14131e6532a1a8de1b68fc6f6dacd0b781ce1ca4da54ad0278ff",
+    "/tmp/dtvm-next-build/dtvm": "11b44ff33c37adf08e4741bf01116d402f78909724399ce5353b2b0f8f1c7b73",
+    "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime": "d7b7317b34a717f4b809df14657975e2ce83221a697167219abdad6e44c7a12c"
+  },
+  "cases": {
+    "2mm": {
+      "commands": {
+        "main-F": [
+          "/tmp/dtvm-srem-study/main",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "--disable-multipass-greedyra",
+          "--disable-multipass-multithread",
+          "/workspace/DTVM_contract_bench/benchmarks/paper/benchmarks/polybenchc/2mm.wasm"
+        ],
+        "candidate-F": [
+          "/tmp/dtvm-next-build/dtvm",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "--disable-multipass-greedyra",
+          "--disable-multipass-multithread",
+          "/workspace/DTVM_contract_bench/benchmarks/paper/benchmarks/polybenchc/2mm.wasm"
+        ],
+        "main-D": [
+          "/tmp/dtvm-srem-study/main",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM_contract_bench/benchmarks/paper/benchmarks/polybenchc/2mm.wasm"
+        ],
+        "candidate-D": [
+          "/tmp/dtvm-next-build/dtvm",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "/workspace/DTVM_contract_bench/benchmarks/paper/benchmarks/polybenchc/2mm.wasm"
+        ],
+        "main-AA": [
+          "/tmp/dtvm-srem-study/main",
+          "-m",
+          "multipass",
+          "--enable-multipass-lazy",
+          "--disable-multipass-greedyra",
+          "--disable-multipass-multithread",
+          "/workspace/DTVM_contract_bench/benchmarks/paper/benchmarks/polybenchc/2mm.wasm"
+        ],
+        "WT45": [
+          "/workspace/DTVM/benchmarks/paper/runtimes/wasmtime-45.0.0/out/wasmtime",
+          "run",
+          "-C",
+          "cache=n",
+          "/workspace/DTVM_contract_bench/benchmarks/paper/benchmarks/polybenchc/2mm.wasm"
+        ]
+      },
+      "cwd": "/workspace/DTVM_contract_bench",
+      "wasm_sha256": "6d31eeebe685646cf2b8c4460beaf2243064dd8a311cb83a92523f9260260d99",
+      "stdin": null,
+      "rounds": 5,
+      "warmups": 1,
+      "expected": null
+    }
+  }
+}
