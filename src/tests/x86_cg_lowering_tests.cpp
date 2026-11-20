@@ -1513,3 +1513,73 @@ TEST(X86CgLowering, WideComparisonKeepsSnapshotsBeforeSourceOverwrite) {
                                     CmpInstruction::ICMP_ULT, false, false, 5);
   EXPECT_EQ(Result.first, 1u) << Result.second;
 }
+
+TEST(X86CgLowering, DefersWideIntegerLiteralsToRegisterAndStackArguments) {
+  for (unsigned ArgumentCount : {15U, 16U}) {
+    CompileContext Ctx;
+    Ctx.initialize();
+    MFunction F(Ctx, 0);
+    MType *I64 = &CompileContext::I64Type;
+    MType *Void = &CompileContext::VoidType;
+    F.setFunctionType(MFunctionType::create(Ctx, *Void, {I64}));
+    MBasicBlock *BB = F.createBasicBlock();
+    F.appendBlock(BB);
+
+    constexpr uint64_t RegisterLiteral = 0x123456789abcdef0;
+    constexpr uint64_t StackLiteral = 0xfedcba9876543210;
+    llvm::SmallVector<MInstruction *, 16> Args;
+    for (unsigned I = 0; I < ArgumentCount; ++I) {
+      if (I == 1 || I + 1 == ArgumentCount) {
+        Args.push_back(
+            makeInt(F, *BB, I64, I == 1 ? RegisterLiteral : StackLiteral));
+      } else {
+        Args.push_back(
+            F.createInstruction<DreadInstruction>(false, *BB, I64, 0));
+      }
+    }
+    F.createInstruction<COMPILER::CallInstruction>(
+        true, *BB, Void, 1U, llvm::ArrayRef<MInstruction *>(Args));
+    F.createInstruction<COMPILER::ReturnInstruction>(true, *BB, Void, nullptr);
+
+    {
+      CgFunction MF(Ctx, F);
+      X86CgLowering Lowering(MF);
+      const std::string Dump = dumpCg(MF);
+      bool FrameReady = false;
+      unsigned Literals = 0;
+      for (const auto *CgBB : MF) {
+        for (auto It = CgBB->begin(); It != CgBB->end(); ++It) {
+          const CgInstruction &MI = *It;
+          if (MI.getOpcode() ==
+              MF.getTargetInstrInfo().getCallFrameSetupOpcode())
+            FrameReady = true;
+          if (MI.getOpcode() != X86::MOV64ri)
+            continue;
+          const auto Imm = static_cast<uint64_t>(MI.getOperand(1).getImm());
+          if (Imm != RegisterLiteral && Imm != StackLiteral)
+            continue;
+          ++Literals;
+          const bool IsWide = ArgumentCount == 16;
+          EXPECT_EQ(FrameReady, IsWide) << ArgumentCount << '\n' << Dump;
+          if (!IsWide)
+            continue;
+          auto Next = std::next(It);
+          if (Next == CgBB->end()) {
+            ADD_FAILURE() << "Missing argument placement after literal\n"
+                          << Dump;
+            continue;
+          }
+          const unsigned Op =
+              Imm == RegisterLiteral ? TargetOpcode::COPY : X86::MOV64mr;
+          EXPECT_EQ(Next->getOpcode(), Op) << Dump;
+          if (Next->getOpcode() == Op)
+            EXPECT_EQ(Next->getOperand(Imm == RegisterLiteral ? 1 : 5).getReg(),
+                      MI.getOperand(0).getReg())
+                << Dump;
+        }
+      }
+      EXPECT_EQ(Literals, 2U) << Dump;
+    }
+    finishLitmus(F);
+  }
+}

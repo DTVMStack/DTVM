@@ -114,6 +114,16 @@ before emitting CMP/SBB/SETcc, preserving their order and the borrow flag chain.
 No memory access, call or potentially trapping expression is moved. This
 requires baseline x86-64 instructions and applies to either register allocator.
 
+### Wide x86 call arguments
+
+For calls with at least 16 MIR argument operands, x86 lowering materializes
+direct i32 and i64 literals immediately before placing them in their ABI
+register or stack slot. A Wasm call's hidden instance pointer counts toward
+this threshold. Other expressions and indirect target lowering keep their
+existing order and temporaries. Only pure literals move across call-frame setup.
+Argument types, placement, outgoing stack area, and register masks follow the
+existing ABI path. The allocator selection is independent of this lowering.
+
 ### LazyJIT stub publish monotonicity
 
 In multithread LazyJIT, each function stub's `jmp` target is published monotonically:
