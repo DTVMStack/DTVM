@@ -154,11 +154,13 @@ with gzip.open(args.out / "samples.jsonl.gz", "wt", encoding="utf-8") as stream:
                     raise RuntimeError((case_id, label, proc.returncode, proc.stderr[-1000:]))
                 if expected is not None:
                     result = int(proc.stdout.decode().strip().split(":")[0], 0) & ((1 << 64) - 1)
-                    assert result == expected, (case_id, label, result, expected)
+                    if result != expected:
+                        raise RuntimeError(f"{case_id} {label}: expected {expected}, got {result}")
                 elif case["suite"] == "polybench" or case_id in {"base64cli","echo","md5","qr2text"}:
                     if output is None:
                         output = signature
-                    assert output == signature, (case_id, label, "output mismatch")
+                    if output != signature:
+                        raise RuntimeError(f"{case_id} {label}: output mismatch")
                 if round_id >= 0:
                     samples[label].append(wall_ms)
         pairs = [(f"candidate-{m}", f"main-{m}") for m in modes]
