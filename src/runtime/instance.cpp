@@ -142,6 +142,18 @@ InstanceUniquePtr Instance::newInstance(Isolation &Iso, const Module &Mod,
 }
 
 Instance::~Instance() {
+#ifdef ZEN_ENABLE_BULK_MEMORY
+  // Free dropped segment tracking arrays
+  if (DroppedDataSegments) {
+    deallocate(DroppedDataSegments);
+    DroppedDataSegments = nullptr;
+  }
+  if (DroppedElemSegments) {
+    deallocate(DroppedElemSegments);
+    DroppedElemSegments = nullptr;
+  }
+#endif
+
   auto *MemAllocator = getWasmMemoryAllocator();
   for (uint32_t I = 0; I < NumTotalMemories; ++I) {
     if (Memories[I].MemBase) {

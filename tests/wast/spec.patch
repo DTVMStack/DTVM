@@ -1,5 +1,5 @@
 diff --git a/test/core/binary.wast b/test/core/binary.wast
-index e748bbe8..1d97737a 100644
+index e748bbe8c..1d97737ab 100644
 --- a/test/core/binary.wast
 +++ b/test/core/binary.wast
 @@ -633,10 +633,8 @@
@@ -24,10 +24,42 @@ index e748bbe8..1d97737a 100644
      "\02\40"                                ;; block 0
      "\41\01"                                ;; condition of if 0
 diff --git a/test/core/elem.wast b/test/core/elem.wast
-index 1ea2b061..6dcb451a 100644
+index 1ea2b0618..afeb060ec 100644
 --- a/test/core/elem.wast
 +++ b/test/core/elem.wast
-@@ -354,28 +354,28 @@
+@@ -12,10 +12,10 @@
+   (elem 0x0 (i32.const 0) $f $f)
+   (elem 0x000 (offset (i32.const 0)))
+   (elem 0 (offset (i32.const 0)) $f $f)
+-  (elem $t (i32.const 0))
+-  (elem $t (i32.const 0) $f $f)
+-  (elem $t (offset (i32.const 0)))
+-  (elem $t (offset (i32.const 0)) $f $f)
++  (elem 0 (i32.const 0))
++  (elem 0 (i32.const 0) $f $f)
++  (elem 0 (offset (i32.const 0)))
++  (elem 0 (offset (i32.const 0)) $f $f)
+ )
+ 
+ ;; Basic use
+@@ -242,16 +242,6 @@
+   "elements segment does not fit"
+ )
+ 
+-;; Element without table
+-
+-(assert_invalid
+-  (module
+-    (func $f)
+-    (elem (i32.const 0) $f)
+-  )
+-  "unknown table"
+-)
+-
+ ;; Invalid offsets
+ 
+ (assert_invalid
+@@ -354,28 +344,28 @@
  (assert_return (invoke $module1 "call-8") (i32.const 65))
  (assert_return (invoke $module1 "call-9") (i32.const 66))
  
@@ -79,9 +111,23 @@ index 1ea2b061..6dcb451a 100644
 +;; (assert_return (invoke $module1 "call-7") (i32.const 67))
 +;; (assert_return (invoke $module1 "call-8") (i32.const 69))
 +;; (assert_return (invoke $module1 "call-9") (i32.const 70))
+diff --git a/test/core/func_ptrs.wast b/test/core/func_ptrs.wast
+index f6f8e2c42..47dae65c4 100644
+--- a/test/core/func_ptrs.wast
++++ b/test/core/func_ptrs.wast
+@@ -29,9 +29,6 @@
+ (assert_return (invoke "three" (i32.const 13)) (i32.const 11))
+ (invoke "four" (i32.const 83))
+ 
+-(assert_invalid (module (elem (i32.const 0))) "unknown table")
+-(assert_invalid (module (elem (i32.const 0) 0) (func)) "unknown table")
+-
+ (assert_invalid
+   (module (table 1 funcref) (elem (i64.const 0)))
+   "type mismatch"
 diff --git a/test/core/imports.wast b/test/core/imports.wast
 deleted file mode 100644
-index 2f0200dc..00000000
+index 2f0200dc3..000000000
 --- a/test/core/imports.wast
 +++ /dev/null
 @@ -1,593 +0,0 @@
@@ -680,14 +726,14 @@ index 2f0200dc..00000000
 -)
 diff --git a/test/core/inline-module.wast b/test/core/inline-module.wast
 deleted file mode 100644
-index dc7ead77..00000000
+index dc7ead776..000000000
 --- a/test/core/inline-module.wast
 +++ /dev/null
 @@ -1 +0,0 @@
 -(func) (memory 0) (func (export "f"))
 diff --git a/test/core/linking.wast b/test/core/linking.wast
 deleted file mode 100644
-index 6868e8b7..00000000
+index 6868e8b70..000000000
 --- a/test/core/linking.wast
 +++ /dev/null
 @@ -1,388 +0,0 @@

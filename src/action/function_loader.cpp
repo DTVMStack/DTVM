@@ -671,6 +671,120 @@ void FunctionLoader::load() {
     case I64_EXTEND32_S:
       popAndPushValueType(1, WASMType::I64, WASMType::I64);
       break;
+    case WASM_PREFIX_FC: {
+#ifdef ZEN_ENABLE_BULK_MEMORY
+      // Multi-byte opcode prefix for bulk memory operations
+      uint32_t SubOpcode = readU32();
+      switch (SubOpcode) {
+      case FC_MEMORY_INIT: { // memory.init: dataidx + 0x00
+        uint32_t DataIdx = readU32();
+        uint8_t MemIdx = to_underlying(readByte());
+        if (MemIdx != 0x00) {
+          throw getError(ErrorCode::ZeroFlagExpected);
+        }
+        if (Mod.DataCount == -1u) {
+          throw getError(ErrorCode::UnknownDataSegment);
+        }
+        if (!Mod.isValidDataSegment(DataIdx)) {
+          throw getError(ErrorCode::UnknownDataSegment);
+        }
+        if (!hasMemory()) {
+          throw getError(ErrorCode::UnknownMemory);
+        }
+        popValueType(WASMType::I32); // n
+        popValueType(WASMType::I32); // s
+        popValueType(WASMType::I32); // d
+        FuncCodeEntry.Stats |= Module::SF_memory;
+        break;
+      }
+      case FC_DATA_DROP: { // data.drop: dataidx
+        uint32_t DataIdx = readU32();
+        if (Mod.DataCount == -1u) {
+          throw getError(ErrorCode::UnknownDataSegment);
+        }
+        if (!Mod.isValidDataSegment(DataIdx)) {
+          throw getError(ErrorCode::UnknownDataSegment);
+        }
+        break;
+      }
+      case FC_MEMORY_COPY: { // memory.copy: 0x00 0x00
+        uint8_t DstMemIdx = to_underlying(readByte());
+        uint8_t SrcMemIdx = to_underlying(readByte());
+        if (DstMemIdx != 0x00 || SrcMemIdx != 0x00) {
+          throw getError(ErrorCode::ZeroFlagExpected);
+        }
+        if (!hasMemory()) {
+          throw getError(ErrorCode::UnknownMemory);
+        }
+        popValueType(WASMType::I32); // n
+        popValueType(WASMType::I32); // s
+        popValueType(WASMType::I32); // d
+        FuncCodeEntry.Stats |= Module::SF_memory;
+        break;
+      }
+      case FC_MEMORY_FILL: { // memory.fill: 0x00
+        uint8_t MemIdx = to_underlying(readByte());
+        if (MemIdx != 0x00) {
+          throw getError(ErrorCode::ZeroFlagExpected);
+        }
+        if (!hasMemory()) {
+          throw getError(ErrorCode::UnknownMemory);
+        }
+        popValueType(WASMType::I32); // n
+        popValueType(WASMType::I32); // val
+        popValueType(WASMType::I32); // d
+        FuncCodeEntry.Stats |= Module::SF_memory;
+        break;
+      }
+      case FC_TABLE_INIT: { // table.init: elemidx + tableidx
+        uint32_t ElemIdx = readU32();
+        uint32_t TableIdx = readU32();
+        if (!Mod.isValidElemSegment(ElemIdx)) {
+          throw getError(ErrorCode::UnknownElemSegment);
+        }
+        if (!Mod.isValidTable(TableIdx)) {
+          throw getError(ErrorCode::UnknownTable);
+        }
+        popValueType(WASMType::I32); // n
+        popValueType(WASMType::I32); // s
+        popValueType(WASMType::I32); // d
+        FuncCodeEntry.Stats |= Module::SF_table;
+        break;
+      }
+      case FC_ELEM_DROP: { // elem.drop: elemidx
+        uint32_t ElemIdx = readU32();
+        if (!Mod.isValidElemSegment(ElemIdx)) {
+          throw getError(ErrorCode::UnknownElemSegment);
+        }
+        break;
+      }
+      case FC_TABLE_COPY: { // table.copy: dst_tableidx + src_tableidx
+        uint32_t DstTableIdx = readU32();
+        uint32_t SrcTableIdx = readU32();
+        if (!Mod.isValidTable(DstTableIdx)) {
+          throw getError(ErrorCode::UnknownTable);
+        }
+        if (!Mod.isValidTable(SrcTableIdx)) {
+          throw getError(ErrorCode::UnknownTable);
+        }
+        popValueType(WASMType::I32); // n
+        popValueType(WASMType::I32); // s
+        popValueType(WASMType::I32); // d
+        FuncCodeEntry.Stats |= Module::SF_table;
+        break;
+      }
+      default:
+        throw getErrorWithExtraMessage(ErrorCode::UnsupportedOpcode,
+                                       "0xFC " + std::to_string(SubOpcode));
+      }
+#else
+      throw getErrorWithExtraMessage(
+          ErrorCode::UnsupportedOpcode,
+          "bulk memory operations not enabled (compile with "
+          "ZEN_ENABLE_BULK_MEMORY=ON)");
+#endif
+      break;
+    }
     case I32_LOAD:
     case I64_LOAD:
     case F32_LOAD:

@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -112,8 +113,26 @@ void testWithUnitName(const std::pair<std::string, std::string> &UnitPair) {
   T.run(UnitPair);
 }
 
+// Bulk memory operations tests that require the feature to be enabled
+static const std::unordered_set<std::string> BulkMemoryTests = {
+    "memory_fill", "memory_copy", "memory_init", "data_drop",
+    "table_copy",  "table_init",  "elem_drop",
+};
+
 TEST_P(SpecUnitTest, TestSpec) {
   const auto &UnitPair = GetParam();
+#ifdef ZEN_ENABLE_BULK_MEMORY
+  // Skip bulk memory tests in JIT mode (not supported)
+  if (T.getConfig().Mode != RunMode::InterpMode &&
+      UnitPair.first == "proposals" && BulkMemoryTests.count(UnitPair.second)) {
+    GTEST_SKIP() << "Bulk memory operations not supported in JIT mode";
+  }
+#else
+  // Skip bulk memory tests when feature is disabled
+  if (UnitPair.first == "proposals" && BulkMemoryTests.count(UnitPair.second)) {
+    GTEST_SKIP() << "Bulk memory operations not enabled";
+  }
+#endif
   testWithUnitName(UnitPair);
 }
 

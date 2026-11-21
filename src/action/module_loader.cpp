@@ -810,33 +810,81 @@ void ModuleLoader::loadElementSection() {
 
   ElemEntry *Entry = Mod.initElemTable(NumElemSegments);
   for (uint32_t I = 0; I < NumElemSegments; ++I) {
-    uint32_t TableIdx = readU32();
-    if (!Mod.isValidTable(TableIdx)) {
-      throw getError(ErrorCode::UnknownTable);
-    }
+    uint32_t SegFlags = readU32();
 
-    const auto [ExprKind, Expr] = readConstExpr(WASMType::I32);
-
-    uint32_t NumFuncIdxs = readU32();
-    // Set the field `NumFuncIdxs` and `FuncIdxs` implicitly
-    uint32_t *FuncIdxs = Mod.initFuncIdxTable(NumFuncIdxs, Entry);
-    for (uint32_t J = 0; J < NumFuncIdxs; ++J) {
-      uint32_t FuncIdx = readU32();
-      if (!Mod.isValidFunc(FuncIdx)) {
-        throw getError(ErrorCode::UnknownFunction);
+    if (SegFlags == 0) {
+      // Format 0: active, table 0, offset expr, vec(funcidx)
+      // Validate that table 0 exists (required for active element segments)
+      if (!Mod.isValidTable(0)) {
+        throw getError(ErrorCode::UnknownTable);
       }
-      FuncIdxs[J] = FuncIdx;
+
+      const auto [ExprKind, Expr] = readConstExpr(WASMType::I32);
+
+      uint32_t NumFuncIdxs = readU32();
+      uint32_t *FuncIdxs = Mod.initFuncIdxTable(NumFuncIdxs, Entry);
+      for (uint32_t J = 0; J < NumFuncIdxs; ++J) {
+        uint32_t FuncIdx = readU32();
+        if (!Mod.isValidFunc(FuncIdx)) {
+          throw getError(ErrorCode::UnknownFunction);
+        }
+        FuncIdxs[J] = FuncIdx;
 #ifdef ZEN_ENABLE_MULTIPASS_JIT
-      if (ZEN_LIKELY(FuncIdx >= Mod.NumImportFunctions)) {
-        uint32_t TypeIdx = Mod.getFunctionTypeIdx(FuncIdx);
-        Mod.TypedFuncRefs[TypeIdx].push_back(FuncIdx);
+        if (ZEN_LIKELY(FuncIdx >= Mod.NumImportFunctions)) {
+          uint32_t TypeIdx = Mod.getFunctionTypeIdx(FuncIdx);
+          Mod.TypedFuncRefs[TypeIdx].push_back(FuncIdx);
+        }
+#endif
       }
+
+      Entry->TableIdx = 0;
+      Entry->InitExprKind = ExprKind;
+      Entry->InitExprVal = Expr;
+#ifdef ZEN_ENABLE_BULK_MEMORY
+      Entry->Mode = 0; // active
 #endif
     }
+#ifdef ZEN_ENABLE_BULK_MEMORY
+    else if (SegFlags == 1) {
+      // Format 1: passive, elemkind(0x00), vec(funcidx)
+      uint8_t ElemKind = to_underlying(readByte());
+      if (ElemKind != 0x00) {
+        throw getError(ErrorCode::InvalidType);
+      }
 
-    Entry->TableIdx = TableIdx;
-    Entry->InitExprKind = ExprKind;
-    Entry->InitExprVal = Expr;
+      uint32_t NumFuncIdxs = readU32();
+      uint32_t *FuncIdxs = Mod.initFuncIdxTable(NumFuncIdxs, Entry);
+      for (uint32_t J = 0; J < NumFuncIdxs; ++J) {
+        uint32_t FuncIdx = readU32();
+        if (!Mod.isValidFunc(FuncIdx)) {
+          throw getError(ErrorCode::UnknownFunction);
+        }
+        FuncIdxs[J] = FuncIdx;
+#ifdef ZEN_ENABLE_MULTIPASS_JIT
+        if (ZEN_LIKELY(FuncIdx >= Mod.NumImportFunctions)) {
+          uint32_t TypeIdx = Mod.getFunctionTypeIdx(FuncIdx);
+          Mod.TypedFuncRefs[TypeIdx].push_back(FuncIdx);
+        }
+#endif
+      }
+
+      Entry->TableIdx = 0;
+      Entry->InitExprKind = 0;
+      Entry->InitExprVal = {};
+      Entry->Mode = 1; // passive
+    }
+#endif
+    else {
+      // SegFlags 2 and 3 are valid in the WebAssembly spec but not yet
+      // supported:
+      // - 2: active with explicit table index
+      // - 3: declarative element segment
+      // For now, reject with a clear error indicating unsupported feature
+      throw getErrorWithExtraMessage(
+          ErrorCode::UnsupportedOpcode,
+          "element segment flags " + std::to_string(SegFlags) +
+              " not supported (only flags 0 and 1 are supported)");
+    }
 
     ++Entry;
   }
@@ -991,29 +1039,89 @@ void ModuleLoader::loadDataSection() {
   uint32_t TotalDataSize = 0;
   DataEntry *Entry = Mod.initDataTable(NumDataSegments);
   for (uint32_t I = 0; I < NumDataSegments; ++I) {
-    uint32_t MemIdx = readU32();
-    if (!Mod.isValidMem(MemIdx)) {
-      throw getError(ErrorCode::UnknownMemory);
+    uint32_t SegFlags = readU32();
+
+    if (SegFlags == 0) {
+      // Format 0: active, memory 0, offset expr, data (MVP compatible)
+      if (!Mod.isValidMem(0)) {
+        throw getError(ErrorCode::UnknownMemory);
+      }
+
+      const auto [ExprKind, Expr] = readConstExpr(WASMType::I32);
+
+      uint32_t DataSegmentSize = readU32();
+      if (DataSegmentSize > PresetMaxDataSegmentSize ||
+          addOverflow(TotalDataSize, DataSegmentSize, TotalDataSize)) {
+        throw getError(ErrorCode::DataSegmentTooLarge);
+      }
+
+      uint32_t DataPtrOffset = Ptr - Start;
+      if (addOverflow(Ptr, DataSegmentSize, Ptr) || Ptr > End) {
+        throw getError(ErrorCode::UnexpectedEnd);
+      }
+
+      Entry->MemIdx = 0;
+      Entry->Size = DataSegmentSize;
+      Entry->Offset = DataPtrOffset;
+      Entry->InitExprKind = ExprKind;
+      Entry->InitExprVal = Expr;
+#ifdef ZEN_ENABLE_BULK_MEMORY
+      Entry->Mode = 0; // active
+#endif
     }
+#ifdef ZEN_ENABLE_BULK_MEMORY
+    else if (SegFlags == 1) {
+      // Format 1: passive, data only
+      uint32_t DataSegmentSize = readU32();
+      if (DataSegmentSize > PresetMaxDataSegmentSize ||
+          addOverflow(TotalDataSize, DataSegmentSize, TotalDataSize)) {
+        throw getError(ErrorCode::DataSegmentTooLarge);
+      }
 
-    const auto [ExprKind, Expr] = readConstExpr(WASMType::I32);
+      uint32_t DataPtrOffset = Ptr - Start;
+      if (addOverflow(Ptr, DataSegmentSize, Ptr) || Ptr > End) {
+        throw getError(ErrorCode::UnexpectedEnd);
+      }
 
-    uint32_t DataSegmentSize = readU32();
-    if (DataSegmentSize > PresetMaxDataSegmentSize ||
-        addOverflow(TotalDataSize, DataSegmentSize, TotalDataSize)) {
-      throw getError(ErrorCode::DataSegmentTooLarge);
+      Entry->MemIdx = 0;
+      Entry->Size = DataSegmentSize;
+      Entry->Offset = DataPtrOffset;
+      Entry->InitExprKind = 0;
+      Entry->InitExprVal = {};
+      Entry->Mode = 1; // passive
     }
+#endif
+    else if (SegFlags == 2) {
+      // Format 2: active, explicit memory index, offset expr, data
+      uint32_t MemIdx = readU32();
+      if (!Mod.isValidMem(MemIdx)) {
+        throw getError(ErrorCode::UnknownMemory);
+      }
 
-    uint32_t DataPtrOffset = Ptr - Start;
-    if (addOverflow(Ptr, DataSegmentSize, Ptr) || Ptr > End) {
-      throw getError(ErrorCode::UnexpectedEnd);
+      const auto [ExprKind, Expr] = readConstExpr(WASMType::I32);
+
+      uint32_t DataSegmentSize = readU32();
+      if (DataSegmentSize > PresetMaxDataSegmentSize ||
+          addOverflow(TotalDataSize, DataSegmentSize, TotalDataSize)) {
+        throw getError(ErrorCode::DataSegmentTooLarge);
+      }
+
+      uint32_t DataPtrOffset = Ptr - Start;
+      if (addOverflow(Ptr, DataSegmentSize, Ptr) || Ptr > End) {
+        throw getError(ErrorCode::UnexpectedEnd);
+      }
+
+      Entry->MemIdx = MemIdx;
+      Entry->Size = DataSegmentSize;
+      Entry->Offset = DataPtrOffset;
+      Entry->InitExprKind = ExprKind;
+      Entry->InitExprVal = Expr;
+#ifdef ZEN_ENABLE_BULK_MEMORY
+      Entry->Mode = 0; // active
+#endif
+    } else {
+      throw getError(ErrorCode::UnsupportedOpcode);
     }
-
-    Entry->MemIdx = MemIdx;
-    Entry->Size = DataSegmentSize;
-    Entry->Offset = DataPtrOffset;
-    Entry->InitExprKind = ExprKind;
-    Entry->InitExprVal = Expr;
 
     ++Entry;
   }
