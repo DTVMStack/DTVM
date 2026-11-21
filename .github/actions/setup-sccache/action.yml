@@ -1,0 +1,18 @@
+name: Set up compiler caching
+description: Use a local compiler cache if the GitHub Actions cache is unavailable
+runs:
+  using: composite
+  steps:
+    - uses: mozilla-actions/sccache-action@v0.0.10
+    - shell: bash
+      run: |
+        if ! sccache --start-server; then
+          echo '::warning::Could not start sccache with the GitHub Actions cache. Using the local compiler cache.'
+          # A nonempty version also enables the GitHub Actions backend.
+          export SCCACHE_GHA_ENABLED=false SCCACHE_GHA_VERSION=
+          sccache --start-server
+          {
+            echo 'SCCACHE_GHA_ENABLED=false'
+            echo 'SCCACHE_GHA_VERSION='
+          } >> "$GITHUB_ENV"
+        fi

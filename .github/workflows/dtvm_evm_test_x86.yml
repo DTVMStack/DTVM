@@ -59,7 +59,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Clone asmjit
         run: |
           git clone https://github.com/asmjit/asmjit.git
@@ -100,7 +100,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Build and Test
         run: |
           echo "current home is $HOME"
@@ -139,7 +139,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Build and Test
         run: |
           echo "current home is $HOME"
@@ -188,7 +188,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Build and Test
         run: |
           echo "current home is $HOME"
@@ -226,7 +226,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Build and Test
         run: |
           echo "current home is $HOME"
@@ -265,7 +265,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Build and Test
         run: |
           echo "current home is $HOME"
@@ -311,7 +311,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Build and Test
         env:
           LLVM_SYS_150_PREFIX: /opt/llvm15
@@ -356,7 +356,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Build and Test
         env:
           LLVM_SYS_150_PREFIX: /opt/llvm15
@@ -395,7 +395,7 @@ jobs:
           path: /github/home/.fetchcontent
           key: ${{ runner.os }}-fc-${{ github.workflow }}-ninja-v2-${{ hashFiles('third_party/AddDeps.cmake') }}
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Build and Test
         env:
           LLVM_SYS_150_PREFIX: /opt/llvm15
@@ -434,7 +434,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Build and Test
         run: |
           echo "current home is $HOME"
@@ -497,7 +497,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
 
       # Cache the BUILT baseline libdtvmapi.so (a deterministic function of
       # base.sha), not the bench output JSON (a function of source + host +

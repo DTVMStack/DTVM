@@ -52,7 +52,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Test Git clone
         run: |
           git clone https://github.com/asmjit/asmjit.git
@@ -101,7 +101,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Test Git clone
         run: |
           git clone https://github.com/asmjit/asmjit.git
@@ -150,7 +150,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Test Git clone
         run: |
           git clone https://github.com/asmjit/asmjit.git
@@ -199,7 +199,7 @@ jobs:
         run: |
           ./tools/format.sh check
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: ./.github/actions/setup-sccache
       - name: Test Git clone
         run: |
           git clone https://github.com/asmjit/asmjit.git

@@ -952,6 +952,38 @@ MInstruction *FunctionMirBuilder::tryFoldSignedPositivePow2Div(
       createIntConstInstruction(Mtype, ShiftAmt));
 }
 
+MInstruction *FunctionMirBuilder::tryFoldSignedPow2Rem(MInstruction *LHS,
+                                                       MInstruction *RHS,
+                                                       MType *Mtype) {
+  const auto *Divisor = llvm::dyn_cast<ConstantInstruction>(RHS);
+  if (!Divisor) {
+    return nullptr;
+  }
+  const auto *Int = llvm::cast<MConstantInt>(&Divisor->getConstant());
+  // Interpret abs(INT_MIN) as an unsigned magnitude at the same width.
+  const llvm::APInt Magnitude = Int->getValue().abs();
+  if (!Magnitude.isPowerOf2() || Magnitude.isOne()) {
+    return nullptr;
+  }
+
+  // With mask = |d| - 1, bias is mask for negative x and 0 otherwise.
+  // This gives a signed remainder in [-(|d|-1), |d|-1] even for INT_MIN.
+  const uint64_t Mask = (Magnitude - 1).getZExtValue();
+  MInstruction *X = makeReusableValue(LHS, Mtype);
+  MInstruction *Sign = createInstruction<BinaryInstruction>(
+      false, OP_sshr, Mtype, X,
+      createIntConstInstruction(Mtype, Mtype->getBitWidth() - 1));
+  MInstruction *Bias = makeReusableValue(
+      createInstruction<BinaryInstruction>(
+          false, OP_and, Mtype, Sign, createIntConstInstruction(Mtype, Mask)),
+      Mtype);
+  MInstruction *Biased =
+      createInstruction<BinaryInstruction>(false, OP_add, Mtype, X, Bias);
+  MInstruction *Low = createInstruction<BinaryInstruction>(
+      false, OP_and, Mtype, Biased, createIntConstInstruction(Mtype, Mask));
+  return createInstruction<BinaryInstruction>(false, OP_sub, Mtype, Low, Bias);
+}
+
 // ==================== MIR Opcode Methods ====================
 
 Opcode FunctionMirBuilder::getBinOpcode(BinaryOperator BinOpr) {
