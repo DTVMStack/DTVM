@@ -15,5 +15,6 @@ zero, unit, and dynamic divisor paths.
 
 Two hosts confirmed the arithmetic kernel gains. The default-lazy
 `gesummv` slowdown from the initial cohorts did not recur with main A/A
-controls. A short process-wall difference on the Singlepass and CLI
-controls remains under review. [Measurements and reproduction](BENCHMARK.md)
+controls. The Singlepass `qr2text` process-wall difference also did not
+recur on either host with independently copied executables and inherited
+CPU affinity. [Measurements and reproduction](BENCHMARK.md) · [Regression analysis](REGRESSION.md)

@@ -236,3 +236,7 @@ fixed-argument, direct-spawn `--help` check with streams redirected to
 3.567 ms for the trial. Dynamic loader startup medians were 461,320 and
 463,460 cycles in the separate loader instrumentation for main and trial.
 These timings use different process and instrumentation boundaries.
+
+The [subsequent regression analysis](REGRESSION.md) repeats the short-process
+measurements with an independent executable copy for main A/A, inherited CPU
+affinity, and direct process launches on both hosts.
