@@ -393,7 +393,7 @@ public:
         return Operand(Folded, Type);
       }
     } else if constexpr (Opeator == BinaryOperator::BO_REM_S) {
-      if (MInstruction *Folded = tryFoldSignedPow2Rem(LHSRaw, RHSRaw, Mtype)) {
+      if (MInstruction *Folded = tryFoldSignedConstRem(LHSRaw, RHSRaw, Mtype)) {
         return Operand(Folded, Type);
       }
     }
@@ -810,8 +810,10 @@ private:
   // Returns null when RHS is not a strictly-positive power of two.
   MInstruction *tryFoldSignedPositivePow2Div(MInstruction *LHS,
                                              MInstruction *RHS, MType *Mtype);
-  MInstruction *tryFoldSignedPow2Rem(MInstruction *LHS, MInstruction *RHS,
-                                     MType *Mtype);
+  MInstruction *tryFoldSignedConstRem(MInstruction *LHS, MInstruction *RHS,
+                                      MType *Mtype);
+  MInstruction *lowerSignedI32ConstRem(MInstruction *LHS,
+                                       const llvm::APInt &Divisor);
 
   MInstruction *makeReusableValue(MInstruction *Value, MType *Type) {
     Variable *ReusableVar = CurFunc->createVariable(Type);

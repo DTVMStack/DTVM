@@ -25,6 +25,10 @@ parser.add_argument("--rounds", type=int, required=True)
 parser.add_argument("--long-rounds", type=int, default=3)
 parser.add_argument("--seed", type=int, required=True)
 parser.add_argument("--input-seed", type=int, default=123)
+parser.add_argument("--signed-i32-kernels", action="store_true",
+                    help="measure signed i32 literal divisors 3, 7, 1009 and 1024")
+parser.add_argument("--default-lazy-aa", action="store_true",
+                    help="repeat the main default lazy command within each round")
 parser.add_argument("--candidate-singlepass", action="store_true")
 parser.add_argument("--omit-singlepass", action="store_true")
 parser.add_argument("--warmups", type=int, default=2)
@@ -56,7 +60,10 @@ def oracle(name, count, state):
             state = (state * 6364136223846793005 + 1442695040888963407) & mask64
             state = remainder(state, 64, 1 << 40) & mask64
         return state
-    divisor = 1024 if name == "bucket32" else 1009
+    if args.signed_i32_kernels:
+        divisor = int(name.removeprefix("bucket"))
+    else:
+        divisor = 1024 if name == "bucket32" else 1009
     result = 0
     for _ in range(count):
         state = (state * 1664525 + 1013904223) & 0xffffffff
@@ -64,12 +71,16 @@ def oracle(name, count, state):
     return result & mask64
 
 if args.group == "kernel":
-    inputs = [
-        ("bucket32", 8_000_000, args.input_seed),
-        ("bucket64", 8_000_000, args.input_seed),
-        ("bucket32_other", 8_000_000, args.input_seed),
-        ("bucket32", 0, args.input_seed),
-    ]
+    if args.signed_i32_kernels:
+        inputs = [(f"bucket{d}", 8_000_000, args.input_seed) for d in (3, 7, 1009, 1024)]
+        inputs.append(("bucket7", 0, args.input_seed))
+    else:
+        inputs = [
+            ("bucket32", 8_000_000, args.input_seed),
+            ("bucket64", 8_000_000, args.input_seed),
+            ("bucket32_other", 8_000_000, args.input_seed),
+            ("bucket32", 0, args.input_seed),
+        ]
     cases = {
         f"{name}/{n}": {
             "kind": "reactor", "function": name, "args": [n, seed],
@@ -110,6 +121,8 @@ with gzip.open(args.out / "samples.jsonl.gz", "wt", encoding="utf-8") as stream:
             for mode, flag in modes.items() for label, binary in binaries.items()
         }
         commands["main-AA"] = commands["main-F"]
+        if args.default_lazy_aa:
+            commands["main-D-AA"] = commands["main-D"]
         if not args.omit_singlepass:
             commands["main-SP"] = harness.dtvm_cmd(
                 binaries["main"], case, "singlepass", False,
@@ -165,6 +178,8 @@ with gzip.open(args.out / "samples.jsonl.gz", "wt", encoding="utf-8") as stream:
                     samples[label].append(wall_ms)
         pairs = [(f"candidate-{m}", f"main-{m}") for m in modes]
         pairs.append(("main-AA","main-F"))
+        if args.default_lazy_aa:
+            pairs.append(("main-D-AA", "main-D"))
         if args.candidate_singlepass:
             pairs.append(("candidate-SP","main-SP"))
         paired = {}
