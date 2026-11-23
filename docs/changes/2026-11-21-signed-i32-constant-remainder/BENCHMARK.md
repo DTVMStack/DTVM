@@ -160,3 +160,79 @@ python3 "$bench" --main /path/main-dtvm --candidate /path/pr-dtvm \
   --default-lazy-aa --candidate-singlepass --rounds 41 --seed 6553410 \
   --out "$work/catalog"
 ```
+
+## Follow-up for the reviewed change
+
+The main A/A column repeats the same main executable and flags in each
+randomized round. Both catalog cohorts use 41 rounds and bypass the Wasmtime
+cache. DTVM's Singlepass runs are available in the raw summaries. Times are
+fresh-process wall medians in milliseconds.
+
+### Original host with a default-lazy A/A control
+
+| Case | Main default lazy | Main A/A | Trial default lazy | Wasmtime 45 | Trial/Main | A/A/Main |
+|---|---:|---:|---:|---:|---:|---:|
+| `gesummv` | 51.69 | 50.77 | 52.56 | 62.77 | 0.997 [0.969, 1.031] | 0.978 [0.940, 1.006] |
+| `md5` | 27.16 | 27.13 | 27.11 | 43.24 | 1.005 [0.967, 1.041] | 0.984 [0.949, 1.011] |
+| `figlet` | 50.58 | 49.85 | 51.05 | 113.12 | 0.999 [0.958, 1.028] | 0.962 [0.926, 1.018] |
+| `qr2text` | 48.27 | 47.45 | 48.90 | 121.35 | 1.010 [0.976, 1.039] | 0.992 [0.955, 1.013] |
+| `atax` | 52.71 | 53.26 | 54.04 | 63.67 | 1.032 [1.000, 1.089] | 1.007 [0.988, 1.026] |
+| `bicg` | 62.72 | 62.74 | 63.98 | 75.04 | 1.028 [0.999, 1.091] | 1.013 [0.989, 1.033] |
+
+### Independent GitHub runner
+
+The independent Ubuntu 24.04 GitHub runner used the DTVM development image
+with GCC 11.4.0 and LLVM 15. It rebuilt both uninstrumented Release binaries
+in the same CMake tree and used the verified Wasmtime 45.0.0 release archive.
+The run log records the tables below. The uploaded artifact contains the
+runner details, manifests and sample data. [Run and artifact](https://github.com/zoowii/DTVM/actions/runs/45184220749)
+
+| Case | Main default lazy | Main A/A | Trial default lazy | Wasmtime 45 | Trial/Main | A/A/Main |
+|---|---:|---:|---:|---:|---:|---:|
+| `gesummv` | 37.02 | 36.94 | 37.43 | 47.22 | 1.008 [0.997, 1.017] | 0.998 [0.992, 1.013] |
+| `atax` | 41.56 | 41.78 | 42.13 | 51.99 | 1.003 [0.990, 1.020] | 1.000 [0.984, 1.016] |
+| `bicg` | 48.78 | 49.16 | 48.32 | 58.10 | 0.990 [0.980, 1.007] | 1.005 [0.994, 1.024] |
+| `md5` | 20.98 | 20.94 | 20.40 | 33.46 | 0.998 [0.972, 1.013] | 0.984 [0.951, 1.018] |
+| `qr2text` | 39.01 | 40.08 | 40.59 | 96.38 | 1.022 [1.002, 1.153] | 1.021 [0.982, 1.038] |
+| `figlet` | 38.23 | 38.60 | 37.85 | 84.49 | 1.009 [0.964, 1.034] | 1.009 [0.995, 1.021] |
+
+The same runner measured the kernel with 31 rounds per case.
+
+| Case | Main FastRA | Trial FastRA | Main default lazy | Trial default lazy | Wasmtime 45 | FastRA Trial/Main | Default lazy Trial/Main |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `bucket3/8000000` | 16.72 | 14.48 | 18.81 | 15.82 | 19.27 | 0.853 [0.807, 0.869] | 0.842 [0.822, 0.860] |
+| `bucket7/8000000` | 16.29 | 14.76 | 18.31 | 16.69 | 18.29 | 0.901 [0.879, 0.932] | 0.892 [0.861, 0.928] |
+| `bucket1009/8000000` | 16.74 | 15.35 | 18.53 | 17.51 | 18.65 | 0.904 [0.840, 0.923] | 0.903 [0.884, 0.944] |
+| `bucket1024/8000000` | 13.55 | 13.32 | 15.21 | 15.29 | 15.80 | 1.012 [0.982, 1.024] | 1.007 [0.970, 1.020] |
+| `bucket7/0` | 3.20 | 3.36 | 3.49 | 3.57 | 5.12 | 1.016 [0.980, 1.039] | 1.005 [0.976, 1.080] |
+
+The earlier default-lazy `gesummv` slowdown did not recur. The paired
+trial/main ratio was 0.997 on the original host and 1.008 on the independent
+runner. The corresponding main A/A ratios were 0.978 and 0.998. On that
+runner, the paired default-lazy `qr2text` ratios were 1.022 for the trial
+and 1.021 for main A/A. The three target kernels improved by 9.6%–14.7% with
+FastRA and 9.7%–15.8% with default lazy.
+
+### Singlepass and CLI process controls
+
+A separate 81-round local check used the same two uninstrumented executables,
+repeated main A/A, and added phase timing for Singlepass. The independent
+runner measured a paired `qr2text` Singlepass ratio of 1.051. The local phase
+check reproduced a wall-time difference, with a much smaller change in the
+measured compilation and execution sections. The CLI `--help` control
+showed a difference without loading any Wasm. These data leave a process
+startup effect unresolved and do not identify a Singlepass codegen change.
+
+| Case | Main wall (ms) | Main A/A (ms) | Trial wall (ms) | Wasmtime 45 wall (ms) | Trial/Main | A/A/Main |
+|---|---:|---:|---:|---:|---:|---:|
+| `qr2text` | 10.66 | 10.59 | 11.17 | 128.77 | 1.060 [1.042, 1.076] | 0.995 [0.960, 1.045] |
+| `md5` | 7.70 | 7.75 | 8.02 | 46.21 | 1.030 [0.992, 1.082] | 0.976 [0.952, 1.057] |
+| `--help` | 5.01 | 5.08 | 5.70 | 4.76 | 1.096 [1.064, 1.128] | 1.004 [0.966, 1.056] |
+
+For `qr2text`, the main and trial Singlepass compilation medians were 3.053
+and 3.116 ms. The execution medians were 0.641 and 0.645 ms. In a separate
+fixed-argument, direct-spawn `--help` check with streams redirected to
+`/dev/null`, wall medians were 3.465 ms for main, 3.385 ms for main A/A, and
+3.567 ms for the trial. Dynamic loader startup medians were 461,320 and
+463,460 cycles in the separate loader instrumentation for main and trial.
+These timings use different process and instrumentation boundaries.
