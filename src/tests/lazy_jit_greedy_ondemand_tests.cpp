@@ -571,6 +571,34 @@ TEST(LazyJitGreedyOndemand, InitialPolicySizeAndDisableGuards) {
   }
 }
 
+TEST(LazyJitGreedyOndemand, SelectsIntegerLocalsCarriedAcrossABackedge) {
+  auto Bytes = loadWasmFile(CARRIED_LOOP_WASM_PATH);
+  LoadedMod LM = loadModule(Bytes, "carried", true, false, false);
+  ASSERT_TRUE(waitForBackgroundPublishes(*LM.Lazy, 1, 5000));
+  ASSERT_TRUE(stubIsTrampoline(*LM.Mod, 0));
+
+  EXPECT_EQ(callI32(*LM.RT, *LM.Inst, "entry", 13), 9);
+  EXPECT_EQ(callI32(*LM.RT, *LM.Inst, "entry", 23), 77);
+  EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), 0u);
+
+  EXPECT_EQ(callI32(*LM.RT, *LM.Inst, "entry", 3), 77);
+  EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), 1u);
+  EXPECT_EQ(callI32(*LM.RT, *LM.Inst, "entry", 0), 6);
+  EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), 1u);
+}
+
+TEST(LazyJitGreedyOndemand, CarriedLocalsHonorAutoGreedyDisable) {
+  auto Bytes = loadWasmFile(CARRIED_LOOP_WASM_PATH);
+  RuntimeConfig Policy;
+  Policy.DisableLazyAutoGreedy = true;
+  LoadedMod LM = loadModule(Bytes, "carried_disabled", true, false, false, true,
+                            false, &Policy);
+  ASSERT_TRUE(waitForBackgroundPublishes(*LM.Lazy, 1, 5000));
+  ASSERT_TRUE(stubIsTrampoline(*LM.Mod, 0));
+  EXPECT_EQ(callI32(*LM.RT, *LM.Inst, "entry", 3), 77);
+  EXPECT_EQ(LM.Lazy->getForegroundLoopGreedyCount(), 0u);
+}
+
 TEST(WasmBucketMemory, GrowthPreservesPrefixZeroesAndInstanceIsolation) {
   auto Bytes = loadWasmFile(BUCKET_GROW_WASM_PATH);
   auto RT = makeRuntime(false, false, true);

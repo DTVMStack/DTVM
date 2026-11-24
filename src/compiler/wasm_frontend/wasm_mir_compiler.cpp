@@ -6,6 +6,7 @@
 #include "compiler/mir/pointer.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/DivisionByConstantInfo.h"
+#include "llvm/Support/MathExtras.h"
 #include <unordered_map>
 #include <unordered_set>
 
@@ -93,6 +94,70 @@ FunctionMirBuilder::FunctionMirBuilder(CompilerContext &Context,
 bool FunctionMirBuilder::compile([[maybe_unused]] CompilerContext *Context) {
   zen::action::WASMByteCodeVisitor<FunctionMirBuilder> Visitor(*this, &Ctx);
   return Visitor.compile();
+}
+
+bool FunctionMirBuilder::hasIntegerLoopCarriedLocals() const {
+  // Wasm parameters and locals occupy the first MIR variables after the
+  // hidden instance parameter. Ignore MIR temporaries when counting.
+  const uint32_t NumWasmVars =
+      Ctx.getWasmFuncType().NumParams + Ctx.getWasmFuncCode().NumLocals;
+  if (Ctx.NumWasmLoops != 1 || Ctx.NumGuestCalls || NumWasmVars < 4 ||
+      NumWasmVars >= 64 || CurFunc->getNumBasicBlocks() > 16) {
+    return false;
+  }
+
+  for (const MBasicBlock *BB : *CurFunc) {
+    auto Succs = BB->successors();
+    if (std::distance(Succs.begin(), Succs.end()) != 2 ||
+        llvm::find(Succs, BB) == Succs.end()) {
+      continue;
+    }
+
+    uint64_t Assigned = 0;
+    uint64_t ReadOnEntry = 0;
+    unsigned NodesLeft = 128;
+    auto Scan = [&](auto &&Self, const MInstruction *Inst) -> bool {
+      if (!Inst || !NodesLeft || !Inst->getType()->isInteger())
+        return false;
+      --NodesLeft;
+      switch (Inst->getKind()) {
+      case MInstruction::DREAD: {
+        const auto Idx = llvm::cast<DreadInstruction>(Inst)->getVarIdx();
+        if (Idx > 0 && Idx <= NumWasmVars)
+          ReadOnEntry |= (uint64_t(1) << Idx) & ~Assigned;
+        return true;
+      }
+      case MInstruction::CONSTANT:
+        return true;
+      case MInstruction::UNARY:
+      case MInstruction::BINARY:
+      case MInstruction::CMP:
+      case MInstruction::CONVERSION:
+        for (OperandNum I = 0; I < Inst->getNumOperands(); ++I) {
+          if (!Self(Self, Inst->getOperand(I)))
+            return false;
+        }
+        return true;
+      default:
+        return false;
+      }
+    };
+    for (const MInstruction *Stmt : *BB) {
+      if (Stmt->getKind() != MInstruction::DASSIGN &&
+          Stmt->getKind() != MInstruction::BR_IF)
+        return false;
+      if (!Scan(Scan, Stmt->getOperand<0>()))
+        return false;
+      // Process a self-update's input before publishing its new value.
+      if (const auto *Write = llvm::dyn_cast<DassignInstruction>(Stmt)) {
+        const auto Idx = Write->getVarIdx();
+        if (Idx > 0 && Idx <= NumWasmVars)
+          Assigned |= uint64_t(1) << Idx;
+      }
+    }
+    return llvm::countPopulation(ReadOnEntry & Assigned) >= 4;
+  }
+  return false;
 }
 
 void FunctionMirBuilder::initFunction(
