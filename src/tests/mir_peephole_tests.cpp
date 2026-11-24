@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "compiler/context.h"
+#include "compiler/llvm-prebuild/Target/X86/MCTargetDesc/X86MCTargetDesc.h"
 #include "compiler/mir/basic_block.h"
 #include "compiler/mir/constants.h"
 #include "compiler/mir/function.h"
@@ -17,6 +18,10 @@
 #include "zetaengine.h"
 
 #include "llvm/ADT/APFloat.h"
+#include "llvm/MC/MCDisassembler/MCDisassembler.h"
+#include "llvm/MC/MCInst.h"
+#include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <gtest/gtest.h>
@@ -28,6 +33,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -178,49 +184,53 @@ int32_t callI32NoArg(Runtime &RT, Instance &Inst, const char *Name) {
   return Results[0].Value.I32;
 }
 
-bool codeHasDiv(const uint8_t *P, size_t N) {
-  for (size_t I = 0; I + 1 < N; ++I) {
-    size_t J = I;
-    if (P[J] >= 0x40 && P[J] <= 0x4f) {
-      ++J;
-      if (J + 1 >= N) {
-        break;
-      }
-    }
-    if (P[J] == 0xf7) {
-      const unsigned Reg = (P[J + 1] >> 3) & 7u;
-      if (Reg == 6 || Reg == 7) {
-        return true;
-      }
-    }
-  }
-  return false;
+std::unique_ptr<llvm::MCDisassembler> makeX86Disassembler(CompileContext &Ctx) {
+  LLVMInitializeX86Disassembler();
+  Ctx.initialize();
+  const auto &TM = Ctx.getTargetMachine();
+  return std::unique_ptr<llvm::MCDisassembler>(
+      TM.getTarget().createMCDisassembler(*TM.getMCSubtargetInfo(),
+                                          Ctx.getMCContext()));
 }
 
-bool codeHasAndImm7(const uint8_t *P, size_t N) {
-  for (size_t I = 0; I + 2 < N; ++I) {
-    if (P[I] == 0x83 && ((P[I + 1] >> 3) & 7u) == 4 && P[I + 2] == 7) {
-      return true;
-    }
-    if (P[I] == 0x25 && I + 4 < N && P[I + 1] == 7 && P[I + 2] == 0 &&
-        P[I + 3] == 0 && P[I + 4] == 0) {
-      return true;
-    }
-    if (P[I] == 0x81 && ((P[I + 1] >> 3) & 7u) == 4 && I + 5 < N &&
-        P[I + 2] == 7 && P[I + 3] == 0 && P[I + 4] == 0 && P[I + 5] == 0) {
-      return true;
-    }
+void decodeX86(const llvm::MCDisassembler &Disasm,
+               llvm::ArrayRef<uint8_t> Bytes, std::vector<llvm::MCInst> &Code) {
+  for (size_t Offset = 0; Offset < Bytes.size();) {
+    llvm::MCInst Inst;
+    uint64_t Size = 0;
+    ASSERT_EQ(Disasm.getInstruction(Inst, Size, Bytes.drop_front(Offset),
+                                    Offset, llvm::nulls()),
+              llvm::MCDisassembler::Success)
+        << "instruction at offset " << Offset;
+    ASSERT_GT(Size, 0u);
+    Offset += static_cast<size_t>(Size);
+    Code.push_back(Inst);
   }
-  return false;
 }
 
-bool codeHasShrImm3(const uint8_t *P, size_t N) {
-  for (size_t I = 0; I + 2 < N; ++I) {
-    if (P[I] == 0xc1 && ((P[I + 1] >> 3) & 7u) == 5 && P[I + 2] == 3) {
-      return true;
+bool hasOpcode(llvm::ArrayRef<llvm::MCInst> Code,
+               llvm::ArrayRef<unsigned> Opcodes,
+               std::optional<int64_t> Immediate = std::nullopt) {
+  return std::any_of(Code.begin(), Code.end(), [&](const llvm::MCInst &Inst) {
+    if (std::find(Opcodes.begin(), Opcodes.end(), Inst.getOpcode()) ==
+        Opcodes.end()) {
+      return false;
     }
-  }
-  return false;
+    return !Immediate ||
+           std::any_of(Inst.begin(), Inst.end(), [&](const auto &Op) {
+             return Op.isImm() && Op.getImm() == *Immediate;
+           });
+  });
+}
+
+bool hasIntegerDiv(llvm::ArrayRef<llvm::MCInst> Code) {
+  return hasOpcode(Code,
+                   {llvm::X86::DIV8m, llvm::X86::DIV8r, llvm::X86::DIV16m,
+                    llvm::X86::DIV16r, llvm::X86::DIV32m, llvm::X86::DIV32r,
+                    llvm::X86::DIV64m, llvm::X86::DIV64r, llvm::X86::IDIV8m,
+                    llvm::X86::IDIV8r, llvm::X86::IDIV16m, llvm::X86::IDIV16r,
+                    llvm::X86::IDIV32m, llvm::X86::IDIV32r, llvm::X86::IDIV64m,
+                    llvm::X86::IDIV64r});
 }
 
 const uint8_t *jitFuncBytes(const zen::runtime::Module &Mod, const char *Name,
@@ -1391,6 +1401,22 @@ TEST(MIRPeepholeLitmus, DoesNotHoistFPConstUsedOnlyInEntry) {
   finishLitmus(F);
 }
 
+TEST(MIRPeepholeWasm, DivideDetectionIgnoresBytesInsideAnImmediate) {
+  CompileContext Ctx;
+  auto Disasm = makeX86Disassembler(Ctx);
+  ASSERT_NE(Disasm, nullptr);
+  // mov eax, 0xf8f7; ret. The immediate contains the byte sequence for IDIV.
+  const uint8_t WithImmediate[] = {0xb8, 0xf7, 0xf8, 0x00, 0x00, 0xc3};
+  std::vector<llvm::MCInst> Code;
+  ASSERT_NO_FATAL_FAILURE(decodeX86(*Disasm, WithImmediate, Code));
+  EXPECT_FALSE(hasIntegerDiv(Code));
+
+  const uint8_t WithDiv[] = {0xf7, 0xf8, 0xc3}; // idiv eax; ret
+  Code.clear();
+  ASSERT_NO_FATAL_FAILURE(decodeX86(*Disasm, WithDiv, Code));
+  EXPECT_TRUE(hasIntegerDiv(Code));
+}
+
 TEST(MIRPeepholeWasm, MultipassMatchesExpected) {
   auto Bytes = loadPeepholeWasm();
   ASSERT_FALSE(Bytes.empty());
@@ -1464,19 +1490,26 @@ TEST(MIRPeepholeWasm, MultipassMatchesExpected) {
   EXPECT_EQ(callI32(*RT, *Inst, "rem1_of_call", 42), 0);
   EXPECT_EQ(callI32NoArg(*RT, *Inst, "g"), 1);
 
+  CompileContext DecodeCtx;
+  auto Disasm = makeX86Disassembler(DecodeCtx);
+  ASSERT_NE(Disasm, nullptr);
   size_t RemLen = 0;
   const uint8_t *RemBytes = jitFuncBytes(*Inst->getModule(), "rem_u8", RemLen);
   ASSERT_NE(RemBytes, nullptr);
-  EXPECT_FALSE(codeHasDiv(RemBytes, RemLen))
-      << "wasm rem_u by 8 still emits DIV";
-  EXPECT_TRUE(codeHasAndImm7(RemBytes, RemLen))
+  std::vector<llvm::MCInst> RemCode;
+  ASSERT_NO_FATAL_FAILURE(decodeX86(*Disasm, {RemBytes, RemLen}, RemCode));
+  EXPECT_FALSE(hasIntegerDiv(RemCode)) << "wasm rem_u by 8 still emits DIV";
+  EXPECT_TRUE(hasOpcode(
+      RemCode, {llvm::X86::AND32i32, llvm::X86::AND32ri8, llvm::X86::AND32ri},
+      7))
       << "wasm rem_u by 8 should AND with 7";
   size_t DivLen = 0;
   const uint8_t *DivBytes = jitFuncBytes(*Inst->getModule(), "div_u8", DivLen);
   ASSERT_NE(DivBytes, nullptr);
-  EXPECT_FALSE(codeHasDiv(DivBytes, DivLen))
-      << "wasm div_u by 8 still emits DIV";
-  EXPECT_TRUE(codeHasShrImm3(DivBytes, DivLen))
+  std::vector<llvm::MCInst> DivCode;
+  ASSERT_NO_FATAL_FAILURE(decodeX86(*Disasm, {DivBytes, DivLen}, DivCode));
+  EXPECT_FALSE(hasIntegerDiv(DivCode)) << "wasm div_u by 8 still emits DIV";
+  EXPECT_TRUE(hasOpcode(DivCode, {llvm::X86::SHR32ri}, 3))
       << "wasm div_u by 8 should SHR by 3";
   EXPECT_EQ(callI32(*RT, *Inst, "mul8", 3), 24);
   EXPECT_EQ(callI32(*RT, *Inst, "add_reassoc", 1), 10417);
