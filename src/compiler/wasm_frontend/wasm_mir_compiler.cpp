@@ -5,6 +5,7 @@
 #include "compiler/mir/module.h"
 #include "compiler/mir/pointer.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/DivisionByConstantInfo.h"
 #include <unordered_map>
 #include <unordered_set>
 
@@ -952,9 +953,9 @@ MInstruction *FunctionMirBuilder::tryFoldSignedPositivePow2Div(
       createIntConstInstruction(Mtype, ShiftAmt));
 }
 
-MInstruction *FunctionMirBuilder::tryFoldSignedPow2Rem(MInstruction *LHS,
-                                                       MInstruction *RHS,
-                                                       MType *Mtype) {
+MInstruction *FunctionMirBuilder::tryFoldSignedConstRem(MInstruction *LHS,
+                                                        MInstruction *RHS,
+                                                        MType *Mtype) {
   const auto *Divisor = llvm::dyn_cast<ConstantInstruction>(RHS);
   if (!Divisor) {
     return nullptr;
@@ -962,8 +963,11 @@ MInstruction *FunctionMirBuilder::tryFoldSignedPow2Rem(MInstruction *LHS,
   const auto *Int = llvm::cast<MConstantInt>(&Divisor->getConstant());
   // Interpret abs(INT_MIN) as an unsigned magnitude at the same width.
   const llvm::APInt Magnitude = Int->getValue().abs();
-  if (!Magnitude.isPowerOf2() || Magnitude.isOne()) {
+  if (Magnitude.isZero() || Magnitude.isOne()) {
     return nullptr;
+  }
+  if (!Magnitude.isPowerOf2()) {
+    return Mtype->isI32() ? lowerSignedI32ConstRem(LHS, Magnitude) : nullptr;
   }
 
   // With mask = |d| - 1, bias is mask for negative x and 0 otherwise.
@@ -982,6 +986,43 @@ MInstruction *FunctionMirBuilder::tryFoldSignedPow2Rem(MInstruction *LHS,
   MInstruction *Low = createInstruction<BinaryInstruction>(
       false, OP_and, Mtype, Biased, createIntConstInstruction(Mtype, Mask));
   return createInstruction<BinaryInstruction>(false, OP_sub, Mtype, Low, Bias);
+}
+
+MInstruction *
+FunctionMirBuilder::lowerSignedI32ConstRem(MInstruction *LHS,
+                                           const llvm::APInt &Divisor) {
+  const auto Info = llvm::SignedDivisionByConstantInfo::get(Divisor);
+  MType *I32 = &Ctx.I32Type;
+  MType *I64 = &Ctx.I64Type;
+  auto Bin = [this](Opcode Op, MType *Type, MInstruction *L, MInstruction *R) {
+    return createInstruction<BinaryInstruction>(false, Op, Type, L, R);
+  };
+  MInstruction *X = makeReusableValue(LHS, I32);
+  MInstruction *Wide =
+      createInstruction<ConversionInstruction>(false, OP_sext, I64, X);
+  MInstruction *Product =
+      Bin(OP_mul, I64, Wide,
+          createIntConstInstruction(I64, Info.Magic.getSExtValue()));
+  const bool AddDividend = Info.Magic.isNegative();
+  const unsigned ProductShift = 32 + (AddDividend ? 0 : Info.ShiftAmount);
+  MInstruction *High =
+      Bin(OP_sshr, I64, Product, createIntConstInstruction(I64, ProductShift));
+  MInstruction *Quotient =
+      createInstruction<ConversionInstruction>(false, OP_trunc, I32, High);
+  if (AddDividend) {
+    Quotient = Bin(OP_sshr, I32, Bin(OP_add, I32, Quotient, X),
+                   createIntConstInstruction(I32, Info.ShiftAmount));
+  }
+  // The high product is negative iff X is negative for a positive multiplier.
+  // With a negative multiplier, adding X gives the same sign test: the high
+  // product is at most floor(|X| / 2) for negative X and at least -X otherwise.
+  // Reading the sign from X lets the correction run alongside the multiply.
+  MInstruction *Correction =
+      Bin(OP_ushr, I32, X, createIntConstInstruction(I32, 31));
+  Quotient = Bin(OP_add, I32, Quotient, Correction);
+  return Bin(OP_sub, I32, X,
+             Bin(OP_mul, I32, Quotient,
+                 createIntConstInstruction(I32, Divisor.getZExtValue())));
 }
 
 // ==================== MIR Opcode Methods ====================
