@@ -10,6 +10,7 @@
 #include "compiler/mir/opcode.h"
 #include "compiler/mir/pass/dead_basicblock_elim.h"
 #include "compiler/mir/pass/peephole.h"
+#include "compiler/mir/pass/verifier.h"
 #include "compiler/mir/type.h"
 #include "compiler/utils/magic_div.h"
 #include "runtime/isolation.h"
@@ -284,6 +285,38 @@ bool isCloseToTwo(double D) {
 }
 
 } // namespace
+
+TEST(MIRVerifier, ValidatesSharedConstantOperands) {
+  MirBuilder B;
+  MModule Mod(B.Ctx);
+  MInstruction *Const = B.iconst(7);
+  B.ret(B.bin(OP_add, B.param(), B.bin(OP_add, Const, Const)));
+
+  std::string Errors;
+  llvm::raw_string_ostream OS(Errors);
+  MVerifier Verifier(Mod, B.F, OS);
+  EXPECT_TRUE(Verifier.verify()) << Errors;
+
+  // Both operands of the inner add still have the same type. Only the
+  // verifier's constant check can detect their mismatch with the literal.
+  Const->setType(&CompileContext::I64Type);
+  EXPECT_FALSE(Verifier.verify());
+  EXPECT_NE(Errors.find("constant type"), std::string::npos);
+}
+
+TEST(MIRVerifier, RejectsAnOperandCycle) {
+  MirBuilder B;
+  MModule Mod(B.Ctx);
+  MInstruction *Add = B.bin(OP_add, B.param(), B.iconst(1));
+  B.ret(Add);
+  Add->getOperand<0>() = Add;
+
+  std::string Errors;
+  llvm::raw_string_ostream OS(Errors);
+  MVerifier Verifier(Mod, B.F, OS);
+  EXPECT_FALSE(Verifier.verify());
+  EXPECT_NE(Errors.find("operand graph must be acyclic"), std::string::npos);
+}
 
 TEST(U32MagicUDiv, Div20MatchesDocumentedSequence) {
   auto Mag = tryU32MagicUDiv(20);
