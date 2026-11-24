@@ -90,52 +90,46 @@ void JITCompilerBase::compileMIRToCgIR(MModule &MMod, MFunction &MFunc,
   }
 
   CgFunction &MF = CgFunc;
+  const uint32_t MFuncIdx = MFunc.getFuncIdx();
+  bool UseFastRA = DisableGreedyRA;
+#ifdef ZEN_ENABLE_DEBUG_GREEDY_RA
+  UseFastRA = UseFastRA || !isFuncNeedGreedyRA(MFuncIdx);
+#endif
 
   // TODO: refactor to pass
-  X86CgLowering CgLowering(MF);
+  X86CgLowering CgLowering(MF, UseFastRA);
   X86CgPeephole CgPeephole(MF);
   CgPhiElimination PhiElimination;
   PhiElimination.runOnCgFunction(MF);
 
-  uint32_t MFuncIdx = MFunc.getFuncIdx();
-
-  if (DisableGreedyRA) {
+  if (UseFastRA) {
     ZEN_LOG_DEBUG("using fast ra for function %d", MFuncIdx);
     FastRA RA(MF);
   } else {
-#ifdef ZEN_ENABLE_DEBUG_GREEDY_RA
-    if (!isFuncNeedGreedyRA(MFuncIdx)) {
-      ZEN_LOG_DEBUG("using fast ra for function %d", MFuncIdx);
-      FastRA RA(MF);
-    } else {
-#endif // ZEN_ENABLE_DEBUG_GREEDY_RA
-      ZEN_LOG_DEBUG("using greedy ra for function %d", MFuncIdx);
-      CgDeadCgInstructionElim DCE(MF);
-      CgDominatorTree DomTree(MF);
-      CgLoopInfo Loops(MF);
-      CgSlotIndexes Indexes(MF);
-      CgLiveIntervals LIS(MF);
-      CgLiveStacks LSS(MF);
-      CgBlockFrequencyInfo MBFI(MF);
-      // CgRegisterCoalescer must before CgVirtRegMap
-      CgRegisterCoalescer Coalescer(MF);
-      CgVirtRegMap VRM(MF);
-      if (KeepFirstParamInRegister) {
-        LIS.getInterval(CgLowering.getVarReg(0)).markNotSpillable();
-      }
-      CgLiveRegMatrix Matrix(MF);
-      // RABasic ra(MF);
-
-      CgEdgeBundles EdgeBundles(MF);
-      CgSpillPlacement SpillPlacer(MF);
-      MF.EvictAdvisor = std::unique_ptr<CgRegAllocEvictionAdvisorAnalysis>(
-          createReleaseModeAdvisor());
-      std::shared_ptr<CgRAGreedy> RA = std::make_shared<CgRAGreedy>(MF);
-
-      CgVirtRegRewriter Rewriter(MF);
-#ifdef ZEN_ENABLE_DEBUG_GREEDY_RA
+    ZEN_LOG_DEBUG("using greedy ra for function %d", MFuncIdx);
+    CgDeadCgInstructionElim DCE(MF);
+    CgDominatorTree DomTree(MF);
+    CgLoopInfo Loops(MF);
+    CgSlotIndexes Indexes(MF);
+    CgLiveIntervals LIS(MF);
+    CgLiveStacks LSS(MF);
+    CgBlockFrequencyInfo MBFI(MF);
+    // CgRegisterCoalescer must before CgVirtRegMap
+    CgRegisterCoalescer Coalescer(MF);
+    CgVirtRegMap VRM(MF);
+    if (KeepFirstParamInRegister) {
+      LIS.getInterval(CgLowering.getVarReg(0)).markNotSpillable();
     }
-#endif // ZEN_ENABLE_DEBUG_GREEDY_RA
+    CgLiveRegMatrix Matrix(MF);
+    // RABasic ra(MF);
+
+    CgEdgeBundles EdgeBundles(MF);
+    CgSpillPlacement SpillPlacer(MF);
+    MF.EvictAdvisor = std::unique_ptr<CgRegAllocEvictionAdvisorAnalysis>(
+        createReleaseModeAdvisor());
+    std::shared_ptr<CgRAGreedy> RA = std::make_shared<CgRAGreedy>(MF);
+
+    CgVirtRegRewriter Rewriter(MF);
   }
 
 #ifdef ZEN_ENABLE_MULTIPASS_JIT_LOGGING

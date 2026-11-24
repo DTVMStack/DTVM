@@ -51,9 +51,10 @@ CgRegister X86CgLowering::tryLowerScalarAVX(const MInstruction &Inst) {
                          LHS, RHS);
 }
 
-X86CgLowering::X86CgLowering(CgFunction &MF)
+X86CgLowering::X86CgLowering(CgFunction &MF, bool UseFastRA)
     : CgLowering(MF), Subtarget(&MF.getSubtarget<X86Subtarget>()),
-      TRI(Subtarget->getRegisterInfo()) {
+      TRI(Subtarget->getRegisterInfo()),
+      UseBMI2Shifts(UseFastRA && Subtarget->hasBMI2()) {
   if (_mir_func.mayHaveEvmUmul128Hi()) {
     llvm::DenseSet<const MInstruction *> Visited;
     auto CollectUmul128Hi = [&](auto &&Self, const MInstruction *Inst) -> void {
@@ -376,17 +377,30 @@ CgRegister X86CgLowering::lowerShiftExpr(const MInstruction &LHS,
     }
   }
 
-  static unsigned ShiftOpcs[5][2] = {
+  const bool Is32Bits = Type.isI32();
+  CgRegister RHSReg = lowerExpr(RHS);
+
+  // BMI2 shifts mask the count just like the legacy instructions. Their
+  // third operand removes the fixed CL register and the tied destination.
+  static constexpr unsigned BMI2ShiftOpcs[][2] = {
+      {X86::SHLX64rr, X86::SHLX32rr},
+      {X86::SARX64rr, X86::SARX32rr},
+      {X86::SHRX64rr, X86::SHRX32rr},
+  };
+  if (UseBMI2Shifts && MOpcIndex < std::size(BMI2ShiftOpcs) &&
+      (Is32Bits || Type.isI64())) {
+    return fastEmitInst_rr(BMI2ShiftOpcs[MOpcIndex][Is32Bits], RC, LHSReg,
+                           RHSReg);
+  }
+
+  static constexpr unsigned ShiftOpcs[5][2] = {
       {X86::SHL64rCL, X86::SHL32rCL}, {X86::SAR64rCL, X86::SAR32rCL},
       {X86::SHR64rCL, X86::SHR32rCL}, {X86::ROL64rCL, X86::ROL32rCL},
       {X86::ROR64rCL, X86::ROR32rCL},
   };
 
-  bool Is32Bits = Type.isI32();
   unsigned ShiftOpc = ShiftOpcs[MOpcIndex][Is32Bits];
   unsigned CReg = Is32Bits ? X86::ECX : X86::RCX;
-
-  CgRegister RHSReg = lowerExpr(RHS);
 
   MF->createCgInstruction(*CurBB, TII.get(TargetOpcode::COPY), RHSReg, CReg);
 

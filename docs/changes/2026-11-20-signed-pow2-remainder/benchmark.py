@@ -25,10 +25,13 @@ parser.add_argument("--rounds", type=int, required=True)
 parser.add_argument("--long-rounds", type=int, default=3)
 parser.add_argument("--seed", type=int, required=True)
 parser.add_argument("--input-seed", type=int, default=123)
-parser.add_argument("--signed-i32-kernels", action="store_true",
-                    help="measure signed i32 literal divisors 3, 7, 1009 and 1024")
-parser.add_argument("--signed-i32-div-kernels", action="store_true",
-                    help="measure signed i32 literal quotients and controls")
+kernel_group = parser.add_mutually_exclusive_group()
+kernel_group.add_argument("--signed-i32-kernels", action="store_true",
+                          help="measure signed i32 literal divisors 3, 7, 1009 and 1024")
+kernel_group.add_argument("--signed-i32-div-kernels", action="store_true",
+                          help="measure signed i32 literal quotients and controls")
+kernel_group.add_argument("--kernel-manifest", type=Path,
+                          help="JSON mapping of kernel IDs to function, args and expected i64")
 parser.add_argument("--default-lazy-aa", action="store_true",
                     help="repeat the main default lazy command within each round")
 parser.add_argument("--main-aa", type=Path,
@@ -42,8 +45,8 @@ if min(args.rounds, args.long_rounds) < 1:
     parser.error("round counts must be positive")
 if args.warmups < 0 or (args.candidate_singlepass and args.omit_singlepass):
     parser.error("use nonnegative warmups and compatible singlepass options")
-if args.signed_i32_kernels and args.signed_i32_div_kernels:
-    parser.error("select only one signed i32 kernel group")
+if args.kernel_manifest and args.group != "kernel":
+    parser.error("--kernel-manifest requires --group kernel")
 if args.cpu not in os.sched_getaffinity(0):
     parser.error(f"CPU {args.cpu} is outside the process affinity mask")
 # Child processes inherit this mask. Apply it before timing any launch.
@@ -97,7 +100,15 @@ def oracle(name, count, state):
         result += remainder(state, 32, divisor)
     return result & mask64
 
-if args.group == "kernel":
+if args.kernel_manifest:
+    cases = {
+        name: {
+            "kind": "reactor", "function": case["function"], "args": case["args"],
+            "wasm": str(args.wasm.resolve()), "expected": int(case["expected"]),
+        }
+        for name, case in json.loads(args.kernel_manifest.read_text()).items()
+    }
+elif args.group == "kernel":
     if args.signed_i32_div_kernels:
         inputs = [(name, 8_000_000, args.input_seed) for name in
                   ("div3", "div7", "div1009", "div1024", "bucket7")]
@@ -154,7 +165,9 @@ with gzip.open(args.out / "samples.jsonl.gz", "wt", encoding="utf-8") as stream:
         wasm = harness.paper_join(case["wasm"])
         harness.require_wasm(wasm)
         count = args.long_rounds if case_id in ("gemm", "2mm") else args.rounds
-        expected = oracle(case["function"], *case["args"]) if args.group == "kernel" else None
+        expected = case.get("expected")
+        if args.group == "kernel" and expected is None:
+            expected = oracle(case["function"], *case["args"])
         commands = {
             f"{label}-{mode}": harness.dtvm_cmd(binary, case, flag, False)
             for mode, flag in modes.items() for label, binary in binaries.items()
