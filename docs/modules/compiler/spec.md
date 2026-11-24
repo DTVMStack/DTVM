@@ -123,6 +123,9 @@ the signed minimum divisor. With `mask = |d| - 1` and `bias = (x >>s (w-1))
 & mask`, the remainder is `((x + bias) & mask) - bias`. The frontend
 evaluates the dividend once before applying the identity.
 
+Signed division by a positive power of two uses a bias before an arithmetic
+shift to round toward zero. Division by one returns the dividend.
+
 For i32 literal divisors with a non-power-of-two magnitude greater than one,
 the frontend uses LLVM's signed division multiplier for the positive
 magnitude. It sign-extends the dividend for the i64 product, takes the high

@@ -807,6 +807,8 @@ private:
                                       MType *Mtype);
   MInstruction *tryFoldSignedConstRem(MInstruction *LHS, MInstruction *RHS,
                                       MType *Mtype);
+  // X is a reusable i32 dividend. Magnitude is a positive i32 divisor
+  // greater than one with at least two bits set.
   MInstruction *makeSignedI32Quotient(MInstruction *X,
                                       const llvm::APInt &Magnitude);
 

@@ -1,14 +1,14 @@
 #include <stdint.h>
 
-#define DEFINE_KERNEL(name, expression)                                       \
+#define DEFINE_KERNEL(name, expression)                                        \
   uint64_t name(uint32_t count, uint32_t state) {                              \
-    uint64_t sum = 0;                                                         \
-    for (uint32_t i = 0; i < count; ++i) {                                    \
+    uint64_t sum = 0;                                                          \
+    for (uint32_t i = 0; i < count; ++i) {                                     \
       state = state * UINT32_C(1664525) + UINT32_C(1013904223);                \
-      int32_t x = (int32_t)state;                                             \
-      sum += (expression);                                                    \
-    }                                                                        \
-    return sum;                                                              \
+      int32_t x = (int32_t)state;                                              \
+      sum += (expression);                                                     \
+    }                                                                          \
+    return sum;                                                                \
   }
 
 DEFINE_KERNEL(div3, x / 3)
