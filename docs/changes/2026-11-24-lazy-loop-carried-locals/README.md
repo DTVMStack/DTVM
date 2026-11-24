@@ -1,6 +1,6 @@
 # Select initial GreedyRA for integer loop-carried locals
 
-- **Status**: Proposed
+- **Status**: Implemented
 - **Date**: 2026-11-24
 - **Tier**: Light
 
@@ -9,6 +9,8 @@ call-free function whose single integer loop reads and rewrites several
 Wasm locals across a self-edge. Use bounded MIR inspection and the
 existing automatic Greedy size, time and disable controls.
 
-- [ ] Verify policy selection and exclusions.
-- [ ] Compare machine code, foreground compilation and execution on a single call.
-- [ ] Check WAPM, PolyBench, and the explicit allocator controls.
+- [x] Verify policy selection and exclusions.
+- [x] Compare machine code, foreground compilation and execution on a single call.
+- [x] Check WAPM, PolyBench, and the explicit allocator controls.
+
+[Benchmark results and reproduction commands](BENCHMARK.md)
