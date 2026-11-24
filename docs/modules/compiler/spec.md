@@ -136,6 +136,16 @@ divisor sign. Zero, minus one, dynamic divisors, and non-power-of-two i64
 divisors use the existing lowering and trap checks. Signed division by a
 negative power of two also uses the existing lowering.
 
+### Register-count integer shifts
+
+x86 lowering uses `SHLX`, `SARX`, and `SHRX` for register-count
+32-bit and 64-bit shifts when FastRA is selected and the host supports
+BMI2. The instructions take independent source and count registers and
+mask the count to five or six bits. The allocator decision takes effect
+before instruction selection. The existing immediate path takes
+precedence, and the legacy `CL` path handles rotates, GreedyRA, and CPUs
+without BMI2.
+
 ### Wide x86 call arguments
 
 For calls with at least 16 MIR argument operands, x86 lowering materializes

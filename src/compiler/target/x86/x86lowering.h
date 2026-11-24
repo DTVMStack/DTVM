@@ -15,7 +15,7 @@ using namespace llvm;
 
 class X86CgLowering : public CgLowering<X86CgLowering> {
 public:
-  X86CgLowering(CgFunction &MF);
+  explicit X86CgLowering(CgFunction &MF, bool UseFastRA = false);
   CgRegister tryLowerScalarAVX(const MInstruction &Inst);
 
   // ==================== Unary Expressions ====================
@@ -157,6 +157,7 @@ private:
 
   const X86Subtarget *Subtarget;
   const TargetRegisterInfo *TRI;
+  const bool UseBMI2Shifts;
   llvm::DenseMap<const MInstruction *, CgRegister> Umul128HiRegs;
   llvm::DenseSet<const MInstruction *> Umul128NeedHi;
   llvm::DenseMap<const MInstruction *, std::array<CgRegister, 3>>

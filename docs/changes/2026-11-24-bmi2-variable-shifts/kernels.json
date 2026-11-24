@@ -1,0 +1,34 @@
+{
+  "shift32/6000000": {
+    "function": "shift32",
+    "args": [
+      6000000,
+      463
+    ],
+    "expected": "2643481125"
+  },
+  "shift64/6000000": {
+    "function": "shift64",
+    "args": [
+      6000000,
+      463
+    ],
+    "expected": "6001217881583914197"
+  },
+  "immediate64/6000000": {
+    "function": "immediate64",
+    "args": [
+      6000000,
+      463
+    ],
+    "expected": "4743721983426617846"
+  },
+  "shift64/0": {
+    "function": "shift64",
+    "args": [
+      0,
+      463
+    ],
+    "expected": "9223372034707291696"
+  }
+}
