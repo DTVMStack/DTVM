@@ -114,7 +114,7 @@ before emitting CMP/SBB/SETcc, preserving their order and the borrow flag chain.
 No memory access, call or potentially trapping expression is moved. This
 requires baseline x86-64 instructions and applies to either register allocator.
 
-### Signed remainder by a literal divisor
+### Signed division and remainder by a literal divisor
 
 The Wasm multipass frontend recognizes i32 and i64 signed remainder with
 a literal divisor whose magnitude is a power of two greater than one.
@@ -125,11 +125,13 @@ evaluates the dividend once before applying the identity.
 
 For i32 literal divisors with a non-power-of-two magnitude greater than one,
 the frontend uses LLVM's signed division multiplier for the positive
-magnitude. It sign-extends the dividend for the i64 product, shifts out the
-high quotient bits, and adds the dividend when the multiplier is negative.
-The sign correction rounds the quotient toward zero. The remainder is
-`x - q * |d|` for either divisor sign. The original division and overflow
-checks handle zero, unit, dynamic, and non-power-of-two i64 divisors.
+magnitude. It sign-extends the dividend for the i64 product, takes the high
+product bits, and adds the dividend when the multiplier is negative.
+The sign correction rounds the quotient toward zero. Division negates the
+quotient for negative divisors. The remainder is `x - q * |d|` for either
+divisor sign. Zero, minus one, dynamic divisors, and non-power-of-two i64
+divisors use the existing lowering and trap checks. Signed division by a
+negative power of two also uses the existing lowering.
 
 ### Wide x86 call arguments
 

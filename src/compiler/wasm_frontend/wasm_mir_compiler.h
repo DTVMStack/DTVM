@@ -384,12 +384,9 @@ public:
     MInstruction *LHSRaw = extractOperand(LHSOp);
     MInstruction *RHSRaw = extractOperand(RHSOp);
 
-    // Positive power-of-two signed division cannot overflow (divisor != -1)
-    // and cannot trap on zero. Replace sdiv with toward-zero bias+shift and
-    // skip the INT_MIN / -1 overflow diamond. Unsigned pow2 is DTVMStack #626.
+    // Fold supported signed literals before emitting the Wasm trap checks.
     if constexpr (Opeator == BinaryOperator::BO_DIV_S) {
-      if (MInstruction *Folded =
-              tryFoldSignedPositivePow2Div(LHSRaw, RHSRaw, Mtype)) {
+      if (MInstruction *Folded = tryFoldSignedConstDiv(LHSRaw, RHSRaw, Mtype)) {
         return Operand(Folded, Type);
       }
     } else if constexpr (Opeator == BinaryOperator::BO_REM_S) {
@@ -806,14 +803,12 @@ private:
         false, Type, *MConstantInt::get(Ctx, *Type, V));
   }
 
-  // q = (x + ((x >>s (w-1)) & (2^k-1))) >>s k  for divisor 2^k > 0.
-  // Returns null when RHS is not a strictly-positive power of two.
-  MInstruction *tryFoldSignedPositivePow2Div(MInstruction *LHS,
-                                             MInstruction *RHS, MType *Mtype);
+  MInstruction *tryFoldSignedConstDiv(MInstruction *LHS, MInstruction *RHS,
+                                      MType *Mtype);
   MInstruction *tryFoldSignedConstRem(MInstruction *LHS, MInstruction *RHS,
                                       MType *Mtype);
-  MInstruction *lowerSignedI32ConstRem(MInstruction *LHS,
-                                       const llvm::APInt &Divisor);
+  MInstruction *makeSignedI32Quotient(MInstruction *X,
+                                      const llvm::APInt &Magnitude);
 
   MInstruction *makeReusableValue(MInstruction *Value, MType *Type) {
     Variable *ReusableVar = CurFunc->createVariable(Type);

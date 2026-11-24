@@ -27,6 +27,8 @@ parser.add_argument("--seed", type=int, required=True)
 parser.add_argument("--input-seed", type=int, default=123)
 parser.add_argument("--signed-i32-kernels", action="store_true",
                     help="measure signed i32 literal divisors 3, 7, 1009 and 1024")
+parser.add_argument("--signed-i32-div-kernels", action="store_true",
+                    help="measure signed i32 literal quotients and controls")
 parser.add_argument("--default-lazy-aa", action="store_true",
                     help="repeat the main default lazy command within each round")
 parser.add_argument("--main-aa", type=Path,
@@ -40,6 +42,8 @@ if min(args.rounds, args.long_rounds) < 1:
     parser.error("round counts must be positive")
 if args.warmups < 0 or (args.candidate_singlepass and args.omit_singlepass):
     parser.error("use nonnegative warmups and compatible singlepass options")
+if args.signed_i32_kernels and args.signed_i32_div_kernels:
+    parser.error("select only one signed i32 kernel group")
 if args.cpu not in os.sched_getaffinity(0):
     parser.error(f"CPU {args.cpu} is outside the process affinity mask")
 # Child processes inherit this mask. Apply it before timing any launch.
@@ -58,6 +62,15 @@ def remainder(raw, width, divisor):
     value = signed(raw, width)
     return (-1 if value < 0 else 1) * (abs(value) % divisor)
 
+division_kernels = {
+    "div3": (3,), "div7": (-7,), "div1009": (1009,), "div1024": (1024,),
+    "divtime": (60, 3600, 86400),
+}
+
+def quotient(value, divisor):
+    magnitude = abs(value) // abs(divisor)
+    return -magnitude if (value < 0) != (divisor < 0) else magnitude
+
 def oracle(name, count, state):
     mask64 = (1 << 64) - 1
     if name == "bucket64":
@@ -65,7 +78,16 @@ def oracle(name, count, state):
             state = (state * 6364136223846793005 + 1442695040888963407) & mask64
             state = remainder(state, 64, 1 << 40) & mask64
         return state
-    if args.signed_i32_kernels:
+    if name in division_kernels:
+        result = 0
+        divisors = division_kernels[name]
+        for _ in range(count):
+            state = (state * 1664525 + 1013904223) & 0xffffffff
+            value = signed(state, 32)
+            for divisor in divisors:
+                result += quotient(value, divisor)
+        return result & mask64
+    if args.signed_i32_kernels or args.signed_i32_div_kernels:
         divisor = int(name.removeprefix("bucket"))
     else:
         divisor = 1024 if name == "bucket32" else 1009
@@ -76,7 +98,11 @@ def oracle(name, count, state):
     return result & mask64
 
 if args.group == "kernel":
-    if args.signed_i32_kernels:
+    if args.signed_i32_div_kernels:
+        inputs = [(name, 8_000_000, args.input_seed) for name in
+                  ("div3", "div7", "div1009", "div1024", "bucket7")]
+        inputs += [("divtime", 4_000_000, args.input_seed), ("div7", 0, args.input_seed)]
+    elif args.signed_i32_kernels:
         inputs = [(f"bucket{d}", 8_000_000, args.input_seed) for d in (3, 7, 1009, 1024)]
         inputs.append(("bucket7", 0, args.input_seed))
     else:
