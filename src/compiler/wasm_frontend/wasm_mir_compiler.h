@@ -77,6 +77,7 @@ public:
 
   bool hasCallFreeNestedFPLoop() const { return HasCallFreeNestedFPLoop; }
   bool hasCallFreeDeepWordLoop() const { return HasCallFreeDeepWordLoop; }
+  bool hasIntegerLoopCarriedLocals() const;
 
   class Operand {
   public:

@@ -206,27 +206,32 @@ TEST(LazyPrivateGate, ConcurrentColdCrossingRunsCallbackOnce) {
 TEST(LazyInitialRAPolicy, LimitsAndDecisionPriority) {
   using P = LazyInitialRAPolicy;
   P Default({}, 10000000);
-  EXPECT_EQ(Default.select(true, 2048, true, false), P::Decision::GreedyFP);
-  EXPECT_EQ(Default.select(true, 2049, true, false), P::Decision::FunctionSize);
-  EXPECT_EQ(Default.select(false, 1, true, true), P::Decision::Disabled);
-  EXPECT_EQ(Default.select(true, 1, false, true), P::Decision::GreedyWord);
-  EXPECT_EQ(Default.select(true, 1, false, false), P::Decision::NoLoop);
+  EXPECT_EQ(Default.select(true, 2048, {true, false}), P::Decision::GreedyFP);
+  EXPECT_EQ(Default.select(true, 2049, {true, false}),
+            P::Decision::FunctionSize);
+  EXPECT_EQ(Default.select(false, 1, {true, true}), P::Decision::Disabled);
+  EXPECT_EQ(Default.select(true, 1, {false, true}), P::Decision::GreedyWord);
+  EXPECT_EQ(Default.select(true, 1, {}), P::Decision::NoLoop);
+  EXPECT_EQ(Default.select(true, 1, {false, false, true}),
+            P::Decision::GreedyLoopCarried);
+  EXPECT_EQ(Default.select(true, 1, {true, true, true}), P::Decision::GreedyFP);
   P Bounded({true, 100, 10, 50}, 100);
-  EXPECT_EQ(Bounded.select(true, 10, false, true), P::Decision::GreedyWord);
-  EXPECT_EQ(Bounded.select(true, 11, true, true), P::Decision::FunctionSize);
+  EXPECT_EQ(Bounded.select(true, 10, {false, true}), P::Decision::GreedyWord);
+  EXPECT_EQ(Bounded.select(true, 11, {true, true}), P::Decision::FunctionSize);
   Bounded.recordTime(30);
-  EXPECT_EQ(Bounded.select(true, 1, true, false, 19), P::Decision::GreedyFP);
-  EXPECT_EQ(Bounded.select(true, 1, true, false, 20), P::Decision::Budget);
+  EXPECT_EQ(Bounded.select(true, 1, {true, false}, 19), P::Decision::GreedyFP);
+  EXPECT_EQ(Bounded.select(true, 1, {false, false, true}, 20),
+            P::Decision::Budget);
   Bounded.recordTime(30); // one admitted compile may overrun
-  EXPECT_EQ(Bounded.select(true, 1, true, false), P::Decision::Budget);
+  EXPECT_EQ(Bounded.select(true, 1, {true, false}), P::Decision::Budget);
   P Oversize({true, 99, 0, 0}, 100);
-  EXPECT_EQ(Oversize.select(true, 1, true, true), P::Decision::ModuleSize);
+  EXPECT_EQ(Oversize.select(true, 1, {true, true}), P::Decision::ModuleSize);
   P Disabled({false, 0, 0, 0}, 100);
-  EXPECT_EQ(Disabled.select(true, 1, true, true), P::Decision::Disabled);
+  EXPECT_EQ(Disabled.select(true, 1, {true, true}), P::Decision::Disabled);
   Default.recordTime(UINT64_MAX);
   Default.recordTime(1);
   EXPECT_EQ(Default.usedTime(), UINT64_MAX);
-  EXPECT_EQ(Default.select(true, 1, true, false), P::Decision::GreedyFP);
+  EXPECT_EQ(Default.select(true, 1, {true, false}), P::Decision::GreedyFP);
 }
 
 TEST(LazyInitialRAPolicy, StructuralRules) {

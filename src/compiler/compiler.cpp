@@ -414,9 +414,12 @@ bool WasmJITCompiler::compileWasmToMC(
       LazyInitialRAPolicy::Decision::Eligible;
   FunctionMirBuilder MIRBuilder(Ctx, MFunc, CollectInitialRAHints);
   MIRBuilder.compile(&Ctx); // pass the ctx argument only for compatibility
+  const bool FP = MIRBuilder.hasCallFreeNestedFPLoop();
+  const bool Word = MIRBuilder.hasCallFreeDeepWordLoop();
+  const bool LoopCarried = CollectInitialRAHints && !FP && !Word &&
+                           MIRBuilder.hasIntegerLoopCarriedLocals();
   const bool LoopGreedy = LazyInitialRAPolicy::isGreedy(InitialRAPolicy.select(
-      Allowed, FuncCode->CodeSize, MIRBuilder.hasCallFreeNestedFPLoop(),
-      MIRBuilder.hasCallFreeDeepWordLoop(),
+      Allowed, FuncCode->CodeSize, {FP, Word, LoopCarried},
       CompileTimer ? CompileTimer->elapsed() : 0));
   if (LoopGreedy)
     DisableGreedyRA = false;
@@ -426,8 +429,10 @@ bool WasmJITCompiler::compileWasmToMC(
     UsesGreedyRA = isFuncNeedGreedyRA(FuncIdx);
 #endif
   Ctx.EnableGreedyScalarAVX = false;
+  // The integer-local hint selects only the allocator.
+  const bool AutoScalarAVX = LoopGreedy && (FP || Word);
   if ((Config.EnableGreedyScalarAVX ||
-       (!Config.DisableAutoGreedyScalarAVX && LoopGreedy)) &&
+       (!Config.DisableAutoGreedyScalarAVX && AutoScalarAVX)) &&
       UsesGreedyRA) {
     static const bool HostHasAVX = [] {
       llvm::StringMap<bool> Features;
@@ -435,7 +440,7 @@ bool WasmJITCompiler::compileWasmToMC(
     }();
     Ctx.EnableGreedyScalarAVX = ScalarAVXPolicy::enabled(
         Config.EnableGreedyScalarAVX, !Config.DisableAutoGreedyScalarAVX,
-        HostHasAVX, UsesGreedyRA, LoopGreedy);
+        HostHasAVX, UsesGreedyRA, AutoScalarAVX);
   }
   // Spill-slot metadata is only consumed by eligible demanded FastRA helpers.
   // Background/initial Greedy, callful and loop-free functions cannot use it.

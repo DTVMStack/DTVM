@@ -684,6 +684,22 @@ if(ZEN_ENABLE_SPEC_TEST)
       lazyJitGreedyOndemandTests
       PRIVATE WORD_LOOP_WASM_PATH="${WORD_LOOP_WASM}"
     )
+    set(CARRIED_LOOP_WAT
+        "${CMAKE_SOURCE_DIR}/tests/wast/multipass/lazy_carried_loops.wat"
+    )
+    set(CARRIED_LOOP_WASM "${CMAKE_CURRENT_BINARY_DIR}/lazy_carried_loops.wasm")
+    add_custom_command(
+      OUTPUT ${CARRIED_LOOP_WASM}
+      COMMAND wat2wasm ${CARRIED_LOOP_WAT} -o ${CARRIED_LOOP_WASM}
+      DEPENDS ${CARRIED_LOOP_WAT}
+      VERBATIM
+    )
+    add_custom_target(lazy_carried_loop_wasm DEPENDS ${CARRIED_LOOP_WASM})
+    add_dependencies(lazyJitGreedyOndemandTests lazy_carried_loop_wasm)
+    target_compile_definitions(
+      lazyJitGreedyOndemandTests
+      PRIVATE CARRIED_LOOP_WASM_PATH="${CARRIED_LOOP_WASM}"
+    )
     set(BUCKET_GROW_WAT
         "${CMAKE_SOURCE_DIR}/tests/wast/multipass/bucket_memory_grow.wat"
     )
