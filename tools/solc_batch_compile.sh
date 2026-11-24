@@ -2,6 +2,8 @@
 # Copyright (C) 2025 the DTVM authors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+set -euo pipefail
+
 # Script to compile all Solidity files in subdirectories to JSON using solc
 # Usage: ./solc_batch_compile.sh [directory]
 # If no directory is provided, defaults to tests/evm_solidity
@@ -36,12 +38,6 @@ if ! command -v solc &> /dev/null; then
     exit 1
 fi
 
-# Ensure jq is available for JSON formatting
-if ! command -v jq &> /dev/null; then
-    echo "Installing jq for JSON formatting..."
-    sudo apt-get update -qq && sudo apt-get install -y jq
-fi
-
 echo "Compiling Solidity contracts in $BASE_DIR..."
 
 # Find all subdirectories in the base directory
@@ -56,11 +52,16 @@ for dir in "$BASE_DIR"/*/; do
 
         if [ -f "$sol_file" ]; then
             echo "Compiling $sol_file..."
-            # Compile the Solidity file and format JSON
-            if solc --evm-version cancun --combined-json abi,bin,bin-runtime "$dir$dirname.sol" | jq --indent 2 '.' > "$dir$dirname.json"; then
+            # Keep the previous fixture until compilation and JSON parsing succeed.
+            tmp_file=$(mktemp "$json_file.XXXXXX")
+            if solc --evm-version cancun --combined-json abi,bin,bin-runtime "$sol_file" |
+                python3 -m json.tool --indent 2 > "$tmp_file"; then
+                mv -- "$tmp_file" "$json_file"
                 echo "✓ Successfully compiled $dirname.sol to $dirname.json (cancun EVM)"
             else
-                echo "✗ Failed to compile $dirname.sol"
+                rm -f -- "$tmp_file"
+                echo "✗ Failed to compile $dirname.sol" >&2
+                exit 1
             fi
         else
             echo "Warning: $sol_file not found, skipping directory $dirname"
