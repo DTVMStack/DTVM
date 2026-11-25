@@ -303,6 +303,10 @@ public:
 #endif // ZEN_ENABLE_EVM && ZEN_ENABLE_LINUX_PERF
 
 private:
+  friend class CgFunction;
+
+  void destroyInstructions();
+
   uint32_t _idx;
   CgFunction *_parent;
   CgInstructionListType _cg_instructions;

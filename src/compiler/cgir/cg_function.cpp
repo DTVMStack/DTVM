@@ -10,6 +10,15 @@
 
 using namespace COMPILER;
 
+CgFunction::~CgFunction() {
+  for (CgBasicBlock *BB : _cg_basic_blocks) {
+    BB->destroyInstructions();
+    deleteCgBasicBlock(BB);
+  }
+  Ctx.MemPool.deleteObject(_cg_register_info);
+  Ctx.MemPool.deleteObject(FrameInfo);
+}
+
 void CgFunction::print(llvm::raw_ostream &OS,
                        const CgSlotIndexes *Indexes) const {
   OS << "cgfunc %" << _mir_func->getFuncIdx();
