@@ -89,6 +89,17 @@ private:
   enum class VisitState : uint8_t { Active, Completed };
 
   void visitInstruction(MInstruction &I) override {
+    // Local reads and constants are common leaves. Neither can lead back to
+    // an active instruction, and their checks take less work than a lookup.
+    if (I.getKind() == MInstruction::DREAD) {
+      visitDreadInstruction(static_cast<DreadInstruction &>(I));
+      return;
+    }
+    if (I.getKind() == MInstruction::CONSTANT) {
+      visitConstantInstruction(static_cast<ConstantInstruction &>(I));
+      return;
+    }
+
     auto [It, Inserted] =
         InstructionVisitStates.try_emplace(&I, VisitState::Active);
     if (!Inserted) {
