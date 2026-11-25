@@ -23,6 +23,17 @@ CgBasicBlock::CgBasicBlock(uint32_t idx, CgFunction &parent)
   _idx = idx;
 }
 
+void CgBasicBlock::destroyInstructions() {
+  // Only used when the whole function and its register index are going away.
+  // Advance before destroying each instruction, then reset the list sentinel
+  // without running the per-instruction removal hooks.
+  for (auto It = begin(), End = end(); It != End;) {
+    CgInstruction *Inst = &*It++;
+    _parent->deleteCgInstruction(Inst);
+  }
+  _cg_instructions.clearAndLeakNodesUnsafely();
+}
+
 CgBasicBlock::parent_iterator CgBasicBlock::getIterator() {
   ZEN_ASSERT(_parent != nullptr);
   return _parent->begin() + _idx;
