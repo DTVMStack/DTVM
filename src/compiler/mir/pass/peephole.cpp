@@ -45,19 +45,10 @@ void MIRPeephole::rewriteBlock(MBasicBlock &BB) {
   if (CacheBlockAssignments && LastAssignments.empty()) {
     LastAssignments.assign(F->getNumVariables(), nullptr);
   }
-  // Snapshot on the host heap. A CompileVector here shares the LLVM
-  // bump slab with IR and can read ASan red zones on growth.
-  llvm::SmallVector<MInstruction *, 16> Stmts;
-  llvm::SmallPtrSet<MInstruction *, 32> InBlock;
-  for (MInstruction *Inst : BB) {
-    Stmts.push_back(Inst);
-    InBlock.insert(Inst);
-  }
-  for (MInstruction *Inst : Stmts) {
-    if (!InBlock.contains(Inst)) {
-      continue;
-    }
-    CurStmt = Inst;
+  // Use an index so branch folding can replace or erase the current
+  // statement. Erasure moves the next statement into the same slot.
+  for (CurStmtIndex = 0; CurStmtIndex < BB.getNumStatements();) {
+    MInstruction *Inst = BB.begin()[CurStmtIndex];
     for (OperandNum I = 0, E = Inst->getNumOperands(); I != E; ++I) {
       MInstruction *Op = Inst->getOperand(I);
       if (Op == nullptr) {
@@ -77,15 +68,11 @@ void MIRPeephole::rewriteBlock(MBasicBlock &BB) {
       }
       LastAssignments[Var] = DA;
     }
-    if (auto *BrIf = llvm::dyn_cast<BrIfInstruction>(Inst)) {
-      if (foldConstBrIf(BB, *BrIf)) {
-        InBlock.erase(BrIf);
-        InBlock.clear();
-        for (MInstruction *Cur : BB) {
-          InBlock.insert(Cur);
-        }
-      }
+    if (auto *BrIf = llvm::dyn_cast<BrIfInstruction>(Inst);
+        BrIf && foldConstBrIf(BB, *BrIf)) {
+      continue;
     }
+    ++CurStmtIndex;
   }
 }
 
@@ -655,7 +642,7 @@ bool MIRPeephole::foldConstBrIf(MBasicBlock &BB, BrIfInstruction &BrIf) {
   BrInstruction *NewBr =
       F->createInstruction<BrInstruction>(false, BB, F->getContext(), Keep);
   BB.replaceStatement(&BrIf, NewBr);
-  return true;
+  return false;
 }
 
 MInstruction *MIRPeephole::foldU32MagicDivRem(MInstruction *Inst) {
@@ -837,23 +824,21 @@ bool MIRPeephole::matchIntConst(const MInstruction *Inst,
 bool MIRPeephole::matchAssignedIntConst(const MInstruction *Inst,
                                         llvm::APInt &Val) const {
   const auto *Dr = llvm::dyn_cast_or_null<DreadInstruction>(Inst);
-  if (!Dr || CurBB == nullptr || CurStmt == nullptr) {
+  if (!Dr) {
     return false;
   }
   const uint32_t VarIdx = Dr->getVarIdx();
   if (!CacheBlockAssignments) {
-    const MInstruction *LastAssign = nullptr;
-    for (MInstruction *Stmt : *CurBB) {
-      if (Stmt == CurStmt) {
-        break;
-      }
-      if (const auto *DA = llvm::dyn_cast<DassignInstruction>(Stmt)) {
-        if (DA->getVarIdx() == VarIdx) {
-          LastAssign = DA->getOperand<0>();
-        }
+    // Find the most recent assignment before this statement. A dynamic
+    // assignment ends the search just like a constant one.
+    for (size_t I = CurStmtIndex; I > 0; --I) {
+      const auto *DA =
+          llvm::dyn_cast<DassignInstruction>(CurBB->begin()[I - 1]);
+      if (DA && DA->getVarIdx() == VarIdx) {
+        return matchIntConst(DA->getOperand<0>(), Val);
       }
     }
-    return matchIntConst(LastAssign, Val);
+    return false;
   }
   ZEN_ASSERT(VarIdx < LastAssignments.size());
   const DassignInstruction *DA = LastAssignments[VarIdx];

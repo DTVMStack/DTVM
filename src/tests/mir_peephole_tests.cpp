@@ -255,6 +255,11 @@ const uint8_t *jitFuncBytes(const zen::runtime::Module &Mod, const char *Name,
       Next = Other->JITCodePtr;
     }
   }
+  // The caller compiles one text section. Require a following function
+  // as the bound, since the module allocation may end with page padding.
+  if (Next == End) {
+    return nullptr;
+  }
   Len = static_cast<size_t>(Next - P);
   return P;
 }
@@ -1179,7 +1184,9 @@ TEST(MIRPeepholeLitmus, ConstZeroBrIfWithoutFalseFallsThrough) {
   Entry->addSuccessor(Trap);
   auto *Seven = F.createInstruction<ConstantInstruction>(
       false, *Entry, I32, *MConstantInt::get(Ctx, *I32, 7));
-  F.createInstruction<ReturnInstruction>(true, *Entry, I32, Seven);
+  auto *Add = F.createInstruction<BinaryInstruction>(false, *Entry, OP_add, I32,
+                                                     Zero, Seven);
+  auto *Ret = F.createInstruction<ReturnInstruction>(true, *Entry, I32, Add);
 
   auto *Z = F.createInstruction<ConstantInstruction>(
       false, *Trap, I32, *MConstantInt::get(Ctx, *I32, 0));
@@ -1192,6 +1199,7 @@ TEST(MIRPeepholeLitmus, ConstZeroBrIfWithoutFalseFallsThrough) {
 
   const std::string Dump = dumpFunc(F);
   EXPECT_EQ(Dump.find("br_if"), std::string::npos) << Dump;
+  EXPECT_TRUE(llvm::isa<ConstantInstruction>(Ret->getOperand<0>())) << Dump;
   EXPECT_NE(Dump.find("const.i32 7"), std::string::npos) << Dump;
   EXPECT_TRUE(Trap->empty()) << Dump;
   finishLitmus(F);
@@ -1453,7 +1461,9 @@ TEST(MIRPeepholeWasm, DivideDetectionIgnoresBytesInsideAnImmediate) {
 TEST(MIRPeepholeWasm, MultipassMatchesExpected) {
   auto Bytes = loadPeepholeWasm();
   ASSERT_FALSE(Bytes.empty());
-  auto RT = makeRuntime(RunMode::MultipassMode);
+  // The disassembly checks use adjacent function addresses. Compile one
+  // text section so their ranges stay within the same object.
+  auto RT = makeRuntime(RunMode::MultipassMode, /*DisableMT=*/true);
   ASSERT_NE(RT, nullptr);
   auto ModRet = RT->loadModule("peep", Bytes.data(), Bytes.size());
   ASSERT_TRUE(ModRet) << ModRet.getError().getFormattedMessage();

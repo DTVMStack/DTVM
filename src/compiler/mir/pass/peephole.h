@@ -20,7 +20,7 @@ public:
 private:
   MFunction *F = nullptr;
   MBasicBlock *CurBB = nullptr;
-  MInstruction *CurStmt = nullptr;
+  size_t CurStmtIndex = 0;
   // Last completed direct assignment in the current block. Clear only touched
   // slots between blocks so lookup is O(1) without O(variables * blocks)
   // resets.
@@ -40,6 +40,7 @@ private:
   MInstruction *foldSelectConstCond(MInstruction *Inst);
   MInstruction *foldSignedPositivePow2Div(MInstruction *Inst);
   MInstruction *foldU32MagicDivRem(MInstruction *Inst);
+  // Returns true when the statement was erased from the block.
   bool foldConstBrIf(MBasicBlock &BB, BrIfInstruction &BrIf);
 
   MInstruction *makeConv(Opcode Opc, MType *Ty, MInstruction *Op);
