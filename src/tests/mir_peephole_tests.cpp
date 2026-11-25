@@ -255,6 +255,11 @@ const uint8_t *jitFuncBytes(const zen::runtime::Module &Mod, const char *Name,
       Next = Other->JITCodePtr;
     }
   }
+  // The caller compiles one text section. Require a following function
+  // as the bound, since the module allocation may end with page padding.
+  if (Next == End) {
+    return nullptr;
+  }
   Len = static_cast<size_t>(Next - P);
   return P;
 }
@@ -1456,7 +1461,9 @@ TEST(MIRPeepholeWasm, DivideDetectionIgnoresBytesInsideAnImmediate) {
 TEST(MIRPeepholeWasm, MultipassMatchesExpected) {
   auto Bytes = loadPeepholeWasm();
   ASSERT_FALSE(Bytes.empty());
-  auto RT = makeRuntime(RunMode::MultipassMode);
+  // The disassembly checks use adjacent function addresses. Compile one
+  // text section so their ranges stay within the same object.
+  auto RT = makeRuntime(RunMode::MultipassMode, /*DisableMT=*/true);
   ASSERT_NE(RT, nullptr);
   auto ModRet = RT->loadModule("peep", Bytes.data(), Bytes.size());
   ASSERT_TRUE(ModRet) << ModRet.getError().getFormattedMessage();
