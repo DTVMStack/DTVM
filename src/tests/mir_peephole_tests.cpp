@@ -1179,7 +1179,9 @@ TEST(MIRPeepholeLitmus, ConstZeroBrIfWithoutFalseFallsThrough) {
   Entry->addSuccessor(Trap);
   auto *Seven = F.createInstruction<ConstantInstruction>(
       false, *Entry, I32, *MConstantInt::get(Ctx, *I32, 7));
-  F.createInstruction<ReturnInstruction>(true, *Entry, I32, Seven);
+  auto *Add = F.createInstruction<BinaryInstruction>(false, *Entry, OP_add, I32,
+                                                     Zero, Seven);
+  auto *Ret = F.createInstruction<ReturnInstruction>(true, *Entry, I32, Add);
 
   auto *Z = F.createInstruction<ConstantInstruction>(
       false, *Trap, I32, *MConstantInt::get(Ctx, *I32, 0));
@@ -1192,6 +1194,7 @@ TEST(MIRPeepholeLitmus, ConstZeroBrIfWithoutFalseFallsThrough) {
 
   const std::string Dump = dumpFunc(F);
   EXPECT_EQ(Dump.find("br_if"), std::string::npos) << Dump;
+  EXPECT_TRUE(llvm::isa<ConstantInstruction>(Ret->getOperand<0>())) << Dump;
   EXPECT_NE(Dump.find("const.i32 7"), std::string::npos) << Dump;
   EXPECT_TRUE(Trap->empty()) << Dump;
   finishLitmus(F);
