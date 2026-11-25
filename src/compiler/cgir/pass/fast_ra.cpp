@@ -103,7 +103,8 @@ public:
   // These sets use membership queries only. Register units have dense IDs.
   BitVector UsedInInstr;
   BitVector PhysRegUses;
-  SmallVector<uint16_t, 8> DefOperandIndexes;
+  SmallVector<unsigned, 8> DefOperandIndexes;
+  SmallVector<CgOperand *, 8> VirtUseOperands;
   // Register masks attached to the current instruction.
   SmallVector<const uint32_t *> RegMasks;
 
@@ -738,108 +739,62 @@ void FastRA::Impl::allocateCgInstruction(CgInstruction &MI) {
   UsedInInstr.reset();
   RegMasks.clear();
 
-  // Scan for special cases; Apply pre-assigned register defs to state.
+  DefOperandIndexes.clear();
+  VirtUseOperands.clear();
   bool HasPhysRegUse = false;
-  bool HasRegMask = false;
-  bool HasVRegDef = false;
   bool HasDef = false;
+  bool HasVRegDef = false;
   bool NeedToAssignLiveThroughs = false;
-  for (CgOperand &MO : MI) {
-    if (MO.isReg()) {
-      Register Reg = MO.getReg();
+
+  // Classify virtual operands and apply pre-assigned register defs.
+  for (unsigned I = 0, E = MI.getNumOperands(); I != E; ++I) {
+    CgOperand &MO = MI.getOperand(I);
+    if (!MO.isReg()) {
+      if (MO.isRegMask())
+        RegMasks.push_back(MO.getRegMask());
+      continue;
+    }
+
+    Register Reg = MO.getReg();
+    if (MO.isDef()) {
+      DefOperandIndexes.push_back(I);
       if (Reg.isVirtual()) {
-        if (MO.isDef()) {
-          HasDef = true;
-          HasVRegDef = true;
-          // if (MO.isEarlyClobber()) {
-          //     HasEarlyClobber = true;
-          //     NeedToAssignLiveThroughs = true;
-          // }
-          // if ((MO.isTied() && !TiedOpIsUndef(MO, I))
-          //     || (MO.getSubReg() != 0 && !MO.isUndef()))
-          //     NeedToAssignLiveThroughs = true;
-          if (MO.isTied()) {
-            NeedToAssignLiveThroughs = true;
-          }
-        }
-      } else if (Reg.isPhysical()) {
-        if (!MRI->isReserved(Reg)) {
-          // Allocate physreg defs.
-          if (MO.isDef()) {
-            HasDef = true;
-            definePhysReg(MI, Reg);
-            // bool displacedAny = definePhysReg(MI, Reg);
-            // if (MO.isEarlyClobber())
-            //     HasEarlyClobber = true;
-            // if (!displacedAny)
-            //     MO.setIsDead(true);
-          }
-          if (MO.readsReg()) {
-            HasPhysRegUse = true;
-          }
-        }
+        HasDef = HasVRegDef = true;
+        NeedToAssignLiveThroughs |= MO.isTied();
       }
-    } else if (MO.isRegMask()) {
-      HasRegMask = true;
-      RegMasks.push_back(MO.getRegMask());
+    } else if (Reg.isVirtual()) {
+      VirtUseOperands.push_back(&MO);
+    }
+
+    if (Reg.isPhysical() && !MRI->isReserved(Reg)) {
+      if (MO.isDef()) {
+        HasDef = true;
+        definePhysReg(MI, Reg);
+      }
+      HasPhysRegUse |= MO.readsReg();
     }
   }
 
-  // Allocate virtreg defs.
   if (HasDef) {
+    // Tied defs cannot use a register pre-assigned for a use operand.
+    if (NeedToAssignLiveThroughs) {
+      PhysRegUses.reset();
+      for (const CgOperand &MO : MI) {
+        if (MO.isReg() && MO.getReg().isPhysical() && MO.readsReg())
+          markPhysRegUsedInInstr(MO.getReg());
+      }
+    }
+
     if (HasVRegDef) {
-      // Special handling for tied operands or subregister defs:
-      // Compared to "normal" defs these:
-      // - Must not use a register that is pre-assigned for a use operand.
-      // - In order to solve tricky inline assembly constraints we change
-      //   the heuristic to figure out a good operand order before doing
-      //   assignments.
-      if (NeedToAssignLiveThroughs) {
-        DefOperandIndexes.clear();
-        PhysRegUses.reset();
-
-        LLVM_DEBUG(dbgs() << "Need to assign livethroughs\n");
-        for (unsigned I = 0, E = MI.getNumOperands(); I < E; ++I) {
-          const CgOperand &MO = MI.getOperand(I);
-          if (!MO.isReg())
-            continue;
-          Register Reg = MO.getReg();
-          if (MO.readsReg()) {
-            if (Reg.isPhysical()) {
-              LLVM_DEBUG(dbgs()
-                         << "mark extra used: " << printReg(Reg, TRI) << '\n');
-              markPhysRegUsedInInstr(Reg);
-            }
-          }
-
-          if (MO.isDef()) {
-            if (Reg.isVirtual()) {
-              DefOperandIndexes.push_back(I);
-            }
-          }
-        }
-
-        for (uint16_t OpIdx : DefOperandIndexes) {
-          CgOperand &MO = MI.getOperand(OpIdx);
-          unsigned Reg = MO.getReg();
-          if (MO.isTied()) {
-            defineLiveThroughVirtReg(MI, OpIdx, Reg);
-          } else {
-            defineVirtReg(MI, OpIdx, Reg);
-          }
-        }
-      } else {
-        // Assign virtual register defs.
-        for (unsigned I = 0, E = MI.getNumOperands(); I < E; ++I) {
-          CgOperand &MO = MI.getOperand(I);
-          if (!MO.isReg() || !MO.isDef()) {
-            continue;
-          }
-          Register Reg = MO.getReg();
-          if (Reg.isVirtual()) {
-            defineVirtReg(MI, I, Reg);
-          }
-        }
+      for (unsigned OpIdx : DefOperandIndexes) {
+        const CgOperand &MO = MI.getOperand(OpIdx);
+        Register Reg = MO.getReg();
+        if (!Reg.isVirtual())
+          continue;
+        if (MO.isTied())
+          defineLiveThroughVirtReg(MI, OpIdx, Reg);
+        else
+          defineVirtReg(MI, OpIdx, Reg);
       }
     }
 
@@ -847,10 +802,8 @@ void FastRA::Impl::allocateCgInstruction(CgInstruction &MI) {
     // Iterate operands in reverse order, so we see the implicit super
     // register defs first (we added them earlier in case of
     // <def,read-undef>).
-    for (CgOperand &MO : reverse(MI)) {
-      if (!MO.isReg() || !MO.isDef()) {
-        continue;
-      }
+    for (unsigned OpIdx : reverse(DefOperandIndexes)) {
+      CgOperand &MO = MI.getOperand(OpIdx);
 
       // subreg defs don't free the full register. We left the subreg
       // number around as a marker in setPhysReg() to recognize this case
@@ -880,8 +833,7 @@ void FastRA::Impl::allocateCgInstruction(CgInstruction &MI) {
   }
 
   // Displace clobbered registers.
-  if (HasRegMask) {
-    ZEN_ASSERT(!RegMasks.empty() && "expected RegMask");
+  if (!RegMasks.empty()) {
     // MRI bookkeeping.
     for (const auto *RM : RegMasks) {
       MRI->addPhysRegsUsedFromRegMask(RM);
@@ -941,27 +893,14 @@ void FastRA::Impl::allocateCgInstruction(CgInstruction &MI) {
     }
   }
 
-  // Allocate virtreg uses and insert reloads as necessary.
-  for (CgOperand &MO : MI) {
-    if (!MO.isReg() || !MO.isUse()) {
-      continue;
-    }
-    Register Reg = MO.getReg();
-    if (!Reg.isVirtual()) {
-      continue;
-    }
-
-    // if (MO.isUndef()) {
-    //     HasUndefUse = true;
-    //     continue;
-    // }
+  // Def allocation rewrites only def operands. Virtual uses still have their
+  // original registers and can be visited in their original order.
+  for (CgOperand *MO : VirtUseOperands) {
+    Register Reg = MO->getReg();
     mayLiveIn(Reg);
-
-    ZEN_ASSERT(MO.readsReg() && "reading use");
-    useVirtReg(MI, MO, Reg);
+    ZEN_ASSERT(MO->readsReg() && "reading use");
+    useVirtReg(MI, *MO, Reg);
   }
-
-  // TODO: if (HasUndefUse) { ... }
 
   // process coalescing regs
   if (MI.isCopy() && MI.getOperand(0).getReg() == MI.getOperand(1).getReg() &&
