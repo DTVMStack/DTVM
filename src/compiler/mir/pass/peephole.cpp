@@ -78,6 +78,12 @@ void MIRPeephole::rewriteBlock(MBasicBlock &BB) {
 
 MInstruction *MIRPeephole::rewriteExpr(MInstruction *Inst) {
   ZEN_ASSERT(Inst);
+  // These leaves are used by their parent's folds and have no folds of
+  // their own.
+  if (Inst->getKind() == MInstruction::DREAD ||
+      Inst->getKind() == MInstruction::CONSTANT) {
+    return Inst;
+  }
   for (OperandNum I = 0, E = Inst->getNumOperands(); I != E; ++I) {
     MInstruction *Op = Inst->getOperand(I);
     if (Op == nullptr) {
@@ -978,7 +984,7 @@ static MConstantFloat *matchNonZeroFPConst(MInstruction *Inst) {
 // use-frequency or cold-path filter: every eligible constant is initialized
 // on every invocation, which can grow the frame and live ranges.
 void MIRPeephole::hoistNonEntryFPConsts(MFunction &Func) {
-  if (Func.getNumBasicBlocks() < 2) {
+  if (!Func.mayHaveFPConstant() || Func.getNumBasicBlocks() < 2) {
     return;
   }
   MBasicBlock *Entry = Func.getEntryBasicBlock();

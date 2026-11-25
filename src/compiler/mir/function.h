@@ -15,11 +15,13 @@
 #include <list>
 #include <map>
 #include <stdio.h>
+#include <type_traits>
 #include <vector>
 
 namespace COMPILER {
 
 class CompileContext;
+class ConstantInstruction;
 
 class MFunctionType : public MType, public NonCopyable {
 public:
@@ -89,6 +91,7 @@ public:
     Variables.clear();
     Instructions.clear();
     MayHaveEvmUmul128Hi = false;
+    MayHaveFPConstant = false;
     ExceptionSetBBs.clear();
     ExceptionHandlingBB = nullptr;
     ExceptionReturnBB = nullptr;
@@ -189,11 +192,14 @@ public:
   // clear it: a false value must prove that the high-multiply walk is needless.
   bool mayHaveEvmUmul128Hi() const { return MayHaveEvmUmul128Hi; }
 
+  // Track the literal's type, which is fixed even if the node's type changes.
+  // A deleted literal may leave this conservative bit set.
+  bool mayHaveFPConstant() const { return MayHaveFPConstant; }
+
   template <class T, typename... Arguments>
   T *createInstruction(bool IsStmt, MBasicBlock &BB, Arguments &&...Args) {
     T *Inst = T::create(Ctx.MemPool, std::forward<Arguments>(Args)...);
-    Instructions.emplace_back(Inst);
-    MayHaveEvmUmul128Hi |= Inst->getKind() == MInstruction::EVM_UMUL128_HI;
+    trackInstruction(Inst);
 
     if (IsStmt) {
       BB.addStatement(Inst);
@@ -205,8 +211,7 @@ public:
   template <class T, typename... Arguments>
   T *createInstructionBeforeFirstNonPhi(MBasicBlock &BB, Arguments &&...Args) {
     T *Inst = T::create(Ctx.MemPool, std::forward<Arguments>(Args)...);
-    Instructions.emplace_back(Inst);
-    MayHaveEvmUmul128Hi |= Inst->getKind() == MInstruction::EVM_UMUL128_HI;
+    trackInstruction(Inst);
     BB.addStatementBeforeFirstNonPhi(Inst);
     return Inst;
   }
@@ -230,6 +235,7 @@ public:
     }
     Instructions.clear();
     MayHaveEvmUmul128Hi = false;
+    MayHaveFPConstant = false;
   }
 
   auto getFuncIdx() const { return FuncIdx; }
@@ -263,12 +269,21 @@ public:
   MBasicBlock *getExceptionReturnBB() const { return ExceptionReturnBB; }
 
 private:
+  template <class T> void trackInstruction(T *Inst) {
+    Instructions.emplace_back(Inst);
+    MayHaveEvmUmul128Hi |= Inst->getKind() == MInstruction::EVM_UMUL128_HI;
+    if constexpr (std::is_same_v<T, ConstantInstruction>) {
+      MayHaveFPConstant |= Inst->getConstant().getType().isFloat();
+    }
+  }
+
   uint32_t FuncIdx = 0;
   MFunctionType *FuncType = nullptr;
   std::vector<Variable *> Variables;
   std::vector<MBasicBlock *> BasicBlocks;
   std::vector<MInstruction *> Instructions;
   bool MayHaveEvmUmul128Hi = false;
+  bool MayHaveFPConstant = false;
   std::map<ErrorCode, MBasicBlock *> ExceptionSetBBs;
   MBasicBlock *ExceptionHandlingBB = nullptr;
   MBasicBlock *ExceptionReturnBB = nullptr;
