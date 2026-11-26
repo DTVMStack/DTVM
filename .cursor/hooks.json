@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "hooks": {
+    "workspaceOpen": [
+      {
+        "command": ".cursor/hooks/register-pstack.sh"
+      }
+    ]
+  }
+}

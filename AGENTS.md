@@ -96,6 +96,18 @@ Skills are defined in `.agents/skills/` (single source of truth). `.claude/skill
 python3 .agents/tooling/generate_skill_mirrors.py
 ```
 
+## Cursor pstack plugin
+
+This repository vendors the official Cursor marketplace plugin [pstack](https://github.com/cursor/plugins/tree/main/pstack) at `.cursor/plugins/pstack` (MIT). It is **not** a DTVM first-party skill pack: do not copy or merge pstack skills into `.agents/skills/` or `.claude/skills/`, and leave `generate_skill_mirrors.py` pointed at DTVM skills only.
+
+Cursor does not document auto-loading a project `.cursor/plugins/` folder. A `workspaceOpen` hook in `.cursor/hooks.json` registers the vendored plugin via `pluginPaths` in the Cursor desktop app and CLI. Hosted Cloud Agents skip that hook; install from the marketplace instead:
+
+```text
+/add-plugin pstack
+```
+
+Then run `/setup-pstack` once to pick models, and `/poteto-mode` at the start of any task that needs rigor (pick it from the `/` menu before typing the task). Upstream SHA, version, and refresh steps: `.cursor/plugins/SOURCE.md`.
+
 ## Documentation Pointers
 
 - Overview: `README.md`
