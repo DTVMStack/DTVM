@@ -143,6 +143,8 @@ public:
   uint64_t getObservedLoopHeat(uint32_t FuncIdx) const;
 
 private:
+  uint32_t findDeferredWasiEntry() const;
+
   enum class CompileStatus : uint8_t {
     None,
     Pending,
@@ -210,6 +212,7 @@ private:
   // workloads (a large one-fn module can still theoretically benefit from
   // FastRA-first tiering).
   std::vector<WasmFrontendContext> AuxContexts;
+  uint32_t DeferredWasiEntry = -1u;
   // must be declared before ThreadPool
   std::unique_ptr<std::atomic<CompileStatus>[]> CompileStatuses;
   // must be declared before ThreadPool

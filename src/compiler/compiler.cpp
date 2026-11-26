@@ -762,6 +762,23 @@ void LazyJITCompiler::dispatchEntryCompileTasks(WasmFrontendContext &Ctx) {
   }
 }
 
+uint32_t LazyJITCompiler::findDeferredWasiEntry() const {
+  if (WasmMod->getStartFuncIdx() != -1u ||
+      WasmMod->getExportedFuncIdxs().size() != 1)
+    return -1u;
+
+  uint32_t Entry;
+  if (!WasmMod->getExportFunc("_start", Entry))
+    return -1u;
+  const auto *Code = WasmMod->getCodeEntry(Entry);
+  const auto *Type = WasmMod->getFunctionType(Entry);
+  constexpr uint32_t MaxDeferredEntryBytes = 512;
+  if (!Code || Code->CodeSize > MaxDeferredEntryBytes || Type->NumParams ||
+      Type->NumReturns)
+    return -1u;
+  return Entry - WasmMod->getNumImportFunctions();
+}
+
 void LazyJITCompiler::precompile() {
   LazyInitialRAPolicy::Timer BudgetTimer(InitialRAPolicy, true);
   auto Timer =
@@ -774,8 +791,11 @@ void LazyJITCompiler::precompile() {
   }
   StubBuilder.finalizeStubs();
   if (ThreadPool) {
-    ThreadPool->pushTask(
-        [this](WasmFrontendContext *Ctx) { dispatchEntryCompileTasks(*Ctx); });
+    DeferredWasiEntry = findDeferredWasiEntry();
+    if (DeferredWasiEntry == -1u)
+      ThreadPool->pushTask([this](WasmFrontendContext *Ctx) {
+        dispatchEntryCompileTasks(*Ctx);
+      });
   }
   uint32_t NumImportFunctions = WasmMod->getNumImportFunctions();
   for (uint32_t I = 0; I < NumInternalFunctions; ++I) {
@@ -856,10 +876,9 @@ uint8_t *LazyJITCompiler::compileFunctionOnRequest(uint8_t *FuncStubCodePtr) {
     ForegroundGuard = std::unique_lock<std::mutex>(ForegroundMutex);
   if (PrivateFunctions && PrivateFunctions[FuncIdx].OriginalFast)
     return handlePrivateEntry(FuncIdx);
-  if (!ThreadPool) {
-    // Single-thread lazy, or single-internal-function modules (no FastRA
-    // FG / Greedy BG split). Configured allocator on-demand (Greedy unless
-    // DisableMultipassGreedyRA); unconditional stub publish.
+  if (!ThreadPool || FuncIdx == DeferredWasiEntry) {
+    // A deferred entry has no background compiler. Use the configured
+    // allocator on demand and publish directly, as in serial lazy.
     // Attempt/start count: entered the no-pool on-request compile path.
     ForegroundCompileCount.fetch_add(1, std::memory_order_relaxed);
     auto Timer = Stats.startRecord(utils::StatisticPhase::JITLazyFgCompilation);
