@@ -14,3 +14,6 @@ Use the configured allocator for the entry and publish through the same path
 as serial lazy. Private promotion remains available to eligible callees.
 Other entry scheduling follows the
 [compiler specification](../../modules/compiler/spec.md).
+
+The [benchmark report](BENCHMARK.md) records matched timings, compiler
+counters, code-generation experiments, and correctness checks.
