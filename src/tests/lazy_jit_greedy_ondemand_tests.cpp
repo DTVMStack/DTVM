@@ -238,6 +238,36 @@ CompiledFib compileAndRunOneFn(bool Lazy, bool DisableGreedyRA,
 
 } // namespace
 
+TEST(LazyJitGreedyOndemand, SmallWasiEntryCompilesOnDemand) {
+  for (const char *Path : {
+           LAZY_WASI_ENTRY_SPEC_DIR "/lazy_wasi_entry.0.wasm",
+           LAZY_WASI_ENTRY_SPEC_DIR "/lazy_wasi_entry.1.wasm",
+       }) {
+    auto LM = loadModule(loadWasmFile(Path), "wasi-entry", true, false, false);
+    ASSERT_TRUE(LM.Lazy->hasBackgroundCompilePool());
+    ASSERT_TRUE(stubIsTrampoline(*LM.Mod, 1));
+    std::vector<TypedValue> Results;
+    ASSERT_TRUE(LM.RT->callWasmFunction(*LM.Inst, "_start", {}, Results));
+    EXPECT_TRUE(Results.empty());
+    const uint32_t Compiles = LM.Lazy->getForegroundCompileCount();
+    EXPECT_GT(Compiles, 0u);
+    EXPECT_EQ(LM.Lazy->getBackgroundCompileCount(), 0u);
+    ASSERT_TRUE(LM.RT->callWasmFunction(*LM.Inst, "_start", {}, Results));
+    EXPECT_EQ(LM.Lazy->getForegroundCompileCount(), Compiles);
+  }
+}
+
+TEST(LazyJitGreedyOndemand, KeepsPrewarmForOtherStartFunctions) {
+  for (const char *Path : {
+           LAZY_WASI_ENTRY_SPEC_DIR "/lazy_wasi_entry.2.wasm",
+           LAZY_WASI_ENTRY_SPEC_DIR "/lazy_wasi_entry.3.wasm",
+       }) {
+    auto LM = loadModule(loadWasmFile(Path), "prewarmed-entry", true, false,
+                         false, /*Instantiate=*/false);
+    ASSERT_TRUE(waitForBackgroundPublishes(*LM.Lazy, 1, 5000)) << Path;
+  }
+}
+
 TEST(LazyJitGreedyOndemand, FastRASpillsMoreThanGreedyOnFibLoop) {
   CompiledFib Fast =
       compileAndRunOneFn(/*Lazy=*/false, /*DisableGreedyRA=*/true,

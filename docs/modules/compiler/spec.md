@@ -236,6 +236,15 @@ loading, guest execution and background compilation; admitted/concurrent work
 can overrun. It is not a first-call deadline. Unlimited mode reads no budget
 clock. Eager, serial, one-function and background configured choices are exempt.
 
+### On-demand WASI entry
+
+Lazy Multipass normally queues the module start function and exported
+functions for background compilation. If there is no module start function
+and the sole internal function export is `_start` with signature
+`() -> ()`, a body of at most 512 bytes compiles on demand with the
+configured allocator. Its stub publishes directly through the serial lazy
+path. The thread pool remains available for opt-in private promotion.
+
 ### Opt-in private loop tiering
 
 `EnableLazyPrivateTiering` permits demand-compiled private WASM helpers to

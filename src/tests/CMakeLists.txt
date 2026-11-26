@@ -597,11 +597,20 @@ if(ZEN_ENABLE_SPEC_TEST)
     add_custom_target(lazy_entry_seeds_wasm DEPENDS ${LAZY_ENTRY_SEEDS_WASM})
     add_dependencies(lazyJitGreedyOndemandTests fib_iter_lazy_wasm)
     add_dependencies(lazyJitGreedyOndemandTests lazy_entry_seeds_wasm)
+    set(LAZY_WASI_ENTRY_SPEC_DIR
+        "${CMAKE_BINARY_DIR}/wast/multipass/lazy_wasi_entry"
+    )
+    add_custom_target(
+      lazy_wasi_entry_wasm
+      DEPENDS "${LAZY_WASI_ENTRY_SPEC_DIR}/lazy_wasi_entry.json"
+    )
+    add_dependencies(lazyJitGreedyOndemandTests lazy_wasi_entry_wasm)
     target_compile_definitions(
       lazyJitGreedyOndemandTests
       PRIVATE FIB_ITER_ONEFN_WASM_PATH="${FIB_ITER_ONEFN_WASM}"
               FIB_ITER_TWOFN_WASM_PATH="${FIB_ITER_TWOFN_WASM}"
               LAZY_ENTRY_SEEDS_WASM_PATH="${LAZY_ENTRY_SEEDS_WASM}"
+              LAZY_WASI_ENTRY_SPEC_DIR="${LAZY_WASI_ENTRY_SPEC_DIR}"
     )
     if(ZEN_TEST_ENABLE_ASAN)
       target_compile_options(
