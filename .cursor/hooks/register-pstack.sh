@@ -8,7 +8,7 @@ ROOT="${CURSOR_PROJECT_DIR:-}"
 if [ -z "$ROOT" ]; then
   ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 fi
-PLUGIN="$ROOT/.cursor/plugins/pstack"
+PLUGIN="$ROOT/.agents/plugins/pstack"
 
 if [ ! -f "$PLUGIN/plugin.json" ] && [ ! -f "$PLUGIN/.cursor-plugin/plugin.json" ]; then
   printf '{"pluginPaths":[]}\n'
