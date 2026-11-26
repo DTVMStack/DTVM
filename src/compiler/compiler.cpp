@@ -793,8 +793,9 @@ void LazyJITCompiler::precompile() {
   if (ThreadPool) {
     DeferredWasiEntry = findDeferredWasiEntry();
     if (DeferredWasiEntry == -1u)
-      ThreadPool->pushTask(
-          [this](WasmFrontendContext *Ctx) { dispatchEntryCompileTasks(*Ctx); });
+      ThreadPool->pushTask([this](WasmFrontendContext *Ctx) {
+        dispatchEntryCompileTasks(*Ctx);
+      });
   }
   uint32_t NumImportFunctions = WasmMod->getNumImportFunctions();
   for (uint32_t I = 0; I < NumInternalFunctions; ++I) {
